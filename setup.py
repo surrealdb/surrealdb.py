@@ -27,7 +27,7 @@ setup(
     long_description=get_readme(),
     long_description_content_type="text/markdown",
     package_data={"surrealdb": ["py.typed"]},
-    install_requires=["httpx>=0.23.0", "requests>=2.28.1"],
+    install_requires=["httpx>=0.23.0"],
     extras_require={"speedup": ["orjson>=3.8.0"]},
     classifiers=[
         "Intended Audience :: Developers",

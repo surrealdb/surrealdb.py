@@ -7,7 +7,6 @@ license = "Apache-2.0"
 
 [tool.poetry.dependencies]
 httpx = ">=0.23.0"
-requests = ">=2.28.1"
 
 [tool.poetry.dev-dependencies]
 pre-commit = ">=2.20.0"
