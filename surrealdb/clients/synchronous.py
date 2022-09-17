@@ -11,7 +11,7 @@ from ..common import json as jsonlib
 from ..exceptions.surreal_exception import SurrealException
 from ..models.response import SurrealResponse
 
-__all__ = ["SurrealDBClient"]
+__all__ = ("SurrealDBClient",)
 
 
 class SurrealDBClient:

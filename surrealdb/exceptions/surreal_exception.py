@@ -1,4 +1,4 @@
-__all__ = ["SurrealException"]
+__all__ = ("SurrealException",)
 
 
 class SurrealException(Exception):

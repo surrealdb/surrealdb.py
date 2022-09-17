@@ -7,7 +7,7 @@ try:
 except ImportError:
     import json as jsonlib
 
-__all__ = ["dumps", "loads"]
+__all__ = ("dumps", "loads",)
 
 
 def dumps(obj: Any, **kwargs: Any) -> str:

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-__all__ = ["SurrealResponse"]
+__all__ = ("SurrealResponse",)
 
 
 @dataclass(frozen=True)
