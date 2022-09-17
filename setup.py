@@ -25,8 +25,6 @@ setup(
     description="The official SurrealDB library for Python.",
     long_description=get_readme(),
     long_description_content_type="text/markdown",
-    author="tsunyoku",
-    author_email="tsunyoku@gmail.com",
     package_data={"surrealdb": ["py.typed"]},
     install_requires=["httpx>=0.23.0", "requests>=2.28.1"],
     extras_require={
