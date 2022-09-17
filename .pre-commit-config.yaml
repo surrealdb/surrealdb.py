@@ -14,10 +14,10 @@ repos:
     hooks:
     -   id: reorder-python-imports
         args: [--py37-plus]
--   repo: https://github.com/pre-commit/mirrors-autopep8
-    rev: v1.7.0
+-   repo: https://github.com/psf/black
+    rev: 22.8.0
     hooks:
-    -   id: autopep8
+    -   id: black
 
 default_language_version:
     python: python3.9
