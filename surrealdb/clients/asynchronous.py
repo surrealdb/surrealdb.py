@@ -16,7 +16,6 @@ limitations under the License.
 from json import JSONDecodeError
 from types import TracebackType
 from typing import Any
-from typing import Literal
 from typing import Optional
 from typing import Type
 
@@ -78,16 +77,7 @@ class AsyncSurrealDBClient:
 
     async def _request(
         self,
-        method: Literal[
-            "GET",
-            "POST",
-            "PUT",
-            "PATCH",
-            "DELETE",
-            "OPTIONS",
-            "TRACE",
-            "HEAD",
-        ],
+        method: str,
         uri: str,
         data: Optional[str] = None,
     ) -> SurrealResponse:
