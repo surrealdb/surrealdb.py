@@ -26,3 +26,10 @@ Temporary Items
 # -----------------------------------
 
 *.db
+
+# Poetry Lock file
+# Locks are only recommended to be included in CLI applications
+poetry.lock
+
+# Python Cache
+__pycache__
