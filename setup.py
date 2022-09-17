@@ -20,6 +20,7 @@ def get_readme() -> str:
 setup(
     name="surrealdb",
     version=get_package_version("surrealdb"),
+    license="Apache-2.0",
     python_requires=">=3.7",
     url="https://github.com/surrealdb/surrealdb.py",
     description="The official SurrealDB library for Python.",
@@ -27,9 +28,7 @@ setup(
     long_description_content_type="text/markdown",
     package_data={"surrealdb": ["py.typed"]},
     install_requires=["httpx>=0.23.0", "requests>=2.28.1"],
-    extras_require={
-        "speedup": ["orjson>=3.8.0"]
-    },
+    extras_require={"speedup": ["orjson>=3.8.0"]},
     classifiers=[
         "Intended Audience :: Developers",
         "Operating System :: OS Independent",
@@ -39,5 +38,5 @@ setup(
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3 :: Only",
-    ]
+    ],
 )
