@@ -16,10 +16,11 @@ limitations under the License.
 from typing import Any
 
 try:
-    import orjson as json
+    import msgspec
 except ImportError:
     import json
+    msgspec = None
 
 
 def load_json(obj: Any) -> Any:
-    return json.loads(obj)
+    return msgspec.json.decode(obj) if msgspec else json.loads(obj)

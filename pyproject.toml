@@ -19,7 +19,7 @@ black = "^22.8.0"
 isort = "^5.10.1"
 
 [tool.poetry.extras]
-speed = [ "msgspec", "orjson", "charset-normalizer", "aiodns", "Brotli" ]
+speed = [ "msgspec", "charset-normalizer", "aiodns", "Brotli" ]
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
