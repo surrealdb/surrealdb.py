@@ -1,0 +1,2 @@
+class SurrealException(Exception):
+    pass
