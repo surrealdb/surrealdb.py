@@ -12,6 +12,8 @@ from ..common import json as jsonlib
 from ..exceptions.surreal_exception import SurrealException
 from ..models.response import SurrealResponse
 
+__all__ = ["AsyncSurrealDBClient"]
+
 
 class AsyncSurrealDBClient:
     def __init__(self, url: str, namespace: str, database: str,
