@@ -30,8 +30,14 @@ __all__ = ("SurrealDBClient",)
 
 
 class SurrealDBClient:
-    def __init__(self, url: str, namespace: str, database: str,
-                 username: str, password: str) -> None:
+    def __init__(
+        self,
+        url: str,
+        namespace: str,
+        database: str,
+        username: str,
+        password: str,
+    ) -> None:
         self._url = url.removesuffix("/")
         self._namespace = namespace
         self._database = database
@@ -56,10 +62,12 @@ class SurrealDBClient:
         self.connect()
         return self
 
-    def __exit__(self,
-                 exc_type: Type[BaseException] = None,
-                 exc_value: BaseException = None,
-                 traceback: TracebackType = None) -> None:
+    def __exit__(
+        self,
+        exc_type: Type[BaseException] = None,
+        exc_value: BaseException = None,
+        traceback: TracebackType = None,
+    ) -> None:
         self.disconnect()
 
     def connect(self) -> None:
@@ -68,29 +76,35 @@ class SurrealDBClient:
     async def disconnect(self) -> None:
         self._http.close()
 
-    def _request(self,
-                 method: Literal["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "HEAD"],
-                 uri: str,
-                 data: Optional[str] = None) -> SurrealResponse:
-        surreal_response = self._http.request(
-            method=method, url=uri, data=data)
+    def _request(
+        self,
+        method: Literal[
+            "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "HEAD"
+        ],
+        uri: str,
+        data: Optional[str] = None,
+    ) -> SurrealResponse:
+        surreal_response = self._http.request(method=method, url=uri, data=data)
         surreal_raw_data = surreal_response.read()
 
         try:
             surreal_data = jsonlib.loads(surreal_raw_data)
         except JSONDecodeError:
             raise SurrealException(
-                f"Invalid JSON response from SurrealDB: {surreal_raw_data}")
+                f"Invalid JSON response from SurrealDB: {surreal_raw_data}"
+            )
         else:
             response_obj = SurrealResponse(**surreal_data[0])
 
         if surreal_response.status_code not in range(200, 300):
             raise SurrealException(
-                f"Query failed with status code {surreal_response.status_code}: {response_obj.result}")
+                f"Query failed with status code {surreal_response.status_code}: {response_obj.result}"
+            )
 
         if response_obj.status != "OK":
             raise SurrealException(
-                f"Query failed with status {response_obj.status}: {response_obj.result}")
+                f"Query failed with status {response_obj.status}: {response_obj.result}"
+            )
 
         return response_obj
 
@@ -100,13 +114,19 @@ class SurrealDBClient:
 
     def create_all(self, table: str, data: Any) -> list[dict[str, Any]]:
         response = self._request(
-            method="POST", uri=f"/key/{table}", data=jsonlib.dumps(data))
+            method="POST",
+            uri=f"/key/{table}",
+            data=jsonlib.dumps(data),
+        )
 
         return response.result
 
     def create_one(self, table: str, id: str, data: Any) -> dict[str, Any]:
         response = self._request(
-            method="POST", uri=f"/key/{table}/{id}", data=jsonlib.dumps(data))
+            method="POST",
+            uri=f"/key/{table}/{id}",
+            data=jsonlib.dumps(data),
+        )
 
         return response.result[0]
 
@@ -127,13 +147,19 @@ class SurrealDBClient:
 
     def replace_one(self, table: str, id: str, data: Any) -> dict[str, Any]:
         response = self._request(
-            method="PUT", uri=f"/key/{table}/{id}", data=jsonlib.dumps(data))
+            method="PUT",
+            uri=f"/key/{table}/{id}",
+            data=jsonlib.dumps(data),
+        )
 
         return response.result[0]
 
     def upsert_one(self, table: str, id: str, data: Any) -> dict[str, Any]:
-        response = self._request(method="PATCH",
-                                 uri=f"/key/{table}/{id}", data=jsonlib.dumps(data))
+        response = self._request(
+            method="PATCH",
+            uri=f"/key/{table}/{id}",
+            data=jsonlib.dumps(data),
+        )
 
         return response.result[0]
 

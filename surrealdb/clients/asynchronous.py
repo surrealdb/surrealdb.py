@@ -30,8 +30,14 @@ __all__ = ("AsyncSurrealDBClient",)
 
 
 class AsyncSurrealDBClient:
-    def __init__(self, url: str, namespace: str, database: str,
-                 username: str, password: str) -> None:
+    def __init__(
+        self,
+        url: str,
+        namespace: str,
+        database: str,
+        username: str,
+        password: str,
+    ) -> None:
         self._url = url.removesuffix("/")
         self._namespace = namespace
         self._database = database
@@ -56,10 +62,12 @@ class AsyncSurrealDBClient:
         await self.connect()
         return self
 
-    async def __aexit__(self,
-                        exc_type: Type[BaseException] = None,
-                        exc_value: BaseException = None,
-                        traceback: TracebackType = None) -> None:
+    async def __aexit__(
+        self,
+        exc_type: Type[BaseException] = None,
+        exc_value: BaseException = None,
+        traceback: TracebackType = None,
+    ) -> None:
         await self.disconnect()
 
     async def connect(self) -> None:
@@ -68,10 +76,14 @@ class AsyncSurrealDBClient:
     async def disconnect(self) -> None:
         await self._http.aclose()
 
-    async def _request(self,
-                       method: Literal["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "HEAD"],
-                       uri: str,
-                       data: Optional[str] = None) -> SurrealResponse:
+    async def _request(
+        self,
+        method: Literal[
+            "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "HEAD"
+        ],
+        uri: str,
+        data: Optional[str] = None,
+    ) -> SurrealResponse:
         surreal_response = await self._http.request(method=method, url=uri, data=data)
         surreal_raw_data = await surreal_response.aread()
 
@@ -79,17 +91,20 @@ class AsyncSurrealDBClient:
             surreal_data = jsonlib.loads(surreal_raw_data)
         except JSONDecodeError:
             raise SurrealException(
-                f"Invalid JSON response from SurrealDB: {surreal_raw_data}")
+                f"Invalid JSON response from SurrealDB: {surreal_raw_data}"
+            )
         else:
             response_obj = SurrealResponse(**surreal_data[0])
 
         if surreal_response.status_code not in range(200, 300):
             raise SurrealException(
-                f"Query failed with status code {surreal_response.status_code}: {response_obj.result}")
+                f"Query failed with status code {surreal_response.status_code}: {response_obj.result}"
+            )
 
         if response_obj.status != "OK":
             raise SurrealException(
-                f"Query failed with status {response_obj.status}: {response_obj.result}")
+                f"Query failed with status {response_obj.status}: {response_obj.result}"
+            )
 
         return response_obj
 
@@ -98,11 +113,21 @@ class AsyncSurrealDBClient:
         return response.result
 
     async def create_all(self, table: str, data: Any) -> list[dict[str, Any]]:
-        response = await self._request(method="POST", uri=f"/key/{table}", data=jsonlib.dumps(data))
+        response = await self._request(
+            method="POST",
+            uri=f"/key/{table}",
+            data=jsonlib.dumps(data),
+        )
+
         return response.result
 
     async def create_one(self, table: str, id: str, data: Any) -> dict[str, Any]:
-        response = await self._request(method="POST", uri=f"/key/{table}/{id}", data=jsonlib.dumps(data))
+        response = await self._request(
+            method="POST",
+            uri=f"/key/{table}/{id}",
+            data=jsonlib.dumps(data),
+        )
+
         return response.result[0]
 
     async def select_all(self, table: str) -> list[dict[str, Any]]:
@@ -121,11 +146,20 @@ class AsyncSurrealDBClient:
     # `upsert_one` requires only the fields you wish to be updated (if it exists), and will create/update using it
 
     async def replace_one(self, table: str, id: str, data: Any) -> dict[str, Any]:
-        response = await self._request(method="PUT", uri=f"/key/{table}/{id}", data=jsonlib.dumps(data))
+        response = await self._request(
+            method="PUT",
+            uri=f"/key/{table}/{id}",
+            data=jsonlib.dumps(data),
+        )
         return response.result[0]
 
     async def upsert_one(self, table: str, id: str, data: Any) -> dict[str, Any]:
-        response = await self._request(method="PATCH", uri=f"/key/{table}/{id}", data=jsonlib.dumps(data))
+        response = await self._request(
+            method="PATCH",
+            uri=f"/key/{table}/{id}",
+            data=jsonlib.dumps(data),
+        )
+
         return response.result[0]
 
     async def delete_all(self, table: str) -> None:
