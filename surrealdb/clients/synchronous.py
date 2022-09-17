@@ -1,7 +1,8 @@
 from json import JSONDecodeError
 from types import TracebackType
-from typing import Any, Optional
+from typing import Any
 from typing import Literal
+from typing import Optional
 from typing import Type
 
 import httpx

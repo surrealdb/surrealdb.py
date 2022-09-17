@@ -1,5 +1,5 @@
-from typing import Union
 from typing import Any
+from typing import Union
 
 
 try:
