@@ -36,6 +36,22 @@ def encode_basic_auth(username: str, password: str):
 
 # NOTE: This implements HTTP state and requests
 class HTTPClient:
+    """
+    Raw HTTP Client used to wrap surreal.
+
+    Parameters
+    ----------
+    url: :class:`str`
+        The url your surrealdb instance is running on.
+    username: :class:`str`
+        The username to use to authenticate with your instance.
+    password: :class:`str`
+        The password to use to authenticate with your instance.
+    ns: :class:`str`
+        The namespace on your instance to use.
+    db: :class:`str`
+        The database on your instance to use.
+    """
     def __init__(
         self,
         url: str,
@@ -61,6 +77,21 @@ class HTTPClient:
         self._session = ClientSession()
 
     async def execute(self, query: str) -> list[dict[str, Any]]:
+        """
+        Executes this query and returns the data given by the server.
+
+        If the query is a transactional query, the list should be ordered based on the transaction order.
+
+        Parameters
+        ----------
+        query: :class:`str`
+            The query to execute.
+
+        Returns
+        -------
+        rows: list[dict[str, Any]]
+        """
+
         if self._session is None:
             await self._create_session()
 
@@ -87,4 +118,7 @@ class HTTPClient:
         return ret
 
     async def close(self) -> None:
+        """
+        Closes the HTTP session created upon a execution.
+        """
         await self._session.close()
