@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 from json import JSONDecodeError
 from types import TracebackType
-from typing import Any
+from typing import Any, Optional
 from typing import Literal
 from typing import Type
 
@@ -38,7 +36,7 @@ class AsyncSurrealDBClient:
             },
         )
 
-    async def __aenter__(self) -> AsyncSurrealDBClient:
+    async def __aenter__(self) -> "AsyncSurrealDBClient":
         await self.connect()
         return self
 
@@ -57,7 +55,7 @@ class AsyncSurrealDBClient:
     async def _request(self,
                        method: Literal["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "HEAD"],
                        uri: str,
-                       data: str | None = None) -> SurrealResponse:
+                       data: Optional[str] = None) -> SurrealResponse:
         surreal_response = await self._http.request(method=method, url=uri, data=data)
         surreal_raw_data = await surreal_response.aread()
 

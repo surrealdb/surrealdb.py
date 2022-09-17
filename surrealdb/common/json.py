@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+from typing import Union
 from typing import Any
 
 
@@ -19,5 +18,5 @@ def dumps(obj: Any, **kwargs: Any) -> str:
     return result
 
 
-def loads(content: bytes | str, **kwargs: Any) -> Any:
+def loads(content: Union[bytes, str], **kwargs: Any) -> Any:
     return jsonlib.loads(content, **kwargs)
