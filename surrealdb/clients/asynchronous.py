@@ -79,7 +79,14 @@ class AsyncSurrealDBClient:
     async def _request(
         self,
         method: Literal[
-            "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "HEAD"
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE",
+            "OPTIONS",
+            "TRACE",
+            "HEAD",
         ],
         uri: str,
         data: Optional[str] = None,
@@ -91,19 +98,19 @@ class AsyncSurrealDBClient:
             surreal_data = jsonlib.loads(surreal_raw_data)
         except JSONDecodeError:
             raise SurrealException(
-                f"Invalid JSON response from SurrealDB: {surreal_raw_data}"
+                f"Invalid JSON response from SurrealDB: {surreal_raw_data}",
             )
         else:
             response_obj = SurrealResponse(**surreal_data[0])
 
         if surreal_response.status_code not in range(200, 300):
             raise SurrealException(
-                f"Query failed with status code {surreal_response.status_code}: {response_obj.result}"
+                f"Query failed with status code {surreal_response.status_code}: {response_obj.result}",
             )
 
         if response_obj.status != "OK":
             raise SurrealException(
-                f"Query failed with status {response_obj.status}: {response_obj.result}"
+                f"Query failed with status {response_obj.status}: {response_obj.result}",
             )
 
         return response_obj
