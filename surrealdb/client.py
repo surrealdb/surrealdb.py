@@ -34,6 +34,7 @@ class SurrealDBClient:
     def __init__(
         self,
         url: str,
+        *,
         namespace: str,
         database: str,
         username: str,
