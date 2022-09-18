@@ -110,7 +110,7 @@ class WebsocketClient:
 
             json_response = jsonlib.loads(msg.data)
             response = RPCResponse(**json_response)
-            if response.get("error") is not None:
+            if response.error is not None:
                 raise SurrealWebsocketException(response.error.message)
 
             self._responses[response["id"]] = response
