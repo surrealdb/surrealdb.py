@@ -27,10 +27,10 @@ from ..common import json as jsonlib
 from ..common.exceptions import SurrealException
 from ..models.response import SurrealResponse
 
-__all__ = ("SurrealDBClient",)
+__all__ = ("SyncSurrealDBClient",)
 
 
-class SurrealDBClient:
+class SyncSurrealDBClient:
     def __init__(
         self,
         url: str,
@@ -59,7 +59,7 @@ class SurrealDBClient:
             },
         )
 
-    def __enter__(self) -> "SurrealDBClient":
+    def __enter__(self) -> "SyncSurrealDBClient":
         self.connect()
         return self
 

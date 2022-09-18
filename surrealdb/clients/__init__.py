@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 from .asynchronous import AsyncSurrealDBClient
-from .synchronous import SurrealDBClient
+from .synchronous import SyncSurrealDBClient
 
 __all__ = (
     "AsyncSurrealDBClient",
-    "SurrealDBClient",
+    "SyncSurrealDBClient",
 )

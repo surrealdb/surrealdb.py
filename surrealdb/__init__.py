@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 from .clients import AsyncSurrealDBClient
-from .clients import SurrealDBClient
+from .clients import SyncSurrealDBClient
 
 __version__ = "0.1.0"
 __title__ = "surrealdb"
@@ -22,6 +22,6 @@ __author__ = "SurrealDB"
 __license__ = "Apache-2.0"
 __copyright__ = "SurrealDB Ltd"
 __all__ = (
-    "SurrealDBClient",
+    "SyncSurrealDBClient",
     "AsyncSurrealDBClient",
 )
