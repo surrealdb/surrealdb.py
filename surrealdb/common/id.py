@@ -13,10 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-import secrets
 
 __all__ = ("generate_id",)
 
+CURRENT_ID = 0
 
-def generate_id(length: int = 16) -> str:
-    return secrets.token_hex(length)
+
+def generate_id() -> str:
+    global CURRENT_ID
+
+    id = CURRENT_ID % (2**32)
+    CURRENT_ID += 1
+
+    return str(id)
