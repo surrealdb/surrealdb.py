@@ -16,6 +16,7 @@ limitations under the License.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from types import TracebackType
 from typing import Any
 from typing import Dict
@@ -83,7 +84,7 @@ class WebsocketClient:
             await self.authenticate(self._token)
 
         if self._username is not None and self._password is not None:
-            await self.sign_in(username=self._username, password=self._password)
+            await self.signin(username=self._username, password=self._password)
 
         if self._namespace is not None and self._database is not None:
             await self.use(self._namespace, self._database)
@@ -107,11 +108,12 @@ class WebsocketClient:
             if msg.type == WSMsgType.ERROR:
                 raise SurrealWebsocketException(msg.data)
 
-            response: RPCResponse = jsonlib.loads(msg.data)
-            if response.get("error") is not None:
-                raise SurrealWebsocketException(response["error"]["message"])
+            json_response = jsonlib.loads(msg.data)
+            response = RPCResponse(**json_response)
+            if response.error is not None:
+                raise SurrealWebsocketException(response.error.message)
 
-            self._responses[response["id"]] = response
+            self._responses[response.id] = response
 
     async def _wait_response(self, id: str) -> RPCResponse:
         while id not in self._responses:
@@ -125,16 +127,15 @@ class WebsocketClient:
         method: str,
         *params: Any,
     ) -> Any:
-        request: RPCRequest = {
-            "id": generate_id(length=16),
-            "method": method,
-            "params": params,
-        }
+        request = RPCRequest(
+            id=generate_id(length=16),
+            method=method,
+            params=params,
+        )
+        await self._ws.send_json(dataclasses.asdict(request))
 
-        await self._ws.send_json(request)
-
-        response = await self._wait_response(request["id"])
-        return response["result"]
+        response = await self._wait_response(request.id)
+        return response.result
 
     async def ping(self) -> bool:
         response = await self._send("ping")

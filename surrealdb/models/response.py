@@ -18,7 +18,6 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import TypedDict
 
 from .error import RPCError
 
@@ -35,7 +34,8 @@ class SurrealResponse:
     result: List[Dict[str, Any]]
 
 
-class RPCResponse(TypedDict):
+@dataclass(frozen=True)
+class RPCResponse:
     id: str
-    error: Optional[RPCError]
     result: Any
+    error: Optional[RPCError] = None
