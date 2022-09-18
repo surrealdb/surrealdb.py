@@ -249,8 +249,8 @@ class WebsocketClient:
         response = await self._send("set", key, value)
         return response
 
-    async def query(self, sql: str, kwargs: Any) -> List[Dict[str, Any]]:
-        response = await self._send("query", sql, kwargs)
+    async def query(self, sql: str, params: Any) -> List[Dict[str, Any]]:
+        response = await self._send("query", sql, params)
         return response
 
     async def select(self, table_or_record_id: str) -> List[Dict[str, Any]]:
