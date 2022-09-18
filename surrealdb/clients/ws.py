@@ -59,9 +59,7 @@ class WebsocketClient:
         self._ws: ClientWebSocketResponse
         self._recv_task: asyncio.Task
 
-        self._response_futures: WeakKeyDictionary[
-            int, asyncio.Future
-        ] = WeakKeyDictionary()
+        self._response_futures: dict[str, asyncio.Future] = {}
 
     async def __aenter__(self) -> WebsocketClient:
         await self.connect()
@@ -86,7 +84,7 @@ class WebsocketClient:
             await self.authenticate(self._token)
 
         if self._username is not None and self._password is not None:
-            await self.sign_in(username=self._username, password=self._password)
+            await self.signin(username=self._username, password=self._password)
 
         if self._namespace is not None and self._database is not None:
             await self.use(self._namespace, self._database)
@@ -135,7 +133,7 @@ class WebsocketClient:
         future = loop.create_future()
         self._response_futures[request["id"]] = future
 
-        response = await asyncio.wait_for(future)
+        response = await asyncio.wait_for(future, timeout=None)
         return response["result"]
 
     async def ping(self) -> bool:
