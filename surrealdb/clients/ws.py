@@ -118,8 +118,6 @@ class WebsocketClient:
             if request_future is not None:
                 request_future.set_result(response)
 
-            self._responses[response.id] = response
-
     async def _send(
         self,
         method: str,
@@ -136,7 +134,7 @@ class WebsocketClient:
         future = loop.create_future()
         self._response_futures[request.id] = future
 
-        response = await asyncio.wait_for(future, timeout=None)
+        response: RPCResponse = await asyncio.wait_for(future, timeout=None)
         return response.result
 
     async def ping(self) -> bool:
