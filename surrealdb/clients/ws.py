@@ -17,6 +17,7 @@ import asyncio
 from types import TracebackType
 from typing import Any
 from typing import Awaitable
+from typing import List
 from typing import Optional
 from typing import Type
 
@@ -137,7 +138,11 @@ class SurrealDBWSClient:
         response = await self._send("ping")
         return response
 
-    async def use(self, namespace: str, database: str) -> Any:
+    async def use(
+        self,
+        namespace: Optional[str] = None,
+        database: Optional[str] = None,
+    ) -> None:
         response = await self._send("use", namespace, database)
 
         self._namespace = namespace
@@ -193,20 +198,32 @@ class SurrealDBWSClient:
             "NS": namespace,
         }
 
+        if username is not None:
+            self._username = username
+
+        if password is not None:
+            self._password = password
+
+        if namespace is not None:
+            self._namespace = namespace
+
+        if database is not None:
+            self._database = database
+
         # if we send None, it's going to error so we must remove any none values
         sanitised_params = {k: v for k, v in request_params.items() if v is not None}
 
         response = await self._send("signin", sanitised_params)
         return response
 
-    async def invalidate(self) -> Any:
+    async def invalidate(self) -> None:
         response = await self._send("invalidate")
 
         self._token = None
 
         return response
 
-    async def authenticate(self, token: str) -> Any:
+    async def authenticate(self, token: str) -> None:
         response = await self._send("authenticate", token)
 
         self._token = token
@@ -217,38 +234,42 @@ class SurrealDBWSClient:
         response = await self._send("live", table)
         return response
 
-    async def kill(self, query: str) -> Any:
-        response = await self._send("kill", query)
+    async def kill(self, id: str) -> Any:
+        response = await self._send("kill", id)
         return response
 
     async def let(self, key: str, value: Any) -> Any:
         response = await self._send("let", key, value)
         return response
 
-    async def query(self, sql: str, **kwargs: Any) -> Any:
+    async def set(self, key: str, value: Any) -> Any:
+        response = await self._send("set", key, value)
+        return response
+
+    async def query(self, sql: str, **kwargs: Any) -> List[Any]:
         response = await self._send("query", sql, kwargs)
         return response
 
-    async def select(self, what: str) -> Any:
-        response = await self._send("select", what)
+    async def select(self, table_or_record_id: str) -> List[Any]:
+        response = await self._send("select", table_or_record_id)
         return response
 
-    async def create(self, thing: str, **data: Any) -> Any:
-        response = await self._send("create", thing, data)
+    async def create(self, table_or_record_id: str, **data: Any) -> List[Any]:
+        response = await self._send("create", table_or_record_id, data)
         return response
 
-    async def update(self, thing: str, **data: Any) -> Any:
-        response = await self._send("update", thing, data)
+    async def update(self, table_or_record_id: str, **data: Any) -> List[Any]:
+        response = await self._send("update", table_or_record_id, data)
         return response
 
-    async def change(self, thing: str, **data: Any) -> Any:
-        response = await self._send("change", thing, data)
+    async def change(self, table_or_record_id: str, **data: Any) -> List[Any]:
+        response = await self._send("change", table_or_record_id, data)
         return response
 
-    async def modify(self, thing: str, **data: Any) -> Any:
-        response = await self._send("modify", thing, data)
+    async def modify(self, table_or_record_id: str, **data: Any) -> List[Any]:
+        response = await self._send("modify", table_or_record_id, data)
         return response
 
-    async def delete(self, what: str) -> Any:
-        response = await self._send("delete", what)
+    async def delete(self, table_or_record_id: str) -> List[Any]:
+        response = await self._send("delete", table_or_record_id)
         return response
