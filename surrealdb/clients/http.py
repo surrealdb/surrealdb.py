@@ -231,7 +231,7 @@ class HTTPClient:
         response = await self._request(method="GET", uri=f"/key/{table}/{id}")
         if not response.result:
             raise SurrealException(f"Key {id} not found in table {table}")
-            
+
         return response.result[0]
 
     async def replace_one(self, table: str, id: str, data: Any) -> Dict[str, Any]:
@@ -280,7 +280,7 @@ class HTTPClient:
         Returns
         -------
         :class:`Dict[str, Any]`
-            The new item.
+            The difference between the old and new item.
         """
         response = await self._request(
             method="PATCH",
