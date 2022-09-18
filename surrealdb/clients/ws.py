@@ -182,7 +182,7 @@ class SurrealDBWSClient:
         response = await self._send("signup", sanitised_params)
         return response
 
-    async def sign_in(
+    async def signin(
         self,
         *,
         username: Optional[str] = None,
