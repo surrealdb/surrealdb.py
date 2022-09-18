@@ -2,7 +2,7 @@
 name = "surrealdb"
 version = "0.1.0"
 description = "The official SurrealDB library for Python."
-authors = []
+authors = ["SurrealDB"]
 license = "Apache-2.0"
 
 [tool.poetry.dependencies]

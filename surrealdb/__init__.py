@@ -18,6 +18,7 @@ from .clients import SurrealDBClient
 
 __version__ = "0.1.0"
 __title__ = "surrealdb"
+__author__ = "SurrealDB"
 __license__ = "Apache-2.0"
 __copyright__ = "SurrealDB Ltd"
 __all__ = (

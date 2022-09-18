@@ -20,6 +20,8 @@ def get_readme() -> str:
 setup(
     name="surrealdb",
     version=get_package_version("surrealdb"),
+    author="SurrealDB",
+    author_email="info@surrealdb.com",
     license="Apache-2.0",
     python_requires=">=3.7",
     url="https://github.com/surrealdb/surrealdb.py",
