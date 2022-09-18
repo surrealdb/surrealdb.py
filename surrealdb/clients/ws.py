@@ -17,6 +17,7 @@ import asyncio
 from types import TracebackType
 from typing import Any
 from typing import Awaitable
+from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Type
@@ -134,7 +135,7 @@ class SurrealDBWSClient:
         response = await self._wait_response(request["id"])
         return response["result"]
 
-    async def ping(self) -> Any:
+    async def ping(self) -> bool:
         response = await self._send("ping")
         return response
 
@@ -150,7 +151,7 @@ class SurrealDBWSClient:
 
         return response
 
-    async def info(self) -> Any:
+    async def info(self) -> None:
         response = await self._send("info")
         return response
 
@@ -164,7 +165,7 @@ class SurrealDBWSClient:
         email: Optional[str] = None,
         scope: Optional[str] = None,
         interests: Optional[list[str]] = None,
-    ) -> Any:
+    ) -> None:
         request_params = {
             "user": username,
             "pass": password,
@@ -189,7 +190,7 @@ class SurrealDBWSClient:
         namespace: Optional[str] = None,
         database: Optional[str] = None,
         email: Optional[str] = None,
-    ) -> Any:
+    ) -> None:
         request_params = {
             "user": username,
             "pass": password,
@@ -230,46 +231,54 @@ class SurrealDBWSClient:
 
         return response
 
-    async def live(self, table: str) -> Any:
+    async def live(self, table: str) -> None:
         response = await self._send("live", table)
         return response
 
-    async def kill(self, id: str) -> Any:
+    async def kill(self, id: str) -> None:
         response = await self._send("kill", id)
         return response
 
-    async def let(self, key: str, value: Any) -> Any:
+    async def let(self, key: str, value: Any) -> None:
         response = await self._send("let", key, value)
         return response
 
-    async def set(self, key: str, value: Any) -> Any:
+    async def set(self, key: str, value: Any) -> None:
         response = await self._send("set", key, value)
         return response
 
-    async def query(self, sql: str, **kwargs: Any) -> List[Any]:
+    async def query(self, sql: str, **kwargs: Any) -> List[Dict[str, Any]]:
         response = await self._send("query", sql, kwargs)
         return response
 
-    async def select(self, table_or_record_id: str) -> List[Any]:
+    async def select(self, table_or_record_id: str) -> List[Dict[str, Any]]:
         response = await self._send("select", table_or_record_id)
         return response
 
-    async def create(self, table_or_record_id: str, **data: Any) -> List[Any]:
+    async def create(
+        self, table_or_record_id: str, **data: Any
+    ) -> List[Dict[str, Any]]:
         response = await self._send("create", table_or_record_id, data)
         return response
 
-    async def update(self, table_or_record_id: str, **data: Any) -> List[Any]:
+    async def update(
+        self, table_or_record_id: str, **data: Any
+    ) -> List[Dict[str, Any]]:
         response = await self._send("update", table_or_record_id, data)
         return response
 
-    async def change(self, table_or_record_id: str, **data: Any) -> List[Any]:
+    async def change(
+        self, table_or_record_id: str, **data: Any
+    ) -> List[Dict[str, Any]]:
         response = await self._send("change", table_or_record_id, data)
         return response
 
-    async def modify(self, table_or_record_id: str, **data: Any) -> List[Any]:
+    async def modify(
+        self, table_or_record_id: str, **data: Any
+    ) -> List[Dict[str, Any]]:
         response = await self._send("modify", table_or_record_id, data)
         return response
 
-    async def delete(self, table_or_record_id: str) -> List[Any]:
+    async def delete(self, table_or_record_id: str) -> List[Dict[str, Any]]:
         response = await self._send("delete", table_or_record_id)
         return response
