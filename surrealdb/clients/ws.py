@@ -93,7 +93,9 @@ class WebsocketClient:
         self._recv_task.cancel()
 
         await self._ws.close()
-        await self._client.close()  # type: ignore
+
+        if isinstance(self._client, ClientSession):
+            await self._client.close()
 
     def _receive_complete(self, task: asyncio.Task) -> None:
         try:
