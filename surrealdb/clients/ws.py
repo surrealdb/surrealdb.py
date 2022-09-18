@@ -13,10 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
+from __future__ import annotations
+
 import asyncio
 from types import TracebackType
 from typing import Any
-from typing import Awaitable
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -59,7 +60,7 @@ class SurrealDBWSClient:
 
         self._responses: dict[str, RPCResponse] = {}
 
-    async def __aenter__(self) -> "SurrealDBWSClient":
+    async def __aenter__(self) -> SurrealDBWSClient:
         await self.connect()
         return self
 
