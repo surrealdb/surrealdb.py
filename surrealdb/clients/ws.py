@@ -38,6 +38,7 @@ class SurrealDBWSClient:
     def __init__(
         self,
         url: str,
+        *,
         token: Optional[str] = None,
         namespace: Optional[str] = None,
         database: Optional[str] = None,
