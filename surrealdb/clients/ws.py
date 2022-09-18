@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 import asyncio
-from json import JSONDecodeError
 from types import TracebackType
 from typing import Any
+from typing import Awaitable
 from typing import Optional
 from typing import Type
 
@@ -25,7 +25,6 @@ from aiohttp import ClientWebSocketResponse
 from aiohttp import WSMsgType
 
 from ..common import json as jsonlib
-from ..common.exceptions import SurrealException
 from ..common.exceptions import SurrealWebsocketException
 from ..common.id import generate_id
 from ..models import RPCRequest
@@ -75,25 +74,30 @@ class SurrealDBWSClient:
         self._ws = await self._client.ws_connect(self._url)
 
         self._recv_task = asyncio.create_task(self._receive_task())
+        self._recv_task.add_done_callback(self._receive_complete)
 
         if self._token is not None:
             await self.authenticate(self._token)
 
         if self._username is not None and self._password is not None:
-            await self.sign_in(
-                {
-                    "user": self._username,
-                    "pass": self._password,
-                },
-            )
+            await self.sign_in(username=self._username, password=self._password)
 
         if self._namespace is not None and self._database is not None:
             await self.use(self._namespace, self._database)
 
     async def disconnect(self) -> None:
-        await self._recv_task.cancel()
+        self._recv_task.cancel()
+
         await self._ws.close()
         await self._client.close()
+
+    def _receive_complete(self, task: asyncio.Task) -> None:
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            raise e
 
     async def _receive_task(self) -> None:
         async for msg in self._ws:
@@ -101,7 +105,7 @@ class SurrealDBWSClient:
                 raise SurrealWebsocketException(msg.data)
 
             response: RPCResponse = jsonlib.loads(msg.data)
-            if response["error"] is not None:
+            if response.get("error") is not None:
                 raise SurrealWebsocketException(response["error"]["message"])
 
             self._responses[response["id"]] = response
@@ -116,7 +120,6 @@ class SurrealDBWSClient:
     async def _send(
         self,
         method: str,
-        wait_for_response: bool = True,
         *params: Any,
     ) -> Any:
         request: RPCRequest = {
@@ -127,9 +130,8 @@ class SurrealDBWSClient:
 
         await self._ws.send_json(request)
 
-        if wait_for_response:
-            response = await self._wait_response(request["id"])
-            return response["result"]
+        response = await self._wait_response(request["id"])
+        return response["result"]
 
     async def use(self, namespace: str, database: str) -> Any:
         response = await self._send("use", namespace, database)
@@ -143,12 +145,54 @@ class SurrealDBWSClient:
         response = await self._send("info")
         return response
 
-    async def sign_up(self, **kwargs: Any) -> Any:
-        response = await self._send("signup", kwargs)
+    async def sign_up(
+        self,
+        *,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        namespace: Optional[str] = None,
+        database: Optional[str] = None,
+        email: Optional[str] = None,
+        scope: Optional[str] = None,
+        interests: Optional[list[str]] = None,
+    ) -> Any:
+        request_params = {
+            "user": username,
+            "pass": password,
+            "email": email,
+            "DB": database,
+            "NS": namespace,
+            "SC": scope,
+            "interests": interests,
+        }
+
+        # if we send None, it's going to error so we must remove any none values
+        sanitised_params = {k: v for k, v in request_params.items() if v is not None}
+
+        response = await self._send("signup", sanitised_params)
         return response
 
-    async def sign_in(self, **kwargs: Any) -> Any:
-        response = await self._send("signin", kwargs)
+    async def sign_in(
+        self,
+        *,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        namespace: Optional[str] = None,
+        database: Optional[str] = None,
+        email: Optional[str] = None,
+    ) -> Any:
+        request_params = {
+            "user": username,
+            "pass": password,
+            "email": email,
+            "DB": database,
+            "NS": namespace,
+        }
+
+        # if we send None, it's going to error so we must remove any none values
+        sanitised_params = {k: v for k, v in request_params.items() if v is not None}
+
+        response = await self._send("signin", sanitised_params)
         return response
 
     async def invalidate(self) -> Any:
