@@ -27,10 +27,10 @@ from ..common import json as jsonlib
 from ..common.exceptions import SurrealException
 from ..models.response import SurrealResponse
 
-__all__ = ("SurrealDBHTTPClient",)
+__all__ = ("HTTPClient",)
 
 
-class SurrealDBHTTPClient:
+class HTTPClient:
     def __init__(
         self,
         url: str,
@@ -60,7 +60,7 @@ class SurrealDBHTTPClient:
             },
         )
 
-    async def __aenter__(self) -> "SurrealDBHTTPClient":
+    async def __aenter__(self) -> "HTTPClient":
         await self.connect()
         return self
 

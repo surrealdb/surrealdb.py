@@ -13,12 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-from .clients import SurrealDBHTTPClient
-from .clients import SurrealDBWebsocketClient
+from .clients import HTTPClient
+from .clients import WebsocketClient
 
 __version__ = "0.2.0"
 __title__ = "surrealdb"
 __author__ = "SurrealDB"
 __license__ = "Apache-2.0"
 __copyright__ = "SurrealDB Ltd"
-__all__ = ("SurrealDBHTTPClient", "SurrealDBWebsocketClient")
+__all__ = ("HTTPClient", "WebsocketClient")

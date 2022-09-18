@@ -33,10 +33,10 @@ from ..common.id import generate_id
 from ..models import RPCRequest
 from ..models import RPCResponse
 
-__all__ = ("SurrealDBWebsocketClient",)
+__all__ = ("WebsocketClient",)
 
 
-class SurrealDBWebsocketClient:
+class WebsocketClient:
     def __init__(
         self,
         url: str,
@@ -60,7 +60,7 @@ class SurrealDBWebsocketClient:
 
         self._responses: dict[str, RPCResponse] = {}
 
-    async def __aenter__(self) -> SurrealDBWebsocketClient:
+    async def __aenter__(self) -> WebsocketClient:
         await self.connect()
         return self
 
