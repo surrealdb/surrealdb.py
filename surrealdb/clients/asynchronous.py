@@ -24,7 +24,7 @@ from typing import Type
 import httpx
 
 from ..common import json as jsonlib
-from ..exceptions.surreal_exception import SurrealException
+from ..common.exceptions import SurrealException
 from ..models.response import SurrealResponse
 
 __all__ = ("AsyncSurrealDBClient",)
