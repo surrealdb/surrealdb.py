@@ -252,43 +252,27 @@ class WebsocketClient:
         response = await self._send("set", key, value)
         return response
 
-    async def query(self, sql: str, **kwargs: Any) -> List[Dict[str, Any]]:
-        response = await self._send("query", sql, kwargs)
+    async def query(self, sql: str, params: Any) -> List[Dict[str, Any]]:
+        response = await self._send("query", sql, params)
         return response
 
     async def select(self, table_or_record_id: str) -> List[Dict[str, Any]]:
         response = await self._send("select", table_or_record_id)
         return response
 
-    async def create(
-        self,
-        table_or_record_id: str,
-        **data: Any,
-    ) -> List[Dict[str, Any]]:
+    async def create(self, table_or_record_id: str, data: Any) -> List[Dict[str, Any]]:
         response = await self._send("create", table_or_record_id, data)
         return response
 
-    async def update(
-        self,
-        table_or_record_id: str,
-        **data: Any,
-    ) -> List[Dict[str, Any]]:
+    async def update(self, table_or_record_id: str, data: Any) -> List[Dict[str, Any]]:
         response = await self._send("update", table_or_record_id, data)
         return response
 
-    async def change(
-        self,
-        table_or_record_id: str,
-        **data: Any,
-    ) -> List[Dict[str, Any]]:
+    async def change(self, table_or_record_id: str, data: Any) -> List[Dict[str, Any]]:
         response = await self._send("change", table_or_record_id, data)
         return response
 
-    async def modify(
-        self,
-        table_or_record_id: str,
-        **data: Any,
-    ) -> List[Dict[str, Any]]:
+    async def modify(self, table_or_record_id: str, data: Any) -> List[Dict[str, Any]]:
         response = await self._send("modify", table_or_record_id, data)
         return response
 
