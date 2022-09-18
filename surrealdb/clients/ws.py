@@ -23,6 +23,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Type
+from weakref import WeakKeyDictionary
 
 from aiohttp import ClientSession
 from aiohttp import ClientWebSocketResponse
@@ -55,11 +56,11 @@ class WebsocketClient:
         self._namespace = namespace
         self._database = database
 
-        self._client = ClientSession
+        self._client: ClientSession
         self._ws: ClientWebSocketResponse
         self._recv_task: asyncio.Task
 
-        self._responses: dict[str, RPCResponse] = {}
+        self._response_futures: Dict[str, asyncio.Future] = {}
 
     async def __aenter__(self) -> WebsocketClient:
         await self.connect()
@@ -92,8 +93,11 @@ class WebsocketClient:
     async def disconnect(self) -> None:
         self._recv_task.cancel()
 
-        await self._ws.close()
-        await self._client.close()
+        if isinstance(self._ws, ClientWebSocketResponse):
+            await self._ws.close()
+
+        if isinstance(self._client, ClientSession):
+            await self._client.close()
 
     def _receive_complete(self, task: asyncio.Task) -> None:
         try:
@@ -113,14 +117,9 @@ class WebsocketClient:
             if response.error is not None:
                 raise SurrealWebsocketException(response.error.message)
 
-            self._responses[response.id] = response
-
-    async def _wait_response(self, id: str) -> RPCResponse:
-        while id not in self._responses:
-            await asyncio.sleep(0.1)
-
-        response = self._responses.pop(id)
-        return response
+            request_future = self._response_futures.pop(response.id, None)
+            if request_future is not None:
+                request_future.set_result(response)
 
     async def _send(
         self,
@@ -134,7 +133,11 @@ class WebsocketClient:
         )
         await self._ws.send_json(dataclasses.asdict(request))
 
-        response = await self._wait_response(request.id)
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        self._response_futures[request.id] = future
+
+        response: RPCResponse = await asyncio.wait_for(future, timeout=None)
         return response.result
 
     async def ping(self) -> bool:
