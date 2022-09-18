@@ -58,19 +58,8 @@ class WebsocketClient:
     def __init__(
         self,
         url: str,
-        *,
-        token: Optional[str] = None,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        namespace: Optional[str] = None,
-        database: Optional[str] = None,
     ) -> None:
         self._url = url
-        self._token = token
-        self._username = username
-        self._password = password
-        self._namespace = namespace
-        self._database = database
 
         self._client: ClientSession
         self._ws: ClientWebSocketResponse
@@ -97,15 +86,6 @@ class WebsocketClient:
 
         self._recv_task = asyncio.create_task(self._receive_task())
         self._recv_task.add_done_callback(self._receive_complete)
-
-        if self._token is not None:
-            await self.authenticate(self._token)
-
-        if self._username is not None and self._password is not None:
-            await self.signin(username=self._username, password=self._password)
-
-        if self._namespace is not None and self._database is not None:
-            await self.use(self._namespace, self._database)
 
     async def disconnect(self) -> None:
         """Disconnects from the SurrealDB server."""
@@ -180,79 +160,35 @@ class WebsocketClient:
         response = await self._send("info")
         return response
 
-    async def signup(
-        self,
-        *,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        namespace: Optional[str] = None,
-        database: Optional[str] = None,
-        email: Optional[str] = None,
-        scope: Optional[str] = None,
-        interests: Optional[List[str]] = None,
-    ) -> None:
-        request_params = {
-            "user": username,
-            "pass": password,
-            "email": email,
-            "DB": database,
-            "NS": namespace,
-            "SC": scope,
-            "interests": interests,
-        }
+    async def signup(self, params: Dict[str, Any]) -> str:
+        """Creates an account on the SurrealDB server.
 
+        Parameters
+        ----------
+        params: :class:`Dict[str, Any]`
+            The dict of params to pass to sign up.
+
+        Returns
+        -------
+        :class:`str`
+            A JWT token for the new account.
+        """
         # if we send None, it's going to error so we must remove any none values
-        sanitised_params = {k: v for k, v in request_params.items() if v is not None}
+        sanitised_params = {k: v for k, v in params.items() if v is not None}
 
         response = await self._send("signup", sanitised_params)
         return response
 
-    async def signin(
-        self,
-        *,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        namespace: Optional[str] = None,
-        database: Optional[str] = None,
-        email: Optional[str] = None,
-    ) -> None:
+    async def signin(self, params: Dict[str, Any]) -> None:
         """Signs in to the SurrealDB server.
 
         Parameters
         ----------
-        username: :class:`str`
-            The username to use for the connection.
-        password: :class:`str`
-            The password to use for the connection.
-        namespace: :class:`str`
-            The namespace to use for the connection.
-        database: :class:`str`
-            The database to use for the connection.
-        email: :class:`str`
-            The email to use for the connection.
+        params: :class:`Dict[str, Any]`
+            The dict of params to pass to sign in.
         """
-        request_params = {
-            "user": username,
-            "pass": password,
-            "email": email,
-            "DB": database,
-            "NS": namespace,
-        }
-
-        if username is not None:
-            self._username = username
-
-        if password is not None:
-            self._password = password
-
-        if namespace is not None:
-            self._namespace = namespace
-
-        if database is not None:
-            self._database = database
-
         # if we send None, it's going to error so we must remove any none values
-        sanitised_params = {k: v for k, v in request_params.items() if v is not None}
+        sanitised_params = {k: v for k, v in params.items() if v is not None}
 
         response = await self._send("signin", sanitised_params)
         return response
@@ -260,9 +196,6 @@ class WebsocketClient:
     async def invalidate(self) -> None:
         """Invalidates the current session."""
         response = await self._send("invalidate")
-
-        self._token = None
-
         return response
 
     async def authenticate(self, token: str) -> None:
@@ -274,9 +207,6 @@ class WebsocketClient:
             The token to use for the connection.
         """
         response = await self._send("authenticate", token)
-
-        self._token = token
-
         return response
 
     async def live(self, table: str) -> None:
