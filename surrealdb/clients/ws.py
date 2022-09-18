@@ -23,7 +23,6 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Type
-from weakref import WeakKeyDictionary
 
 from aiohttp import ClientSession
 from aiohttp import ClientWebSocketResponse
@@ -32,6 +31,7 @@ from aiohttp import WSMsgType
 from ..common import json as jsonlib
 from ..common.exceptions import SurrealWebsocketException
 from ..common.id import generate_id
+from ..models import RPCError
 from ..models import RPCRequest
 from ..models import RPCResponse
 
@@ -59,19 +59,8 @@ class WebsocketClient:
     def __init__(
         self,
         url: str,
-        *,
-        token: Optional[str] = None,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        namespace: Optional[str] = None,
-        database: Optional[str] = None,
     ) -> None:
         self._url = url
-        self._token = token
-        self._username = username
-        self._password = password
-        self._namespace = namespace
-        self._database = database
 
         self._client: ClientSession
         self._ws: ClientWebSocketResponse
@@ -99,24 +88,12 @@ class WebsocketClient:
         self._recv_task = asyncio.create_task(self._receive_task())
         self._recv_task.add_done_callback(self._receive_complete)
 
-        if self._token is not None:
-            await self.authenticate(self._token)
-
-        if self._username is not None and self._password is not None:
-            await self.signin(username=self._username, password=self._password)
-
-        if self._namespace is not None and self._database is not None:
-            await self.use(self._namespace, self._database)
-
     async def disconnect(self) -> None:
         """Disconnects from the SurrealDB server."""
         self._recv_task.cancel()
 
-        if isinstance(self._ws, ClientWebSocketResponse):
-            await self._ws.close()
-
-        if isinstance(self._client, ClientSession):
-            await self._client.close()
+        await self._ws.close()
+        await self._client.close()
 
     def _receive_complete(self, task: asyncio.Task) -> None:
         try:
@@ -131,10 +108,14 @@ class WebsocketClient:
             if msg.type == WSMsgType.ERROR:
                 raise SurrealWebsocketException(msg.data)
 
-            json_response = jsonlib.loads(msg.data)
+            json_response: Dict[str, Any] = jsonlib.loads(msg.data)
+
+            error = json_response.get("error")
+            if error is not None:
+                error = RPCError(**error)
+                raise SurrealWebsocketException(error.message)
+
             response = RPCResponse(**json_response)
-            if response.error is not None:
-                raise SurrealWebsocketException(response.error.message)
 
             request_future = self._response_futures.pop(response.id, None)
             if request_future is not None:
@@ -146,7 +127,7 @@ class WebsocketClient:
         *params: Any,
     ) -> Any:
         request = RPCRequest(
-            id=generate_id(length=16),
+            id=generate_id(),
             method=method,
             params=params,
         )
@@ -166,8 +147,8 @@ class WebsocketClient:
 
     async def use(
         self,
-        namespace: Optional[str] = None,
-        database: Optional[str] = None,
+        namespace: str,
+        database: str,
     ) -> None:
         """Changes the namespace and database to use."""
         response = await self._send("use", namespace, database)
@@ -181,79 +162,35 @@ class WebsocketClient:
         response = await self._send("info")
         return response
 
-    async def signup(
-        self,
-        *,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        namespace: Optional[str] = None,
-        database: Optional[str] = None,
-        email: Optional[str] = None,
-        scope: Optional[str] = None,
-        interests: Optional[List[str]] = None,
-    ) -> None:
-        request_params = {
-            "user": username,
-            "pass": password,
-            "email": email,
-            "DB": database,
-            "NS": namespace,
-            "SC": scope,
-            "interests": interests,
-        }
+    async def signup(self, params: Dict[str, Any]) -> str:
+        """Creates an account on the SurrealDB server.
 
+        Parameters
+        ----------
+        params: :class:`Dict[str, Any]`
+            The dict of params to pass to sign up.
+
+        Returns
+        -------
+        :class:`str`
+            A JWT token for the new account.
+        """
         # if we send None, it's going to error so we must remove any none values
-        sanitised_params = {k: v for k, v in request_params.items() if v is not None}
+        sanitised_params = {k: v for k, v in params.items() if v is not None}
 
         response = await self._send("signup", sanitised_params)
         return response
 
-    async def signin(
-        self,
-        *,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        namespace: Optional[str] = None,
-        database: Optional[str] = None,
-        email: Optional[str] = None,
-    ) -> None:
+    async def signin(self, params: Dict[str, Any]) -> None:
         """Signs in to the SurrealDB server.
 
         Parameters
         ----------
-        username: :class:`str`
-            The username to use for the connection.
-        password: :class:`str`
-            The password to use for the connection.
-        namespace: :class:`str`
-            The namespace to use for the connection.
-        database: :class:`str`
-            The database to use for the connection.
-        email: :class:`str`
-            The email to use for the connection.
+        params: :class:`Dict[str, Any]`
+            The dict of params to pass to sign in.
         """
-        request_params = {
-            "user": username,
-            "pass": password,
-            "email": email,
-            "DB": database,
-            "NS": namespace,
-        }
-
-        if username is not None:
-            self._username = username
-
-        if password is not None:
-            self._password = password
-
-        if namespace is not None:
-            self._namespace = namespace
-
-        if database is not None:
-            self._database = database
-
         # if we send None, it's going to error so we must remove any none values
-        sanitised_params = {k: v for k, v in request_params.items() if v is not None}
+        sanitised_params = {k: v for k, v in params.items() if v is not None}
 
         response = await self._send("signin", sanitised_params)
         return response
@@ -261,9 +198,6 @@ class WebsocketClient:
     async def invalidate(self) -> None:
         """Invalidates the current session."""
         response = await self._send("invalidate")
-
-        self._token = None
-
         return response
 
     async def authenticate(self, token: str) -> None:
@@ -275,9 +209,6 @@ class WebsocketClient:
             The token to use for the connection.
         """
         response = await self._send("authenticate", token)
-
-        self._token = token
-
         return response
 
     async def live(self, table: str) -> None:
@@ -289,10 +220,6 @@ class WebsocketClient:
         return response
 
     async def let(self, key: str, value: Any) -> None:
-        response = await self._send("let", key, value)
-        return response
-
-    async def set(self, key: str, value: Any) -> None:
         """Sets a value in the SurrealDB server.
 
         Parameters
@@ -302,25 +229,45 @@ class WebsocketClient:
         value: Any
             The value to set.
         """
+        response = await self._send("let", key, value)
+        return response
+
+    async def set(self, key: str, value: Any) -> None:
+        """Alias for :meth:`let`."""
         response = await self._send("set", key, value)
         return response
 
-    async def query(self, sql: str, params: Any) -> List[Dict[str, Any]]:
+    async def query(self, sql: str, params: Any = None) -> List[Dict[str, Any]]:
         """Executes a SQL query.
 
         Parameters
         ----------
         sql: :class:`str`
-            The SQL query to execute.
+            The SQL queries to execute.
+        params: Any
+            List of parameters which are part of the SQL queries.
 
         Returns
         -------
         List[Dict[:class:`str`, Any]]
+            The results for each query executed.
         """
         response = await self._send("query", sql, params)
         return response
 
     async def select(self, table_or_record_id: str) -> List[Dict[str, Any]]:
+        """Selects rows from an SQL table.
+
+        Parameters
+        ----------
+        table_or_record_id: :class:`str`
+            The table or record ID to find.
+
+        Returns
+        -------
+        List[Dict[:class:`str`, Any]]
+            The results of the select.
+        """
         response = await self._send("select", table_or_record_id)
         return response
 
@@ -394,7 +341,7 @@ class WebsocketClient:
         Returns
         -------
         List[Dict[:class:`str`, Any]]
-            A list of dictionaries containing the deleted records.
+            A list of dictionaries containing the diff of the records.
         """
         response = await self._send("modify", table_or_record_id, data)
         return response
