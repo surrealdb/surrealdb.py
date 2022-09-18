@@ -17,9 +17,6 @@ from dataclasses import dataclass
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Optional
-
-from .error import RPCError
 
 __all__ = (
     "SurrealResponse",
@@ -37,5 +34,4 @@ class SurrealResponse:
 @dataclass(frozen=True)
 class RPCResponse:
     id: str
-    result: Any
-    error: Optional[RPCError] = None
+    result: Any = None
