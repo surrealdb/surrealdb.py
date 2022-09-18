@@ -38,7 +38,7 @@ __all__ = ("WebsocketClient",)
 
 
 class WebsocketClient:
-    """Represents a websocket connection 
+    """Represents a websocket connection
     to a SurrealDB server.
 
     Parameters
@@ -100,8 +100,10 @@ class WebsocketClient:
 
         if self._token is not None:
             await self.authenticate(self._token)
+
         if self._username is not None and self._password is not None:
             await self.signin(username=self._username, password=self._password)
+
         if self._namespace is not None and self._database is not None:
             await self.use(self._namespace, self._database)
 
@@ -213,7 +215,7 @@ class WebsocketClient:
         email: Optional[str] = None,
     ) -> None:
         """Signs in to the SurrealDB server.
-        
+
         Parameters
         ----------
         username: :class:`str`
@@ -237,10 +239,13 @@ class WebsocketClient:
 
         if username is not None:
             self._username = username
+
         if password is not None:
             self._password = password
+
         if namespace is not None:
             self._namespace = namespace
+
         if database is not None:
             self._database = database
 
@@ -259,7 +264,7 @@ class WebsocketClient:
 
     async def authenticate(self, token: str) -> None:
         """Authenticates the current session.
-        
+
         Parameters
         ----------
         token: :class:`str`
@@ -285,7 +290,7 @@ class WebsocketClient:
 
     async def set(self, key: str, value: Any) -> None:
         """Sets a value in the SurrealDB server.
-        
+
         Parameters
         ----------
         key: :class:`str`
@@ -298,7 +303,7 @@ class WebsocketClient:
 
     async def query(self, sql: str, **kwargs: Any) -> List[Dict[str, Any]]:
         """Executes a SQL query.
-        
+
         Parameters
         ----------
         sql: :class:`str`
@@ -319,14 +324,14 @@ class WebsocketClient:
         self, table_or_record_id: str, **data: Any
     ) -> List[Dict[str, Any]]:
         """Creates a new record in the database.
-        
+
         Parameters
         ----------
         table_or_record_id: :class:`str`
             The table or record ID to create the record in.
         data: :class:`dict`
             The data to create the record with.
-        
+
         Returns
         -------
         List[Dict[:class:`str`, Any]]
@@ -339,14 +344,14 @@ class WebsocketClient:
         self, table_or_record_id: str, **data: Any
     ) -> List[Dict[str, Any]]:
         """Updates a record or records in a table.
-        
+
         Parameters
         ----------
         table_or_record_id: :class:`str`
             The table or record ID to update.
         data: :class:`dict`
             The data to update the record with.
-        
+
         Returns
         -------
         List[Dict[:class:`str`, Any]]`
@@ -366,14 +371,14 @@ class WebsocketClient:
         self, table_or_record_id: str, **data: Any
     ) -> List[Dict[str, Any]]:
         """Modifies a record or table.
-        
+
         Parameters
         ----------
         table_or_record_id: :class:`str`
             The table or record ID to modify.
         data: :class:`Any`
             The data to modify the record or table with.
-        
+
         Returns
         -------
         List[Dict[:class:`str`, Any]]
@@ -384,12 +389,12 @@ class WebsocketClient:
 
     async def delete(self, table_or_record_id: str) -> List[Dict[str, Any]]:
         """Deletes a record or table.
-        
+
         Parameters
         ----------
         table_or_record_id: :class:`str`
             The table or record ID to delete.
-        
+
         Returns
         -------
         List[Dict[:class:`str`, Any]]
