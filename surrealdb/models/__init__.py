@@ -13,6 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
+from .error import RPCError
+from .request import RPCRequest
+from .response import RPCResponse
 from .response import SurrealResponse
 
-__all__ = ("SurrealResponse",)
+__all__ = ("SurrealResponse", "RPCResponse", "RPCRequest", "RPCError")

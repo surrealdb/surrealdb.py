@@ -13,12 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-__all__ = ("SurrealException", "SurrealWebsocketException")
+from typing import Optional
+from typing import TypedDict
+
+__all__ = ("RPCError",)
 
 
-class SurrealException(Exception):
-    pass
-
-
-class SurrealWebsocketException(SurrealException):
-    pass
+class RPCError(TypedDict):
+    code: int
+    message: Optional[str]
