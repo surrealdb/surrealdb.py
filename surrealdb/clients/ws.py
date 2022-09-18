@@ -31,6 +31,7 @@ from aiohttp import WSMsgType
 from ..common import json as jsonlib
 from ..common.exceptions import SurrealWebsocketException
 from ..common.id import generate_id
+from ..models import RPCError
 from ..models import RPCRequest
 from ..models import RPCResponse
 
@@ -107,10 +108,14 @@ class WebsocketClient:
             if msg.type == WSMsgType.ERROR:
                 raise SurrealWebsocketException(msg.data)
 
-            json_response = jsonlib.loads(msg.data)
+            json_response: Dict[str, Any] = jsonlib.loads(msg.data)
+
+            error = json_response.get("error")
+            if error is not None:
+                error = RPCError(**error)
+                raise SurrealWebsocketException(error.message)
+
             response = RPCResponse(**json_response)
-            if response.error is not None:
-                raise SurrealWebsocketException(response.error.message)
 
             request_future = self._response_futures.pop(response.id, None)
             if request_future is not None:
