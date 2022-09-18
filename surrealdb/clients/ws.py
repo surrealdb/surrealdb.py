@@ -55,7 +55,7 @@ class WebsocketClient:
         self._namespace = namespace
         self._database = database
 
-        self._client = ClientSession
+        self._client: ClientSession
         self._ws: ClientWebSocketResponse
         self._recv_task: asyncio.Task
 
