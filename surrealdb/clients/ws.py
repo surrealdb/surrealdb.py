@@ -371,7 +371,7 @@ class WebsocketClient:
     async def change(
         self,
         table_or_record_id: str,
-        **data: Any,
+        data: Any,
     ) -> List[Dict[str, Any]]:
         """Alias for :meth:`update`."""
         response = await self._send("change", table_or_record_id, data)
@@ -380,7 +380,7 @@ class WebsocketClient:
     async def modify(
         self,
         table_or_record_id: str,
-        **data: Any,
+        data: Any,
     ) -> List[Dict[str, Any]]:
         """Modifies a record or table.
 
