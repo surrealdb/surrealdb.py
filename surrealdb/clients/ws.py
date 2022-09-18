@@ -127,7 +127,7 @@ class WebsocketClient:
         *params: Any,
     ) -> Any:
         request = RPCRequest(
-            id=generate_id(length=16),
+            id=generate_id(),
             method=method,
             params=params,
         )
