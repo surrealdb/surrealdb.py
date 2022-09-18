@@ -28,3 +28,4 @@ Temporary Items
 *.db
 __pycache__/
 *.pyc
+.vscode/

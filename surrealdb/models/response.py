@@ -17,8 +17,15 @@ from dataclasses import dataclass
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
+from typing import TypedDict
 
-__all__ = ("SurrealResponse",)
+from .error import RPCError
+
+__all__ = (
+    "SurrealResponse",
+    "RPCResponse",
+)
 
 
 @dataclass(frozen=True)
@@ -26,3 +33,9 @@ class SurrealResponse:
     time: str
     status: str
     result: List[Dict[str, Any]]
+
+
+class RPCResponse(TypedDict):
+    id: str
+    error: Optional[RPCError]
+    result: Any
