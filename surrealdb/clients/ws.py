@@ -84,7 +84,7 @@ class WebsocketClient:
             await self.authenticate(self._token)
 
         if self._username is not None and self._password is not None:
-            await self.sign_in(username=self._username, password=self._password)
+            await self.signin(username=self._username, password=self._password)
 
         if self._namespace is not None and self._database is not None:
             await self.use(self._namespace, self._database)
@@ -113,7 +113,7 @@ class WebsocketClient:
             if response.error is not None:
                 raise SurrealWebsocketException(response.error.message)
 
-            self._responses[response["id"]] = response
+            self._responses[response.id] = response
 
     async def _wait_response(self, id: str) -> RPCResponse:
         while id not in self._responses:
@@ -134,8 +134,8 @@ class WebsocketClient:
         )
         await self._ws.send_json(dataclasses.asdict(request))
 
-        response = await self._wait_response(request["id"])
-        return response["result"]
+        response = await self._wait_response(request.id)
+        return response.result
 
     async def ping(self) -> bool:
         response = await self._send("ping")
