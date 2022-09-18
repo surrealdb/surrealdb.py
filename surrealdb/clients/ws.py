@@ -22,6 +22,7 @@ from aiohttp import ClientSession
 from aiohttp import ClientWebSocketResponse
 
 from ..common.id import generate_id
+from ..models.request import RPCRequest
 
 __all__ = ("SurrealDBWSClient",)
 
@@ -57,7 +58,7 @@ class SurrealDBWSClient:
         await self._client.close()
 
     async def _send(self, method: str, *params: Any) -> None:
-        request = {
+        request: RPCRequest = {
             "id": generate_id(length=16),
             "method": method,
             "params": params,
