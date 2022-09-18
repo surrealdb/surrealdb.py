@@ -155,7 +155,7 @@ class SurrealDBWSClient:
         response = await self._send("info")
         return response
 
-    async def sign_up(
+    async def signup(
         self,
         *,
         username: Optional[str] = None,
