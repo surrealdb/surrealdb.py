@@ -27,35 +27,41 @@ async def create_all():
     print(response)
 
 
-# hospital:mpiw9ru2v6kkl2sto412
-# hospital:c1xjgtof77x3a6creqg1
-
-async def create_one():
+# This will allow us to create a record and allow us to use our own ids
+# if we run this twice it will raise record already exist
+async def create_with_id():
     table = "hospital"
-    eye_dee = "mpiw9ru2v6kkl2sto413"  # this is id but its reserved
+    eye_dee = "customidhere"  # this is id but its reserved
     data = {"name": "A second Hospital"}
     response = await client.create_one(table, eye_dee, data)
     print(response)
 
 
+# this queries the table for all the records that exist
+# try adding more records with the above create functions to see it in action
 async def select_all():
     table = "hospital"
     response = await client.select_all(table)
     print(response)
 
 
+# this queries the table and the specific record id
 async def select_one():
     table = "hospital"
-    eye_dee = "mpiw9ru2v6kkl2sto413"
+    eye_dee = "customidhere"
     response = await client.select_one(table, eye_dee)
     print(response)
 
 
 # this is an example to run your own queries
 async def my_query():
-    query = "INFO FOR DB;"
+    query = "SELECT * FROM hospital"
     data = await client.execute(query)
     print(data)
 
-
-asyncio.run(create_one())
+# uncomment these one by one to run them, or you can uncomment them all at once
+# asyncio.run(create_all())
+# asyncio.run(create_with_id())
+# asyncio.run(select_all())
+# asyncio.run(select_one())
+# asyncio.run(my_query())
