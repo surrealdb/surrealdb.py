@@ -142,8 +142,8 @@ class WebsocketClient:
 
     async def use(
         self,
-        namespace: Optional[str] = None,
-        database: Optional[str] = None,
+        namespace: str,
+        database: str,
     ) -> None:
         """Changes the namespace and database to use."""
         response = await self._send("use", namespace, database)
