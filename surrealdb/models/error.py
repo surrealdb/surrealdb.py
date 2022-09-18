@@ -13,12 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
+from dataclasses import dataclass
 from typing import Optional
-from typing import TypedDict
 
 __all__ = ("RPCError",)
 
 
-class RPCError(TypedDict):
+@dataclass(frozen=True)
+class RPCError:
     code: int
     message: Optional[str]

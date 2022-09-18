@@ -16,6 +16,7 @@ limitations under the License.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from types import TracebackType
 from typing import Any
 from typing import Dict
@@ -107,9 +108,10 @@ class WebsocketClient:
             if msg.type == WSMsgType.ERROR:
                 raise SurrealWebsocketException(msg.data)
 
-            response: RPCResponse = jsonlib.loads(msg.data)
+            json_response = jsonlib.loads(msg.data)
+            response = RPCResponse(**json_response)
             if response.get("error") is not None:
-                raise SurrealWebsocketException(response["error"]["message"])
+                raise SurrealWebsocketException(response.error.message)
 
             self._responses[response["id"]] = response
 
@@ -125,13 +127,12 @@ class WebsocketClient:
         method: str,
         *params: Any,
     ) -> Any:
-        request: RPCRequest = {
-            "id": generate_id(length=16),
-            "method": method,
-            "params": params,
-        }
-
-        await self._ws.send_json(request)
+        request = RPCRequest(
+            id=generate_id(length=16),
+            method=method,
+            params=params,
+        )
+        await self._ws.send_json(dataclasses.asdict(request))
 
         response = await self._wait_response(request["id"])
         return response["result"]
