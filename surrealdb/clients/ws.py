@@ -40,11 +40,15 @@ class SurrealDBWSClient:
         url: str,
         *,
         token: Optional[str] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
         namespace: Optional[str] = None,
         database: Optional[str] = None,
     ) -> None:
         self._url = url
         self._token = token
+        self._username = username
+        self._password = password
         self._namespace = namespace
         self._database = database
 
@@ -74,6 +78,14 @@ class SurrealDBWSClient:
 
         if self._token is not None:
             await self.authenticate(self._token)
+
+        if self._username is not None and self._password is not None:
+            await self.sign_in(
+                {
+                    "user": self._username,
+                    "pass": self._password,
+                },
+            )
 
         if self._namespace is not None and self._database is not None:
             await self.use(self._namespace, self._database)
