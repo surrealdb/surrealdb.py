@@ -23,7 +23,6 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Type
-from weakref import WeakKeyDictionary
 
 from aiohttp import ClientSession
 from aiohttp import ClientWebSocketResponse
