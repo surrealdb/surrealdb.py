@@ -22,7 +22,7 @@ client = SurrealDBHTTPClient("http://localhost:8000", namespace="test", database
 # this is an example of using the client to create data in a table
 async def create_all():
     table = "hospital"
-    data = {"name:": "A Hospital", "location":"earth"}
+    data = {"name:": "A Hospital", "location": "earth"}
     response = await client.create_all(table, data)
     print(response)
 
@@ -32,7 +32,7 @@ async def create_all():
 async def create_with_id():
     table = "hospital"
     eye_dee = "customidhere"  # this is id but its reserved
-    data = {"name": "A second Hospital", "location":"earth"}
+    data = {"name": "A second Hospital", "location": "earth"}
     response = await client.create_one(table, eye_dee, data)
     print(response)
 
@@ -52,32 +52,37 @@ async def select_one():
     response = await client.select_one(table, eye_dee)
     print(response)
 
+
 # This is an example to replace the data at the specified id
 async def replace_one():
     table = "hospital"
     eye_dee = "customidhere"
-    new_data = {"name": "A Replacement Hospital","location":"not earth"}
-    response = await client.replace_one(table,eye_dee,new_data)
+    new_data = {"name": "A Replacement Hospital", "location": "not earth"}
+    response = await client.replace_one(table, eye_dee, new_data)
     print(response)
 
-#This is an example to patch the data at the specified id
+
+# This is an example to patch the data at the specified id
 async def upsert_one():
     table = "hospital"
     eye_dee = "customidhere"
-    partial_new_data = {"location":"on the sun", "fieldthatdint":"exist"}
-    response = await client.upsert_one(table,eye_dee,partial_new_data)
+    partial_new_data = {"location": "on the sun", "fieldthatdint": "exist"}
+    response = await client.upsert_one(table, eye_dee, partial_new_data)
     print(response)
 
-#This is an example to delete all the data
+
+# This is an example to delete all the data
 async def delete_all():
     table = "hospital"
     await client.delete_all(table)
+
 
 # This is an example to delete only the specified
 async def delete_one():
     table = "hospital"
     eye_dee = "customidhere"
-    await client.delete_one(table,eye_dee)
+    await client.delete_one(table, eye_dee)
+
 
 # this is an example to run your own queries
 async def my_query():
@@ -92,5 +97,6 @@ async def my_query():
 # asyncio.run(select_one())
 # asyncio.run(replace_one())
 # asyncio.run(upsert_one())
-asyncio.run(delete_all())
+# asyncio.run(delete_all())
+# asyncio.run(delete_one())
 # asyncio.run(my_query())
