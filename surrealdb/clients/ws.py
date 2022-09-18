@@ -22,6 +22,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Type
+from weakref import WeakKeyDictionary
 
 from aiohttp import ClientSession
 from aiohttp import ClientWebSocketResponse
@@ -58,7 +59,9 @@ class WebsocketClient:
         self._ws: ClientWebSocketResponse
         self._recv_task: asyncio.Task
 
-        self._responses: dict[str, RPCResponse] = {}
+        self._response_futures: WeakKeyDictionary[
+            int, asyncio.Future
+        ] = WeakKeyDictionary()
 
     async def __aenter__(self) -> WebsocketClient:
         await self.connect()
@@ -111,14 +114,9 @@ class WebsocketClient:
             if response.get("error") is not None:
                 raise SurrealWebsocketException(response["error"]["message"])
 
-            self._responses[response["id"]] = response
-
-    async def _wait_response(self, id: str) -> RPCResponse:
-        while id not in self._responses:
-            await asyncio.sleep(0.1)
-
-        response = self._responses.pop(id)
-        return response
+            request_future = self._response_futures.pop(response["id"], None)
+            if request_future is not None:
+                request_future.set_result(response)
 
     async def _send(
         self,
@@ -133,7 +131,11 @@ class WebsocketClient:
 
         await self._ws.send_json(request)
 
-        response = await self._wait_response(request["id"])
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        self._response_futures[request["id"]] = future
+
+        response = await asyncio.wait_for(future)
         return response["result"]
 
     async def ping(self) -> bool:
