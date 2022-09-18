@@ -11,11 +11,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 import asyncio
-# import the http client this client is not as feature rich as the websocket client coming soon
-from surrealdb.clients.http import SurrealDBHTTPClient
+# import the http client this client is not as feature rich as the websocket client
+from surrealdb.clients.http import HTTPClient
 
 # create a new client to connect to SurrealDB
-client = SurrealDBHTTPClient("http://localhost:8000", namespace="test", database="test", username="root",
+client = HTTPClient("http://localhost:8000", namespace="test", database="test", username="root",
                              password="root")
 
 

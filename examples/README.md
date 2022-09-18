@@ -8,7 +8,7 @@ All the functions are async therefore they have to be wrapped by an async functi
 ### Creating a client 
 Start off by creating a client
 ```python
-client = SurrealDBHTTPClient("http://localhost:8000", namespace="test", database="test", username="root",password="root")\
+client = HTTPClient("http://localhost:8000", namespace="test", database="test", username="root",password="root")\
 ```
 
 ### Create a record
