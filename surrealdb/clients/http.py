@@ -23,14 +23,14 @@ from typing import Type
 
 import httpx
 
-from .common import json as jsonlib
-from .common.exceptions import SurrealException
-from .models.response import SurrealResponse
+from ..common import json as jsonlib
+from ..common.exceptions import SurrealException
+from ..models.response import SurrealResponse
 
-__all__ = ("SurrealDBClient",)
+__all__ = ("HTTPClient",)
 
 
-class SurrealDBClient:
+class HTTPClient:
     def __init__(
         self,
         url: str,
@@ -60,7 +60,7 @@ class SurrealDBClient:
             },
         )
 
-    async def __aenter__(self) -> "SurrealDBClient":
+    async def __aenter__(self) -> "HTTPClient":
         await self.connect()
         return self
 
@@ -88,23 +88,24 @@ class SurrealDBClient:
         surreal_raw_data = await surreal_response.aread()
 
         try:
-            surreal_data = jsonlib.loads(surreal_raw_data)
+            surreal_json: List[Dict[str, Any]] = jsonlib.loads(surreal_raw_data)
+            surreal_data = surreal_json[0]
         except JSONDecodeError:
             raise SurrealException(
                 f"Invalid JSON response from SurrealDB: {surreal_raw_data}",
             )
         else:
-            response_obj = SurrealResponse(**surreal_data[0])
+            if surreal_data["status"] != "OK":
+                raise SurrealException(
+                    f"Query failed: {surreal_data}",
+                )
 
-        if surreal_response.status_code not in range(200, 300):
-            raise SurrealException(
-                f"Query failed with status code {surreal_response.status_code}: {response_obj.result}",
-            )
+            if surreal_response.status_code not in range(200, 300):
+                raise SurrealException(
+                    f"Query failed with status code {surreal_response.status_code}: {surreal_data}"
+                )
 
-        if response_obj.status != "OK":
-            raise SurrealException(
-                f"Query failed with status {response_obj.status}: {response_obj.result}",
-            )
+            response_obj = SurrealResponse(**surreal_data)
 
         return response_obj
 

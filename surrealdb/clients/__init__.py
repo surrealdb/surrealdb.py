@@ -13,9 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-from .error import RPCError
-from .request import RPCRequest
-from .response import RPCResponse
-from .response import SurrealResponse
+from .http import HTTPClient
+from .ws import WebsocketClient
 
-__all__ = ("SurrealResponse", "RPCResponse", "RPCRequest", "RPCError")
+__all__ = ("HTTPClient", "WebsocketClient")
