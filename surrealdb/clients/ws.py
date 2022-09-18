@@ -60,7 +60,7 @@ class WebsocketClient:
         self._ws: ClientWebSocketResponse
         self._recv_task: asyncio.Task
 
-        self._response_futures: dict[str, asyncio.Future] = {}
+        self._response_futures: Dict[str, asyncio.Future] = {}
 
     async def __aenter__(self) -> WebsocketClient:
         await self.connect()
