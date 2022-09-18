@@ -16,6 +16,7 @@ limitations under the License.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from types import TracebackType
 from typing import Any
 from typing import Dict
@@ -108,33 +109,35 @@ class WebsocketClient:
             if msg.type == WSMsgType.ERROR:
                 raise SurrealWebsocketException(msg.data)
 
-            response: RPCResponse = jsonlib.loads(msg.data)
-            if response.get("error") is not None:
-                raise SurrealWebsocketException(response["error"]["message"])
+            json_response = jsonlib.loads(msg.data)
+            response = RPCResponse(**json_response)
+            if response.error is not None:
+                raise SurrealWebsocketException(response.error.message)
 
-            request_future = self._response_futures.pop(response["id"], None)
+            request_future = self._response_futures.pop(response.id, None)
             if request_future is not None:
                 request_future.set_result(response)
+
+            self._responses[response.id] = response
 
     async def _send(
         self,
         method: str,
         *params: Any,
     ) -> Any:
-        request: RPCRequest = {
-            "id": generate_id(length=16),
-            "method": method,
-            "params": params,
-        }
-
-        await self._ws.send_json(request)
+        request = RPCRequest(
+            id=generate_id(length=16),
+            method=method,
+            params=params,
+        )
+        await self._ws.send_json(dataclasses.asdict(request))
 
         loop = asyncio.get_running_loop()
         future = loop.create_future()
-        self._response_futures[request["id"]] = future
+        self._response_futures[request.id] = future
 
         response = await asyncio.wait_for(future, timeout=None)
-        return response["result"]
+        return response.result
 
     async def ping(self) -> bool:
         response = await self._send("ping")
