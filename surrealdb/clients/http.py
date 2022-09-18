@@ -23,14 +23,14 @@ from typing import Type
 
 import httpx
 
-from .common import json as jsonlib
-from .common.exceptions import SurrealException
-from .models.response import SurrealResponse
+from ..common import json as jsonlib
+from ..common.exceptions import SurrealException
+from ..models.response import SurrealResponse
 
-__all__ = ("SurrealDBClient",)
+__all__ = ("SurrealDBHTTPClient",)
 
 
-class SurrealDBClient:
+class SurrealDBHTTPClient:
     def __init__(
         self,
         url: str,
@@ -60,7 +60,7 @@ class SurrealDBClient:
             },
         )
 
-    async def __aenter__(self) -> "SurrealDBClient":
+    async def __aenter__(self) -> "SurrealDBHTTPClient":
         await self.connect()
         return self
 
