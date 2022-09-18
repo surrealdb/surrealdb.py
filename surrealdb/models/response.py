@@ -15,6 +15,8 @@ limitations under the License.
 """
 from dataclasses import dataclass
 from typing import Any
+from typing import Dict
+from typing import List
 
 __all__ = ("SurrealResponse",)
 
@@ -23,4 +25,4 @@ __all__ = ("SurrealResponse",)
 class SurrealResponse:
     time: str
     status: str
-    result: list[dict[str, Any]]
+    result: List[Dict[str, Any]]

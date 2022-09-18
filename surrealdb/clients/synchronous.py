@@ -16,6 +16,8 @@ limitations under the License.
 from json import JSONDecodeError
 from types import TracebackType
 from typing import Any
+from typing import Dict
+from typing import List
 from typing import Optional
 from typing import Type
 
@@ -37,7 +39,7 @@ class SurrealDBClient:
         username: str,
         password: str,
     ) -> None:
-        self._url = url.removesuffix("/")
+        self._url = url
         self._namespace = namespace
         self._database = database
         self._username = username
@@ -105,11 +107,11 @@ class SurrealDBClient:
 
         return response_obj
 
-    def execute(self, query: str) -> list[dict[str, Any]]:
+    def execute(self, query: str) -> List[Dict[str, Any]]:
         response = self._request(method="POST", uri="/sql", data=query)
         return response.result
 
-    def create_all(self, table: str, data: Any) -> list[dict[str, Any]]:
+    def create_all(self, table: str, data: Any) -> List[Dict[str, Any]]:
         response = self._request(
             method="POST",
             uri=f"/key/{table}",
@@ -118,7 +120,7 @@ class SurrealDBClient:
 
         return response.result
 
-    def create_one(self, table: str, id: str, data: Any) -> dict[str, Any]:
+    def create_one(self, table: str, id: str, data: Any) -> Dict[str, Any]:
         response = self._request(
             method="POST",
             uri=f"/key/{table}/{id}",
@@ -127,11 +129,11 @@ class SurrealDBClient:
 
         return response.result[0]
 
-    def select_all(self, table: str) -> list[dict[str, Any]]:
+    def select_all(self, table: str) -> List[Dict[str, Any]]:
         response = self._request(method="GET", uri=f"/key/{table}")
         return response.result
 
-    def select_one(self, table: str, id: str) -> dict[str, Any]:
+    def select_one(self, table: str, id: str) -> Dict[str, Any]:
         response = self._request(method="GET", uri=f"/key/{table}/{id}")
         if not response.result:
             raise SurrealException(f"Key {id} not found in table {table}")
@@ -142,7 +144,7 @@ class SurrealDBClient:
     # `replace_one` requires the entire data structure to be sent, and will create/update using it
     # `upsert_one` requires only the fields you wish to be updated (if it exists), and will create/update using it
 
-    def replace_one(self, table: str, id: str, data: Any) -> dict[str, Any]:
+    def replace_one(self, table: str, id: str, data: Any) -> Dict[str, Any]:
         response = self._request(
             method="PUT",
             uri=f"/key/{table}/{id}",
@@ -151,7 +153,7 @@ class SurrealDBClient:
 
         return response.result[0]
 
-    def upsert_one(self, table: str, id: str, data: Any) -> dict[str, Any]:
+    def upsert_one(self, table: str, id: str, data: Any) -> Dict[str, Any]:
         response = self._request(
             method="PATCH",
             uri=f"/key/{table}/{id}",
