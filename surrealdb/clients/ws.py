@@ -91,11 +91,8 @@ class WebsocketClient:
         """Disconnects from the SurrealDB server."""
         self._recv_task.cancel()
 
-        if isinstance(self._ws, ClientWebSocketResponse):
-            await self._ws.close()
-
-        if isinstance(self._client, ClientSession):
-            await self._client.close()
+        await self._ws.close()
+        await self._client.close()
 
     def _receive_complete(self, task: asyncio.Task) -> None:
         try:
