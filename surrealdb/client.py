@@ -23,14 +23,14 @@ from typing import Type
 
 import httpx
 
-from ..common import json as jsonlib
-from ..common.exceptions import SurrealException
-from ..models.response import SurrealResponse
+from .common import json as jsonlib
+from .common.exceptions import SurrealException
+from .models.response import SurrealResponse
 
-__all__ = ("SyncSurrealDBClient",)
+__all__ = ("SurrealDBClient",)
 
 
-class SyncSurrealDBClient:
+class SurrealDBClient:
     def __init__(
         self,
         url: str,
@@ -45,7 +45,7 @@ class SyncSurrealDBClient:
         self._username = username
         self._password = password
 
-        self._http = httpx.Client(
+        self._http = httpx.AsyncClient(
             base_url=self._url,
             auth=httpx.BasicAuth(
                 username=self._username,
@@ -59,32 +59,32 @@ class SyncSurrealDBClient:
             },
         )
 
-    def __enter__(self) -> "SyncSurrealDBClient":
-        self.connect()
+    async def __aenter__(self) -> "SurrealDBClient":
+        await self.connect()
         return self
 
-    def __exit__(
+    async def __aexit__(
         self,
         exc_type: Type[BaseException] = None,
         exc_value: BaseException = None,
         traceback: TracebackType = None,
     ) -> None:
-        self.disconnect()
+        await self.disconnect()
 
-    def connect(self) -> None:
-        self._http.__enter__()
+    async def connect(self) -> None:
+        await self._http.__aenter__()
 
     async def disconnect(self) -> None:
-        self._http.close()
+        await self._http.aclose()
 
-    def _request(
+    async def _request(
         self,
         method: str,
         uri: str,
         data: Optional[str] = None,
     ) -> SurrealResponse:
-        surreal_response = self._http.request(method=method, url=uri, data=data)
-        surreal_raw_data = surreal_response.read()
+        surreal_response = await self._http.request(method=method, url=uri, data=data)
+        surreal_raw_data = await surreal_response.aread()
 
         try:
             surreal_data = jsonlib.loads(surreal_raw_data)
@@ -107,12 +107,12 @@ class SyncSurrealDBClient:
 
         return response_obj
 
-    def execute(self, query: str) -> List[Dict[str, Any]]:
-        response = self._request(method="POST", uri="/sql", data=query)
+    async def execute(self, query: str) -> List[Dict[str, Any]]:
+        response = await self._request(method="POST", uri="/sql", data=query)
         return response.result
 
-    def create_all(self, table: str, data: Any) -> List[Dict[str, Any]]:
-        response = self._request(
+    async def create_all(self, table: str, data: Any) -> List[Dict[str, Any]]:
+        response = await self._request(
             method="POST",
             uri=f"/key/{table}",
             data=jsonlib.dumps(data),
@@ -120,8 +120,8 @@ class SyncSurrealDBClient:
 
         return response.result
 
-    def create_one(self, table: str, id: str, data: Any) -> Dict[str, Any]:
-        response = self._request(
+    async def create_one(self, table: str, id: str, data: Any) -> Dict[str, Any]:
+        response = await self._request(
             method="POST",
             uri=f"/key/{table}/{id}",
             data=jsonlib.dumps(data),
@@ -129,12 +129,12 @@ class SyncSurrealDBClient:
 
         return response.result[0]
 
-    def select_all(self, table: str) -> List[Dict[str, Any]]:
-        response = self._request(method="GET", uri=f"/key/{table}")
+    async def select_all(self, table: str) -> List[Dict[str, Any]]:
+        response = await self._request(method="GET", uri=f"/key/{table}")
         return response.result
 
-    def select_one(self, table: str, id: str) -> Dict[str, Any]:
-        response = self._request(method="GET", uri=f"/key/{table}/{id}")
+    async def select_one(self, table: str, id: str) -> Dict[str, Any]:
+        response = await self._request(method="GET", uri=f"/key/{table}/{id}")
         if not response.result:
             raise SurrealException(f"Key {id} not found in table {table}")
 
@@ -144,17 +144,16 @@ class SyncSurrealDBClient:
     # `replace_one` requires the entire data structure to be sent, and will create/update using it
     # `upsert_one` requires only the fields you wish to be updated (if it exists), and will create/update using it
 
-    def replace_one(self, table: str, id: str, data: Any) -> Dict[str, Any]:
-        response = self._request(
+    async def replace_one(self, table: str, id: str, data: Any) -> Dict[str, Any]:
+        response = await self._request(
             method="PUT",
             uri=f"/key/{table}/{id}",
             data=jsonlib.dumps(data),
         )
-
         return response.result[0]
 
-    def upsert_one(self, table: str, id: str, data: Any) -> Dict[str, Any]:
-        response = self._request(
+    async def upsert_one(self, table: str, id: str, data: Any) -> Dict[str, Any]:
+        response = await self._request(
             method="PATCH",
             uri=f"/key/{table}/{id}",
             data=jsonlib.dumps(data),
@@ -162,8 +161,8 @@ class SyncSurrealDBClient:
 
         return response.result[0]
 
-    def delete_all(self, table: str) -> None:
-        self._request(method="DELETE", uri=f"/key/{table}")
+    async def delete_all(self, table: str) -> None:
+        await self._request(method="DELETE", uri=f"/key/{table}")
 
-    def delete_one(self, table: str, id: str) -> None:
-        self._request(method="DELETE", uri=f"/key/{table}/{id}")
+    async def delete_one(self, table: str, id: str) -> None:
+        await self._request(method="DELETE", uri=f"/key/{table}/{id}")
