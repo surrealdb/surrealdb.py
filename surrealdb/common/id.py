@@ -13,7 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-from .http import SurrealDBHTTPClient
-from .ws import SurrealDBWSClient
+import secrets
 
-__all__ = ("SurrealDBHTTPClient", "SurrealDBWSClient")
+__all__ = ("generate_id",)
+
+
+def generate_id(length: int = 16) -> str:
+    return secrets.token_hex(length)
