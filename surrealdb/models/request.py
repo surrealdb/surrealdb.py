@@ -15,7 +15,7 @@ limitations under the License.
 """
 from dataclasses import dataclass
 from typing import Any
-from typing import List
+from typing import Tuple
 
 __all__ = ("RPCRequest",)
 
@@ -24,4 +24,4 @@ __all__ = ("RPCRequest",)
 class RPCRequest:
     id: str
     method: str
-    params: List[Any]
+    params: Tuple[Any]
