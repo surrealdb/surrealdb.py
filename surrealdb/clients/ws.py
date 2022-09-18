@@ -82,10 +82,8 @@ class WebsocketClient:
 
         if self._token is not None:
             await self.authenticate(self._token)
-
         if self._username is not None and self._password is not None:
             await self.signin(username=self._username, password=self._password)
-
         if self._namespace is not None and self._database is not None:
             await self.use(self._namespace, self._database)
 
@@ -203,13 +201,10 @@ class WebsocketClient:
 
         if username is not None:
             self._username = username
-
         if password is not None:
             self._password = password
-
         if namespace is not None:
             self._namespace = namespace
-
         if database is not None:
             self._database = database
 
@@ -220,17 +215,15 @@ class WebsocketClient:
         return response
 
     async def invalidate(self) -> None:
-        response = await self._send("invalidate")
-
         self._token = None
 
+        response = await self._send("invalidate")
         return response
 
     async def authenticate(self, token: str) -> None:
-        response = await self._send("authenticate", token)
-
         self._token = token
 
+        response = await self._send("authenticate", token)
         return response
 
     async def live(self, table: str) -> None:
