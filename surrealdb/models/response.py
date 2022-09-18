@@ -37,5 +37,5 @@ class SurrealResponse:
 @dataclass(frozen=True)
 class RPCResponse:
     id: str
-    error: Optional[RPCError]
     result: Any
+    error: Optional[RPCError] = None
