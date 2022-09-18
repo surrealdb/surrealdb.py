@@ -133,6 +133,10 @@ class SurrealDBWSClient:
         response = await self._wait_response(request["id"])
         return response["result"]
 
+    async def ping(self) -> Any:
+        response = await self._send("ping")
+        return response
+
     async def use(self, namespace: str, database: str) -> Any:
         response = await self._send("use", namespace, database)
 
