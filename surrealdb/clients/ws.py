@@ -38,6 +38,23 @@ __all__ = ("WebsocketClient",)
 
 
 class WebsocketClient:
+    """Represents a websocket connection 
+    to a SurrealDB server.
+
+    Parameters
+    ----------
+    url: :class:`str`
+        The URL of the SurrealDB server.
+    namespace: :class:`str`
+        The namespace to use for the connection.
+    database: :class:`str`
+        The database to use for the connection.
+    username: :class:`str`
+        The username to use for the connection.
+    password: :class:`str`
+        The password to use for the connection.
+    """
+
     def __init__(
         self,
         url: str,
@@ -74,6 +91,7 @@ class WebsocketClient:
         await self.disconnect()
 
     async def connect(self) -> None:
+        """Connects to the SurrealDB server."""
         self._client = ClientSession()
         self._ws = await self._client.ws_connect(self._url)
 
@@ -88,6 +106,7 @@ class WebsocketClient:
             await self.use(self._namespace, self._database)
 
     async def disconnect(self) -> None:
+        """Disconnects from the SurrealDB server."""
         self._recv_task.cancel()
 
         await self._ws.close()
@@ -136,6 +155,7 @@ class WebsocketClient:
         return response.result
 
     async def ping(self) -> bool:
+        """Pings the SurrealDB server."""
         response = await self._send("ping")
         return response
 
@@ -144,6 +164,7 @@ class WebsocketClient:
         namespace: Optional[str] = None,
         database: Optional[str] = None,
     ) -> None:
+        """Changes the namespace and database to use."""
         response = await self._send("use", namespace, database)
 
         self._namespace = namespace
@@ -191,6 +212,21 @@ class WebsocketClient:
         database: Optional[str] = None,
         email: Optional[str] = None,
     ) -> None:
+        """Signs in to the SurrealDB server.
+        
+        Parameters
+        ----------
+        username: :class:`str`
+            The username to use for the connection.
+        password: :class:`str`
+            The password to use for the connection.
+        namespace: :class:`str`
+            The namespace to use for the connection.
+        database: :class:`str`
+            The database to use for the connection.
+        email: :class:`str`
+            The email to use for the connection.
+        """
         request_params = {
             "user": username,
             "pass": password,
@@ -215,18 +251,27 @@ class WebsocketClient:
         return response
 
     async def invalidate(self) -> None:
+        """Invalidates the current session."""
         self._token = None
 
         response = await self._send("invalidate")
         return response
 
     async def authenticate(self, token: str) -> None:
+        """Authenticates the current session.
+        
+        Parameters
+        ----------
+        token: :class:`str`
+            The token to use for the connection.
+        """
         self._token = token
 
         response = await self._send("authenticate", token)
         return response
 
     async def live(self, table: str) -> None:
+        """"""
         response = await self._send("live", table)
         return response
 
@@ -239,10 +284,30 @@ class WebsocketClient:
         return response
 
     async def set(self, key: str, value: Any) -> None:
+        """Sets a value in the SurrealDB server.
+        
+        Parameters
+        ----------
+        key: :class:`str`
+            The key to set.
+        value: Any
+            The value to set.
+        """
         response = await self._send("set", key, value)
         return response
 
     async def query(self, sql: str, **kwargs: Any) -> List[Dict[str, Any]]:
+        """Executes a SQL query.
+        
+        Parameters
+        ----------
+        sql: :class:`str`
+            The SQL query to execute.
+
+        Returns
+        -------
+        List[Dict[:class:`str`, Any]]
+        """
         response = await self._send("query", sql, kwargs)
         return response
 
@@ -253,27 +318,82 @@ class WebsocketClient:
     async def create(
         self, table_or_record_id: str, **data: Any
     ) -> List[Dict[str, Any]]:
+        """Creates a new record in the database.
+        
+        Parameters
+        ----------
+        table_or_record_id: :class:`str`
+            The table or record ID to create the record in.
+        data: :class:`dict`
+            The data to create the record with.
+        
+        Returns
+        -------
+        List[Dict[:class:`str`, Any]]
+            The created record.
+        """
         response = await self._send("create", table_or_record_id, data)
         return response
 
     async def update(
         self, table_or_record_id: str, **data: Any
     ) -> List[Dict[str, Any]]:
+        """Updates a record or records in a table.
+        
+        Parameters
+        ----------
+        table_or_record_id: :class:`str`
+            The table or record ID to update.
+        data: :class:`dict`
+            The data to update the record with.
+        
+        Returns
+        -------
+        List[Dict[:class:`str`, Any]]`
+            The updated records.
+        """
         response = await self._send("update", table_or_record_id, data)
         return response
 
     async def change(
         self, table_or_record_id: str, **data: Any
     ) -> List[Dict[str, Any]]:
+        """Alias for :meth:`update`."""
         response = await self._send("change", table_or_record_id, data)
         return response
 
     async def modify(
         self, table_or_record_id: str, **data: Any
     ) -> List[Dict[str, Any]]:
+        """Modifies a record or table.
+        
+        Parameters
+        ----------
+        table_or_record_id: :class:`str`
+            The table or record ID to modify.
+        data: :class:`Any`
+            The data to modify the record or table with.
+        
+        Returns
+        -------
+        List[Dict[:class:`str`, Any]]
+            A list of dictionaries containing the deleted records.
+        """
         response = await self._send("modify", table_or_record_id, data)
         return response
 
     async def delete(self, table_or_record_id: str) -> List[Dict[str, Any]]:
+        """Deletes a record or table.
+        
+        Parameters
+        ----------
+        table_or_record_id: :class:`str`
+            The table or record ID to delete.
+        
+        Returns
+        -------
+        List[Dict[:class:`str`, Any]]
+            A list of dictionaries containing the deleted records.
+        """
         response = await self._send("delete", table_or_record_id)
         return response
