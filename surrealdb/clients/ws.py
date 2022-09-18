@@ -220,10 +220,6 @@ class WebsocketClient:
         return response
 
     async def let(self, key: str, value: Any) -> None:
-        response = await self._send("let", key, value)
-        return response
-
-    async def set(self, key: str, value: Any) -> None:
         """Sets a value in the SurrealDB server.
 
         Parameters
@@ -233,6 +229,11 @@ class WebsocketClient:
         value: Any
             The value to set.
         """
+        response = await self._send("let", key, value)
+        return response
+
+    async def set(self, key: str, value: Any) -> None:
+        """Alias for :meth:`let`."""
         response = await self._send("set", key, value)
         return response
 
@@ -242,16 +243,31 @@ class WebsocketClient:
         Parameters
         ----------
         sql: :class:`str`
-            The SQL query to execute.
+            The SQL queries to execute.
+        params: Any
+            List of parameters which are part of the SQL queries.
 
         Returns
         -------
         List[Dict[:class:`str`, Any]]
+            The results for each query executed.
         """
         response = await self._send("query", sql, params)
         return response
 
     async def select(self, table_or_record_id: str) -> List[Dict[str, Any]]:
+        """Selects rows from an SQL table.
+
+        Parameters
+        ----------
+        table_or_record_id: :class:`str`
+            The table or record ID to find.
+
+        Returns
+        -------
+        List[Dict[:class:`str`, Any]]
+            The results of the select.
+        """
         response = await self._send("select", table_or_record_id)
         return response
 
@@ -325,7 +341,7 @@ class WebsocketClient:
         Returns
         -------
         List[Dict[:class:`str`, Any]]
-            A list of dictionaries containing the deleted records.
+            A list of dictionaries containing the diff of the records.
         """
         response = await self._send("modify", table_or_record_id, data)
         return response
