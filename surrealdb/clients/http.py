@@ -13,6 +13,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
+from __future__ import annotations
+
 from json import JSONDecodeError
 from types import TracebackType
 from typing import Any
@@ -60,7 +62,7 @@ class HTTPClient:
             },
         )
 
-    async def __aenter__(self) -> "HTTPClient":
+    async def __aenter__(self) -> HTTPClient:
         await self.connect()
         return self
 
@@ -84,7 +86,11 @@ class HTTPClient:
         uri: str,
         data: Optional[str] = None,
     ) -> SurrealResponse:
-        surreal_response = await self._http.request(method=method, url=uri, data=data)
+        surreal_response = await self._http.request(
+            method=method,
+            url=uri,
+            content=data,
+        )
         surreal_raw_data = await surreal_response.aread()
 
         try:
@@ -102,7 +108,7 @@ class HTTPClient:
 
             if surreal_response.status_code not in range(200, 300):
                 raise SurrealException(
-                    f"Query failed with status code {surreal_response.status_code}: {surreal_data}"
+                    f"Query failed with status code {surreal_response.status_code}: {surreal_data}",
                 )
 
             response_obj = SurrealResponse(**surreal_data)

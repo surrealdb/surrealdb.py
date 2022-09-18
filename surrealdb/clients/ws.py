@@ -56,7 +56,7 @@ class WebsocketClient:
         self._namespace = namespace
         self._database = database
 
-        self._client = ClientSession
+        self._client: ClientSession
         self._ws: ClientWebSocketResponse
         self._recv_task: asyncio.Task
 
@@ -93,8 +93,11 @@ class WebsocketClient:
     async def disconnect(self) -> None:
         self._recv_task.cancel()
 
-        await self._ws.close()
-        await self._client.close()
+        if isinstance(self._ws, ClientWebSocketResponse):
+            await self._ws.close()
+
+        if isinstance(self._client, ClientSession):
+            await self._client.close()
 
     def _receive_complete(self, task: asyncio.Task) -> None:
         try:
