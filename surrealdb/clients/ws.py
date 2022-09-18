@@ -164,7 +164,7 @@ class SurrealDBWSClient:
         database: Optional[str] = None,
         email: Optional[str] = None,
         scope: Optional[str] = None,
-        interests: Optional[list[str]] = None,
+        interests: Optional[List[str]] = None,
     ) -> None:
         request_params = {
             "user": username,
