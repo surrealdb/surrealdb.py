@@ -287,7 +287,7 @@ class HTTPClient:
             uri=f"/key/{table}/{id}",
             data=jsonlib.dumps(data),
         )
-        
+
         return response.result[0]
 
     async def delete_all(self, table: str) -> None:
