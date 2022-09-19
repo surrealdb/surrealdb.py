@@ -31,9 +31,9 @@ async def create_all():
 # if we run this twice it will raise record already exist
 async def create_with_id():
     table = "hospital"
-    eye_dee = "customidhere"  # this is id but its reserved
+    custom_id = "customidhere"  # this is id but its reserved
     data = {"name": "A second Hospital", "location": "earth"}
-    response = await client.create_one(table, eye_dee, data)
+    response = await client.create_one(table, custom_id, data)
     print(response)
 
 
@@ -48,26 +48,26 @@ async def select_all():
 # this queries the table and the specific record id
 async def select_one():
     table = "hospital"
-    eye_dee = "customidhere"
-    response = await client.select_one(table, eye_dee)
+    custom_id = "customidhere"
+    response = await client.select_one(table, custom_id)
     print(response)
 
 
 # This is an example to replace the data at the specified id
 async def replace_one():
     table = "hospital"
-    eye_dee = "customidhere"
+    custom_id = "customidhere"
     new_data = {"name": "A Replacement Hospital", "location": "not earth"}
-    response = await client.replace_one(table, eye_dee, new_data)
+    response = await client.replace_one(table, custom_id, new_data)
     print(response)
 
 
 # This is an example to patch the data at the specified id
 async def upsert_one():
     table = "hospital"
-    eye_dee = "customidhere"
+    custom_id = "customidhere"
     partial_new_data = {"location": "on the sun", "fieldthatdint": "exist"}
-    response = await client.upsert_one(table, eye_dee, partial_new_data)
+    response = await client.upsert_one(table, custom_id, partial_new_data)
     print(response)
 
 
@@ -80,8 +80,8 @@ async def delete_all():
 # This is an example to delete only the specified
 async def delete_one():
     table = "hospital"
-    eye_dee = "customidhere"
-    await client.delete_one(table, eye_dee)
+    custom_id = "customidhere"
+    await client.delete_one(table, custom_id)
 
 
 # this is an example to run your own queries

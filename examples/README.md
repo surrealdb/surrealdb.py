@@ -29,9 +29,9 @@ To specify your id use the create_one() function
 ```python
 async def create_with_id():
     table = "hospital"
-    eye_dee = "customidhere"  # this is id but its reserved
+    custom_id = "customidhere"  # this is id but its reserved
     data = {"name": "A second Hospital", "location":"earth"}
-    response = await client.create_one(table, eye_dee, data)
+    response = await client.create_one(table, custom_id, data)
     print(response)
 ```
 
@@ -54,8 +54,8 @@ Note this name is going to be changed in the future
 ```python
 async def select_one():
     table = "hospital"
-    eye_dee = "customidhere"
-    response = await client.select_one(table, eye_dee)
+    custom_id = "customidhere"
+    response = await client.select_one(table, custom_id)
     print(response)
 ```
 
@@ -68,9 +68,9 @@ To replace the entire record use the replace_one() function
 ```python
 async def replace_one():
     table = "hospital"
-    eye_dee = "customidhere"
+    custom_id = "customidhere"
     new_data = {"name": "A Replacement Hospital","location":"not earth"}
-    response = await client.replace_one(table,eye_dee,new_data)
+    response = await client.replace_one(table,custom_id,new_data)
     print(response)
 ```
 
@@ -81,9 +81,9 @@ The upsert_one() function can take a partial data and/or data that does not exis
 ```python
 async def upsert_one():
     table = "hospital"
-    eye_dee = "customidhere"
+    custom_id = "customidhere"
     partial_new_data = {"location":"on the sun", "fieldthatdint":"exist"}
-    response = await client.upsert_one(table,eye_dee,partial_new_data)
+    response = await client.upsert_one(table,custom_id,partial_new_data)
     print(response)
 ```
 
@@ -101,8 +101,8 @@ async def delete_all():
 ```python
 async def delete_one():
     table = "hospital"
-    eye_dee = "customidhere"
-    await client.delete_one(table,eye_dee)
+    custom_id = "customidhere"
+    await client.delete_one(table,custom_id)
 ```
 ### Custom Queries
 SurrealDB has a very powerful query language with is similar to SQL. To take advantage of this powerful query language
