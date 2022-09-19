@@ -11,7 +11,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 import asyncio
-# import the http client this client is not as feature rich as the websocket client
+# import the http client
 from surrealdb.clients.http import HTTPClient
 
 # create a new client to connect to SurrealDB
@@ -66,7 +66,7 @@ async def replace_one():
 async def upsert_one():
     table = "hospital"
     custom_id = "customidhere"
-    partial_new_data = {"location": "on the sun", "fieldthatdint": "exist"}
+    partial_new_data = {"location": "on the sun", "fieldthatdidnt": "exist"}
     response = await client.upsert_one(table, custom_id, partial_new_data)
     print(response)
 
@@ -90,13 +90,16 @@ async def my_query():
     data = await client.execute(query)
     print(data)
 
-# uncomment these one by one to run them, or you can uncomment them all at once
-# asyncio.run(create_all())
-# asyncio.run(create_with_id())
-# asyncio.run(select_all())
-# asyncio.run(select_one())
-# asyncio.run(replace_one())
-# asyncio.run(upsert_one())
-# asyncio.run(delete_all())
-# asyncio.run(delete_one())
-# asyncio.run(my_query())
+async def run_all():
+    await create_all()
+    await create_with_id()
+    await select_all()
+    await select_one()
+    await replace_one()
+    await upsert_one()
+    await delete_one()
+    await delete_all()
+    await my_query()
+
+asyncio.run(run_all())
+
