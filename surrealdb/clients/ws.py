@@ -100,8 +100,6 @@ class WebsocketClient:
             task.result()
         except asyncio.CancelledError:
             pass
-        except Exception as e:
-            raise e
 
     async def _receive_task(self) -> None:
         async for msg in self._ws:
@@ -237,7 +235,7 @@ class WebsocketClient:
         response = await self._send("set", key, value)
         return response
 
-    async def query(self, sql: str, params: Any = None) -> List[Dict[str, Any]]:
+    async def query(self, sql: str, params: Any = None) -> List[List[Any]]:
         """Executes a SQL query.
 
         Parameters
@@ -249,11 +247,30 @@ class WebsocketClient:
 
         Returns
         -------
-        List[Dict[:class:`str`, Any]]
+        List[List[Any]]
             The results for each query executed.
         """
         response = await self._send("query", sql, params)
-        return response
+        return [query_result["result"] for query_result in response]
+
+    async def select_one(self, table_or_record_id: str) -> Optional[Dict[str, Any]]:
+        """Selects a row from an SQL table.
+
+        Parameters
+        ----------
+        table_or_record_id: :class:`str`
+            The table or record ID to find.
+
+        Returns
+        -------
+        Optional[Dict[:class:`str`, Any]]
+            The first row found from the table or record ID, if any.
+        """
+        response = await self.select(table_or_record_id)
+        if not response:
+            return None
+
+        return response[0]
 
     async def select(self, table_or_record_id: str) -> List[Dict[str, Any]]:
         """Selects rows from an SQL table.
@@ -293,6 +310,24 @@ class WebsocketClient:
         response = await self._send("create", table_or_record_id, data)
         return response
 
+    async def update_one(self, record_id: str, data: Any) -> Dict[str, Any]:
+        """Updates a record in the database.
+
+        Parameters
+        ----------
+        record_id: :class:`str`
+            The record ID to update the record.
+        data: :class:`dict`
+            The data to update the record with.
+
+        Returns
+        -------
+        Dict[:class:`str`, Any]
+            The updated record.
+        """
+        response = await self.update(record_id, data)
+        return response[0]
+
     async def update(
         self,
         table_or_record_id: str,
@@ -305,7 +340,7 @@ class WebsocketClient:
         table_or_record_id: :class:`str`
             The table or record ID to update.
         data: :class:`dict`
-            The data to update the record with.
+            The data to update the record(s) with.
 
         Returns
         -------
@@ -315,6 +350,11 @@ class WebsocketClient:
         response = await self._send("update", table_or_record_id, data)
         return response
 
+    async def change_one(self, record_id: str, data: Any) -> Dict[str, Any]:
+        """Alias for :meth:`update_one`."""
+        response = await self.change(record_id, data)
+        return response[0]
+
     async def change(
         self,
         table_or_record_id: str,
@@ -323,6 +363,24 @@ class WebsocketClient:
         """Alias for :meth:`update`."""
         response = await self._send("change", table_or_record_id, data)
         return response
+
+    async def modify_one(self, record_id: str, data: Any) -> Dict[str, Any]:
+        """Modifies a record or table.
+
+        Parameters
+        ----------
+        record_id: :class:`str`
+            The record ID to modify.
+        data: :class:`Any`
+            The data to modify the record with.
+
+        Returns
+        -------
+        Dict[:class:`str`, Any]
+            A dictionary containing the diff of the record.
+        """
+        response = await self.modify(record_id, data)
+        return response[0]
 
     async def modify(
         self,
