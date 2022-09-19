@@ -16,7 +16,7 @@ limitations under the License.
 from .clients import HTTPClient
 from .clients import WebsocketClient
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __title__ = "surrealdb"
 __author__ = "SurrealDB"
 __license__ = "Apache-2.0"
