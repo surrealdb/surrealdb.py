@@ -100,8 +100,6 @@ class WebsocketClient:
             task.result()
         except asyncio.CancelledError:
             pass
-        except Exception as e:
-            raise e
 
     async def _receive_task(self) -> None:
         async for msg in self._ws:
