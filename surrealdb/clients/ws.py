@@ -235,7 +235,7 @@ class WebsocketClient:
         response = await self._send("set", key, value)
         return response
 
-    async def query(self, sql: str, params: Any = None) -> List[Dict[str, Any]]:
+    async def query(self, sql: str, params: Any = None) -> List[List[Any]]:
         """Executes a SQL query.
 
         Parameters
@@ -247,7 +247,7 @@ class WebsocketClient:
 
         Returns
         -------
-        List[Dict[:class:`str`, Any]]
+        List[List[Any]]
             The results for each query executed.
         """
         response = await self._send("query", sql, params)
