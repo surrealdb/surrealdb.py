@@ -253,7 +253,8 @@ class WebsocketClient:
             The results for each query executed.
         """
         response = await self._send("query", sql, params)
-        return response
+        return [query_result["result"] for query_result in response]
+
 
     async def select(self, table_or_record_id: str) -> List[Dict[str, Any]]:
         """Selects rows from an SQL table.
