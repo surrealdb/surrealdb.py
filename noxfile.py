@@ -3,10 +3,10 @@ import nox
 
 
 @nox.session(reuse_venv=True)
-def reformat(session: nox.Session) -> None:
+def format(session: nox.Session) -> None:
     """Reformat using Black."""
     session.install("black")
-    session.run("black", ".")
+    session.run("black", ".", "--check")
 
 
 @nox.session(reuse_venv=True)
