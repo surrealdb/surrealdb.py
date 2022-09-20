@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "surrealdb"
-version = "0.3.0"
+version = "0.0.1"
 description = "The official SurrealDB library for Python."
 authors = ["SurrealDB"]
 license = "Apache-2.0"
