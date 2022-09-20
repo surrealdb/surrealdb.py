@@ -1,5 +1,5 @@
 """
-Copyright © SurrealDB Ltd
+Copyright © SurrealDB Ltd.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@ __all__ = (
 
 @dataclass(frozen=True)
 class SurrealResponse:
+    """Represents a http response from a SurrealDB server."""
+
     time: str
     status: str
     result: List[Dict[str, Any]]
@@ -33,5 +35,7 @@ class SurrealResponse:
 
 @dataclass(frozen=True)
 class RPCResponse:
+    """Represents an RPC response from a SurrealDB server.."""
+
     id: str
     result: Any = None

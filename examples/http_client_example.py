@@ -1,5 +1,6 @@
 """
-Copyright © SurrealDB Ltd
+Copyright © SurrealDB Ltd.
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -11,25 +12,35 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 import asyncio
-# import the http client
+
 from surrealdb.clients.http import HTTPClient
 
+# import the http client
+
 # create a new client to connect to SurrealDB
-client = HTTPClient("http://localhost:8000", namespace="test", database="test", username="root",
-                             password="root")
+client = HTTPClient(
+    "http://localhost:8000",
+    namespace="test",
+    database="test",
+    username="root",
+    password="root",
+)
 
 
-# this is an example of using the client to create data in a table
 async def create_all():
+    """Use the client to create example data in a table."""
     table = "hospital"
     data = {"name:": "A Hospital", "location": "earth"}
     response = await client.create_all(table, data)
     print(response)
 
 
-# This will allow us to create a record and allow us to use our own ids
-# if we run this twice it will raise record already exist
 async def create_with_id():
+    """
+    Create a record with a specified id.
+
+    This will raise an exception if the record already exists.
+    """
     table = "hospital"
     custom_id = "customidhere"  # this is id but its reserved
     data = {"name": "A second Hospital", "location": "earth"}
@@ -37,24 +48,23 @@ async def create_with_id():
     print(response)
 
 
-# this queries the table for all the records that exist
-# try adding more records with the above create functions to see it in action
 async def select_all():
+    """Query a table for all records."""
     table = "hospital"
     response = await client.select_all(table)
     print(response)
 
 
-# this queries the table and the specific record id
 async def select_one():
+    """Query a table for a specific record by the record's id."""
     table = "hospital"
     custom_id = "customidhere"
     response = await client.select_one(table, custom_id)
     print(response)
 
 
-# This is an example to replace the data at the specified id
 async def replace_one():
+    """Replace a record with a specified id."""
     table = "hospital"
     custom_id = "customidhere"
     new_data = {"name": "A Replacement Hospital", "location": "not earth"}
@@ -62,8 +72,8 @@ async def replace_one():
     print(response)
 
 
-# This is an example to patch the data at the specified id
 async def upsert_one():
+    """Patch a record with a specified id."""
     table = "hospital"
     custom_id = "customidhere"
     partial_new_data = {"location": "on the sun", "fieldthatdidnt": "exist"}
@@ -71,26 +81,28 @@ async def upsert_one():
     print(response)
 
 
-# This is an example to delete all the data
 async def delete_all():
+    """Delete all records in a table."""
     table = "hospital"
     await client.delete_all(table)
 
 
-# This is an example to delete only the specified
 async def delete_one():
+    """Delete a record with a specified id."""
     table = "hospital"
     custom_id = "customidhere"
     await client.delete_one(table, custom_id)
 
 
-# this is an example to run your own queries
 async def my_query():
+    """Execute a custom query."""
     query = "SELECT * FROM hospital"
     data = await client.execute(query)
     print(data)
 
+
 async def run_all():
+    """Run all of the examples."""
     await create_all()
     await create_with_id()
     await select_all()
@@ -101,5 +113,5 @@ async def run_all():
     await delete_all()
     await my_query()
 
-asyncio.run(run_all())
 
+asyncio.run(run_all())

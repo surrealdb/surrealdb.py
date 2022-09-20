@@ -13,6 +13,3 @@ ignore =
 
     W503  # Is not yet up to date with https://www.flake8rules.com/rules/W503.html
           # and conflicts with black.
-
-[tool.black]
-line-length = 88

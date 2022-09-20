@@ -1,5 +1,5 @@
 """
-Copyright © SurrealDB Ltd
+Copyright © SurrealDB Ltd.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@ __all__ = ("SurrealException", "SurrealWebsocketException")
 
 
 class SurrealException(Exception):
-    pass
+    """Exception raised for errors with the SurrealDB http client."""
 
 
 class SurrealWebsocketException(SurrealException):
-    pass
+    """Exception raised for errors with the SurrealDB websocket client."""
