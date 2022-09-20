@@ -17,7 +17,7 @@ __all__ = ("SurrealException", "SurrealWebsocketException")
 
 
 class SurrealException(Exception):
-    """Exception raised for errors with the SurrealDB http client."""
+    """Base exception for SurrealDB client library."""
 
 
 class SurrealWebsocketException(SurrealException):
