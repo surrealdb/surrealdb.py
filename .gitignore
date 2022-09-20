@@ -26,6 +26,7 @@ Temporary Items
 # -----------------------------------
 
 *.db
-__pycache__/
 *.pyc
 .vscode/
+__pycache__/
+dist/
