@@ -35,7 +35,7 @@ class SurrealResponse:
 
 @dataclass(frozen=True)
 class RPCResponse:
-    """Represents an RPC response from a SurrealDB server.."""
+    """Represents an RPC response from a SurrealDB server."""
 
     id: str
     result: Any = None
