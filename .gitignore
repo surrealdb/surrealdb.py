@@ -21,6 +21,18 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+bin/
+lib64
+pyvenv.cfg
+
 # -----------------------------------
 # Files
 # -----------------------------------
