@@ -22,7 +22,7 @@ client = HTTPClient("http://localhost:8000", namespace="test", database="test", 
 # this is an example of using the client to create data in a table
 async def create_all():
     table = "hospital"
-    data = {"name:": "A Hospital", "location": "earth"}
+    data = {"name": "A Hospital", "location": "earth"}
     response = await client.create_all(table, data)
     print(response)
 
