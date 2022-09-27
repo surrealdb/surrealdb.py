@@ -68,7 +68,7 @@ class HTTPClient:
             base_url=self._url,
             auth=httpx.BasicAuth(
                 username=self._username,
-                password=self._username,
+                password=self._password,
             ),
             headers={
                 "NS": self._namespace,
