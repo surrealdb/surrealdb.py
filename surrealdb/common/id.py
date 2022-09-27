@@ -1,5 +1,5 @@
 """
-Copyright © SurrealDB Ltd
+Copyright © SurrealDB Ltd.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ CURRENT_ID = 0
 
 
 def generate_id() -> str:
+    """Generate a unique ID."""
     global CURRENT_ID
 
     id = CURRENT_ID % (2**32)

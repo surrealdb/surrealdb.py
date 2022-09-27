@@ -1,5 +1,5 @@
 """
-Copyright © SurrealDB Ltd
+Copyright © SurrealDB Ltd.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -79,6 +79,7 @@ class HTTPClient:
         )
 
     async def __aenter__(self) -> HTTPClient:
+        """Connect to the http client when entering the context manager."""
         await self.connect()
         return self
 
@@ -88,14 +89,15 @@ class HTTPClient:
         exc_value: Optional[BaseException] = None,
         traceback: Optional[TracebackType] = None,
     ) -> None:
+        """Disconnect from the http client when exiting the context manager."""
         await self.disconnect()
 
     async def connect(self) -> None:
-        """Connects to http client."""
+        """Connect to http client."""
         await self._http.__aenter__()
 
     async def disconnect(self) -> None:
-        """Disconnects from the http client."""
+        """Disconnect from the http client."""
         await self._http.aclose()
 
     async def _request(
@@ -126,7 +128,8 @@ class HTTPClient:
 
             if surreal_response.status_code not in range(200, 300):
                 raise SurrealException(
-                    f"Query failed with status code {surreal_response.status_code}: {surreal_data}",
+                    "Query failed with status code "
+                    + f"{surreal_response.status_code}: {surreal_data}",
                 )
 
             response_obj = SurrealResponse(**surreal_data)
@@ -134,7 +137,7 @@ class HTTPClient:
         return response_obj
 
     async def execute(self, query: str) -> List[Dict[str, Any]]:
-        """Executes a query against the SurrealDB server.
+        """Execute a query against the SurrealDB server.
 
         Parameters
         ----------
@@ -150,7 +153,7 @@ class HTTPClient:
         return response.result
 
     async def create_all(self, table: str, data: Any) -> List[Dict[str, Any]]:
-        """Creates multiple items in a table.
+        """Create multiple items in a table.
 
         Parameters
         ----------
@@ -173,7 +176,7 @@ class HTTPClient:
         return response.result
 
     async def create_one(self, table: str, id: str, data: Any) -> Dict[str, Any]:
-        """Creates a single item in a table.
+        """Create a single item in a table.
 
         Parameters
         ----------
@@ -198,7 +201,7 @@ class HTTPClient:
         return response.result[0]
 
     async def select_all(self, table: str) -> List[Dict[str, Any]]:
-        """Selects all items in a table.
+        """Select all items in a table.
 
         Parameters
         ----------
@@ -214,7 +217,7 @@ class HTTPClient:
         return response.result
 
     async def select_one(self, table: str, id: str) -> Dict[str, Any]:
-        """Selects a single item in a table.
+        """Select a single item in a table.
 
         Parameters
         ----------
@@ -235,7 +238,7 @@ class HTTPClient:
         return response.result[0]
 
     async def replace_one(self, table: str, id: str, data: Any) -> Dict[str, Any]:
-        """Replaces a single item in a table.
+        """Replace a single item in a table.
 
         This method requires the entire data structure
         to be sent and will create or update the item.
@@ -291,7 +294,7 @@ class HTTPClient:
         return response.result[0]
 
     async def delete_all(self, table: str) -> None:
-        """Deletes all items in a table.
+        """Delete all items in a table.
 
         Parameters
         ----------
@@ -301,7 +304,7 @@ class HTTPClient:
         await self._request(method="DELETE", uri=f"/key/{table}")
 
     async def delete_one(self, table: str, id: str) -> None:
-        """Deletes one item in a table.
+        """Delete one item in a table.
 
         Parameters
         ----------

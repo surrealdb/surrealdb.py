@@ -1,5 +1,5 @@
 """
-Copyright © SurrealDB Ltd
+Copyright © SurrealDB Ltd.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -39,8 +39,7 @@ __all__ = ("WebsocketClient",)
 
 
 class WebsocketClient:
-    """Represents a websocket connection
-    to a SurrealDB server.
+    """Represents a websocket connection to a SurrealDB server.
 
     Parameters
     ----------
@@ -69,6 +68,7 @@ class WebsocketClient:
         self._response_futures: Dict[str, asyncio.Future] = {}
 
     async def __aenter__(self) -> WebsocketClient:
+        """Create a websocket connection when entering the context manager."""
         await self.connect()
         return self
 
@@ -78,10 +78,11 @@ class WebsocketClient:
         exc_value: Optional[BaseException] = None,
         traceback: Optional[TracebackType] = None,
     ) -> None:
+        """Disconnect the websocket client when exiting the context manager."""
         await self.disconnect()
 
     async def connect(self) -> None:
-        """Connects to the SurrealDB server."""
+        """Connect to the SurrealDB server."""
         self._client = ClientSession()
         self._ws = await self._client.ws_connect(self._url)
 
@@ -148,7 +149,7 @@ class WebsocketClient:
         namespace: str,
         database: str,
     ) -> None:
-        """Changes the namespace and database to use."""
+        """Change the namespace and database to use."""
         response = await self._send("use", namespace, database)
 
         self._namespace = namespace
@@ -157,11 +158,12 @@ class WebsocketClient:
         return response
 
     async def info(self) -> None:
+        """Get current authentication information."""
         response = await self._send("info")
         return response
 
     async def signup(self, params: Dict[str, Any]) -> str:
-        """Creates an account on the SurrealDB server.
+        """Create an account on the SurrealDB server.
 
         Parameters
         ----------
@@ -199,7 +201,7 @@ class WebsocketClient:
         return response
 
     async def authenticate(self, token: str) -> None:
-        """Authenticates the current session.
+        """Authenticate the current session.
 
         Parameters
         ----------
@@ -209,16 +211,16 @@ class WebsocketClient:
         response = await self._send("authenticate", token)
         return response
 
-    async def live(self, table: str) -> None:
+    async def live(self, table: str) -> None:  # noqa: D102
         response = await self._send("live", table)
         return response
 
-    async def kill(self, id: str) -> None:
+    async def kill(self, id: str) -> None:  # noqa: D102
         response = await self._send("kill", id)
         return response
 
     async def let(self, key: str, value: Any) -> None:
-        """Sets a value in the SurrealDB server.
+        """Set a value in the SurrealDB server.
 
         Parameters
         ----------
@@ -236,7 +238,7 @@ class WebsocketClient:
         return response
 
     async def query(self, sql: str, params: Any = None) -> List[List[Any]]:
-        """Executes a SQL query.
+        """Execute a SQL query.
 
         Parameters
         ----------
@@ -254,7 +256,7 @@ class WebsocketClient:
         return [query_result["result"] for query_result in response]
 
     async def select_one(self, table_or_record_id: str) -> Optional[Dict[str, Any]]:
-        """Selects a row from an SQL table.
+        """Select a row from an SQL table.
 
         Parameters
         ----------
@@ -273,7 +275,7 @@ class WebsocketClient:
         return response[0]
 
     async def select(self, table_or_record_id: str) -> List[Dict[str, Any]]:
-        """Selects rows from an SQL table.
+        """Select rows from an SQL table.
 
         Parameters
         ----------
@@ -293,7 +295,7 @@ class WebsocketClient:
         table_or_record_id: str,
         data: Any,
     ) -> List[Dict[str, Any]]:
-        """Creates a new record in the database.
+        """Create a new record in the database.
 
         Parameters
         ----------
@@ -311,7 +313,7 @@ class WebsocketClient:
         return response
 
     async def update_one(self, record_id: str, data: Any) -> Dict[str, Any]:
-        """Updates a record in the database.
+        """Update a record in the database.
 
         Parameters
         ----------
@@ -333,7 +335,7 @@ class WebsocketClient:
         table_or_record_id: str,
         data: Any,
     ) -> List[Dict[str, Any]]:
-        """Updates a record or records in a table.
+        """Update a record or records in a table.
 
         Parameters
         ----------
@@ -365,7 +367,7 @@ class WebsocketClient:
         return response
 
     async def modify_one(self, record_id: str, data: Any) -> Dict[str, Any]:
-        """Modifies a record or table.
+        """Modify a record or table.
 
         Parameters
         ----------
@@ -387,7 +389,7 @@ class WebsocketClient:
         table_or_record_id: str,
         data: Any,
     ) -> List[Dict[str, Any]]:
-        """Modifies a record or table.
+        """Modify a record or table.
 
         Parameters
         ----------
@@ -405,7 +407,7 @@ class WebsocketClient:
         return response
 
     async def delete(self, table_or_record_id: str) -> List[Dict[str, Any]]:
-        """Deletes a record or table.
+        """Delete a record or table.
 
         Parameters
         ----------
