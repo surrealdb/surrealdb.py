@@ -27,6 +27,12 @@ repos:
     hooks:
     -   id: pyupgrade
         args: [--py37-plus, --keep-runtime-typing]
+-   repo: https://github.com/pycqa/flake8
+    rev: 5.0.4
+    hooks:
+    -   id: flake8
+        args: ["--config=.flake8"]
+        additional_dependencies: ["flake8-docstrings"]
 
 default_language_version:
     python: python3.9

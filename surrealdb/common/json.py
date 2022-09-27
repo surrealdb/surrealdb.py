@@ -1,5 +1,5 @@
 """
-Copyright © SurrealDB Ltd
+Copyright © SurrealDB Ltd.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ __all__ = (
 
 
 def dumps(obj: Any, **kwargs: Any) -> str:
+    """Serialize an object to a JSON string."""
     result = jsonlib.dumps(obj, **kwargs)
     if isinstance(result, bytes):
         result = result.decode("utf-8")
@@ -37,4 +38,5 @@ def dumps(obj: Any, **kwargs: Any) -> str:
 
 
 def loads(content: Union[bytes, str], **kwargs: Any) -> Any:
+    """Deserialize a JSON string to an object."""
     return jsonlib.loads(content, **kwargs)

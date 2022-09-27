@@ -1,5 +1,5 @@
 """
-Copyright © SurrealDB Ltd
+Copyright © SurrealDB Ltd.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,5 +21,7 @@ __all__ = ("RPCError",)
 
 @dataclass(frozen=True)
 class RPCError:
+    """Represents an RPC error."""
+
     code: int
     message: Optional[str]
