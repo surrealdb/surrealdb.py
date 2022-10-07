@@ -120,14 +120,14 @@ class HTTPClient:
             raise SurrealException(
                 f"Invalid JSON response from SurrealDB: {surreal_raw_data}",
             )
-        except KeyError:
+        except KeyError as e:
             raise SurrealException(
                 "Query failed with status code "
                 + f"{surreal_response.status_code}"
                 + f"\ndetails: {surreal_json['details']}"
                 + f"\ninformation: {surreal_json['information']}"
                 + f"\ndescription: {surreal_json['description']}",
-            )
+            ) from e
         else:
             if surreal_data["status"] != "OK":
                 raise SurrealException(
