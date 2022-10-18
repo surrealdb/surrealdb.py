@@ -16,6 +16,8 @@ limitations under the License.
 from typing import Any, Iterable
 from typing import Union
 
+from ..models.link import RecordLink
+
 
 try:
     import orjson as jsonlib
@@ -30,19 +32,25 @@ __all__ = (
 
 def dumps(obj: Any) -> str:
     """Serialize an object to a SurrealDB string."""
-    if any(isinstance(obj, t) for t in [int, float]):
+    if isinstance(obj, bool):
+        return "true" if obj else "false"
+    elif any(isinstance(obj, t) for t in [int, float]):
         return repr(obj)
     elif isinstance(obj, str):
         return f'"{obj}"'
-    elif hasattr(obj, "id"):
+    elif isinstance(obj, RecordLink):
         return obj.id
     elif isinstance(obj, dict):
-        if obj.get("id") is not None:
-            return obj["id"]
         return "{" + ", ".join(f"{k}: {dumps(v)}" for k, v in obj.items()) + "}"
     elif isinstance(obj, Iterable):
         return f'[{", ".join(dumps(v) for v in obj)}]'
-    raise Exception(f"Object is not json serializable: {repr(obj)}")
+    else:
+        # Try to serialize other objects as json
+        result = jsonlib.dumps(obj)
+        if isinstance(result, bytes):
+            result = result.decode("utf-8")
+
+        return result
 
 
 def loads(content: Union[bytes, str], **kwargs: Any) -> Any:

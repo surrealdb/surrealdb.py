@@ -14,6 +14,8 @@ limitations under the License.
 import asyncio
 
 from surrealdb.clients.http import HTTPClient
+from surrealdb.models import response
+from surrealdb.models.link import RecordLink
 
 # import the http client
 
@@ -81,6 +83,21 @@ async def upsert_one():
     print(response)
 
 
+async def create_record_link():
+    """Create a record with a record-link"""
+    table = "hospital"
+    custom_id = "customidhere"
+    record_with_link = {
+        "location": "down under",
+        "friendlyHospital": RecordLink(id=f"{table}:{custom_id}"),
+    }
+    await client.create_all(table, record_with_link)
+    response = await client.execute(
+        f'SELECT * FROM {table} WHERE location="down under" FETCH friendlyHospital'
+    )
+    print(response)
+
+
 async def delete_all():
     """Delete all records in a table."""
     table = "hospital"
@@ -109,6 +126,7 @@ async def run_all():
     await select_one()
     await replace_one()
     await upsert_one()
+    await create_record_link()
     await delete_one()
     await delete_all()
     await my_query()
