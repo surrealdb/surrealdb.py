@@ -126,8 +126,7 @@ class WebsocketClient:
 
             response = RPCResponse(**json_response)
 
-            if request_future is not None:
-                request_future.set_result(response)
+            request_future.set_result(response)
 
     async def _send(
         self,
