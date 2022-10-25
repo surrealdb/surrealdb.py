@@ -104,21 +104,29 @@ class WebsocketClient:
 
     async def _receive_task(self) -> None:
         async for msg in self._ws:
-            if msg.type == WSMsgType.ERROR:
-                raise SurrealWebsocketException(msg.data)
-
             json_response: Dict[str, Any] = jsonlib.loads(msg.data)
+            request_future = self._response_futures.pop(json_response["id"], None)
+
+            if request_future is None:
+                # SurrealDB returned an answer to a non existent operation
+                raise SurrealWebsocketException(
+                    "Invalid operation id received from server"
+                )
+
+            if msg.type == WSMsgType.ERROR:
+                request_future.set_exception(SurrealWebsocketException(msg.data))
+                continue
 
             error = json_response.get("error")
+
             if error is not None:
                 error = RPCError(**error)
-                raise SurrealWebsocketException(error.message)
+                request_future.set_exception(SurrealWebsocketException(error.message))
+                continue
 
             response = RPCResponse(**json_response)
 
-            request_future = self._response_futures.pop(response.id, None)
-            if request_future is not None:
-                request_future.set_result(response)
+            request_future.set_result(response)
 
     async def _send(
         self,
