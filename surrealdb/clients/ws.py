@@ -110,7 +110,7 @@ class WebsocketClient:
             if request_future is None:
                 # SurrealDB returned an answer to a non existent operation
                 raise SurrealWebsocketException(
-                    "Invalid operation id recived from server"
+                    "Invalid operation id received from server"
                 )
 
             if msg.type == WSMsgType.ERROR:
