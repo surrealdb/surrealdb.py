@@ -286,7 +286,7 @@ class HTTPClient:
         id: :class:`str`
             The id of the item to upsert.
         data: :class:`Any`
-            The data to upsers the original item with.
+            The data to upsert the original item with.
 
         Returns
         -------
