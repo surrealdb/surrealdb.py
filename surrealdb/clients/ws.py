@@ -27,6 +27,7 @@ from typing import Type
 from aiohttp import ClientSession
 from aiohttp import ClientWebSocketResponse
 from aiohttp import WSMsgType
+from aiohttp import BasicAuth
 
 from ..common import json as jsonlib
 from ..common.exceptions import SurrealWebsocketException
@@ -58,8 +59,19 @@ class WebsocketClient:
     def __init__(
         self,
         url: str,
+        namespace: str,
+        database: str,
+        username: str,
+        password: str,
     ) -> None:
         self._url = url
+        self._auth = BasicAuth(username, password)
+        self._headers = {
+            'Content-Type': 'application/json',
+            'Accept':'application/json',
+            'ns': namespace,
+            'db': database,
+         }
 
         self._client: ClientSession
         self._ws: ClientWebSocketResponse
@@ -84,7 +96,7 @@ class WebsocketClient:
     async def connect(self) -> None:
         """Connect to the SurrealDB server."""
         self._client = ClientSession()
-        self._ws = await self._client.ws_connect(self._url)
+        self._ws = await self._client.ws_connect(self._url, headers=self._headers, auth=self._auth)
 
         self._recv_task = asyncio.create_task(self._receive_task())
         self._recv_task.add_done_callback(self._receive_complete)
