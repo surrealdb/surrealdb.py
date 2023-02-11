@@ -14,6 +14,7 @@ aiohttp = ">=3.8.1"
 [tool.poetry.dev-dependencies]
 pre-commit = ">=2.20.0"
 black = ">=22.8.0"
+ruff = ">=0.0.245"
 
 [tool.poetry.extras]
 speedups = ["orjson>=3.8.0", "aiodns>=3.0.0", "cchardet>=2.1.7"]
@@ -21,3 +22,35 @@ speedups = ["orjson>=3.8.0", "aiodns>=3.0.0", "cchardet>=2.1.7"]
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+select = ["I", "D", "N", "UP"]
+line-length = 88
+
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    "node_modules",
+    ".git",
+    "__pycache__",
+]
+
+[tool.ruff.pydocstyle]
+convention = "google"
