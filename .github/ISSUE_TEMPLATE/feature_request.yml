@@ -42,7 +42,7 @@ body:
     validations:
       required: true
   - type: input
-    id: surrealdb.py-version
+    id: surrealdb_py-version
     attributes:
       label: surrealdb.py version
       description: What version of surrealdb.py are you using?
