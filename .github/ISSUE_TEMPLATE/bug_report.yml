@@ -46,7 +46,7 @@ body:
     attributes:
       label: surrealdb.py version
       description: What version of surrealdb.py are you using?
-      placeholder: surrealdb.py 0.1.0 for macOS on aarch64 using Python 3.9.1 installed via pip.
+      placeholder: surrealdb.py 0.1.0 for macOS on aarch64 using Python 3.9.1
     validations:
       required: true
   - type: input
