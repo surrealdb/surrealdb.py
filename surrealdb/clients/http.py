@@ -17,11 +17,7 @@ from __future__ import annotations
 
 from json import JSONDecodeError
 from types import TracebackType
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
-from typing import Type
+from typing import Any, Dict, List, Optional, Type
 
 import httpx
 
@@ -35,18 +31,12 @@ __all__ = ("HTTPClient",)
 class HTTPClient:
     """Represents a http connection to a SurrealDB server.
 
-    Parameters
-    ----------
-    url: :class:`str`
-        The URL of the SurrealDB server.
-    namespace: :class:`str`
-        The namespace to use for the connection.
-    database: :class:`str`
-        The database to use for the connection.
-    username: :class:`str`
-        The username to use for the connection.
-    password: :class:`str`
-        The password to use for the connection.
+    Args:
+        url: The URL of the SurrealDB server.
+        namespace: The namespace to use for the connection.
+        database: The database to use for the connection.
+        username: The username to use for the connection.
+        password: The password to use for the connection.
     """
 
     def __init__(
@@ -147,14 +137,10 @@ class HTTPClient:
     async def execute(self, query: str) -> List[Dict[str, Any]]:
         """Execute a query against the SurrealDB server.
 
-        Parameters
-        ----------
-        query: :class:`str`
-            The query to execute.
+        Args:
+            query: The query to execute.
 
-        Returns
-        -------
-        :class:`List[Dict[str, Any]]`
+        Returns:
             The results of the query.
         """
         response = await self._request(method="POST", uri="/sql", data=query)
@@ -163,16 +149,11 @@ class HTTPClient:
     async def create_all(self, table: str, data: Any) -> List[Dict[str, Any]]:
         """Create multiple items in a table.
 
-        Parameters
-        ----------
-        table: :class:`str`
-            The table to create the item in.
-        data: :class:`Any`
-            The data to insert into the table.
+        Args:
+            table: The table to create the item in.
+            data: The data to insert into the table.
 
-        Returns
-        -------
-        :class:`Dict[str, Any]`
+        Returns:
             The items created
         """
         response = await self._request(
@@ -186,18 +167,12 @@ class HTTPClient:
     async def create_one(self, table: str, id: str, data: Any) -> Dict[str, Any]:
         """Create a single item in a table.
 
-        Parameters
-        ----------
-        table: :class:`str`
-            The table to create the item in.
-        id: :class:`str`
-            The id of the item to select.
-        data: :class:`Any`
-            The data to insert into the table.
+        Args:
+            table: The table to create the item in.
+            id: The id of the item to select.
+            data: The data to insert into the table.
 
-        Returns
-        -------
-        :class:`Dict[str, Any]`
+        Returns:
             The item created.
         """
         response = await self._request(
@@ -216,7 +191,7 @@ class HTTPClient:
         table: :class:`str`
             The table to select from.
 
-        Returns
+        Returns:
         -------
         :class:`Dict[str, Any]`
             All items retrieved from the table.
@@ -227,16 +202,11 @@ class HTTPClient:
     async def select_one(self, table: str, id: str) -> Dict[str, Any]:
         """Select a single item in a table.
 
-        Parameters
-        ----------
-        table: :class:`str`
-            The table to select from.
-        id: :class:`str`
-            The id of the item to select.
+        Args:
+            table: The table to select from.
+            id: The id of the item to select.
 
-        Returns
-        -------
-        :class:`Dict[str, Any]`
+        Returns:
             The item selected.
         """
         response = await self._request(method="GET", uri=f"/key/{table}/{id}")
@@ -251,18 +221,12 @@ class HTTPClient:
         This method requires the entire data structure
         to be sent and will create or update the item.
 
-        Parameters
-        ----------
-        table: :class:`str`
-            The table the item is in.
-        id: :class:`str`
-            The id of the item to replace.
-        data: :class:`Any`
-            The data replace the original item with.
+        Args:
+            table: The table the item is in.
+            id: The id of the item to replace.
+            data: The data replace the original item with.
 
-        Returns
-        -------
-        :class:`Dict[str, Any]`
+        Returns:
             The new item.
         """
         response = await self._request(
@@ -273,24 +237,18 @@ class HTTPClient:
         return response.result[0]
 
     async def upsert_one(self, table: str, id: str, data: Any) -> Dict[str, Any]:
-        """Upserts a single item in a table.
+        """Upsert a single item in a table.
 
-        This method requires only the fields you wish to be updated,
-        assuming that this id exists. If it doesn't exist, it will be created
-        with the data.
+        This method requires only the fields you wish to be updated, assuming
+        that this id exists. If it doesn't exist, it will be created with the
+        data.
 
-        Parameters
-        ----------
-        table: :class:`str`
-            The table the item is in.
-        id: :class:`str`
-            The id of the item to upsert.
-        data: :class:`Any`
-            The data to upsers the original item with.
+        Args:
+            table: The table the item is in.
+            id: The id of the item to upsert.
+            data: The data to upsert the original item with.
 
-        Returns
-        -------
-        :class:`Dict[str, Any]`
+        Returns:
             The difference between the old and new item.
         """
         response = await self._request(
@@ -304,21 +262,16 @@ class HTTPClient:
     async def delete_all(self, table: str) -> None:
         """Delete all items in a table.
 
-        Parameters
-        ----------
-        table: :class:`str`
-            The table to delete all items from.
+        Args:
+            table: The table to delete all items from.
         """
         await self._request(method="DELETE", uri=f"/key/{table}")
 
     async def delete_one(self, table: str, id: str) -> None:
         """Delete one item in a table.
 
-        Parameters
-        ----------
-        table: :class:`str`
-            The table the item is in.
-        id: :class:`str`
-            The id of the item to delete.
+        Args:
+            table: The table the item is in.
+            id: The id of the item to delete.
         """
         await self._request(method="DELETE", uri=f"/key/{table}/{id}")

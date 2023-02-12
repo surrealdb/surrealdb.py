@@ -14,15 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 from dataclasses import dataclass
-from typing import Any
-from typing import Tuple
+from typing import Any, Tuple
 
 __all__ = ("RPCRequest",)
 
 
 @dataclass(frozen=True)
 class RPCRequest:
-    """Represents an RPC request to a SurrealDB server."""
+    """Represents an RPC request to a SurrealDB server.
+
+    Attributes:
+        id: The ID of the request.
+        method: The method to call.
+        params: The parameters to pass to the method.
+    """
 
     id: str
     method: str
