@@ -13,8 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-from .clients import HTTPClient
-from .clients import WebsocketClient
+from .clients import HTTPClient, WebsocketClient
 
 __version__ = "0.3.0"
 __title__ = "surrealdb"

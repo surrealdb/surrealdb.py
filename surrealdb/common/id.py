@@ -20,7 +20,11 @@ CURRENT_ID = 0
 
 
 def generate_id() -> str:
-    """Generate a unique ID."""
+    """Generate a unique ID.
+
+    Returns:
+        A unique ID.
+    """
     global CURRENT_ID
 
     id = CURRENT_ID % (2**32)

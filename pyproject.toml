@@ -14,6 +14,7 @@ aiohttp = ">=3.8.1"
 [tool.poetry.dev-dependencies]
 pre-commit = ">=2.20.0"
 black = ">=22.8.0"
+ruff = ">=0.0.245"
 
 [tool.poetry.extras]
 speedups = ["orjson>=3.8.0", "aiodns>=3.0.0", "cchardet>=2.1.7"]
@@ -21,3 +22,67 @@ speedups = ["orjson>=3.8.0", "aiodns>=3.0.0", "cchardet>=2.1.7"]
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+color = true
+
+exclude = '''
+/(
+    \.bzr
+    | \.direnv
+    | \.eggs
+    | \.git
+    | \.hg
+    | \.mypy_cache
+    | \.nox
+    | \.pants\.d
+    | \.ruff_cache
+    | \.__pypackages__
+    | \.svn
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+    | env
+    | venv
+)/
+'''
+
+[tool.ruff]
+select = ["I", "D", "N", "UP"]
+line-length = 88
+
+ignore = ["D212", "D107", "D100", "D104", "D107", "N818"]
+
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    ".git",
+    "__pycache__",
+]
+
+[tool.ruff.pydocstyle]
+convention = "google"
+
+[tool.ruff.pyupgrade]
+keep-runtime-typing = true
