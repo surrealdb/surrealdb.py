@@ -18,22 +18,14 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 from types import TracebackType
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
-from typing import Type
+from typing import Any, Dict, List, Optional, Type
 
-from aiohttp import ClientSession
-from aiohttp import ClientWebSocketResponse
-from aiohttp import WSMsgType
+from aiohttp import ClientSession, ClientWebSocketResponse, WSMsgType
 
 from ..common import json as jsonlib
 from ..common.exceptions import SurrealWebsocketException
 from ..common.id import generate_id
-from ..models import RPCError
-from ..models import RPCRequest
-from ..models import RPCResponse
+from ..models import RPCError, RPCRequest, RPCResponse
 
 __all__ = ("WebsocketClient",)
 
@@ -41,24 +33,11 @@ __all__ = ("WebsocketClient",)
 class WebsocketClient:
     """Represents a websocket connection to a SurrealDB server.
 
-    Parameters
-    ----------
-    url: :class:`str`
-        The URL of the SurrealDB server.
-    namespace: :class:`str`
-        The namespace to use for the connection.
-    database: :class:`str`
-        The database to use for the connection.
-    username: :class:`str`
-        The username to use for the connection.
-    password: :class:`str`
-        The password to use for the connection.
+    Args:
+        url: The URL of the SurrealDB server.
     """
 
-    def __init__(
-        self,
-        url: str,
-    ) -> None:
+    def __init__(self, url: str) -> None:
         self._url = url
 
         self._client: ClientSession
@@ -152,12 +131,13 @@ class WebsocketClient:
         response = await self._send("ping")
         return response
 
-    async def use(
-        self,
-        namespace: str,
-        database: str,
-    ) -> None:
-        """Change the namespace and database to use."""
+    async def use(self, namespace: str, database: str) -> None:
+        """Change the namespace and database to use.
+
+        Args:
+            namespace: The namespace to use.
+            database: The database to use.
+        """
         response = await self._send("use", namespace, database)
 
         self._namespace = namespace
@@ -173,14 +153,10 @@ class WebsocketClient:
     async def signup(self, params: Dict[str, Any]) -> str:
         """Create an account on the SurrealDB server.
 
-        Parameters
-        ----------
-        params: :class:`Dict[str, Any]`
-            The dict of params to pass to sign up.
+        Args:
+            params: The dict of params to pass to sign up.
 
-        Returns
-        -------
-        :class:`str`
+        Returns:
             A JWT token for the new account.
         """
         # if we send None, it's going to error so we must remove any none values
@@ -192,10 +168,8 @@ class WebsocketClient:
     async def signin(self, params: Dict[str, Any]) -> None:
         """Signs in to the SurrealDB server.
 
-        Parameters
-        ----------
-        params: :class:`Dict[str, Any]`
-            The dict of params to pass to sign in.
+        Args:
+            params: The dict of params to pass to sign in.
         """
         # if we send None, it's going to error so we must remove any none values
         sanitised_params = {k: v for k, v in params.items() if v is not None}
@@ -211,10 +185,8 @@ class WebsocketClient:
     async def authenticate(self, token: str) -> None:
         """Authenticate the current session.
 
-        Parameters
-        ----------
-        token: :class:`str`
-            The token to use for the connection.
+        Args:
+            token: The token to use for the connection.
         """
         response = await self._send("authenticate", token)
         return response
@@ -230,34 +202,31 @@ class WebsocketClient:
     async def let(self, key: str, value: Any) -> None:
         """Set a value in the SurrealDB server.
 
-        Parameters
-        ----------
-        key: :class:`str`
-            The key to set.
-        value: Any
-            The value to set.
+        Args:
+            key: The key to set.
+            value: The value to set.
         """
         response = await self._send("let", key, value)
         return response
 
     async def set(self, key: str, value: Any) -> None:
-        """Alias for :meth:`let`."""
+        """Alias for `let`.
+
+        Args:
+            key: The key to set.
+            value: The value to set.
+        """
         response = await self._send("set", key, value)
         return response
 
     async def query(self, sql: str, params: Any = None) -> List[List[Any]]:
         """Execute a SQL query.
 
-        Parameters
-        ----------
-        sql: :class:`str`
-            The SQL queries to execute.
-        params: Any
-            List of parameters which are part of the SQL queries.
+        Args:
+            sql: The SQL queries to execute.
+            params: List of parameters which are part of the SQL queries.
 
-        Returns
-        -------
-        List[List[Any]]
+        Returns:
             The results for each query executed.
         """
         response = await self._send("query", sql, params)
@@ -266,14 +235,10 @@ class WebsocketClient:
     async def select_one(self, table_or_record_id: str) -> Optional[Dict[str, Any]]:
         """Select a row from an SQL table.
 
-        Parameters
-        ----------
-        table_or_record_id: :class:`str`
-            The table or record ID to find.
+        Args:
+            table_or_record_id: The table or record ID to find.
 
-        Returns
-        -------
-        Optional[Dict[:class:`str`, Any]]
+        Returns:
             The first row found from the table or record ID, if any.
         """
         response = await self.select(table_or_record_id)
@@ -285,36 +250,23 @@ class WebsocketClient:
     async def select(self, table_or_record_id: str) -> List[Dict[str, Any]]:
         """Select rows from an SQL table.
 
-        Parameters
-        ----------
-        table_or_record_id: :class:`str`
-            The table or record ID to find.
+        Args:
+            table_or_record_id: The table or record ID to find.
 
-        Returns
-        -------
-        List[Dict[:class:`str`, Any]]
+        Returns:
             The results of the select.
         """
         response = await self._send("select", table_or_record_id)
         return response
 
-    async def create(
-        self,
-        table_or_record_id: str,
-        data: Any,
-    ) -> List[Dict[str, Any]]:
+    async def create(self, table_or_record_id: str, data: Any) -> List[Dict[str, Any]]:
         """Create a new record in the database.
 
-        Parameters
-        ----------
-        table_or_record_id: :class:`str`
-            The table or record ID to create the record in.
-        data: :class:`dict`
-            The data to create the record with.
+        Args:
+            table_or_record_id: The table or record ID to create the record in.
+            data: The data to create the record with.
 
-        Returns
-        -------
-        List[Dict[:class:`str`, Any]]
+        Returns:
             The created record.
         """
         response = await self._send("create", table_or_record_id, data)
@@ -323,16 +275,11 @@ class WebsocketClient:
     async def update_one(self, record_id: str, data: Any) -> Dict[str, Any]:
         """Update a record in the database.
 
-        Parameters
-        ----------
-        record_id: :class:`str`
-            The record ID to update the record.
-        data: :class:`dict`
-            The data to update the record with.
+        Args:
+            record_id: The record ID to update the record.
+            data: The data to update the record with.
 
-        Returns
-        -------
-        Dict[:class:`str`, Any]
+        Returns:
             The updated record.
         """
         response = await self.update(record_id, data)
@@ -345,70 +292,63 @@ class WebsocketClient:
     ) -> List[Dict[str, Any]]:
         """Update a record or records in a table.
 
-        Parameters
-        ----------
-        table_or_record_id: :class:`str`
-            The table or record ID to update.
-        data: :class:`dict`
-            The data to update the record(s) with.
+        Args:
+            table_or_record_id: The table or record ID to update.
+            data: The data to update the record(s) with.
 
-        Returns
-        -------
-        List[Dict[:class:`str`, Any]]`
+        Returns:
             The updated records.
         """
         response = await self._send("update", table_or_record_id, data)
         return response
 
     async def change_one(self, record_id: str, data: Any) -> Dict[str, Any]:
-        """Alias for :meth:`update_one`."""
+        """Alias for `update_one`.
+
+        Args:
+            record_id: The record ID to change.
+            data: The data to change the record with.
+
+        Returns:
+            A dictionary containing the diff of the record.
+        """
         response = await self.change(record_id, data)
         return response[0]
 
-    async def change(
-        self,
-        table_or_record_id: str,
-        data: Any,
-    ) -> List[Dict[str, Any]]:
-        """Alias for :meth:`update`."""
+    async def change(self, table_or_record_id: str, data: Any) -> List[Dict[str, Any]]:
+        """Alias for `update`.
+
+        Args:
+            table_or_record_id: The table or record ID to change.
+            data: The data to change the record or table with.
+
+        Returns:
+            A list of dictionaries containing the diff of the records.
+        """
         response = await self._send("change", table_or_record_id, data)
         return response
 
     async def modify_one(self, record_id: str, data: Any) -> Dict[str, Any]:
         """Modify a record or table.
 
-        Parameters
-        ----------
-        record_id: :class:`str`
-            The record ID to modify.
-        data: :class:`Any`
-            The data to modify the record with.
+        Args:
+            record_id: The record ID to modify.
+            data: The data to modify the record with.
 
-        Returns
-        -------
-        Dict[:class:`str`, Any]
+        Returns:
             A dictionary containing the diff of the record.
         """
         response = await self.modify(record_id, data)
         return response[0]
 
-    async def modify(
-        self,
-        table_or_record_id: str,
-        data: Any,
-    ) -> List[Dict[str, Any]]:
+    async def modify(self, table_or_record_id: str, data: Any) -> List[Dict[str, Any]]:
         """Modify a record or table.
 
-        Parameters
-        ----------
-        table_or_record_id: :class:`str`
-            The table or record ID to modify.
-        data: :class:`Any`
-            The data to modify the record or table with.
+        Args:
+            table_or_record_id: The table or record ID to modify.
+            data: The data to modify the record or table with.
 
-        Returns
-        -------
-        List[Dict[:class:`str`, Any]]
+        Returns:
             A list of dictionaries containing the diff of the records.
         """
         response = await self._send("modify", table_or_record_id, data)
@@ -417,14 +357,10 @@ class WebsocketClient:
     async def delete(self, table_or_record_id: str) -> List[Dict[str, Any]]:
         """Delete a record or table.
 
-        Parameters
-        ----------
-        table_or_record_id: :class:`str`
-            The table or record ID to delete.
+        Args:
+            table_or_record_id: The table or record ID to delete.
 
-        Returns
-        -------
-        List[Dict[:class:`str`, Any]]
+        Returns:
             A list of dictionaries containing the deleted records.
         """
         response = await self._send("delete", table_or_record_id)

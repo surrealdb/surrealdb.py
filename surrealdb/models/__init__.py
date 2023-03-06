@@ -15,7 +15,6 @@ limitations under the License.
 """
 from .error import RPCError
 from .request import RPCRequest
-from .response import RPCResponse
-from .response import SurrealResponse
+from .response import RPCResponse, SurrealResponse
 
 __all__ = ("SurrealResponse", "RPCResponse", "RPCRequest", "RPCError")

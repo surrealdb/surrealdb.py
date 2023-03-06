@@ -14,9 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 from dataclasses import dataclass
-from typing import Any
-from typing import Dict
-from typing import List
+from typing import Any, Dict, List
 
 __all__ = (
     "SurrealResponse",
@@ -26,7 +24,13 @@ __all__ = (
 
 @dataclass(frozen=True)
 class SurrealResponse:
-    """Represents a http response from a SurrealDB server."""
+    """Represents a http response from a SurrealDB server.
+
+    Attributes:
+        time: The time the request was processed.
+        status: The status of the request.
+        result: The result of the request.
+    """
 
     time: str
     status: str
@@ -35,7 +39,12 @@ class SurrealResponse:
 
 @dataclass(frozen=True)
 class RPCResponse:
-    """Represents an RPC response from a SurrealDB server."""
+    """Represents an RPC response from a SurrealDB server.
+
+    Attributes:
+        id: The ID of the request.
+        result: The result of the request.
+    """
 
     id: str
     result: Any = None
