@@ -203,13 +203,13 @@ class SurrealHTTP:
             Select a specific record from a table (or other entity)
                 person = await db.select('person:h5wxrf2ewk8xjxosxtyc')
         """
-        if ":" in thing:
-            table, id = thing.split(":")
-            response = await self._request(method="GET", uri=f"/key/{table}/{id}")
-            if not response:
-                raise SurrealException(f"Key {id} not found in table {table}")
-        else:
-            response = await self._request(method="GET", uri=f"/key/{thing}")
+        table, record_id = thing.split(":") if ":" in thing else (thing, None)
+        response = await self._request(
+            method="GET",
+            uri=f"/key/{table}/{record_id}" if record_id else f"/key/{table}",
+        )
+        if not response and record_id:
+            raise SurrealException(f"Key {record_id} not found in table {table}")
         return response[0]['result']
 
     async def create(self, thing: str, data: Optional[Dict[str, Any]] = None) -> str:
@@ -235,20 +235,16 @@ class SurrealHTTP:
                         },
                 })
         """
-        if ":" in thing:
-            table, id = thing.split(":")
-            response = await self._request(
-                method="POST",
-                uri=f"/key/{table}/{id}",
-                data=json.dumps(data),
-            )
-        else:
-            response = await self._request(
-                method="POST",
-                uri=f"/key/{thing}",
-                data=json.dumps(data),
-            )
+        table, record_id = thing.split(":") if ":" in thing else (thing, None)
+        response = await self._request(
+            method="POST",
+            uri=f"/key/{table}/{record_id}" if record_id else f"/key/{table}",
+            data=json.dumps(data),
+        )
+        if not response and record_id:
+            raise SurrealException(f"Key {record_id} not found in table {table}")
         return response[0]['result']
+    
 
     async def update(self, thing: str, data: Any) -> Dict[str, Any]:
         """Updates all records in a table, or a specific record, in the database.
@@ -276,20 +272,12 @@ class SurrealHTTP:
                         },
                 })
         """
-        if ":" in thing:
-            table, id = thing.split(":")
-            response = await self._request(
-                method="PUT",
-                uri=f"/key/{table}/{id}",
-                data=json.dumps(data),
-            )
-        else:
-            table, id = thing.split(":")
-            response = await self._request(
-                method="PUT",
-                uri=f"/key/{thing}",  # need to test if this works
-                data=json.dumps(data),
-            )
+        table, record_id = thing.split(":") if ":" in thing else (thing, None)
+        response = await self._request(
+            method="PUT",
+            uri=f"/key/{table}/{record_id}" if record_id else f"/key/{table}",
+            data=json.dumps(data),
+        )
         return response[0]['result']
 
     async def patch(self, thing: str, data: Any) -> Dict[str, Any]:
@@ -317,20 +305,12 @@ class SurrealHTTP:
                 { 'op': "remove", "path": "/temp" },
             ])
         """
-        if ":" in thing:
-            table, id = thing.split(":")
-            response = await self._request(
-                method="PATCH",
-                uri=f"/key/{table}/{id}",
-                data=json.dumps(data),
-            )
-        else:
-            table, id = thing.split(":")
-            response = await self._request(
-                method="PATCH",
-                uri=f"/key/{thing}",  # need to test if this works
-                data=json.dumps(data),
-            )
+        table, record_id = thing.split(":") if ":" in thing else (thing, None)
+        response = await self._request(
+            method="PATCH",
+            uri=f"/key/{table}/{record_id}" if record_id else f"/key/{table}",
+            data=json.dumps(data),
+        )
         return response[0]['result']
 
     async def delete(self, thing: str) -> None:
@@ -348,9 +328,9 @@ class SurrealHTTP:
             Delete a specific record from a table
                 await db.delete('person:h5wxrf2ewk8xjxosxtyc')
         """
-        if ":" in thing:
-            table, id = thing.split(":")
-            response = await self._request(method="DELETE", uri=f"/key/{table}/{id}")
-        else:
-            response = await self._request(method="DELETE", uri=f"/key/{thing}")
+        table, record_id = thing.split(":") if ":" in thing else (thing, None)
+        response = await self._request(
+            method="DELETE",
+            uri=f"/key/{table}/{record_id}" if record_id else f"/key/{table}",
+        )
         return response
