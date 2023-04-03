@@ -3,10 +3,10 @@ name: ruff
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
     branches:
-      - master
+      - main
 jobs:
   ruff:
     runs-on: ubuntu-latest
