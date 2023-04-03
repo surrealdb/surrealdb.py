@@ -68,7 +68,16 @@ exclude = '''
 select = ["I", "D", "N", "UP"]
 line-length = 88
 
-ignore = ["D212", "D107", "D100", "D104", "D107", "N818", "D401", "D205"]
+ignore = [
+    "D100",  # Missing docstring in public module
+    "D104",  # Missing docstring in public package
+    "D107",  # Missing docstring in __init__
+    "D205",  # 1 blank line required between summary line and description
+    "D212",  # Multi-line docstring summary should start at the first line	
+    "N805",  # First argument of a method should be named self
+    "N818",  # Exception name ... should be named with an Error suffix
+    "UP035"  # Typing deprecations
+]
 
 exclude = [
     ".bzr",
