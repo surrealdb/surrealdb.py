@@ -22,6 +22,8 @@ from typing import Any, Dict, List, Optional, Type
 
 import httpx
 
+from .utils import MISSING
+
 __all__ = ("SurrealHTTP",)
 
 
@@ -203,12 +205,12 @@ class SurrealHTTP:
             Select a specific record from a table (or other entity)
                 person = await db.select('person:h5wxrf2ewk8xjxosxtyc')
         """
-        table, record_id = thing.split(":") if ":" in thing else (thing, None)
+        table, record_id = thing.split(":") if ":" in thing else (thing, MISSING)
         response = await self._request(
             method="GET",
-            uri=f"/key/{table}/{record_id}" if record_id else f"/key/{table}",
+            uri=f"/key/{table}/{record_id}" if record_id is not MISSING else f"/key/{table}",
         )
-        if not response and record_id is not None:
+        if not response and record_id is not MISSING:
             raise SurrealException(f"Key {record_id} not found in table {table}")
         return response[0]['result']
 
@@ -235,13 +237,13 @@ class SurrealHTTP:
                         },
                 })
         """
-        table, record_id = thing.split(":") if ":" in thing else (thing, None)
+        table, record_id = thing.split(":") if ":" in thing else (thing, MISSING)
         response = await self._request(
             method="POST",
-            uri=f"/key/{table}/{record_id}" if record_id else f"/key/{table}",
+            uri=f"/key/{table}/{record_id}" if record_id is not MISSING is not MISSING else f"/key/{table}",
             data=json.dumps(data),
         )
-        if not response and record_id is not None:
+        if not response and record_id is not MISSING:
             raise SurrealException(f"Key {record_id} not found in table {table}")
         return response[0]['result']
     
@@ -272,10 +274,10 @@ class SurrealHTTP:
                         },
                 })
         """
-        table, record_id = thing.split(":") if ":" in thing else (thing, None)
+        table, record_id = thing.split(":") if ":" in thing else (thing, MISSING)
         response = await self._request(
             method="PUT",
-            uri=f"/key/{table}/{record_id}" if record_id else f"/key/{table}",
+            uri=f"/key/{table}/{record_id}" if record_id is not MISSING else f"/key/{table}",
             data=json.dumps(data),
         )
         return response[0]['result']
@@ -305,10 +307,10 @@ class SurrealHTTP:
                 { 'op': "remove", "path": "/temp" },
             ])
         """
-        table, record_id = thing.split(":") if ":" in thing else (thing, None)
+        table, record_id = thing.split(":") if ":" in thing else (thing, MISSING)
         response = await self._request(
             method="PATCH",
-            uri=f"/key/{table}/{record_id}" if record_id else f"/key/{table}",
+            uri=f"/key/{table}/{record_id}" if record_id is not MISSING else f"/key/{table}",
             data=json.dumps(data),
         )
         return response[0]['result']
@@ -328,9 +330,9 @@ class SurrealHTTP:
             Delete a specific record from a table
                 await db.delete('person:h5wxrf2ewk8xjxosxtyc')
         """
-        table, record_id = thing.split(":") if ":" in thing else (thing, None)
+        table, record_id = thing.split(":") if ":" in thing else (thing, MISSING)
         response = await self._request(
             method="DELETE",
-            uri=f"/key/{table}/{record_id}" if record_id else f"/key/{table}",
+            uri=f"/key/{table}/{record_id}" if record_id is not MISSING else f"/key/{table}",
         )
         return response
