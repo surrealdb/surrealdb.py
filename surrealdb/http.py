@@ -208,7 +208,7 @@ class SurrealHTTP:
             method="GET",
             uri=f"/key/{table}/{record_id}" if record_id else f"/key/{table}",
         )
-        if not response and record_id:
+        if not response and record_id is not None:
             raise SurrealException(f"Key {record_id} not found in table {table}")
         return response[0]['result']
 
