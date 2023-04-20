@@ -715,7 +715,7 @@ class Surreal:
             Exception: If the client is not connected to the Surreal server.
         """
         self._validate_connection()
-        await self.ws.send(json.dumps(request.dict()))  # type: ignore
+        await self.ws.send(json.dumps(request.dict(), ensure_ascii=False))  # type: ignore
 
     async def _recv(self) -> Union[ResponseSuccess, ResponseError]:
         """Receives a response from the Surreal server.
