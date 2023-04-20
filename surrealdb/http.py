@@ -239,7 +239,7 @@ class SurrealHTTP:
         response = await self._request(
             method="POST",
             uri=f"/key/{table}/{record_id}" if record_id else f"/key/{table}",
-            data=json.dumps(data),
+            data=json.dumps(data, ensure_ascii=False),
         )
         if not response and record_id is not None:
             raise SurrealException(f"Key {record_id} not found in table {table}")
@@ -276,7 +276,7 @@ class SurrealHTTP:
         response = await self._request(
             method="PUT",
             uri=f"/key/{table}/{record_id}" if record_id else f"/key/{table}",
-            data=json.dumps(data),
+            data=json.dumps(data, ensure_ascii=False),
         )
         return response[0]['result']
 
@@ -309,7 +309,7 @@ class SurrealHTTP:
         response = await self._request(
             method="PATCH",
             uri=f"/key/{table}/{record_id}" if record_id else f"/key/{table}",
-            data=json.dumps(data),
+            data=json.dumps(data, ensure_ascii=False),
         )
         return response[0]['result']
 
