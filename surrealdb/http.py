@@ -99,14 +99,14 @@ class SurrealHTTP:
         traceback: Optional[TracebackType] = None,
     ) -> None:
         """Disconnect from the http client when exiting the context manager."""
-        await self.disconnect()
+        await self.close()
 
     async def connect(self) -> None:
-        """Connects to a local or remote database endpoint."""
+        """Connect to a local or remote database endpoint."""
         await self._http.__aenter__()
 
     async def close(self) -> None:
-        """Closes the persistent connection to the database."""
+        """Close the persistent connection to the database."""
         await self._http.aclose()
 
     async def _request(
@@ -132,10 +132,11 @@ class SurrealHTTP:
     # Missing method - authenticate
     # Missing method - let
     # Missing method - merge
-    #TODO fix signup and signin methods
-    
+    # TODO fix signup and signin methods
+    # TODO: Review type: ignore comments.
+
     async def signup(self, vars: Dict[str, Any]) -> str:
-        """Signs this connection up to a specific authentication scope.
+        """Sign this connection up to a specific authentication scope.
 
         Args:
             vars: Variables used in a signup query.
@@ -143,11 +144,13 @@ class SurrealHTTP:
         Examples:
             await db.signup({"user": "bob", "pass": "123456"})
         """
-        response = await self._request(method="POST", uri="/signup", data=json.dumps(vars))
-        return response
+        response = await self._request(
+            method="POST", uri="/signup", data=json.dumps(vars)
+        )
+        return response  # type: ignore
 
     async def signin(self, vars: Dict[str, Any]) -> str:
-        """Signs this connection in to a specific authentication scope.
+        """Sign this connection in to a specific authentication scope.
 
         Args:
             vars: Variables used in a signin query.
@@ -155,13 +158,15 @@ class SurrealHTTP:
         Examples:
             await db.signin({"user": "root", "pass": "root"})
         """
-        response = await self._request(method="POST", uri="/signin", data=json.dumps(vars))
-        return response
+        response = await self._request(
+            method="POST", uri="/signin", data=json.dumps(vars)
+        )
+        return response  # type: ignore
 
     async def query(
         self, sql: str, vars: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
-        """Runs a set of SurrealQL statements against the database.
+        """Run a set of SurrealQL statements against the database.
 
         Args:
             sql: Specifies the SurrealQL statements.
@@ -181,10 +186,10 @@ class SurrealHTTP:
                 result[1]['result']
         """
         response = await self._request(method="POST", uri="/sql", data=sql, params=vars)
-        return response
+        return response  # type: ignore
 
     async def select(self, thing: str) -> List[Dict[str, Any]]:
-        """Selects all records in a table (or other entity),
+        """Select all records in a table (or other entity),
         or a specific record, in the database.
 
         This function will run the following query in the database:
@@ -210,7 +215,7 @@ class SurrealHTTP:
         )
         if not response and record_id is not None:
             raise SurrealException(f"Key {record_id} not found in table {table}")
-        return response[0]['result']
+        return response[0]["result"]  # type: ignore
 
     async def create(self, thing: str, data: Optional[Dict[str, Any]] = None) -> str:
         """Create a record in the database.
@@ -243,11 +248,10 @@ class SurrealHTTP:
         )
         if not response and record_id is not None:
             raise SurrealException(f"Key {record_id} not found in table {table}")
-        return response[0]['result']
-    
+        return response[0]["result"]  # type: ignore
 
     async def update(self, thing: str, data: Any) -> Dict[str, Any]:
-        """Updates all records in a table, or a specific record, in the database.
+        """Update all records in a table, or a specific record, in the database.
 
         This function replaces the current document / record data with the
         specified data.
@@ -278,10 +282,10 @@ class SurrealHTTP:
             uri=f"/key/{table}/{record_id}" if record_id else f"/key/{table}",
             data=json.dumps(data, ensure_ascii=False),
         )
-        return response[0]['result']
+        return response[0]["result"]  # type: ignore
 
     async def patch(self, thing: str, data: Any) -> Dict[str, Any]:
-        """Applies JSON Patch changes to all records, or a specific record, in the database.
+        """Apply JSON Patch changes to all records, or a specific record, in the database.
 
         This function patches the current document / record data with
         the specified JSON Patch data.
@@ -311,10 +315,10 @@ class SurrealHTTP:
             uri=f"/key/{table}/{record_id}" if record_id else f"/key/{table}",
             data=json.dumps(data, ensure_ascii=False),
         )
-        return response[0]['result']
+        return response[0]["result"]  # type: ignore
 
     async def delete(self, thing: str) -> None:
-        """Deletes all records in a table, or a specific record, from the database.
+        """Delete all records in a table, or a specific record, from the database.
 
         This function will run the following query in the database:
         delete * from $thing
@@ -333,4 +337,3 @@ class SurrealHTTP:
             method="DELETE",
             uri=f"/key/{table}/{record_id}" if record_id else f"/key/{table}",
         )
-        return response
