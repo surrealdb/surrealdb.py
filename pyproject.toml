@@ -31,6 +31,7 @@ websockets = "^10.4"
 pre-commit = ">=2.20.0"
 black = ">=22.8.0"
 ruff = ">=0.0.245"
+mypy = ">=1.2.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
@@ -73,7 +74,7 @@ ignore = [
     "D104",  # Missing docstring in public package
     "D107",  # Missing docstring in __init__
     "D205",  # 1 blank line required between summary line and description
-    "D212",  # Multi-line docstring summary should start at the first line	
+    "D212",  # Multi-line docstring summary should start at the first line
     "N805",  # First argument of a method should be named self
     "N818",  # Exception name ... should be named with an Error suffix
     "UP035"  # Typing deprecations
@@ -108,3 +109,9 @@ convention = "google"
 
 [tool.ruff.pyupgrade]
 keep-runtime-typing = true
+
+[tool.mypy]
+ python_version = 3.8
+ pretty = true
+ show_traceback = true
+ color_output = true
