@@ -539,7 +539,6 @@ class Surreal:
                 params=(thing,) if data is None else (thing, data),
             ),
         )
-        _validate_response(response, SurrealPermissionException)
         success: ResponseSuccess = _validate_response(
             response, SurrealPermissionException
         )
