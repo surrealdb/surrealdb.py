@@ -317,7 +317,7 @@ class SurrealHTTP:
         )
         return response[0]["result"]  # type: ignore
 
-    async def delete(self, thing: str) -> None:
+    async def delete(self, thing: str) -> List[Dict[str, Any]]:
         """Delete all records in a table, or a specific record, from the database.
 
         This function will run the following query in the database:
@@ -337,3 +337,4 @@ class SurrealHTTP:
             method="DELETE",
             uri=f"/key/{table}/{record_id}" if record_id else f"/key/{table}",
         )
+        return response  # type: ignore
