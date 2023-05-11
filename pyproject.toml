@@ -111,7 +111,18 @@ convention = "google"
 keep-runtime-typing = true
 
 [tool.mypy]
- python_version = 3.8
- pretty = true
- show_traceback = true
- color_output = true
+python_version = 3.8
+pretty = true
+show_traceback = true
+color_output = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+ignore_missing_imports = true
+implicit_reexport = true
+strict_equality = true
+strict_optional = false
+warn_no_return = true
+warn_redundant_casts = true
+warn_unreachable = true
+warn_unused_configs = true
+warn_unused_ignores = true
