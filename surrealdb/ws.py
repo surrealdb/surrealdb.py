@@ -233,7 +233,7 @@ class Surreal:
 
     async def close(self) -> None:
         """Close the persistent connection to the database."""
-        await self.ws.close()  # type: ignore
+        await self.ws.close()
         self.client_state = ConnectionState.DISCONNECTED
 
     async def use(self, namespace: str, database: str) -> None:
@@ -463,7 +463,7 @@ class Surreal:
         return success.result
 
     async def update(
-        self, thing, data: Optional[Dict[str, Any]]
+        self, thing: str, data: Optional[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Update all records in a table, or a specific record, in the database.
 
@@ -692,7 +692,7 @@ class Surreal:
             Exception: If the client is not connected to the Surreal server.
         """
         self._validate_connection()
-        await self.ws.send(json.dumps(request.dict(), ensure_ascii=False))  # type: ignore
+        await self.ws.send(json.dumps(request.dict(), ensure_ascii=False))
 
     async def _recv(self) -> Union[ResponseSuccess, ResponseError]:
         """Receive a response from the Surreal server.
@@ -705,7 +705,7 @@ class Surreal:
             Exception: If the response contains an error.
         """
         self._validate_connection()
-        response = json.loads(await self.ws.recv())  # type: ignore
+        response = json.loads(await self.ws.recv())
         if response.get("error"):
             return ResponseError(**response["error"])
         return ResponseSuccess(**response)
