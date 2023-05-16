@@ -1,0 +1,46 @@
+name: Build Poetry
+
+description: 'Build Poetry'
+
+runs:
+  using: 'composite'
+
+  steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.8
+
+    - name: Get full Python version
+      id: full-python-version
+      run: echo "version=$(python -c "import sys; print('-'.join(str(v) for v in sys.version_info))")" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Bootstrap poetry
+      run: curl -sL https://install.python-poetry.org | python - -y
+      shell: bash
+
+    - name: Update PATH
+      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+      shell: bash
+
+    - name: Configure poetry
+      run: poetry config virtualenvs.in-project true
+      shell: bash
+
+    - name: Set up cache
+      uses: actions/cache@v3
+      id: cache
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-${{ steps.full-python-version.outputs.version }}-${{ inputs.working-directory }}-${{ hashFiles('**/poetry.lock') }}
+
+    - name: Ensure cache is healthy
+      if: steps.cache.outputs.cache-hit == 'true'
+      run: timeout 10s poetry run pip --version || rm -rf .venv
+      shell: bash
+
+    - name: Install Dependencies
+      run: poetry install
+      shell: bash
