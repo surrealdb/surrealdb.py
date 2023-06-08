@@ -179,7 +179,7 @@ class Surreal:
             await db.signin({"user": "root", "pass": "root"})
 
         Connect to a remote endpoint
-            db = Surreal('http://cloud.surrealdb.com/rpc')
+            db = Surreal('ws://cloud.surrealdb.com/rpc')
             await db.connect()
             await db.signin({"user": "root", "pass": "root"})
 
