@@ -1,0 +1,7 @@
+version: '3'
+services:
+  surrealdb:
+    image: surrealdb/surrealdb
+    command: start
+    ports:
+      - 8000:8000
