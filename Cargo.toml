@@ -5,9 +5,10 @@ authors = ["Maxwell Flitton <maxwellflitton@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-surrealdb = "1.0.0-beta.9+20230402"
+surrealdb = {version = "1.0.0-beta.9+20230402", features = ["protocol-ws", "protocol-http"]}
 serde = "1.0.164"
 tokio = { version = "1", features = ["full"] }
+once_cell = "1.18.0"
 
 [lib]
 name = "rust_surrealdb"
@@ -16,3 +17,11 @@ crate-type=["cdylib"]
 [dependencies.pyo3]
 version = "0.19.0"
 features = ["extension-module"]
+
+[dependencies.uuid]
+version = "1.3.4"
+features = [
+    "v4",                # Lets you generate random UUIDs
+    "fast-rng",          # Use a faster (but still sufficiently random) RNG
+    "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
+]

@@ -1,7 +1,7 @@
-from .rust_surrealdb import say_hello
+# from .rust_surrealdb import say_hello
 
 
-class SurrealDB:
+# class SurrealDB:
 
-    def say_hello(self):
-        return say_hello()
+#     def say_hello(self):
+#         return say_hello()

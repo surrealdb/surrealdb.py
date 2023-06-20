@@ -8,7 +8,8 @@ setup(
     rust_extensions=[RustExtension("surrealdb.rust_surrealdb", binding=Binding.PyO3)],
     packages=[
         "surrealdb", 
-        "surrealdb.models"
+        "surrealdb.models",
+        "surrealdb.execution_descriptors"
     ],
     package_data={
         "surrealdb": ["binaries/*"],
