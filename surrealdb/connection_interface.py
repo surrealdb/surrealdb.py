@@ -3,6 +3,7 @@ This file defines the interface for the SurrealDB connection.
 """
 from surrealdb.rust_surrealdb import blocking_make_connection
 from surrealdb.rust_surrealdb import blocking_close_connection
+from surrealdb.rust_surrealdb import blocking_check_connection
 
 
 class SurrealDB:
@@ -21,3 +22,11 @@ class SurrealDB:
     
     def close(self) -> None:
         blocking_close_connection(self._connection)
+
+    def check_connection(self) -> bool:
+        blocking_check_connection(self._connection)
+
+    def from_existing_connection(cls, connection_id: str) -> "SurrealDB":
+        if blocking_check_connection(connection_id) is False:
+            raise ValueError("Connection ID is invalid.")
+            

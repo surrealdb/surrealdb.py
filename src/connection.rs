@@ -161,6 +161,20 @@ pub fn blocking_close_connection(connection_id: String) -> Result<(), PyErr> {
 }
 
 
+/// Checks if a connection is still open.
+/// 
+/// # Arguments
+/// * `connection_id` - The unique ID for the connection to be checked
+/// 
+/// # Returns
+/// * `Ok(bool)` - Whether or not the connection is still open
+#[pyfunction]
+pub fn blocking_check_connection(connection_id: String) -> Result<bool, PyErr> {
+    let connection_state = CONNECTION_STATE.lock().unwrap();
+    Ok(connection_state.contains_key(&connection_id))
+}
+
+
 // pub async fn close_connection(connection_id: String) -> Result<(), String> {
 //     Ok(())
 // }
