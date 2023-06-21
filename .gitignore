@@ -57,6 +57,7 @@ cover/
 .vscode/
 __pycache__/
 dist/
+build/
 
 # -----------------------------------
 # IDE
@@ -74,3 +75,9 @@ Cargo.lock
 *.egg
 .eggs/
 *.so
+# -----------------------------------
+# server tests
+# -----------------------------------
+server_tests/flask/app/surreal.py/
+
+

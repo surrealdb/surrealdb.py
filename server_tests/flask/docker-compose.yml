@@ -1,0 +1,12 @@
+version: '3'
+services:
+  surrealdb:
+    image: surrealdb/surrealdb
+    command: start
+    ports:
+      - 8000:8000
+
+  flask_app:
+    build: ./app
+    ports:
+      - 5002:5002

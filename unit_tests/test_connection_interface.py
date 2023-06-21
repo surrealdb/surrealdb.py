@@ -5,7 +5,7 @@ import sys
 from unittest import TestCase, main
 from unittest.mock import MagicMock
 
-import rust_interface_mock
+from unit_tests import rust_interface_mock
 
 
 class TestSurrealDB(TestCase):
