@@ -17,7 +17,7 @@ use surrealdb::engine::remote::ws::Client as WsClient;
 
 
 // Keeps track of the connections that are currently open
-static CONNECTION_STATE: Lazy<Mutex<HashMap<String, WrappedConnection>>> = Lazy::new(|| {
+pub static CONNECTION_STATE: Lazy<Mutex<HashMap<String, WrappedConnection>>> = Lazy::new(|| {
     let m: HashMap<String, WrappedConnection> = HashMap::new();
     Mutex::new(m)
 });
@@ -184,6 +184,12 @@ pub fn blocking_check_connection(connection_id: String) -> Result<bool, PyErr> {
 mod tests {
 
     use super::*;
+
+    /// Resets the connection state to an empty hashmap.
+    fn reset_connection_state() {
+        let mut connection_state = CONNECTION_STATE.lock().unwrap();
+        connection_state.clear();
+    }
 
 
     #[test]
