@@ -21,8 +21,13 @@ from surrealdb.rust_surrealdb import blocking_make_connection
 from surrealdb.rust_surrealdb import blocking_close_connection
 from surrealdb.rust_surrealdb import blocking_check_connection
 
+# import the mixins for operations for the connection
+from surrealdb.execution_mixins.create import CreateMixin
 
-class SurrealDB:
+
+class SurrealDB(
+    CreateMixin
+):
     """
     This class is responsible for managing the connection to SurrealDB and managing operations on the connection.
     """

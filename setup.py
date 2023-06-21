@@ -9,7 +9,7 @@ setup(
     packages=[
         "surrealdb", 
         "surrealdb.models",
-        "surrealdb.execution_descriptors"
+        "surrealdb.execution_mixins"
     ],
     package_data={
         "surrealdb": ["binaries/*"],

@@ -36,3 +36,4 @@ cp pyproject.toml server_tests/flask/app/surreal.py/pyproject.toml
 cd server_tests/flask/
 docker-compose build --no-cache
 docker-compose up
+docker-compose down

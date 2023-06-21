@@ -91,6 +91,7 @@ pub async fn make_connection(url: String) -> Result<String, String> {
     let components = prep_connection_components(url)?;
     let protocol = components.0;
     let address = components.1;
+    // surrealdb::Surreal::init();
 
     let wrapped_connection: WrappedConnection;
     match protocol {

@@ -5,7 +5,7 @@ authors = ["Maxwell Flitton <maxwellflitton@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-surrealdb = {version = "1.0.0-beta.9+20230402", features = ["protocol-ws", "protocol-http", "kv-mem"]}
+surrealdb = {git = "https://github.com/surrealdb/surrealdb", features = ["protocol-ws", "protocol-http", "kv-mem"], rev = "9cd25566ac2f202315aa29a090bfb50e5d76c4eb"}
 serde = "1.0.164"
 tokio = { version = "1", features = ["full"] }
 once_cell = "1.18.0"

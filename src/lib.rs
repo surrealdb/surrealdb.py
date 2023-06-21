@@ -17,5 +17,6 @@ fn rust_surrealdb(_py: Python, m: &PyModule) -> PyResult<()> {
     let _ = m.add_wrapped(wrap_pyfunction!(blocking_make_connection));
     let _ = m.add_wrapped(wrap_pyfunction!(blocking_close_connection));
     let _ = m.add_wrapped(wrap_pyfunction!(blocking_check_connection));
+    operations::operations_module_factory(m);
     Ok(())
 }

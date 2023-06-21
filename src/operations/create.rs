@@ -5,6 +5,7 @@ use crate::connection::{
     CONNECTION_STATE,
     WrappedConnection
 };
+use surrealdb::opt::Resource;
 
 
 pub async fn create(connection_id: String, table_name: String, data: Value) -> Result<(), String> {
@@ -13,13 +14,14 @@ pub async fn create(connection_id: String, table_name: String, data: Value) -> R
         return Err("Connection does not exist".to_string())
     }
     let connection = connection_state.get(&connection_id).unwrap();
+    let resource = Resource::from(table_name.clone());
 
     match connection {
         WrappedConnection::WS(ws_connection) => {
-            ws_connection.create(table_name).content(data).await.map_err(|e| e.to_string())?;
+            ws_connection.create(resource).content(data).await.map_err(|e| e.to_string())?;
         },
         WrappedConnection::HTTP(http_connection) => {
-            http_connection.create(table_name).content(data).await.map_err(|e| e.to_string())?;
+            http_connection.create(resource).content(data).await.map_err(|e| e.to_string())?;
         },
     }
     Ok(())

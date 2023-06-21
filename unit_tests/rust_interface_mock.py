@@ -13,3 +13,6 @@ from unittest.mock import MagicMock
 blocking_make_connection = MagicMock()
 blocking_close_connection = MagicMock()
 blocking_check_connection = MagicMock()
+
+# operations mixins
+blocking_create = MagicMock()

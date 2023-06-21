@@ -16,8 +16,8 @@ WORKDIR /app
 ADD . /app
 
 
-RUN cd surreal.py && cargo clean
-RUN cd surreal.py && cargo update
+#RUN cd surreal.py && cargo clean
+#RUN cd surreal.py && cargo update
 
 RUN pip install ./surreal.py/
 
