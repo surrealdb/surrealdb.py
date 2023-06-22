@@ -1,10 +1,3 @@
-//! Defines the methods of connecting to the database.
-//! This module is currently written in short functions in order to help with the testing. Transition to structs with traits can be an
-//! approach to take when async functions in traits become part of the std library. For now we are keeping the interactions with other
-//! modules in short async functions.
-use pyo3::prelude::*;
-use std::{sync::Mutex, collections::HashMap};
-use once_cell::sync::Lazy;
 use uuid::Uuid;
 
 use surrealdb::engine::remote::{
@@ -12,57 +5,11 @@ use surrealdb::engine::remote::{
     http::Http,
 };
 use surrealdb::Surreal;
-use surrealdb::engine::remote::http::Client as HttpClient;
-use surrealdb::engine::remote::ws::Client as WsClient;
-
-
-// Keeps track of the connections that are currently open
-pub static CONNECTION_STATE: Lazy<Mutex<HashMap<String, WrappedConnection>>> = Lazy::new(|| {
-    let m: HashMap<String, WrappedConnection> = HashMap::new();
-    Mutex::new(m)
-});
-
-
-/// Acts as an interface between the connection string passed in and the connection protocol.
-/// 
-/// # Variants 
-/// * `WS` - Websocket protocol
-/// * `HTTP` - HTTP protocol
-#[derive(Debug, PartialEq)]
-pub enum ConnectProtocol {
-    WS,
-    HTTP,
-}
-
-impl ConnectProtocol {
-
-    /// Creates a new connection protocol enum variant from a string.
-    /// 
-    /// # Arguments
-    /// * `protocol_type` - The type of protocol to use for the connection.
-    /// 
-    /// # Returns
-    /// * `Ok(ConnectProtocol)` - The connection protocol enum variant.
-    pub fn from_string(protocol_type: String) -> Result<Self, String> {
-        match protocol_type.to_uppercase().as_str() {
-            "WS" => Ok(Self::WS),
-            "HTTP" => Ok(Self::HTTP),
-            _ => Err(format!("Invalid protocol: {}", protocol_type)),
-        }
-    }
-
-}
-
-
-/// Acts as a wrapper for the open database connection to be stored in the `CONNECTION_STATE` hashmap.
-/// 
-/// # Variants
-/// * `WS` - live Websocket connection
-/// * `HTTP` - live HTTP connection
-pub enum WrappedConnection {
-    WS(Surreal<WsClient>),
-    HTTP(Surreal<HttpClient>),
-}
+use super::state::{
+    CONNECTION_STATE,
+    WrappedConnection,
+    ConnectProtocol
+};
 
 
 /// Checks and splits the connection string into its components.
@@ -126,59 +73,6 @@ pub async fn close_connection(connection_id: String) -> Result<(), String> {
     println!("Connection state: {:?}", connection_state.keys().len());
     return Ok(())
 }
-
-
-// ============================================== interfaces for the module below ==============================================
-
-
-/// Makes a connection to the database in an non-async manner.
-/// 
-/// # Arguments
-/// * `url` - The URL for the connection
-/// 
-/// # Returns
-/// * `Ok(String)` - The unique ID for the connection that was just made
-#[pyfunction]
-pub fn blocking_make_connection(url: String) -> Result<String, PyErr> {
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(async {
-        let unique_id = make_connection(url).await.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))?;
-        return Ok(unique_id)
-    })
-}
-
-
-/// Closes a connection to the database in an non-async manner.
-/// 
-/// # Arguments
-/// * `connection_id` - The unique ID for the connection to be closed
-#[pyfunction]
-pub fn blocking_close_connection(connection_id: String) -> Result<(), PyErr> {
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(async {
-        let _ = close_connection(connection_id).await.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))?;
-        return Ok(())
-    })
-}
-
-
-/// Checks if a connection is still open.
-/// 
-/// # Arguments
-/// * `connection_id` - The unique ID for the connection to be checked
-/// 
-/// # Returns
-/// * `Ok(bool)` - Whether or not the connection is still open
-#[pyfunction]
-pub fn blocking_check_connection(connection_id: String) -> Result<bool, PyErr> {
-    let connection_state = CONNECTION_STATE.lock().unwrap();
-    Ok(connection_state.contains_key(&connection_id))
-}
-
-
-// pub async fn close_connection(connection_id: String) -> Result<(), String> {
-//     Ok(())
-// }
 
 
 #[cfg(test)]

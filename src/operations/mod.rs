@@ -13,3 +13,9 @@ pub mod create;
 pub fn operations_module_factory(m: &PyModule) {
     let _ = m.add_wrapped(wrap_pyfunction!(create::blocking_create));
 }
+
+
+
+pub enum OperationRoutes {
+    Create
+}

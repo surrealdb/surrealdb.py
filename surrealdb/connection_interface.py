@@ -21,6 +21,8 @@ from surrealdb.rust_surrealdb import blocking_make_connection
 from surrealdb.rust_surrealdb import blocking_close_connection
 from surrealdb.rust_surrealdb import blocking_check_connection
 
+from surrealdb.background_process import BackgroundProcess
+
 # import the mixins for operations for the connection
 from surrealdb.execution_mixins.create import CreateMixin
 
@@ -39,6 +41,7 @@ class SurrealDB(
         :param keep_connection: whether or not to keep the connection open after this object is destroyed
         :param existing_connection_id: the existing connection id to use instead of making a new connection
         """
+        self._daemon: BackgroundProcess = BackgroundProcess()
         self._connection: str = self._make_connection(url=url, existing_connection_id=existing_connection_id)
         self._keep_connection: bool = keep_connection
 
