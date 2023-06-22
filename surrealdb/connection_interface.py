@@ -72,8 +72,8 @@ class SurrealDB(
         :return: the connection id of the connection
         """
         if existing_connection_id is None:
-            return blocking_make_connection(url)
-        if blocking_check_connection(existing_connection_id) is False:
+            return blocking_make_connection(url, self._daemon.port)
+        if blocking_check_connection(existing_connection_id, self._daemon.port) is False:
             raise ValueError("Connection ID is invalid")
         else:
             return existing_connection_id
@@ -84,7 +84,7 @@ class SurrealDB(
 
         :return: None
         """
-        blocking_close_connection(self._connection)
+        blocking_close_connection(self._connection, self._daemon.port)
 
     def check_connection(self) -> bool:
         """
@@ -92,4 +92,4 @@ class SurrealDB(
 
         :return: True if the connection is open, False otherwise
         """
-        return blocking_check_connection(self._connection)
+        return blocking_check_connection(self._connection, self._daemon.port)

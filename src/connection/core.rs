@@ -6,10 +6,14 @@ use surrealdb::engine::remote::{
 };
 use surrealdb::Surreal;
 use super::state::{
-    CONNECTION_STATE,
     WrappedConnection,
-    ConnectProtocol
+    ConnectProtocol,
+    TrackingMessage,
+    CreateConnection,
+    DeleteConnection,
+    get_connection
 };
+use tokio::sync::mpsc::Sender;
 
 
 /// Checks and splits the connection string into its components.
@@ -34,11 +38,10 @@ pub fn prep_connection_components(url: String) -> Result<(ConnectProtocol, Strin
 /// 
 /// # Returns
 /// * `Ok(String)` - The unique ID for the connection that was just made
-pub async fn make_connection(url: String) -> Result<String, String> {
+pub async fn make_connection(url: String, tx: Sender<TrackingMessage>) -> Result<String, String> {
     let components = prep_connection_components(url)?;
     let protocol = components.0;
     let address = components.1;
-    // surrealdb::Surreal::init();
 
     let wrapped_connection: WrappedConnection;
     match protocol {
@@ -55,10 +58,13 @@ pub async fn make_connection(url: String) -> Result<String, String> {
     }
 
     // update the connection state
-    let mut connection_state = CONNECTION_STATE.lock().unwrap();
     let connection_id = Uuid::new_v4().to_string();
-    connection_state.insert(connection_id.clone(), wrapped_connection);
-    println!("Connection state: {:?}", connection_state.keys().len());
+    // let mut lock = CONNECTION_STATE.lock().unwrap();
+    // lock.insert(connection_id.clone(), wrapped_connection.clone());
+    tx.send(TrackingMessage::Create(CreateConnection {
+        connection_id: connection_id.clone(),
+        connection: wrapped_connection.clone(),
+    })).await.map_err(|e| e.to_string())?;
     return Ok(connection_id)
 }
 
@@ -67,11 +73,32 @@ pub async fn make_connection(url: String) -> Result<String, String> {
 /// 
 /// # Arguments
 /// * `connection_id` - The unique ID for the connection to be closed
-pub async fn close_connection(connection_id: String) -> Result<(), String> {
-    let mut connection_state = CONNECTION_STATE.lock().unwrap();
-    connection_state.remove(&connection_id);
-    println!("Connection state: {:?}", connection_state.keys().len());
+pub async fn close_connection(connection_id: String, tx: Sender<TrackingMessage>) -> Result<(), String> {
+    // let mut lock = CONNECTION_STATE.lock().unwrap();
+    // lock.remove(&connection_id);
+    tx.send(TrackingMessage::Delete(DeleteConnection {
+        connection_id: connection_id.clone(),
+    })).await.map_err(|e| e.to_string())?;
     return Ok(())
+}
+
+/// Checks if a connection is still open.
+/// 
+/// # Arguments
+/// * `connection_id` - The unique ID for the connection to be checked
+/// 
+/// # Returns
+/// * `Ok(bool)` - Whether or not the connection is still open
+pub async fn check_connection(connection_id: String, tx: Sender<TrackingMessage>) -> Result<bool, String> {
+    let connection = get_connection(connection_id.clone(), tx).await;
+    if connection.is_none() {
+        return Ok(false)
+    }
+    // let lock = CONNECTION_STATE.lock().unwrap();
+    // if !lock.contains_key(&connection_id) {
+    //     return Ok(false)
+    // }
+    return Ok(true)
 }
 
 
@@ -79,13 +106,6 @@ pub async fn close_connection(connection_id: String) -> Result<(), String> {
 mod tests {
 
     use super::*;
-
-    /// Resets the connection state to an empty hashmap.
-    fn reset_connection_state() {
-        let mut connection_state = CONNECTION_STATE.lock().unwrap();
-        connection_state.clear();
-    }
-
 
     #[test]
     fn test_connect_protocol_from_string() {

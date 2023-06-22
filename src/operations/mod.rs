@@ -11,11 +11,5 @@ pub mod create;
 /// # Returns
 /// * `()` - Nothing
 pub fn operations_module_factory(m: &PyModule) {
-    let _ = m.add_wrapped(wrap_pyfunction!(create::blocking_create));
-}
-
-
-
-pub enum OperationRoutes {
-    Create
+    let _ = m.add_wrapped(wrap_pyfunction!(create::python::blocking_create));
 }

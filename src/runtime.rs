@@ -1,14 +1,18 @@
 use pyo3::prelude::*;
 use once_cell::sync::Lazy;
 use tokio::runtime::{Builder, Runtime};
+use tokio::sync::mpsc;
 
-use crossbeam_channel::{bounded, Sender};
-
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
+use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use serde::{Serialize, Deserialize};
 
-use crate::routing::Routes;
+use crate::routing::handle::{Routes, handle_routes};
+use crate::connection::state::{
+    track_connections,
+    TrackingMessage,
+};
+// use crate::connection::state::TRANSMITTER;
 
 
 pub static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
@@ -19,28 +23,20 @@ pub static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
 });
 
 
-pub static mut TRANSMITTER: Lazy<Sender<u32>> = Lazy::new(|| {
-    let (tx, _) = bounded(10);
-    tx
-});
-
-
 #[pyfunction]
 pub fn start_background_thread(port: i32) -> PyResult<()> {
     let runtime = &RUNTIME;
-
-    unsafe {
-        let new_channel = bounded(10);
-        let transmitter = Lazy::force_mut(&mut TRANSMITTER);
-        *transmitter = new_channel.0;
-    }
+    let (tx, rx) = mpsc::channel::<TrackingMessage>(10);
+    let _tracking_task = runtime.spawn(async move {
+        track_connections(rx).await;
+    });
     let task = runtime.spawn(async move {
         let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).await.unwrap();
         println!("Server started, listening on: {}", listener.local_addr().unwrap());
         loop {
             // Perform your desired task here
             let (mut socket, _) = listener.accept().await.unwrap();
-
+            let transmitter = tx.clone();
             runtime.spawn(async move {
                 let mut buffer = [0; 1024];
                 loop {
@@ -52,9 +48,11 @@ pub fn start_background_thread(port: i32) -> PyResult<()> {
                     }
                     let incoming_body: Routes = serde_json::from_slice(&buffer[..bytes_read]).unwrap();
                     println!("Received message: {:?}", incoming_body);
-                    let response = "Message received successfully";
+                    let response = handle_routes(incoming_body, transmitter.clone()).await.unwrap();
+                    let response_json = serde_json::to_string(&response).unwrap();
+
                     // Write the response back to the client
-                    if let Err(e) = socket.write_all(response.as_bytes()).await {
+                    if let Err(e) = socket.write_all(response_json.as_bytes()).await {
                         eprintln!("Failed to write to socket: {}", e);
                         break;
                     }

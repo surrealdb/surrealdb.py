@@ -1,7 +1,7 @@
 import random
 import socket
-from subprocess import Popen
 import time
+from subprocess import Popen
 
 
 class BackgroundProcessController(type):
