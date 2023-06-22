@@ -1,18 +1,10 @@
-use std::{sync::Mutex, collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::oneshot;
-use once_cell::sync::Lazy;
-use tokio::sync::mpsc;
 
 use surrealdb::Surreal;
 use surrealdb::engine::remote::http::Client as HttpClient;
 use surrealdb::engine::remote::ws::Client as WsClient;
-
-
-// Keeps track of the connections that are currently open
-pub static CONNECTION_STATE: Lazy<Arc<Mutex<HashMap<String, WrappedConnection>>>> = Lazy::new(|| {
-    Arc::new(Mutex::new(HashMap::new()))
-});
 
 
 #[derive(Debug)]
