@@ -2,7 +2,7 @@ use serde::{Serialize, Deserialize};
 
 use crate::routing::enums::Message;
 use tokio::sync::mpsc::Sender;
-use crate::connection::state::TrackingMessage;
+use crate::connection::state::ConnectionMessage;
 
 use super::core::{
     create
@@ -26,7 +26,7 @@ pub struct CreateData {
 pub struct EmptyState;
 
 
-pub async fn handle_create_routes(message: CreateRoutes, tx: Sender<TrackingMessage>) -> Result<CreateRoutes, String> {
+pub async fn handle_create_routes(message: CreateRoutes, tx: Sender<ConnectionMessage>) -> Result<CreateRoutes, String> {
     match message {
         CreateRoutes::Create(message) => {
             let data = message.handle_send()?;

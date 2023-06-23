@@ -10,7 +10,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use crate::routing::handle::{Routes, handle_routes};
 use crate::connection::state::{
     track_connections,
-    TrackingMessage,
+    ConnectionMessage,
 };
 // use crate::connection::state::TRANSMITTER;
 
@@ -26,7 +26,7 @@ pub static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
 #[pyfunction]
 pub fn start_background_thread(port: i32) -> PyResult<()> {
     let runtime = &RUNTIME;
-    let (tx, rx) = mpsc::channel::<TrackingMessage>(10);
+    let (tx, rx) = mpsc::channel::<ConnectionMessage>(10);
     let _tracking_task = runtime.spawn(async move {
         track_connections(rx).await;
     });
@@ -40,16 +40,20 @@ pub fn start_background_thread(port: i32) -> PyResult<()> {
             runtime.spawn(async move {
                 let mut buffer = [0; 1024];
                 loop {
+                    println!("Waiting for message...");
                     let bytes_read = socket.read(&mut buffer).await.unwrap();
                     if bytes_read == 0 {
                         // Connection closed by the client
                         println!("Client disconnected: {}", socket.peer_addr().unwrap());
                         break;
                     }
+                    println!("recieved message");
                     let incoming_body: Routes = serde_json::from_slice(&buffer[..bytes_read]).unwrap();
-                    println!("Received message: {:?}", incoming_body);
+                    println!("Processeed message: {:?}", incoming_body);
                     let response = handle_routes(incoming_body, transmitter.clone()).await.unwrap();
+                    println!("handled message");
                     let response_json = serde_json::to_string(&response).unwrap();
+                    println!("Sending response: {}", response_json);
 
                     // Write the response back to the client
                     if let Err(e) = socket.write_all(response_json.as_bytes()).await {

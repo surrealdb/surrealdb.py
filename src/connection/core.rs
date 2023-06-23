@@ -1,3 +1,11 @@
+//! Defines the core functions for managing connections. These functions should not be called directly
+//! from the Python API but rather from the TCP connection in the runtime module. In this
+//! module we can do the following:
+//! 
+//! * Get a connection from the connection manager
+//! * Make a connection to the database and store it in the connection manager
+//! * Close a connection to the database and remove it from the connection manager
+//! * Check if a connection exists in the connection manager
 use uuid::Uuid;
 
 use surrealdb::engine::remote::{
@@ -8,11 +16,11 @@ use surrealdb::Surreal;
 use super::state::{
     WrappedConnection,
     ConnectProtocol,
-    TrackingMessage,
-    CreateConnection,
-    DeleteConnection,
-    get_connection
+    get_connection,
+    return_connection,
+    ConnectionMessage
 };
+use super::components::state_transfer_actor::StateTransferMessage;
 use tokio::sync::mpsc::Sender;
 
 
@@ -38,7 +46,7 @@ pub fn prep_connection_components(url: String) -> Result<(ConnectProtocol, Strin
 /// 
 /// # Returns
 /// * `Ok(String)` - The unique ID for the connection that was just made
-pub async fn make_connection(url: String, tx: Sender<TrackingMessage>) -> Result<String, String> {
+pub async fn make_connection(url: String, tx: Sender<ConnectionMessage>) -> Result<String, String> {
     let components = prep_connection_components(url)?;
     let protocol = components.0;
     let address = components.1;
@@ -59,12 +67,10 @@ pub async fn make_connection(url: String, tx: Sender<TrackingMessage>) -> Result
 
     // update the connection state
     let connection_id = Uuid::new_v4().to_string();
-    // let mut lock = CONNECTION_STATE.lock().unwrap();
-    // lock.insert(connection_id.clone(), wrapped_connection.clone());
-    tx.send(TrackingMessage::Create(CreateConnection {
-        connection_id: connection_id.clone(),
-        connection: wrapped_connection.clone(),
-    })).await.map_err(|e| e.to_string())?;
+    let message = StateTransferMessage::Create(
+        connection_id.clone(), wrapped_connection
+    );
+    tx.send(message).await.map_err(|e| e.to_string())?;
     return Ok(connection_id)
 }
 
@@ -73,12 +79,9 @@ pub async fn make_connection(url: String, tx: Sender<TrackingMessage>) -> Result
 /// 
 /// # Arguments
 /// * `connection_id` - The unique ID for the connection to be closed
-pub async fn close_connection(connection_id: String, tx: Sender<TrackingMessage>) -> Result<(), String> {
-    // let mut lock = CONNECTION_STATE.lock().unwrap();
-    // lock.remove(&connection_id);
-    tx.send(TrackingMessage::Delete(DeleteConnection {
-        connection_id: connection_id.clone(),
-    })).await.map_err(|e| e.to_string())?;
+pub async fn close_connection(connection_id: String, tx: Sender<ConnectionMessage>) -> Result<(), String> {
+    let message = StateTransferMessage::Delete(connection_id);
+    tx.send(message).await.map_err(|e| e.to_string())?;
     return Ok(())
 }
 
@@ -89,15 +92,9 @@ pub async fn close_connection(connection_id: String, tx: Sender<TrackingMessage>
 /// 
 /// # Returns
 /// * `Ok(bool)` - Whether or not the connection is still open
-pub async fn check_connection(connection_id: String, tx: Sender<TrackingMessage>) -> Result<bool, String> {
-    let connection = get_connection(connection_id.clone(), tx).await;
-    if connection.is_none() {
-        return Ok(false)
-    }
-    // let lock = CONNECTION_STATE.lock().unwrap();
-    // if !lock.contains_key(&connection_id) {
-    //     return Ok(false)
-    // }
+pub async fn check_connection(connection_id: String, tx: Sender<ConnectionMessage>) -> Result<bool, String> {
+    let connection = get_connection(connection_id.clone(), tx).await?;
+    return_connection(connection).await?;
     return Ok(true)
 }
 
