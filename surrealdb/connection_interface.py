@@ -45,14 +45,14 @@ class SurrealDB(
         self._connection: str = self._make_connection(url=url, existing_connection_id=existing_connection_id)
         self._keep_connection: bool = keep_connection
 
-    def __del__(self):
-        """
-        The destructor for the SurrealDB class (fires when the object is destroyed).
-
-        :return: None
-        """
-        if self._keep_connection is False:
-            self.close()
+    # def __del__(self):
+    #     """
+    #     The destructor for the SurrealDB class (fires when the object is destroyed).
+    #
+    #     :return: None
+    #     """
+    #     if self._keep_connection is False:
+    #         self.close()
 
     def __atexit__(self):
         """

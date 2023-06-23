@@ -28,11 +28,11 @@ pub fn blocking_create<'a>(connection_id: String, table_name: String, data: &'a 
 
     let mut response_buffer = [0; 1024];
     // Read the response from the listener
-    let bytes_read = stream.read(&mut response_buffer).unwrap();
+    let bytes_read = stream.read(&mut response_buffer).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     // Deserialize the response from JSON
     let response_json = &response_buffer[..bytes_read];
-    let response_body: Routes = serde_json::from_slice(response_json).unwrap();
+    let response_body: Routes = serde_json::from_slice(response_json).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     let response = match response_body {
         Routes::Create(message) => message,

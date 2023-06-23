@@ -30,7 +30,7 @@ pub fn start_background_thread(port: i32) -> PyResult<()> {
     });
     let task = runtime.spawn(async move {
         let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).await.unwrap();
-        println!("Server started, listening on: {}", listener.local_addr().unwrap());
+        // println!("Server started, listening on: {}", listener.local_addr().unwrap());
         loop {
             // Perform your desired task here
             let (mut socket, _) = listener.accept().await.unwrap();
@@ -38,16 +38,11 @@ pub fn start_background_thread(port: i32) -> PyResult<()> {
             runtime.spawn(async move {
                 let mut buffer = [0; 1024];
                 loop {
-                    println!("Waiting for message...");
                     let bytes_read = socket.read(&mut buffer).await.unwrap();
                     if bytes_read == 0 {
-                        // Connection closed by the client
-                        println!("Client disconnected: {}", socket.peer_addr().unwrap());
                         break;
                     }
-                    println!("recieved message");
                     let incoming_body: Routes = serde_json::from_slice(&buffer[..bytes_read]).unwrap();
-                    println!("Processeed message: {:?}", incoming_body);
 
                     let response_json = match handle_routes(incoming_body, transmitter.clone()).await {
                         Ok(response) => {

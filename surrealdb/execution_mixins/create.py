@@ -19,4 +19,7 @@ class CreateMixin:
 
         :return: None
         """
-        blocking_create(self._connection, name, json.dumps(data), self._daemon.port)
+        try:
+            blocking_create(self._connection, name, json.dumps(data), self._daemon.port)
+        except Exception as e:
+            print(e)
