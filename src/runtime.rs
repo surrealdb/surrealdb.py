@@ -4,7 +4,6 @@ use tokio::runtime::{Builder, Runtime};
 use tokio::sync::mpsc;
 
 use tokio::net::TcpListener;
-use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::routing::handle::{Routes, handle_routes};
@@ -12,7 +11,6 @@ use crate::connection::state::{
     track_connections,
     ConnectionMessage,
 };
-// use crate::connection::state::TRANSMITTER;
 
 
 pub static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
@@ -50,10 +48,16 @@ pub fn start_background_thread(port: i32) -> PyResult<()> {
                     println!("recieved message");
                     let incoming_body: Routes = serde_json::from_slice(&buffer[..bytes_read]).unwrap();
                     println!("Processeed message: {:?}", incoming_body);
-                    let response = handle_routes(incoming_body, transmitter.clone()).await.unwrap();
-                    println!("handled message");
-                    let response_json = serde_json::to_string(&response).unwrap();
-                    println!("Sending response: {}", response_json);
+
+                    let response_json = match handle_routes(incoming_body, transmitter.clone()).await {
+                        Ok(response) => {
+                            serde_json::to_string(&response).unwrap()
+                        },
+                        Err(e) => {
+                            println!("{}", e);
+                            serde_json::to_string(&e).unwrap()
+                        }
+                    };
 
                     // Write the response back to the client
                     if let Err(e) = socket.write_all(response_json.as_bytes()).await {
