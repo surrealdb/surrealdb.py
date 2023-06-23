@@ -1,3 +1,18 @@
+//! The runtime runs indefinitely to accept messages from the PyO3 functions and route them to the appropiate core operation.
+//! The runtime has to run in the background in order to keep the connections open and to keep the state of the connections.
+//! Without the runtime the connections would be created and stored but the channels would be closed. If we were to send the
+//! connection structs over to the python side we would have complications with converting the connection structs to python 
+//! objects. This would also highly couple the python side to the rust side. If the Rust client was to change, it would only
+//! need to be changed on the Rust side as opposed to the Rust and Python side with all the new complications of converting
+//! the functionality of the new Rust client to Python.
+//! The runtime has the following layers:
+//! 
+//! 1. Python client calls a PyO3 function with a operation request and connection ID. 
+//! 2. The PyO3 function sends the operation request and connection ID to the runtime via TCP. 
+//! 3. The runtime accepts the message and routes it to the appropiate core operation which is found in the routing module.
+//! 4. Once the message is routed, the message is going to be at the right core operation, this is where the DB connection is got and the operation is performed.
+//! 
+//! Once the operation is achieved, the result is then passed back to the runtime and sent back to the PyO3 function via TCP and then the python client.
 use pyo3::prelude::*;
 use once_cell::sync::Lazy;
 use tokio::runtime::{Builder, Runtime};
@@ -13,6 +28,7 @@ use crate::connection::state::{
 };
 
 
+/// The Tokio runtime is needed to run the async functions.
 pub static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
     Builder::new_current_thread()
         .enable_all()
@@ -30,7 +46,6 @@ pub fn start_background_thread(port: i32) -> PyResult<()> {
     });
     let task = runtime.spawn(async move {
         let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).await.unwrap();
-        // println!("Server started, listening on: {}", listener.local_addr().unwrap());
         loop {
             // Perform your desired task here
             let (mut socket, _) = listener.accept().await.unwrap();
