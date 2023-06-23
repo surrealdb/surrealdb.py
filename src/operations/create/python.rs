@@ -1,12 +1,11 @@
+//! Python entry point for creating a new record in the database.
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 use serde_json::value::Value;
 
-use std::io::{Read, Write};
-use std::net::TcpStream;
-
 use crate::routing::enums::Message;
 use crate::routing::handle::Routes;
+use crate::runtime::send_message_to_runtime;
 
 use super::interface::{
     CreateRoutes,
@@ -15,6 +14,16 @@ use super::interface::{
 };
 
 
+/// Creates a new record in the database in an non-async manner.
+/// 
+/// # Arguments
+/// * `connection_id` - The ID of the connection being used for the operation
+/// * `table_name` - The name of the table to create the record in
+/// * `data` - The data to be inserted into the table
+/// * `port` - The port for the connection to the runtime
+/// 
+/// # Returns
+/// * `Ok(())` - The operation was successful
 #[pyfunction]
 pub fn blocking_create<'a>(connection_id: String, table_name: String, data: &'a PyAny, port: i32) -> Result<(), PyErr> {
     let data: Value = serde_json::from_str(&data.to_string()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
@@ -22,17 +31,9 @@ pub fn blocking_create<'a>(connection_id: String, table_name: String, data: &'a 
     let route = CreateRoutes::Create(Message::<CreateData, EmptyState>::package_send(CreateData{connection_id, table_name, data}));
     let message = Routes::Create(route);
 
-    let outgoing_json = serde_json::to_string(&message).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-    let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-    stream.write_all(outgoing_json.as_bytes()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-
-    let mut response_buffer = [0; 1024];
-    // Read the response from the listener
-    let bytes_read = stream.read(&mut response_buffer).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-
-    // Deserialize the response from JSON
-    let response_json = &response_buffer[..bytes_read];
-    let response_body: Routes = serde_json::from_slice(response_json).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+    let response_body = send_message_to_runtime(message, port).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
+    })?;
 
     let response = match response_body {
         Routes::Create(message) => message,

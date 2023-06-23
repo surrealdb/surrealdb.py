@@ -13,6 +13,8 @@
 //! 4. Once the message is routed, the message is going to be at the right core operation, this is where the DB connection is got and the operation is performed.
 //! 
 //! Once the operation is achieved, the result is then passed back to the runtime and sent back to the PyO3 function via TCP and then the python client.
+use std::net::TcpStream;
+use std::io::{Read, Write};
 use pyo3::prelude::*;
 use once_cell::sync::Lazy;
 use tokio::runtime::{Builder, Runtime};
@@ -80,4 +82,28 @@ pub fn start_background_thread(port: i32) -> PyResult<()> {
     });
     let _ = runtime.block_on(task);
     Ok(())
+}
+
+
+/// Sends a message to the runtime and returns the response from the runtime.
+/// 
+/// # Arguments
+/// * `message` - The message to be sent to the runtime.
+/// * `port` - The port that the runtime is listening on.
+/// 
+/// # Returns
+/// The response from the runtime.
+pub fn send_message_to_runtime(message: Routes, port: i32) -> Result<Routes, String> {
+    let outgoing_json = serde_json::to_string(&message).map_err(|e| e.to_string())?;
+    let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).map_err(|e| e.to_string())?;
+    stream.write_all(outgoing_json.as_bytes()).map_err(|e| e.to_string())?;
+    
+    let mut response_buffer = [0; 1024];
+    // Read the response from the listener
+    let bytes_read = stream.read(&mut response_buffer).map_err(|e| e.to_string())?;
+
+    // Deserialize the response from JSON
+    let response_json = &response_buffer[..bytes_read];
+    let response_body: Routes = serde_json::from_slice(response_json).map_err(|e| e.to_string())?;
+    Ok(response_body)
 }

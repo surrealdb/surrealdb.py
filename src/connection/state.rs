@@ -42,12 +42,44 @@ pub async fn track_connections(rx: Receiver<ConnectionMessage>) {
     run_state_transfer_actor(actor).await;
 }
 
-
 /// Gets a connection from the connection manager.
 /// 
 /// # Arguments
 /// * `connection_id` - The id of the connection to get.
 /// * `sender` - The sender to send the request to the connection manager.
+/// 
+/// # Usage
+/// It must be stressed that errors need to be handled when using this function. If the connection is retrieved
+/// using the `get_connection` function, it must be returned using the `return_connection` function. If the
+/// connection is not returned, the connection will be lost. This means that if an error occurs before the
+/// `return_connection` function is called, the connection will be lost. We can handle the connection with
+/// code like the following:
+/// ```rust
+/// let mut connection = get_connection(connection_id.clone(), tx).await?; // get the connection
+/// let resource = Resource::from(table_name.clone());
+/// 
+/// let used_connection: WrappedConnection; // stash the connection that was used
+/// let db_result: DbResult; // stash the result of the database operation
+/// match connection.value.unwrap() {
+///     WrappedConnection::WS(ws_connection) => {
+///         db_result = ws_connection.create(resource).content(data).await.map_err(|e| e.to_string());
+///         used_connection = WrappedConnection::WS(ws_connection);
+///     },
+///     WrappedConnection::HTTP(http_connection) => {
+///         db_result = http_connection.create(resource).content(data).await.map_err(|e| e.to_string());
+///         used_connection = WrappedConnection::HTTP(http_connection);
+///     },
+/// }   
+/// connection.value = Some(used_connection); // return the connection to the WrappedValue to be sent back
+/// return_connection(connection).await?; // return the connection to the connection manager
+/// db_result?; // handle the result of the database operation
+/// Ok(())
+/// ```
+/// # Improvements
+/// the author (Maxwell Flitton) appreciates that this is not ideal but luckily rust is safe and handling such errors
+/// is not too difficult. With testing and the right error handling, this can be a very safe and reliable way to 
+/// handle connections. However, the author is very open to suggestions on how to improve this and will look into
+/// other methods once the basic infrastructure is working.
 /// 
 /// # Returns
 /// * `GetConnectionMessage` - The connection message containing connection and sender to send the connection

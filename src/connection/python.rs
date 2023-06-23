@@ -1,10 +1,9 @@
+//! Python entry points for the connection module enabling python to perform connection operations.
 use pyo3::prelude::*;
-
-use std::io::{Read, Write};
-use std::net::TcpStream;
 
 use crate::routing::enums::Message;
 use crate::routing::handle::Routes;
+use crate::runtime::send_message_to_runtime;
 
 use super::interface::{
     ConnectionRoutes,
@@ -27,17 +26,9 @@ pub fn blocking_make_connection(url: String, port: i32) -> Result<String, PyErr>
     let route = ConnectionRoutes::Create(Message::<Url, ConnectionId>::package_send(Url{url: url}));
     let message = Routes::Connection(route);
 
-    let outgoing_json = serde_json::to_string(&message).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-    let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-    stream.write_all(outgoing_json.as_bytes()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-    
-    let mut response_buffer = [0; 1024];
-    // Read the response from the listener
-    let bytes_read = stream.read(&mut response_buffer).unwrap();
-
-    // Deserialize the response from JSON
-    let response_json = &response_buffer[..bytes_read];
-    let response_body: Routes = serde_json::from_slice(response_json).unwrap();
+    let response_body = send_message_to_runtime(message, port).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
+    })?;
 
     let response = match response_body {
         Routes::Connection(message) => message,
@@ -62,17 +53,9 @@ pub fn blocking_close_connection(connection_id: String, port: i32) -> Result<(),
     let route = ConnectionRoutes::Close(Message::<ConnectionId, EmptyState>::package_send(ConnectionId{connection_id: connection_id}));
     let message = Routes::Connection(route);
 
-    let outgoing_json = serde_json::to_string(&message).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-    let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-    stream.write_all(outgoing_json.as_bytes()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-
-    let mut response_buffer = [0; 1024];
-    // Read the response from the listener
-    let bytes_read = stream.read(&mut response_buffer).unwrap();
-
-    // Deserialize the response from JSON
-    let response_json = &response_buffer[..bytes_read];
-    let response_body: Routes = serde_json::from_slice(response_json).unwrap();
+    let response_body = send_message_to_runtime(message, port).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
+    })?;
 
     let response = match response_body {
         Routes::Connection(message) => message,
@@ -100,17 +83,9 @@ pub fn blocking_check_connection(connection_id: String, port: i32) -> Result<boo
     let route = ConnectionRoutes::Check(Message::<ConnectionId, bool>::package_send(ConnectionId{connection_id: connection_id}));
     let message = Routes::Connection(route);
 
-    let outgoing_json = serde_json::to_string(&message).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-    let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-    stream.write_all(outgoing_json.as_bytes()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-
-    let mut response_buffer = [0; 1024];
-    // Read the response from the listener
-    let bytes_read = stream.read(&mut response_buffer).unwrap();
-
-    // Deserialize the response from JSON
-    let response_json = &response_buffer[..bytes_read];
-    let response_body: Routes = serde_json::from_slice(response_json).unwrap();
+    let response_body = send_message_to_runtime(message, port).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
+    })?;
 
     let response = match response_body {
         Routes::Connection(message) => message,
