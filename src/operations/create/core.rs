@@ -4,16 +4,12 @@
 //! 
 //! * Create a record in the database
 use serde_json::value::Value;
-use crate::connection::state::{
-    WrappedConnection
-};
 use surrealdb::opt::Resource;
-use tokio::sync::mpsc::Sender;
-use crate::connection::state::ConnectionMessage;
-use crate::connection::state::{get_connection, return_connection};
-
-
-type DbResult = Result<surrealdb::sql::Value, std::string::String>;
+use crate::connection::state::{
+    WrappedConnection,
+    get_components,
+    CONNECTION_POOL
+};
 
 
 /// Creates a record in the database.
@@ -24,25 +20,24 @@ type DbResult = Result<surrealdb::sql::Value, std::string::String>;
 /// 
 /// # Returns
 /// * `Ok(())` - The record was created successfully
-pub async fn create(connection_id: String, table_name: String, data: Value, tx: Sender<ConnectionMessage>) -> Result<(), String> {
-    let mut connection = get_connection(connection_id.clone(), tx).await?;
+pub async fn create(connection_id: String, table_name: String, data: Value) -> Result<(), String> {
+    let (raw_index, connection_id) = get_components(connection_id)?;
+    let mut connection_pool = CONNECTION_POOL[raw_index].lock().await;
+    let connection = match connection_pool.get_mut(&connection_id) {
+        Some(connection) => connection,
+        None => return Err("connection does not exist".to_string()),
+    };
 
     let resource = Resource::from(table_name.clone());
 
-    let used_connection: WrappedConnection;
-    let db_result: DbResult;
-    match connection.value.unwrap() {
+    match connection {
         WrappedConnection::WS(ws_connection) => {
-            db_result = ws_connection.create(resource).content(data).await.map_err(|e| e.to_string());
-            used_connection = WrappedConnection::WS(ws_connection);
+            ws_connection.create(resource).content(data).await.map_err(|e| e.to_string())?;
         },
         WrappedConnection::HTTP(http_connection) => {
-            db_result = http_connection.create(resource).content(data).await.map_err(|e| e.to_string());
-            used_connection = WrappedConnection::HTTP(http_connection);
+            http_connection.create(resource).content(data).await.map_err(|e| e.to_string())?;
         },
-    }   
-    connection.value = Some(used_connection);
-    return_connection(connection).await?;
-    db_result?;
+        _ => return Err("connection is not a valid type".to_string()),
+    }
     Ok(())
 }

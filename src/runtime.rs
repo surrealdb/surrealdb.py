@@ -18,16 +18,11 @@ use std::io::{Read, Write};
 use pyo3::prelude::*;
 use once_cell::sync::Lazy;
 use tokio::runtime::{Builder, Runtime};
-use tokio::sync::mpsc;
 
 use tokio::net::TcpListener;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::routing::handle::{Routes, handle_routes};
-use crate::connection::state::{
-    track_connections,
-    ConnectionMessage,
-};
 
 
 /// The Tokio runtime is needed to run the async functions.
@@ -39,19 +34,19 @@ pub static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
 });
 
 
+/// Starts the runtime in the background (should run the entire lifetime of the python program).
+/// 
+/// # Arguments
+/// * `port` - The port that the runtime will listen on.
 #[pyfunction]
 pub fn start_background_thread(port: i32) -> PyResult<()> {
     let runtime = &RUNTIME;
-    let (tx, rx) = mpsc::channel::<ConnectionMessage>(10);
-    let _tracking_task = runtime.spawn(async move {
-        track_connections(rx).await;
-    });
+
     let task = runtime.spawn(async move {
         let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).await.unwrap();
         loop {
             // Perform your desired task here
             let (mut socket, _) = listener.accept().await.unwrap();
-            let transmitter = tx.clone();
             runtime.spawn(async move {
                 let mut buffer = [0; 1024];
                 loop {
@@ -61,7 +56,7 @@ pub fn start_background_thread(port: i32) -> PyResult<()> {
                     }
                     let incoming_body: Routes = serde_json::from_slice(&buffer[..bytes_read]).unwrap();
 
-                    let response_json = match handle_routes(incoming_body, transmitter.clone()).await {
+                    let response_json = match handle_routes(incoming_body).await {
                         Ok(response) => {
                             serde_json::to_string(&response).unwrap()
                         },

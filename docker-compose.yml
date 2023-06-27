@@ -3,5 +3,8 @@ services:
   surrealdb:
     image: surrealdb/surrealdb
     command: start
+    environment:
+      - user=root
+      - pass=root
     ports:
       - 8000:8000

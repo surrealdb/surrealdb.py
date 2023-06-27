@@ -2,8 +2,6 @@
 use serde::{Serialize, Deserialize};
 
 use crate::routing::enums::Message;
-use tokio::sync::mpsc::Sender;
-use crate::connection::state::ConnectionMessage;
 
 use super::core::{
     create
@@ -24,15 +22,14 @@ pub enum CreateRoutes {
 /// 
 /// # Arguments
 /// * `message` - The message to be routed.
-/// * `tx` - The channel needed to access the connection state.
 /// 
 /// # Returns
 /// * `Result<CreateRoutes, String>` - The result of the operation.
-pub async fn handle_create_routes(message: CreateRoutes, tx: Sender<ConnectionMessage>) -> Result<CreateRoutes, String> {
+pub async fn handle_create_routes(message: CreateRoutes) -> Result<CreateRoutes, String> {
     match message {
         CreateRoutes::Create(message) => {
             let data = message.handle_send()?;
-            let _ = create(data.connection_id, data.table_name, data.data, tx).await?;
+            let _ = create(data.connection_id, data.table_name, data.data).await?;
             let message = Message::<CreateData, EmptyState>::package_receive(EmptyState);
             return Ok(CreateRoutes::Create(message))
         },

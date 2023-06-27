@@ -9,7 +9,8 @@ use super::interface::{
     ConnectionRoutes,
     Url,
     ConnectionId,
-    EmptyState
+    BasicMessage,
+    SignIn
 };
 
 
@@ -50,7 +51,7 @@ pub fn blocking_make_connection(url: String, port: i32) -> Result<String, PyErr>
 /// * `connection_id` - The unique ID for the connection to be closed
 #[pyfunction]
 pub fn blocking_close_connection(connection_id: String, port: i32) -> Result<(), PyErr> {
-    let route = ConnectionRoutes::Close(Message::<ConnectionId, EmptyState>::package_send(ConnectionId{connection_id: connection_id}));
+    let route = ConnectionRoutes::Close(Message::<ConnectionId, BasicMessage>::package_send(ConnectionId{connection_id: connection_id}));
     let message = Routes::Connection(route);
 
     let response_body = send_message_to_runtime(message, port).map_err(|e| {
@@ -98,4 +99,40 @@ pub fn blocking_check_connection(connection_id: String, port: i32) -> Result<boo
         _ => return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("Invalid response from listener"))
     };
     Ok(connection_state)
+}
+
+
+/// Signs in to a connection.
+/// 
+/// # Arguments
+/// * `connection_id` - The unique ID for the connection to be signed in to
+/// * `username` - The username to be used for signing in
+/// * `password` - The password to be used for signing in
+/// 
+/// # Returns
+/// * `Ok(())` - If the sign in was successful
+#[pyfunction]
+pub fn blocking_sign_in(connection_id: String, username: String, password: String, port: i32) -> Result<(), PyErr> {
+    let route = ConnectionRoutes::SignIn(Message::<SignIn, BasicMessage>::package_send(SignIn{
+        connection_id, 
+        username, 
+        password
+    }));
+    let message = Routes::Connection(route);
+
+    let response_body = send_message_to_runtime(message, port).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
+    })?;
+
+    let response = match response_body {
+        Routes::Connection(message) => message,
+        _ => return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("Invalid response from listener"))
+    };
+    let _ = match response {
+        ConnectionRoutes::SignIn(message) => {
+            message.handle_recieve().map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))?
+        },
+        _ => return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("Invalid response from listener"))
+    };
+    Ok(())
 }

@@ -2,13 +2,12 @@
 //! operation.
 use serde::{Serialize, Deserialize};
 use crate::routing::enums::Message;
-use tokio::sync::mpsc::Sender;
-use crate::connection::state::ConnectionMessage;
 
 use super::core::{
     make_connection,
     close_connection,
-    check_connection
+    check_connection,
+    sign_in
 };
 
 
@@ -23,8 +22,9 @@ use super::core::{
 #[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
 pub enum ConnectionRoutes {
     Create(Message<Url, ConnectionId>),
-    Close(Message<ConnectionId, EmptyState>),
+    Close(Message<ConnectionId, BasicMessage>),
     Check(Message<ConnectionId, bool>),
+    SignIn(Message<SignIn, BasicMessage>),
 }
 
 
@@ -36,25 +36,31 @@ pub enum ConnectionRoutes {
 /// 
 /// # Returns
 /// * `Result<ConnectionRoutes, String>` - The result of the operation.
-pub async fn handle_connection_routes(message: ConnectionRoutes, tx: Sender<ConnectionMessage>) -> Result<ConnectionRoutes, String> {
+pub async fn handle_connection_routes(message: ConnectionRoutes) -> Result<ConnectionRoutes, String> {
     match message {
         ConnectionRoutes::Create(message) => {
             let data = message.handle_send()?;
-            let outcome: String = make_connection(data.url, tx).await?;
+            let outcome: String = make_connection(data.url).await?;
             let message = Message::<Url, ConnectionId>::package_receive(ConnectionId{connection_id: outcome});
             return Ok(ConnectionRoutes::Create(message))
         },
         ConnectionRoutes::Close(message) => {
             let data = message.handle_send()?;
-            let _ = close_connection(data.connection_id, tx).await;
-            let message = Message::<ConnectionId, EmptyState>::package_receive(EmptyState);
+            let outcome: String = close_connection(data.connection_id).await?;
+            let message = Message::<ConnectionId, BasicMessage>::package_receive(BasicMessage{message: outcome});
             return Ok(ConnectionRoutes::Close(message))
         },
         ConnectionRoutes::Check(message) => {
             let data = message.handle_send()?;
-            let outcome = check_connection(data.connection_id, tx).await?;
+            let outcome = check_connection(data.connection_id).await?;
             let message = Message::<ConnectionId, bool>::package_receive(outcome);
             return Ok(ConnectionRoutes::Check(message))
+        },
+        ConnectionRoutes::SignIn(message) => {
+            let data = message.handle_send()?;
+            let outcome: String = sign_in(data.connection_id, data.username, data.password).await?;
+            let message = Message::<SignIn, BasicMessage>::package_receive(BasicMessage{message: outcome});
+            return Ok(ConnectionRoutes::SignIn(message))
         },
     }
 }
@@ -72,8 +78,17 @@ pub struct ConnectionId {
     pub connection_id: String,
 }
 
-/// Data representing an empty state data schema
+/// Data representing a basic message data schema
 #[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
-pub struct EmptyState;
+pub struct BasicMessage {
+    pub message: String,
+}
 
+/// Data representing an signin data schema
+#[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
+pub struct SignIn {
+    pub connection_id: String,
+    pub username: String,
+    pub password: String,
+}
 
