@@ -26,11 +26,13 @@ from surrealdb.background_process import BackgroundProcess
 # import the mixins for operations for the connection
 from surrealdb.execution_mixins.create import CreateMixin
 from surrealdb.execution_mixins.auth import SignInMixin
+from surrealdb.execution_mixins.set import SetMixin
 
 
 class SurrealDB(
     CreateMixin,
-    SignInMixin
+    SignInMixin,
+    SetMixin,
 ):
     """
     This class is responsible for managing the connection to SurrealDB and managing operations on the connection.
@@ -43,10 +45,10 @@ class SurrealDB(
         :param keep_connection: whether or not to keep the connection open after this object is destroyed
         :param existing_connection_id: the existing connection id to use instead of making a new connection
         """
-        self._daemon: BackgroundProcess = BackgroundProcess()
-        self._connection: str = self._make_connection(url=url, existing_connection_id=existing_connection_id)
         self._keep_connection: bool = keep_connection
         self._connection_closed: bool = False
+        self._daemon: BackgroundProcess = BackgroundProcess()
+        self._connection: str = self._make_connection(url=url, existing_connection_id=existing_connection_id)
 
     def __del__(self):
         """

@@ -3,7 +3,10 @@ use pyo3::prelude::*;
 
 use crate::routing::enums::Message;
 use crate::routing::handle::Routes;
-use crate::runtime::send_message_to_runtime;
+use crate::runtime::{
+    send_message_to_runtime,
+    RUNTIME
+};
 
 use super::interface::{
     ConnectionRoutes,
@@ -12,6 +15,22 @@ use super::interface::{
     BasicMessage,
     SignIn
 };
+
+// below is experimental imports
+use crate::connection::core::{
+    prep_connection_components
+};
+use crate::connection::state::{
+    WrappedConnection,
+    ConnectProtocol,
+    WrappedConnectionStruct
+};
+use surrealdb::engine::remote::{
+    ws::Ws,
+    http::Http,
+};
+use surrealdb::Surreal;
+use surrealdb::opt::auth::Root;
 
 
 /// Makes a connection to the database in an non-async manner.
@@ -42,6 +61,72 @@ pub fn blocking_make_connection(url: String, port: i32) -> Result<String, PyErr>
         _ => return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("Invalid response from listener"))
     };
     Ok(unique_id.connection_id)
+}
+
+
+#[pyfunction]
+pub fn blocking_make_connection_pass(url: String) -> Result<WrappedConnectionStruct, PyErr> {
+    let components = prep_connection_components(url).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))?;
+    let protocol = components.0;
+    let address = components.1;
+    let database = components.2;
+    let namespace = components.3;
+
+    let outcome = RUNTIME.block_on(async move{
+        let wrapped_connection: WrappedConnection;
+        match protocol {
+            ConnectProtocol::WS => {
+                let connection = Surreal::new::<Ws>(address).await.map_err(|e| e.to_string()).unwrap();
+                connection.use_ns(namespace).use_db(database).await.map_err(|e| e.to_string()).unwrap();
+                wrapped_connection = WrappedConnection::WS(connection);
+            },
+            ConnectProtocol::HTTP => {
+                let connection = Surreal::new::<Http>(address).await.map_err(|e| e.to_string()).unwrap();
+                connection.use_ns(namespace).use_db(database).await.map_err(|e| e.to_string()).unwrap();
+                wrapped_connection = WrappedConnection::HTTP(connection);
+            },
+        }
+        return wrapped_connection
+    });
+    let wrapped: WrappedConnectionStruct;
+    match outcome {
+        WrappedConnection::WS(connection) => {
+            wrapped = WrappedConnectionStruct{
+                web_socket: Some(connection),
+                http: None
+            };
+        },
+        WrappedConnection::HTTP(connection) => {
+            wrapped = WrappedConnectionStruct{
+                http: Some(connection),
+                web_socket: None
+            };
+        },
+        _ => return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("Invalid response from listener"))
+    }
+    Ok(wrapped)
+}
+
+
+/// Signs in to a connection.
+/// 
+/// # Arguments
+/// * `connection_id` - The unique ID for the connection to be signed in to
+/// * `username` - The username to be used for signing in
+/// * `password` - The password to be used for signing in
+/// 
+/// # Returns
+/// * `Ok(())` - If the sign in was successful
+#[pyfunction]
+pub fn blocking_sign_in_pass(connection: WrappedConnectionStruct, username: String, password: String) -> Result<(), PyErr> {
+    let ws_connection = connection.web_socket.unwrap();
+    let _ = RUNTIME.block_on(async move{
+        ws_connection.signin(Root {
+            username: username.as_str(),
+            password: password.as_str(),
+        }).await.map_err(|e| e.to_string()).unwrap();
+    });
+    Ok(())
 }
 
 
@@ -100,7 +185,6 @@ pub fn blocking_check_connection(connection_id: String, port: i32) -> Result<boo
     };
     Ok(connection_state)
 }
-
 
 /// Signs in to a connection.
 /// 

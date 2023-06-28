@@ -3,6 +3,7 @@ use serde::{Serialize, Deserialize};
 
 use crate::connection::interface::{ConnectionRoutes, handle_connection_routes};
 use crate::operations::create::interface::{CreateRoutes, handle_create_routes};
+use crate::operations::set::interface::{SetRoutes, handle_set_routes};
 
 
 /// Defines the operation modules that are supported.
@@ -14,6 +15,7 @@ use crate::operations::create::interface::{CreateRoutes, handle_create_routes};
 pub enum Routes {
     Connection(ConnectionRoutes),
     Create(CreateRoutes),
+    Set(SetRoutes),
 }
 
 
@@ -34,6 +36,10 @@ pub async fn handle_routes(message: Routes) -> Result<Routes, String> {
         Routes::Create(message) => {
             let outcome = handle_create_routes(message).await?;
             return Ok(Routes::Create(outcome))
+        },
+        Routes::Set(message) => {
+            let outcome = handle_set_routes(message).await?;
+            return Ok(Routes::Set(outcome))
         },
     }
 }

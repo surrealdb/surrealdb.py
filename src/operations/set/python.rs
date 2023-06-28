@@ -1,4 +1,4 @@
-//! Python entry point for creating a new record in the database.
+//! Python entry point for setting a new key.
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 use serde_json::value::Value;
@@ -8,8 +8,8 @@ use crate::routing::handle::Routes;
 use crate::runtime::send_message_to_runtime;
 
 use super::interface::{
-    CreateRoutes,
-    CreateData,
+    SetRoutes,
+    SetData,
     BasicMessage
 };
 
@@ -25,22 +25,22 @@ use super::interface::{
 /// # Returns
 /// * `Ok(())` - The operation was successful
 #[pyfunction]
-pub fn blocking_create<'a>(connection_id: String, table_name: String, data: &'a PyAny, port: i32) -> Result<(), PyErr> {
-    let data: Value = serde_json::from_str(&data.to_string()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+pub fn blocking_set<'a>(connection_id: String, key: String, value: &'a PyAny, port: i32) -> Result<(), PyErr> {
+    let value: Value = serde_json::from_str(&value.to_string()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
-    let route = CreateRoutes::Create(Message::<CreateData, BasicMessage>::package_send(CreateData{connection_id, table_name, data}));
-    let message = Routes::Create(route);
+    let route = SetRoutes::Set(Message::<SetData, BasicMessage>::package_send(SetData{connection_id, key, value}));
+    let message = Routes::Set(route);
 
     let response_body = send_message_to_runtime(message, port).map_err(|e| {
         PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
     })?;
 
     let response = match response_body {
-        Routes::Create(message) => message,
+        Routes::Set(message) => message,
         _ => return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("Invalid response from listener"))
     };
     let _ = match response {
-        CreateRoutes::Create(message) => {
+        SetRoutes::Set(message) => {
             message.handle_recieve().map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))?
         },
     };

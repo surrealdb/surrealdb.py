@@ -1,4 +1,5 @@
 //! The operations for storing, getting, and deleting connections from the connection pool.
+use pyo3::prelude::*;
 use core::fmt::Debug;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -63,6 +64,14 @@ pub enum WrappedConnection {
     HTTP(Surreal<HttpClient>),
     #[cfg(test)]
     DummyInt(i32)
+}
+
+
+#[pyclass]
+#[derive(Clone, Debug)]
+pub struct WrappedConnectionStruct {
+    pub web_socket: Option<Surreal<WsClient>>,
+    pub http: Option<Surreal<HttpClient>>,
 }
 
 
@@ -229,7 +238,7 @@ mod tests {
 
         let mut handles = Vec::new();
 
-        for _ in 0..100 {
+        for _ in 0..1000 {
             let task = runtime.spawn(async {
                 let new_value = get_index();
                 assert_eq!(new_value < 10, true);

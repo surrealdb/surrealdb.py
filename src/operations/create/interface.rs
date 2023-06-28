@@ -14,7 +14,7 @@ use super::core::{
 /// * `Create` - Create a row in a table. (CreateData is needed and EmptyState is returned)
 #[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
 pub enum CreateRoutes {
-    Create(Message<CreateData, EmptyState>),
+    Create(Message<CreateData, BasicMessage>),
 }
 
 
@@ -30,7 +30,9 @@ pub async fn handle_create_routes(message: CreateRoutes) -> Result<CreateRoutes,
         CreateRoutes::Create(message) => {
             let data = message.handle_send()?;
             let _ = create(data.connection_id, data.table_name, data.data).await?;
-            let message = Message::<CreateData, EmptyState>::package_receive(EmptyState);
+            let message = Message::<CreateData, BasicMessage>::package_receive(BasicMessage{
+                message: "Created".to_string(),
+            });
             return Ok(CreateRoutes::Create(message))
         },
     }
@@ -46,6 +48,8 @@ pub struct CreateData {
 }
 
 
-/// Data representing the EmptyState schema
+/// Data representing a basic message data schema
 #[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
-pub struct EmptyState;
+pub struct BasicMessage {
+    pub message: String,
+}
