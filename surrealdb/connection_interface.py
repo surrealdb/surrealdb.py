@@ -18,21 +18,17 @@ connection = SurrealDB(url="ws://localhost:8080", existing_connection_id="some_c
 from typing import Optional
 
 from surrealdb.rust_surrealdb import blocking_make_connection
-from surrealdb.rust_surrealdb import blocking_close_connection
-from surrealdb.rust_surrealdb import blocking_check_connection
-
-from surrealdb.background_process import BackgroundProcess
 
 # import the mixins for operations for the connection
 from surrealdb.execution_mixins.create import CreateMixin
 from surrealdb.execution_mixins.auth import SignInMixin
-from surrealdb.execution_mixins.set import SetMixin
+# from surrealdb.execution_mixins.set import SetMixin
 
 
 class SurrealDB(
     CreateMixin,
     SignInMixin,
-    SetMixin,
+    # SetMixin,
 ):
     """
     This class is responsible for managing the connection to SurrealDB and managing operations on the connection.
@@ -45,31 +41,9 @@ class SurrealDB(
         :param keep_connection: whether or not to keep the connection open after this object is destroyed
         :param existing_connection_id: the existing connection id to use instead of making a new connection
         """
-        self._keep_connection: bool = keep_connection
-        self._connection_closed: bool = False
-        self._daemon: BackgroundProcess = BackgroundProcess()
-        self._connection: str = self._make_connection(url=url, existing_connection_id=existing_connection_id)
+        self._connection: str = self._make_connection(url=url)
 
-    def __del__(self):
-        """
-        The destructor for the SurrealDB class (fires when the object is destroyed).
-
-        :return: None
-        """
-        if self._keep_connection is False:
-            self._connection_closed = True
-            self.close()
-
-    def __atexit__(self):
-        """
-        The atexit function for the SurrealDB class (fires if the system crashes).
-
-        :return: None
-        """
-        if self._keep_connection is False and self._connection_closed is False:
-            self.close()
-
-    def _make_connection(self, url: str, existing_connection_id: Optional[str]) -> str:
+    def _make_connection(self, url: str) -> str:
         """
         Makes a connection to SurrealDB or establishes an existing connection.
 
@@ -77,25 +51,4 @@ class SurrealDB(
         :param existing_connection_id: the existing connection id to use instead of making a new connection
         :return: the connection id of the connection
         """
-        if existing_connection_id is None:
-            return blocking_make_connection(url, self._daemon.port)
-        if blocking_check_connection(existing_connection_id, self._daemon.port) is False:
-            raise ValueError("Connection ID is invalid")
-        else:
-            return existing_connection_id
-    
-    def close(self) -> None:
-        """
-        Closes the connection to SurrealDB.
-
-        :return: None
-        """
-        blocking_close_connection(self._connection, self._daemon.port)
-
-    def check_connection(self) -> bool:
-        """
-        Checks if the connection to SurrealDB is still open.
-
-        :return: True if the connection is open, False otherwise
-        """
-        return blocking_check_connection(self._connection, self._daemon.port)
+        return blocking_make_connection(url)

@@ -26,6 +26,6 @@ class SetMixin:
             print(f"cannot serialize value {type(value)} to json")
         if json_str is not None:
             try:
-                blocking_set(self._connection, key, json_str, self._daemon.port)
+                blocking_set(self._connection, key, json_str)
             except Exception as e:
                 print(e)

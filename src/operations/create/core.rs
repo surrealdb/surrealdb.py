@@ -5,11 +5,7 @@
 //! * Create a record in the database
 use serde_json::value::Value;
 use surrealdb::opt::Resource;
-use crate::connection::state::{
-    WrappedConnection,
-    get_components,
-    CONNECTION_POOL
-};
+use crate::connection::interface::WrappedConnection;
 
 
 /// Creates a record in the database.
@@ -20,24 +16,24 @@ use crate::connection::state::{
 /// 
 /// # Returns
 /// * `Ok(())` - The record was created successfully
-pub async fn create(connection_id: String, table_name: String, data: Value) -> Result<(), String> {
-    let (raw_index, connection_id) = get_components(connection_id)?;
-    let mut connection_pool = CONNECTION_POOL[raw_index].lock().await;
-    let connection = match connection_pool.get_mut(&connection_id) {
-        Some(connection) => connection,
-        None => return Err("connection does not exist".to_string()),
-    };
-
+pub async fn create(connection: WrappedConnection, table_name: String, data: Value) -> Result<(), String> {
     let resource = Resource::from(table_name.clone());
-
     match connection {
-        WrappedConnection::WS(ws_connection) => {
-            ws_connection.create(resource).content(data).await.map_err(|e| e.to_string())?;
+        WrappedConnection {
+            web_socket: Some(connection),
+            http: None
+        } => {
+            connection.create(resource).content(data).await.map_err(|e| e.to_string())?;
         },
-        WrappedConnection::HTTP(http_connection) => {
-            http_connection.create(resource).content(data).await.map_err(|e| e.to_string())?;
+        WrappedConnection {
+            http: Some(connection),
+            web_socket: None
+        } => {
+            connection.create(resource).content(data).await.map_err(|e| e.to_string())?;
         },
-        _ => return Err("connection is not a valid type".to_string()),
+        _ => {
+            return Err(format!("Connection {} does not exist", table_name));
+        }
     }
     Ok(())
 }

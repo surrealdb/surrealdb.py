@@ -1,94 +1,142 @@
-//! Defines the routing for a message accepted via TCP in the runtime to the appropiate connection
-//! operation.
-use serde::{Serialize, Deserialize};
-use crate::routing::enums::Message;
+use pyo3::prelude::*;
+use core::fmt::Debug;
 
-use super::core::{
-    make_connection,
-    close_connection,
-    check_connection,
-    sign_in
-};
+use surrealdb::Surreal;
+use surrealdb::engine::remote::http::Client as HttpClient;
+use surrealdb::engine::local::Client as LocalClient;
+use surrealdb::engine::remote::ws::Client as WsClient;
 
 
-/// Each field is an operation that can be performed on a connection. The left side
-/// of the field type definition is the data needed to perform the operation and the
-/// right side is the data returned from the operation.
-/// 
-/// # Variants
-/// * `Create` - Create a connection. (Url is need and ConnectionId is returned)
-/// * `Close` - Close a connection. (ConnectionId is needed and EmptyState is returned)
-/// * `Check` - Check if a connection is open. (ConnectionId is needed and bool is returned)
-#[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
-pub enum ConnectionRoutes {
-    Create(Message<Url, ConnectionId>),
-    Close(Message<ConnectionId, BasicMessage>),
-    Check(Message<ConnectionId, bool>),
-    SignIn(Message<SignIn, BasicMessage>),
+#[pyclass]
+#[derive(Clone, Debug)]
+pub struct WrappedConnection {
+    pub web_socket: Option<Surreal<WsClient>>,
+    pub http: Option<Surreal<HttpClient>>,
 }
 
 
-/// Accepts a message for a connection operation and routes it to the appropiate connection operation.
+/// Acts as an interface between the connection string passed in and the connection protocol.
+/// 
+/// # Variants 
+/// * `WS` - Websocket protocol
+/// * `HTTP` - HTTP protocol
+#[derive(Debug, PartialEq)]
+pub enum ConnectProtocol {
+    WS,
+    HTTP,
+}
+
+impl ConnectProtocol {
+
+    /// Creates a new connection protocol enum variant from a string.
+    /// 
+    /// # Arguments
+    /// * `protocol_type` - The type of protocol to use for the connection.
+    /// 
+    /// # Returns
+    /// * `Ok(ConnectProtocol)` - The connection protocol enum variant.
+    pub fn from_string(protocol_type: String) -> Result<Self, String> {
+        match protocol_type.to_uppercase().as_str() {
+            "WS" => Ok(Self::WS),
+            "HTTP" => Ok(Self::HTTP),
+            _ => Err(format!("Invalid protocol: {}", protocol_type)),
+        }
+    }
+
+}
+
+
+/// Checks and splits the connection string into its components.
 /// 
 /// # Arguments
-/// * `message` - The message to be routed.
-/// * `tx` - The channel needed to access the connection state.
+/// * `url` - The URL for the connection to be checked and split
 /// 
 /// # Returns
-/// * `Result<ConnectionRoutes, String>` - The result of the operation.
-pub async fn handle_connection_routes(message: ConnectionRoutes) -> Result<ConnectionRoutes, String> {
-    match message {
-        ConnectionRoutes::Create(message) => {
-            let data = message.handle_send()?;
-            let outcome: String = make_connection(data.url).await?;
-            let message = Message::<Url, ConnectionId>::package_receive(ConnectionId{connection_id: outcome});
-            return Ok(ConnectionRoutes::Create(message))
-        },
-        ConnectionRoutes::Close(message) => {
-            let data = message.handle_send()?;
-            let outcome: String = close_connection(data.connection_id).await?;
-            let message = Message::<ConnectionId, BasicMessage>::package_receive(BasicMessage{message: outcome});
-            return Ok(ConnectionRoutes::Close(message))
-        },
-        ConnectionRoutes::Check(message) => {
-            let data = message.handle_send()?;
-            let outcome = check_connection(data.connection_id).await?;
-            let message = Message::<ConnectionId, bool>::package_receive(outcome);
-            return Ok(ConnectionRoutes::Check(message))
-        },
-        ConnectionRoutes::SignIn(message) => {
-            let data = message.handle_send()?;
-            let outcome: String = sign_in(data.connection_id, data.username, data.password).await?;
-            let message = Message::<SignIn, BasicMessage>::package_receive(BasicMessage{message: outcome});
-            return Ok(ConnectionRoutes::SignIn(message))
-        },
+/// * `Ok((ConnectProtocol, String))` - The connection protocol, addrss, database, and namespace
+pub fn prep_connection_components(url: String) -> Result<(ConnectProtocol, String, String, String), String> {
+    let parts: Vec<&str> = url.split("://").collect();
+    let protocol = ConnectProtocol::from_string(parts[0].to_string())?;
+    let address = parts[1];
+    let address_parts: Vec<&str> = address.split("/").collect();
+
+    if address_parts.len() != 3 {
+        return Err("invalid address namespace and database need to be provided".to_string())
     }
+    return Ok((protocol, address_parts[0].to_string(), address_parts[1].to_string(), address_parts[2].to_string()))
 }
 
 
-/// Data representing a url data schema
-#[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
-pub struct Url {
-    pub url: String,
-}
+#[cfg(test)]
+mod tests {
 
-/// Data representing a connection id data schema
-#[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
-pub struct ConnectionId {
-    pub connection_id: String,
-}
+    use super::*;
 
-/// Data representing a basic message data schema
-#[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
-pub struct BasicMessage {
-    pub message: String,
-}
+    #[test]
+    fn test_connect_protocol_from_string() {
+        let protocol = ConnectProtocol::from_string("WS".to_string()).unwrap();
+        match protocol {
+            ConnectProtocol::WS => (),
+            _ => panic!("Expected ConnectProtocol::WS(_)"),
+        }
+        let protocol = ConnectProtocol::from_string("HTTP".to_string()).unwrap();
+        match protocol {
+            ConnectProtocol::HTTP => (),
+            _ => panic!("Expected ConnectProtocol::HTTP(_)"),
+        }
+        let protocol = ConnectProtocol::from_string("INVALID".to_string());
+        match protocol {
+            Ok(_) => panic!("Expected Err(_)"),
+            Err(_) => (),
+        }
+    }
 
-/// Data representing an signin data schema
-#[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
-pub struct SignIn {
-    pub connection_id: String,
-    pub username: String,
-    pub password: String,
-}
+    #[test]
+    fn test_connection_components() {
+        let components = prep_connection_components("ws://localhost:8000/database/namespace".to_string()).unwrap();
 
+        assert_eq!(components.0, ConnectProtocol::WS);
+        assert_eq!(components.1, "localhost:8000".to_string());
+        assert_eq!(components.2, "database".to_string());
+        assert_eq!(components.3, "namespace".to_string());
+
+        let components = prep_connection_components("http://localhost:8000/database/namespace".to_string()).unwrap();
+        
+        assert_eq!(components.0, ConnectProtocol::HTTP);
+        assert_eq!(components.1, "localhost:8000".to_string());
+        assert_eq!(components.2, "database".to_string());
+        assert_eq!(components.3, "namespace".to_string());
+
+        let components = prep_connection_components("invalid".to_string());
+        match components {
+            Ok(_) => panic!("Expected Err(_)"),
+            Err(error) => {
+                assert_eq!(error, "Invalid protocol: invalid".to_string());
+            },
+        }
+
+        let components = prep_connection_components("invalid://localhost:8000/database/namespace".to_string());
+        match components {
+            Ok(_) => panic!("Expected Err(_)"),
+            Err(error) => {
+                assert_eq!(error, "Invalid protocol: invalid".to_string());
+            },
+        }
+
+        let components = prep_connection_components("http://".to_string());
+        match components {
+            Ok(_) => panic!("Expected Err(_)"),
+            Err(error) => {
+                assert_eq!(error, "invalid address namespace and database need to be provided".to_string());
+            },
+        }
+
+        let components = prep_connection_components("http://localhost:8000".to_string());
+        match components {
+            Ok(_) => panic!("Expected Err(_)"),
+            Err(error) => {
+                assert_eq!(error, "invalid address namespace and database need to be provided".to_string());
+            },
+        }
+    }
+
+}

@@ -27,6 +27,6 @@ class SignInMixin:
         username: str = data.get("username", data.get("user", data.get("u", "root")))
 
         try:
-            blocking_sign_in(self._connection, password, username, self._daemon.port)
+            blocking_sign_in(self._connection, password, username)
         except Exception as e:
             print(e)
