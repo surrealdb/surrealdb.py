@@ -1,29 +1,28 @@
+//! Defines structs, enums, and functions that aid in the passing of data between the Python API and connection core.
 use pyo3::prelude::*;
 use core::fmt::Debug;
 
 use surrealdb::Surreal;
-use surrealdb::engine::remote::http::Client as HttpClient;
-use surrealdb::engine::local::Client as LocalClient;
-use surrealdb::engine::remote::ws::Client as WsClient;
+use surrealdb::engine::any::Any;
 
 
 #[pyclass]
 #[derive(Clone, Debug)]
 pub struct WrappedConnection {
-    pub web_socket: Option<Surreal<WsClient>>,
-    pub http: Option<Surreal<HttpClient>>,
+    pub connection: Surreal<Any>
 }
 
 
 /// Acts as an interface between the connection string passed in and the connection protocol.
 /// 
-/// # Variants 
+/// # Variants
 /// * `WS` - Websocket protocol
 /// * `HTTP` - HTTP protocol
 #[derive(Debug, PartialEq)]
 pub enum ConnectProtocol {
     WS,
     HTTP,
+    KV_MEM
 }
 
 impl ConnectProtocol {
@@ -39,7 +38,16 @@ impl ConnectProtocol {
         match protocol_type.to_uppercase().as_str() {
             "WS" => Ok(Self::WS),
             "HTTP" => Ok(Self::HTTP),
+            "MEMORY" => Ok(Self::KV_MEM),
             _ => Err(format!("Invalid protocol: {}", protocol_type)),
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Self::WS => "ws".to_string(),
+            Self::HTTP => "http".to_string(),
+            Self::KV_MEM => "memory".to_string(),
         }
     }
 

@@ -11,7 +11,7 @@ use super::core::create;
 /// Creates a new record in the database in an non-async manner.
 /// 
 /// # Arguments
-/// * `connection_id` - The ID of the connection being used for the operation
+/// * `connection` - The database connection being used for the operation
 /// * `table_name` - The name of the table to create the record in
 /// * `data` - The data to be inserted into the table
 /// * `port` - The port for the connection to the runtime

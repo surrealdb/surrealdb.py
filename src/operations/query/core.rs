@@ -4,12 +4,8 @@
 //! 
 //! * Perform a query on the database
 use serde_json::value::Value;
-use surrealdb::opt::Resource;
-use crate::connection::state::{
-    WrappedConnection,
-    get_components,
-    CONNECTION_POOL
-};
+use crate::connection::interface::WrappedConnection;
+use surrealdb::sql::Value as SurrealValue;
 
 
 	// /// Run a SurrealQL query against the database
@@ -40,25 +36,21 @@ use crate::connection::state::{
 	// 	Ok(to_value(&response.into_json())?)
 	// }
 
-pub async fn query(connection_id: String, sql: String, bindings: Option<Value>) -> Result<Value, String> {
-    let (raw_index, connection_id) = get_components(connection_id)?;
-    let mut connection_pool = CONNECTION_POOL[raw_index].lock().await;
-    let connection = match connection_pool.get_mut(&connection_id) {
-        Some(connection) => connection,
-        None => return Err("connection does not exist".to_string()),
-    };
+pub async fn query(connection: WrappedConnection, sql: String, bindings: Option<Value>) -> Result<Value, String> {
+	let mut response = match bindings {
+		Some(bind) => {connection.connection.query(sql).bind(bind).await},
+		None => {connection.connection.query(sql).await}
+	}.map_err(|e| e.to_string())?;
 
-    Err("not implemented".to_string())
-    // let resource = Resource::from(sql.clone());
+	// extract data needed from the Response struct
+	let num_statements = response.num_statements();
+	let mut output = Vec::<Value>::with_capacity(num_statements);
 
-    // let response = match connection {
-    //     WrappedConnection::WS(ws_connection) => {
-    //         ws_connection.query(resource).content(bindings).await.map_err(|e| e.to_string())?
-    //     },
-    //     WrappedConnection::HTTP(http_connection) => {
-    //         http_connection.query(resource).content(bindings).await.map_err(|e| e.to_string())?
-    //     },
-    //     _ => return Err("connection is not a valid type".to_string()),
-    // };
-    // Ok(response.into_json())
+	// converting SurrealValue items into serde_json::Value items
+	for index in 0..num_statements {
+		let value: SurrealValue = response.take(index).map_err(|x| x.to_string())?;
+		output.push(value.into_json());
+	}
+	let json_value: Value = Value::Array(output);
+	Ok(json_value)
 }

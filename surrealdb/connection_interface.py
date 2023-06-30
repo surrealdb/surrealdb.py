@@ -22,13 +22,15 @@ from surrealdb.rust_surrealdb import blocking_make_connection
 # import the mixins for operations for the connection
 from surrealdb.execution_mixins.create import CreateMixin
 from surrealdb.execution_mixins.auth import SignInMixin
-# from surrealdb.execution_mixins.set import SetMixin
+from surrealdb.execution_mixins.set import SetMixin
+from surrealdb.execution_mixins.query import QueryMixin
 
 
 class SurrealDB(
     CreateMixin,
     SignInMixin,
-    # SetMixin,
+    SetMixin,
+    QueryMixin
 ):
     """
     This class is responsible for managing the connection to SurrealDB and managing operations on the connection.
