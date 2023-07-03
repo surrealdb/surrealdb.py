@@ -102,7 +102,7 @@ as Rust will be needed to compile part of the library. Installation for Rust can
 following command:
 
 ```bash
-pip install git+https://github.com/surrealdb/surrealdb.py@rust-rewrite
+pip install git+https://github.com/surrealdb/surrealdb.py@rust-no-runtime
 ```
 
 Installation can tak a while as it needs to compile the Rust code. If you want to use the python client in a Docker
