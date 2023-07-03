@@ -35,5 +35,10 @@ cp pyproject.toml server_tests/flask/app/surreal.py/pyproject.toml
 # build flask server with no cache
 cd server_tests/flask/
 docker-compose build --no-cache
-docker-compose up
-docker-compose down
+#docker-compose up -d
+#
+## wait for server to start
+#sleep 5
+#
+## run tests
+#newman

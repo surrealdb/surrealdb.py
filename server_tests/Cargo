@@ -1,0 +1,104 @@
+{
+	"info": {
+		"_postman_id": "ffa14de6-4c79-4481-8926-ae06603d5167",
+		"name": "SurrealDB python flask test",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "25540133",
+		"_collection_link": "https://yellow-bird.postman.co/workspace/Clinical-Metrics~6da53e38-b686-4beb-8180-f2964456ca15/collection/25540133-ffa14de6-4c79-4481-8926-ae06603d5167?action=share&creator=25540133&source=collection_link"
+	},
+	"item": [
+		{
+			"name": "create connections",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Response has a 200 status\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							""
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://0.0.0.0:5002/",
+					"protocol": "http",
+					"host": [
+						"0",
+						"0",
+						"0",
+						"0"
+					],
+					"port": "5002",
+					"path": [
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "SQL query",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Response has a 200 status\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"",
+							"pm.test(\"Response body has correct data\", function () {",
+							"    // Define the expected response body",
+							"    const expectedData = [",
+							"        {",
+							"            \"id\": \"user:jaime\",",
+							"            \"name\": \"Jaime\"",
+							"        },",
+							"        {",
+							"            \"id\": \"user:tobie\",",
+							"            \"name\": \"Tobie\"",
+							"        }",
+							"    ];",
+							"",
+							"    // Parse the response body as JSON",
+							"    const responseBody = pm.response.json();",
+							"",
+							"    // Compare the response body with the expected data",
+							"    pm.expect(responseBody).to.deep.equal(expectedData);",
+							"});",
+							""
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://0.0.0.0:5002/sql",
+					"protocol": "http",
+					"host": [
+						"0",
+						"0",
+						"0",
+						"0"
+					],
+					"port": "5002",
+					"path": [
+						"sql"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

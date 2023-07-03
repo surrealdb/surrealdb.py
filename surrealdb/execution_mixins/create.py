@@ -4,6 +4,7 @@ This file defines the interface between python and the Rust SurrealDB library fo
 import json
 
 from surrealdb.rust_surrealdb import blocking_create
+from surrealdb.errors import SurrealDbError
 
 
 class CreateMixin:
@@ -22,4 +23,4 @@ class CreateMixin:
         try:
             blocking_create(self._connection, name, json.dumps(data))
         except Exception as e:
-            print(e)
+            SurrealDbError(e)

@@ -4,6 +4,7 @@ This file defines the interface between python and the Rust SurrealDB library fo
 from typing import Dict, Optional
 
 from surrealdb.rust_surrealdb import blocking_sign_in
+from surrealdb.errors import SurrealDbError
 
 
 class SignInMixin:
@@ -29,4 +30,4 @@ class SignInMixin:
         try:
             blocking_sign_in(self._connection, password, username)
         except Exception as e:
-            print(e)
+            SurrealDbError(e)

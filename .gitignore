@@ -79,5 +79,7 @@ Cargo.lock
 # server tests
 # -----------------------------------
 server_tests/flask/app/surreal.py/
+server_tests/package-lock.json
+server_tests/node_modules/
 
 

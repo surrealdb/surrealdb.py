@@ -28,92 +28,53 @@ class TestSurrealDB(TestCase):
         """
         Resets all rust interface functions.
         """
+        from surrealdb.connection_interface import ConnectionController
         rust_interface_mock.blocking_make_connection.reset_mock()
-        rust_interface_mock.blocking_close_connection.reset_mock()
-        rust_interface_mock.blocking_check_connection.reset_mock()
+        rust_interface_mock.blocking_sign_in.reset_mock()
+        rust_interface_mock.blocking_set.reset_mock()
+        rust_interface_mock.blocking_query.reset_mock()
+        ConnectionController.instances = {}
+        ConnectionController.main_connection = None
 
     def test___init__(self) -> None:
         self.tearDown()
-        self._make_connection_mock.assert_called_once_with(url=self.connection_string, existing_connection_id=None)
+        from surrealdb.connection_interface import SurrealDB
+
+        self._make_connection_mock.assert_called_once_with(url=self.connection_string)
         self.assertEqual(self.test._connection, self._make_connection_mock.return_value)
-        self.assertEqual(self.test._keep_connection, False)
 
-    def test___del__(self) -> None:
-        self.tearDown()
-        close_mock = MagicMock()
-        self.test.close = close_mock
+        test = SurrealDB(url=self.connection_string, keep_connection=True)
+        test_two = SurrealDB(url=self.connection_string, keep_connection=True, existing_connection_id=test.id)
+        test_three = SurrealDB(url=self.connection_string)
 
-        self.test.__del__()
-        close_mock.assert_called_once_with()
+        self.assertEqual(id(test), id(test_two))
+        self.assertNotEqual(id(test), id(test_three))
 
-        close_mock.reset_mock()
-        self.test._keep_connection = True
-        self.test.__del__()
-        close_mock.assert_not_called()
+        self.assertEqual(test.id, test_two.id)
+        self.assertNotEqual(test.id, test_three.id)
 
-    def test___del__call(self):
-        self.tearDown()
-        close_mock = MagicMock()
-        self.test.close = close_mock
-        del(self.test)
-        close_mock.assert_called_once_with()
-        close_mock.reset_mock()
+        test_main_one = SurrealDB(url=self.connection_string, main_connection=True)
+        test_main_two = SurrealDB(main_connection=True)
 
-    def test___atexit__(self) -> None:
-        self.tearDown()
-        close_mock = MagicMock()
-        self.test.close = close_mock
-
-        self.test.__atexit__()
-        close_mock.assert_called_once_with()
-
-        close_mock.reset_mock()
-        self.test._keep_connection = True
-        self.test.__atexit__()
-        close_mock.assert_not_called()
+        self.assertEqual(id(test_main_one), id(test_main_two))
+        self.assertEqual(test_main_one.id, test_main_two.id)
+        self.assertNotEqual(id(test_main_one), id(test))
 
     def test__make_connection(self) -> None:
         self.tearDown()
-        outcome = self.test._make_connection(url=self.connection_string, existing_connection_id=None)
+        outcome = self.test._make_connection(url=self.connection_string)
 
         self.assertEqual(outcome, rust_interface_mock.blocking_make_connection.return_value)
         rust_interface_mock.blocking_make_connection.assert_called_once_with(self.connection_string)
 
         rust_interface_mock.blocking_make_connection.reset_mock()
-        rust_interface_mock.blocking_check_connection.return_value = True
 
         outcome = self.test._make_connection(
             url=self.connection_string,
-            existing_connection_id=self.connection_string
         )
 
-        self.assertEqual(outcome, self.connection_string)
-        rust_interface_mock.blocking_make_connection.assert_not_called()
-        rust_interface_mock.blocking_check_connection.assert_called_once_with(self.connection_string)
-
-        rust_interface_mock.blocking_check_connection.reset_mock()
-        rust_interface_mock.blocking_check_connection.return_value = False
-
-        with self.assertRaises(ValueError) as context:
-            self.test._make_connection(
-                url=self.connection_string,
-                existing_connection_id=self.connection_string
-            )
-        self.assertEqual(str(context.exception), "Connection ID is invalid")
-
-    def test_close(self) -> None:
-        self.tearDown()
-        self.test._connection = self.connection_string
-        self.test.close()
-        rust_interface_mock.blocking_close_connection.assert_called_once_with(self.connection_string)
-
-    def test_check_connection(self) -> None:
-        self.tearDown()
-        self.test._connection = self.connection_string
-        outcome = self.test.check_connection()
-
-        rust_interface_mock.blocking_check_connection.assert_called_once_with(self.connection_string)
-        self.assertEqual(outcome, rust_interface_mock.blocking_check_connection.return_value)
+        self.assertEqual(outcome, rust_interface_mock.blocking_make_connection.return_value)
+        rust_interface_mock.blocking_make_connection.assert_called_once_with(self.connection_string)
 
 
 if __name__ == "__main__":

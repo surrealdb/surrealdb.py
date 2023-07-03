@@ -4,6 +4,7 @@ This file defines the interface between python and the Rust SurrealDB library fo
 import json
 
 from surrealdb.rust_surrealdb import blocking_set
+from surrealdb.errors import SurrealDbError
 
 
 class SetMixin:
@@ -24,8 +25,9 @@ class SetMixin:
             json_str = json.dumps(value)
         except json.JSONEncodeError as e:
             print(f"cannot serialize value {type(value)} to json")
+            SurrealDbError(e)
         if json_str is not None:
             try:
                 blocking_set(self._connection, key, json_str)
             except Exception as e:
-                print(e)
+                SurrealDbError(e)
