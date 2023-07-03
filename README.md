@@ -105,7 +105,7 @@ following command:
 pip install git+https://github.com/surrealdb/surrealdb.py@rust-no-runtime
 ```
 
-Installation can tak a while as it needs to compile the Rust code. If you want to use the python client in a Docker
+Installation can take a while as it needs to compile the Rust code. If you want to use the python client in a Docker
 build in production you can use a two layered build which will use Rust to compile the library and then copy the
 compiled library into a new python image so your production image doesn't need to have Rust installed. Below is an
 example of a Dockerfile that will do this for a Flask application:
@@ -127,7 +127,11 @@ WORKDIR /app
 # Copy the current directory contents into the container at /app
 ADD . /app
 
+# install the python library locally
 RUN pip install ./surreal.py/
+
+# or install the python library from github
+RUN pip install git+https://github.com/surrealdb/surrealdb.py@rust-no-runtime
 
 # server build
 FROM python:3.9
