@@ -33,4 +33,4 @@ COPY --from=builder /usr/local/lib/python3.9/dist-packages /usr/local/lib/python
 COPY --from=builder /app /app
 
 # Run the python server using gunicorn
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5002", "--timeout", "900", "main:app"]
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5002", "--timeout", "900", "--preload", "main:app"]

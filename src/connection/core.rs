@@ -8,7 +8,7 @@
 //! * Check if a connection exists in the connection manager
 use crate::connection::interface::{
     WrappedConnection,
-    prep_connection_components
+    extract_connection_components
 };
 use surrealdb::Surreal;
 use surrealdb::opt::auth::Root;
@@ -24,13 +24,12 @@ use surrealdb::engine::any::Any;
 /// # Returns
 /// * `Ok(String)` - The unique ID for the connection that was just made
 pub async fn make_connection(url: String) -> Result<WrappedConnection, String> {
-    let components = prep_connection_components(url)?;
-    let protocol = components.0;
-    let address = components.1;
-    let database = components.2;
-    let namespace = components.3;
 
-    let connection: Surreal<Any> = connect(format!("{}://{}", protocol.to_string(), address)).await.map_err(|e| e.to_string())?;
+    // if url doesn't have the namespace and database, this is just fine
+
+    let (url, namespace, database) = extract_connection_components(url)?;
+
+    let connection: Surreal<Any> = connect(url).await.map_err(|e| e.to_string())?;
     connection.use_ns(namespace).use_db(database).await.map_err(|e| e.to_string()).map_err(|e| e.to_string())?;
     return Ok(WrappedConnection {connection})
 }

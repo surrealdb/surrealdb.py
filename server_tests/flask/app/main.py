@@ -1,13 +1,20 @@
 from flask import Flask
 from surrealdb import SurrealDB
-from surrealdb.connection_interface import ConnectionController
+
 
 app = Flask(__name__)
 
 
+# ROCKS_CONNECTION = None
+
+with app.app_context():
+    global ROCKS_CONNECTION
+    ROCKS_CONNECTION = SurrealDB("rocksdb:///tmp/test.db/namespace/database")
+
+
 def create_connection():
-    one = SurrealDB("ws://surrealdb:8000/database/namespace")
-    two = SurrealDB("http://surrealdb:8000/database/namespace")
+    _ = SurrealDB("ws://surrealdb:8000/namespace/database")
+    _ = SurrealDB("http://surrealdb:8000/namespace/database")
 
 
 @app.route('/')
@@ -18,7 +25,7 @@ def hello():
 
 @app.route('/sql')
 def sql():
-    connection = SurrealDB("ws://surrealdb:8000/database/namespace")
+    connection = SurrealDB("ws://surrealdb:8000/namespace/database")
     connection.signin({
         "username": "root",
         "password": "root",
@@ -29,22 +36,16 @@ def sql():
     return outcome
 
 
-@app.route("/main/one")
-def main_one():
-    print(f"before: {ConnectionController.instances} {ConnectionController.main_connection}")
-    main_connection = SurrealDB("ws://surrealdb:8000/database/namespace", main_connection=True)
-    main_connection.signin({
+@app.route('/rocksdb')
+def rocksdb():
+    ROCKS_CONNECTION.signin({
         "username": "root",
         "password": "root",
     })
-    print(f"after: {ConnectionController.instances} {ConnectionController.main_connection}")
-    return main_connection.query("SELECT * FROM user;")
-
-
-@app.route("/main/two")
-def main_two():
-    main_connection = SurrealDB(main_connection=True)
-    return main_connection.query("SELECT * FROM user;")
+    ROCKS_CONNECTION.query("CREATE user:tobie SET name = 'Tobie';")
+    ROCKS_CONNECTION.query("CREATE user:jaime SET name = 'Jaime';")
+    outcome = ROCKS_CONNECTION.query("SELECT * FROM user;")
+    return outcome
 
 
 if __name__ == '__main__':
