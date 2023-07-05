@@ -6,7 +6,9 @@ use crate::runtime::{
 };
 use super::core::{
     make_connection,
-    sign_in
+    sign_in,
+    use_database,
+    use_namespace
 };
 use super::interface::WrappedConnection;
 
@@ -26,6 +28,41 @@ pub fn blocking_make_connection(url: String) -> Result<WrappedConnection, PyErr>
     });
     outcome
 }
+
+
+/// Assigns a namespace to a connection in an non-async manner.
+/// 
+/// # Arguments
+/// * `connection` - The connection for the namespace to be assigned to
+/// * `namespace` - The namespace to be assigned to the connection
+/// 
+/// # Returns
+/// * `Ok(String)` - Simple message that the connection has been assigned a namespace
+#[pyfunction]
+pub fn blocking_use_namespace(connection: WrappedConnection, namespace: String) -> Result<String, PyErr> {
+    let outcome = RUNTIME.block_on(async move{
+        use_namespace(connection, namespace).await.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
+    });
+    outcome
+}
+
+
+/// Assigns a database to a connection in an non-async manner.
+/// 
+/// # Arguments
+/// * `connection` - The connection for the database to be assigned to
+/// * `database` - The database to be assigned to the connection
+/// 
+/// # Returns
+/// * `Ok(String)` - Simple message that the connection has been assigned a database
+#[pyfunction]
+pub fn blocking_use_database(connection: WrappedConnection, database: String) -> Result<String, PyErr> {
+    let outcome = RUNTIME.block_on(async move{
+        use_database(connection, database).await.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
+    });
+    outcome
+}
+
 
 /// Signs in to a connection.
 /// 

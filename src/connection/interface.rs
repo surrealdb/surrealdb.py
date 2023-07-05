@@ -24,7 +24,13 @@ pub struct WrappedConnection {
 /// 
 /// # Returns
 /// * `Ok((String, String, String))` - connection address, namespace, and database
-pub fn extract_connection_components(url: String) -> Result<(String, String, String), String> {
+pub fn extract_connection_components(url: String) -> Result<(String, Option<String>, Option<String>), String> {
+
+    // early return if the url is rocksdb
+    if &url.contains("rocksdb") == &true {
+        return Ok((url, None, None))
+    }
+
     let parts: Vec<&str> = url.split("://").collect();
     if parts.len() != 2 {
         return Err("invalid url".to_string())
@@ -35,19 +41,30 @@ pub fn extract_connection_components(url: String) -> Result<(String, String, Str
 
     let total_address_parts = address_parts.len();
 
-    if &total_address_parts < &3 {
-        return Err("invalid address namespace and database need to be provided".to_string())
+    // below is the standard urls
+    match &total_address_parts {
+        &1 => {
+            // this infers that there is no database or namespace provided
+            let address = address_parts.join("/");
+            return Ok((format!("{}://{}", protocol, address), None, None))
+        },
+        &2 => {
+            // this infers that the namespace is provided but not the database
+            let namespace = address_parts.pop().unwrap().to_string();
+            let address = address_parts.join("/");
+            return Ok((format!("{}://{}", protocol, address), Some(namespace), None))
+        },
+        &3 => {
+            // this infers that the namespace and database are provided
+            let database = address_parts.pop().unwrap().to_string();
+            let namespace = address_parts.pop().unwrap().to_string();
+            let address = address_parts.join("/");
+            return Ok((format!("{}://{}", protocol, address), Some(namespace), Some(database)))
+        },
+        _ => {
+            return Err("invalid address provided".to_string())
+        }
     }
-
-    let database = address_parts.pop().unwrap().to_string();
-    let namespace = address_parts.pop().unwrap().to_string();
-    let address = address_parts.join("/");
-
-    Ok((
-        format!("{}://{}", protocol, address), 
-        namespace, 
-        database
-    ))
 }
 
 
@@ -62,8 +79,8 @@ mod tests {
         let (url, namespace, database) = extract_connection_components(url).unwrap();
 
         assert_eq!(url, "ws://localhost:8000".to_string());
-        assert_eq!(database, "database".to_string());
-        assert_eq!(namespace, "namespace".to_string());
+        assert_eq!(database.unwrap(), "database".to_string());
+        assert_eq!(namespace.unwrap(), "namespace".to_string());
     }
 
     #[test]
@@ -72,28 +89,28 @@ mod tests {
         let (url, namespace, database) = extract_connection_components(url).unwrap();
 
         assert_eq!(url, "http://localhost:8000".to_string());
-        assert_eq!(database, "database".to_string());
-        assert_eq!(namespace, "namespace".to_string());
+        assert_eq!(database.unwrap(), "database".to_string());
+        assert_eq!(namespace.unwrap(), "namespace".to_string());
     }
 
     #[test]
     fn test_rocksdb() {
-        let url = "rocksdb:///tmp/test.db/namespace/database".to_string();
+        let url = "rocksdb://tmp/test.db".to_string();
         let (url, namespace, database) = extract_connection_components(url).unwrap();
 
-        assert_eq!(url, "rocksdb:///tmp/test.db".to_string());
-        assert_eq!(database, "database".to_string());
-        assert_eq!(namespace, "namespace".to_string());
+        assert_eq!(url, "rocksdb://tmp/test.db".to_string());
+        assert_eq!(database, None);
+        assert_eq!(namespace, None);
     }
 
     #[test]
     fn test_rocksdb_three_lines() {
-        let url = "rocksdb://tmp/test.db/namespace/database".to_string();
+        let url = "rocksdb:///tmp/test.db".to_string();
         let (url, namespace, database) = extract_connection_components(url).unwrap();
 
-        assert_eq!(url, "rocksdb://tmp/test.db".to_string());
-        assert_eq!(database, "database".to_string());
-        assert_eq!(namespace, "namespace".to_string());
+        assert_eq!(url, "rocksdb:///tmp/test.db".to_string());
+        assert_eq!(database, None);
+        assert_eq!(namespace, None);
     }
 
 }

@@ -19,6 +19,8 @@ import uuid
 from typing import Optional
 
 from surrealdb.rust_surrealdb import blocking_make_connection
+from surrealdb.rust_surrealdb import blocking_use_namespace
+from surrealdb.rust_surrealdb import blocking_use_database
 
 from surrealdb.execution_mixins.auth import SignInMixin
 
@@ -113,3 +115,21 @@ class SurrealDB(
         :return: the connection id of the connection
         """
         return blocking_make_connection(url)
+    
+    def use_namespace(self, namespace: str) -> None:
+        """
+        Uses the given namespace in the connection.
+
+        :param namespace: the namespace to use
+        :return: None
+        """
+        blocking_use_namespace(self._connection, namespace)
+
+    def use_database(self, database: str) -> None:
+        """
+        Uses the given database in the connection.
+
+        :param database: the database to use
+        :return: None
+        """
+        blocking_use_database(self._connection, database)

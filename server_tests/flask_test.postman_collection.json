@@ -44,7 +44,7 @@
 			"response": []
 		},
 		{
-			"name": "SQL query",
+			"name": "create connections Copy",
 			"event": [
 				{
 					"listen": "test",
@@ -52,27 +52,6 @@
 						"exec": [
 							"pm.test(\"Response has a 200 status\", function () {",
 							"    pm.response.to.have.status(200);",
-							"});",
-							"",
-							"",
-							"pm.test(\"Response body has correct data\", function () {",
-							"    // Define the expected response body",
-							"    const expectedData = [",
-							"        {",
-							"            \"id\": \"user:jaime\",",
-							"            \"name\": \"Jaime\"",
-							"        },",
-							"        {",
-							"            \"id\": \"user:tobie\",",
-							"            \"name\": \"Tobie\"",
-							"        }",
-							"    ];",
-							"",
-							"    // Parse the response body as JSON",
-							"    const responseBody = pm.response.json();",
-							"",
-							"    // Compare the response body with the expected data",
-							"    pm.expect(responseBody).to.deep.equal(expectedData);",
 							"});",
 							""
 						],
@@ -84,7 +63,7 @@
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "http://0.0.0.0:5002/sql",
+					"raw": "http://0.0.0.0:5002/",
 					"protocol": "http",
 					"host": [
 						"0",
@@ -94,14 +73,14 @@
 					],
 					"port": "5002",
 					"path": [
-						"sql"
+						""
 					]
 				}
 			},
 			"response": []
 		},
 		{
-			"name": "main connection one",
+			"name": "web socket",
 			"event": [
 				{
 					"listen": "test",
@@ -116,12 +95,12 @@
 							"    // Define the expected response body",
 							"    const expectedData = [",
 							"        {",
-							"            \"id\": \"user:jaime\",",
-							"            \"name\": \"Jaime\"",
+							"            \"id\": \"user:ws_one\",",
+							"            \"name\": \"ws_one\"",
 							"        },",
 							"        {",
-							"            \"id\": \"user:tobie\",",
-							"            \"name\": \"Tobie\"",
+							"            \"id\": \"user:ws_two\",",
+							"            \"name\": \"ws_two\"",
 							"        }",
 							"    ];",
 							"",
@@ -141,7 +120,7 @@
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "http://0.0.0.0:5002/main/one",
+					"raw": "http://0.0.0.0:5002/ws",
 					"protocol": "http",
 					"host": [
 						"0",
@@ -151,15 +130,14 @@
 					],
 					"port": "5002",
 					"path": [
-						"main",
-						"one"
+						"ws"
 					]
 				}
 			},
 			"response": []
 		},
 		{
-			"name": "main connection two",
+			"name": "web socket Copy",
 			"event": [
 				{
 					"listen": "test",
@@ -174,12 +152,12 @@
 							"    // Define the expected response body",
 							"    const expectedData = [",
 							"        {",
-							"            \"id\": \"user:jaime\",",
-							"            \"name\": \"Jaime\"",
+							"            \"id\": \"user:ws_one\",",
+							"            \"name\": \"ws_one\"",
 							"        },",
 							"        {",
-							"            \"id\": \"user:tobie\",",
-							"            \"name\": \"Tobie\"",
+							"            \"id\": \"user:ws_two\",",
+							"            \"name\": \"ws_two\"",
 							"        }",
 							"    ];",
 							"",
@@ -199,7 +177,7 @@
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "http://0.0.0.0:5002/main/two",
+					"raw": "http://0.0.0.0:5002/ws",
 					"protocol": "http",
 					"host": [
 						"0",
@@ -209,8 +187,349 @@
 					],
 					"port": "5002",
 					"path": [
-						"main",
-						"two"
+						"ws"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "http",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Response has a 200 status\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"",
+							"pm.test(\"Response body has correct data\", function () {",
+							"    // Define the expected response body",
+							"    const expectedData = [",
+							"        {",
+							"            \"id\": \"user:http_one\",",
+							"            \"name\": \"http_one\"",
+							"        },",
+							"        {",
+							"            \"id\": \"user:http_two\",",
+							"            \"name\": \"http_two\"",
+							"        }",
+							"    ];",
+							"",
+							"    // Parse the response body as JSON",
+							"    const responseBody = pm.response.json();",
+							"",
+							"    // Compare the response body with the expected data",
+							"    pm.expect(responseBody).to.deep.equal(expectedData);",
+							"});",
+							""
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://0.0.0.0:5002/http",
+					"protocol": "http",
+					"host": [
+						"0",
+						"0",
+						"0",
+						"0"
+					],
+					"port": "5002",
+					"path": [
+						"http"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "http Copy",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Response has a 200 status\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"",
+							"pm.test(\"Response body has correct data\", function () {",
+							"    // Define the expected response body",
+							"    const expectedData = [",
+							"        {",
+							"            \"id\": \"user:http_one\",",
+							"            \"name\": \"http_one\"",
+							"        },",
+							"        {",
+							"            \"id\": \"user:http_two\",",
+							"            \"name\": \"http_two\"",
+							"        }",
+							"    ];",
+							"",
+							"    // Parse the response body as JSON",
+							"    const responseBody = pm.response.json();",
+							"",
+							"    // Compare the response body with the expected data",
+							"    pm.expect(responseBody).to.deep.equal(expectedData);",
+							"});",
+							""
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://0.0.0.0:5002/http",
+					"protocol": "http",
+					"host": [
+						"0",
+						"0",
+						"0",
+						"0"
+					],
+					"port": "5002",
+					"path": [
+						"http"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "rocksdb",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Response has a 200 status\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"",
+							"pm.test(\"Response body has correct data\", function () {",
+							"    // Define the expected response body",
+							"    const expectedData = [",
+							"        {",
+							"            \"id\": \"user:rocks_one\",",
+							"            \"name\": \"rocks_one\"",
+							"        },",
+							"        {",
+							"            \"id\": \"user:rocks_two\",",
+							"            \"name\": \"rocks_two\"",
+							"        }",
+							"    ];",
+							"",
+							"    // Parse the response body as JSON",
+							"    const responseBody = pm.response.json();",
+							"",
+							"    // Compare the response body with the expected data",
+							"    pm.expect(responseBody).to.deep.equal(expectedData);",
+							"});",
+							""
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://0.0.0.0:5002/rocksdb",
+					"protocol": "http",
+					"host": [
+						"0",
+						"0",
+						"0",
+						"0"
+					],
+					"port": "5002",
+					"path": [
+						"rocksdb"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "rocksdb Copy",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Response has a 200 status\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"",
+							"pm.test(\"Response body has correct data\", function () {",
+							"    // Define the expected response body",
+							"    const expectedData = [",
+							"        {",
+							"            \"id\": \"user:rocks_one\",",
+							"            \"name\": \"rocks_one\"",
+							"        },",
+							"        {",
+							"            \"id\": \"user:rocks_two\",",
+							"            \"name\": \"rocks_two\"",
+							"        }",
+							"    ];",
+							"",
+							"    // Parse the response body as JSON",
+							"    const responseBody = pm.response.json();",
+							"",
+							"    // Compare the response body with the expected data",
+							"    pm.expect(responseBody).to.deep.equal(expectedData);",
+							"});",
+							""
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://0.0.0.0:5002/rocksdb",
+					"protocol": "http",
+					"host": [
+						"0",
+						"0",
+						"0",
+						"0"
+					],
+					"port": "5002",
+					"path": [
+						"rocksdb"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "memory",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Response has a 200 status\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"",
+							"pm.test(\"Response body has correct data\", function () {",
+							"    // Define the expected response body",
+							"    const expectedData = [",
+							"        {",
+							"            \"id\": \"user:memory_one\",",
+							"            \"name\": \"memory_one\"",
+							"        },",
+							"        {",
+							"            \"id\": \"user:memory_two\",",
+							"            \"name\": \"memory_two\"",
+							"        }",
+							"    ];",
+							"",
+							"    // Parse the response body as JSON",
+							"    const responseBody = pm.response.json();",
+							"",
+							"    // Compare the response body with the expected data",
+							"    pm.expect(responseBody).to.deep.equal(expectedData);",
+							"});",
+							""
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://0.0.0.0:5002/memory",
+					"protocol": "http",
+					"host": [
+						"0",
+						"0",
+						"0",
+						"0"
+					],
+					"port": "5002",
+					"path": [
+						"memory"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "memory Copy",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Response has a 200 status\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"",
+							"pm.test(\"Response body has correct data\", function () {",
+							"    // Define the expected response body",
+							"    const expectedData = [",
+							"        {",
+							"            \"id\": \"user:memory_one\",",
+							"            \"name\": \"memory_one\"",
+							"        },",
+							"        {",
+							"            \"id\": \"user:memory_two\",",
+							"            \"name\": \"memory_two\"",
+							"        }",
+							"    ];",
+							"",
+							"    // Parse the response body as JSON",
+							"    const responseBody = pm.response.json();",
+							"",
+							"    // Compare the response body with the expected data",
+							"    pm.expect(responseBody).to.deep.equal(expectedData);",
+							"});",
+							""
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://0.0.0.0:5002/memory",
+					"protocol": "http",
+					"host": [
+						"0",
+						"0",
+						"0",
+						"0"
+					],
+					"port": "5002",
+					"path": [
+						"memory"
 					]
 				}
 			},
