@@ -40,6 +40,19 @@ def ws():
     return outcome
 
 
+@app.route('/ws/two')
+def ws_two():
+    connection = SurrealDB("ws://surrealdb:8000/ws_namespace/ws_database")
+    connection.signin({
+        "username": "root",
+        "password": "root",
+    })
+    connection.query("CREATE user:ws_three SET name = 'ws_three';")
+    connection.query("CREATE user:ws_four SET name = 'ws_four';")
+    outcome = connection.query("SELECT * FROM user;")
+    return outcome
+
+
 @app.route('/http')
 def http():
     connection = SurrealDB("http://surrealdb:8000/http_namespace/http_database")
@@ -49,6 +62,19 @@ def http():
     })
     connection.query("CREATE user:http_one SET name = 'http_one';")
     connection.query("CREATE user:http_two SET name = 'http_two';")
+    outcome = connection.query("SELECT * FROM user;")
+    return outcome
+
+
+@app.route('/http/two')
+def http_two():
+    connection = SurrealDB("http://surrealdb:8000/http_namespace/http_database")
+    connection.signin({
+        "username": "root",
+        "password": "root",
+    })
+    connection.query("CREATE user:http_three SET name = 'http_three';")
+    connection.query("CREATE user:http_four SET name = 'http_four';")
     outcome = connection.query("SELECT * FROM user;")
     return outcome
 
@@ -65,10 +91,30 @@ def rocksdb():
     return outcome
 
 
+@app.route('/rocksdb/two')
+def rocksdb_two():
+    ROCKS_CONNECTION.signin({
+        "username": "root",
+        "password": "root",
+    })
+    ROCKS_CONNECTION.query("CREATE user:rocks_three SET name = 'rocks_three';")
+    ROCKS_CONNECTION.query("CREATE user:rocks_four SET name = 'rocks_four';")
+    outcome = ROCKS_CONNECTION.query("SELECT * FROM user;")
+    return outcome
+
+
 @app.route('/memory')
 def memory():
     MEMORY_CONNECTION.query("CREATE user:memory_one SET name = 'memory_one';")
     MEMORY_CONNECTION.query("CREATE user:memory_two SET name = 'memory_two';")
+    outcome = MEMORY_CONNECTION.query("SELECT * FROM user;")
+    return outcome
+
+
+@app.route('/memory/two')
+def memory_two():
+    MEMORY_CONNECTION.query("CREATE user:memory_three SET name = 'memory_three';")
+    MEMORY_CONNECTION.query("CREATE user:memory_four SET name = 'memory_four';")
     outcome = MEMORY_CONNECTION.query("SELECT * FROM user;")
     return outcome
 

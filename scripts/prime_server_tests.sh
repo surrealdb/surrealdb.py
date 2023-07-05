@@ -20,20 +20,20 @@ refresh_files() {
 }
 
 # wipe files for servers
-refresh_files "server_tests/flask/app/surreal.py"
+refresh_files "integration_tests/flask/app/surreal.py"
 
 # copy package files to flask server test
-cp -r surrealdb/ server_tests/flask/app/surreal.py/surrealdb/
-cp -r src/ server_tests/flask/app/surreal.py/src/
-cp -r .cargo/ server_tests/flask/app/surreal.py/.cargo/
+cp -r surrealdb/ integration_tests/flask/app/surreal.py/surrealdb/
+cp -r src/ integration_tests/flask/app/surreal.py/src/
+cp -r .cargo/ integration_tests/flask/app/surreal.py/.cargo/
 
-cp Cargo.toml server_tests/flask/app/surreal.py/Cargo.toml
-cp MANIFEST.in server_tests/flask/app/surreal.py/MANIFEST.in
-cp setup.py server_tests/flask/app/surreal.py/setup.py
-cp pyproject.toml server_tests/flask/app/surreal.py/pyproject.toml
+cp Cargo.toml integration_tests/flask/app/surreal.py/Cargo.toml
+cp MANIFEST.in integration_tests/flask/app/surreal.py/MANIFEST.in
+cp setup.py integration_tests/flask/app/surreal.py/setup.py
+cp pyproject.toml integration_tests/flask/app/surreal.py/pyproject.toml
 
 # build flask server with no cache
-cd server_tests/flask/
+cd integration_tests/flask/
 docker-compose build --no-cache
 #docker-compose up -d
 #

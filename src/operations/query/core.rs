@@ -6,36 +6,19 @@
 use serde_json::value::Value;
 use crate::connection::interface::WrappedConnection;
 use surrealdb::sql::Value as SurrealValue;
+use surrealdb::opt::Resource;
+use surrealdb::sql::Range;
 
 
-	// /// Run a SurrealQL query against the database
-	// ///
-	// /// ```js
-	// /// // Run a query without bindings
-	// /// const people = await db.query('SELECT * FROM person');
-	// ///
-	// /// // Run a query with bindings
-	// /// const people = await db.query('SELECT * FROM type::table($table)', { table: 'person' });
-	// /// ```
-	// pub async fn query(&self, sql: String, bindings: JsValue) -> Result<JsValue, Error> {
-	// 	let bindings: Json = from_value(bindings)?;
-	// 	let mut response = match bindings.is_null() {
-	// 		true => self.db.query(sql).await?,
-	// 		false => self.db.query(sql).bind(bindings).await?,
-	// 	};
-	// 	let num_statements = response.num_statements();
-	// 	let response = if num_statements > 1 {
-	// 		let mut output = Vec::<Value>::with_capacity(num_statements);
-	// 		for index in 0..num_statements {
-	// 			output.push(response.take(index)?);
-	// 		}
-	// 		Value::from(output)
-	// 	} else {
-	// 		response.take(0)?
-	// 	};
-	// 	Ok(to_value(&response.into_json())?)
-	// }
-
+/// Performs a query on the database.
+/// 
+/// # Arguments
+/// * `connection` - The connection to perform the query on
+/// * `sql` - The SQL query to perform
+/// * `bindings` - The bindings to use for the query
+/// 
+/// # Returns
+/// * `Ok(Value)` - The result of the query
 pub async fn query(connection: WrappedConnection, sql: String, bindings: Option<Value>) -> Result<Value, String> {
 	let mut response = match bindings {
 		Some(bind) => {connection.connection.query(sql).bind(bind).await},
@@ -53,4 +36,120 @@ pub async fn query(connection: WrappedConnection, sql: String, bindings: Option<
 	}
 	let json_value: Value = Value::Array(output);
 	Ok(json_value)
+}
+
+/// Performs a select on the database.
+/// 
+/// # Arguments
+/// * `connection` - The connection to perform the select with
+/// * `resource` - The resource to select (can be a table or a range)
+/// 
+/// # Returns
+/// * `Ok(Value)` - The result of the select
+pub async fn select(connection: WrappedConnection, resource: String) -> Result<Value, String> {
+	let response = match resource.parse::<Range>() {
+		Ok(range) => {
+			connection.connection.select(Resource::from(range.tb)).range((range.beg, range.end))
+								 .await.map_err(|e| e.to_string())?
+		}
+		Err(_) => connection.connection.select(Resource::from(resource))
+									   .await.map_err(|e| e.to_string())?
+	};
+	Ok(response.into_json())
+}
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::connection::core::make_connection;
+	use tokio::runtime::Runtime;
+
+	#[test]
+	fn test_query() {
+
+		let runtime = Runtime::new().unwrap();
+
+		let outcome = runtime.block_on(async {
+			let connection = make_connection("memory".to_string()).await.unwrap();
+			connection.connection.use_ns("test_namespace").await.unwrap();
+			connection.connection.use_db("test_database").await.unwrap();
+
+			query(connection.clone(), "CREATE user:tobie SET name = 'Tobie';".to_string(), None).await.unwrap();
+			query(connection.clone(), "CREATE user:jaime SET name = 'Jaime';".to_string(), None).await.unwrap();
+
+			query(connection, "SELECT * FROM user;".to_string(), None).await.unwrap()
+		});
+
+		assert_eq!(outcome[0].as_array().unwrap()[0]["name"], "Jaime");
+		assert_eq!(outcome[0].as_array().unwrap()[1]["name"], "Tobie");
+	}
+
+
+	#[test]
+	fn test_select_all_users() {
+		let runtime = Runtime::new().unwrap();
+
+		let outcome = runtime.block_on(async {
+			let connection = make_connection("memory".to_string()).await.unwrap();
+			connection.connection.use_ns("test_namespace").await.unwrap();
+			connection.connection.use_db("test_database").await.unwrap();
+
+			query(connection.clone(), "CREATE user:1 SET name = 'Tobie';".to_string(), None).await.unwrap();
+			query(connection.clone(), "CREATE user:2 SET name = 'Jaime';".to_string(), None).await.unwrap();
+			query(connection.clone(), "CREATE user:3 SET name = 'Dave';".to_string(), None).await.unwrap();
+
+			select(connection, "user".to_string()).await.unwrap()
+		});
+
+		assert_eq!(outcome.as_array().unwrap().len(), 3);
+		assert_eq!(outcome[0]["name"], "Tobie");
+		assert_eq!(outcome[1]["name"], "Jaime");
+		assert_eq!(outcome[2]["name"], "Dave");
+	}
+
+	#[test]
+	fn test_select_range_users() {
+		let runtime = Runtime::new().unwrap();
+
+		let outcome = runtime.block_on(async {
+			let connection = make_connection("memory".to_string()).await.unwrap();
+			connection.connection.use_ns("test_namespace").await.unwrap();
+			connection.connection.use_db("test_database").await.unwrap();
+
+			query(connection.clone(), "CREATE user:1 SET name = 'Tobie';".to_string(), None).await.unwrap();
+			query(connection.clone(), "CREATE user:2 SET name = 'Jaime';".to_string(), None).await.unwrap();
+			query(connection.clone(), "CREATE user:3 SET name = 'Dave';".to_string(), None).await.unwrap();
+			query(connection.clone(), "CREATE user:4 SET name = 'Tom';".to_string(), None).await.unwrap();
+
+			select(connection, "user:1..4".to_string()).await.unwrap()
+		});
+
+		assert_eq!(outcome.as_array().unwrap().len(), 3);
+		assert_eq!(outcome[0]["name"], "Tobie");
+		assert_eq!(outcome[1]["name"], "Jaime");
+		assert_eq!(outcome[2]["name"], "Dave");
+	}
+
+	#[test]
+	fn test_select_particular_user() {
+		let runtime = Runtime::new().unwrap();
+
+		let outcome = runtime.block_on(async {
+			let connection = make_connection("memory".to_string()).await.unwrap();
+			connection.connection.use_ns("test_namespace").await.unwrap();
+			connection.connection.use_db("test_database").await.unwrap();
+
+			query(connection.clone(), "CREATE user:1 SET name = 'Tobie';".to_string(), None).await.unwrap();
+			query(connection.clone(), "CREATE user:2 SET name = 'Jaime';".to_string(), None).await.unwrap();
+			query(connection.clone(), "CREATE user:3 SET name = 'Dave';".to_string(), None).await.unwrap();
+			query(connection.clone(), "CREATE user:4 SET name = 'Tom';".to_string(), None).await.unwrap();
+
+			select(connection, "user:2".to_string()).await.unwrap()
+		});
+
+		assert_eq!(outcome["name"], "Jaime");
+		assert_eq!(outcome["id"], "user:2");
+	}
+
 }

@@ -14,6 +14,8 @@ blocking_make_connection = MagicMock()
 blocking_sign_in = MagicMock()
 blocking_set = MagicMock()
 blocking_query = MagicMock()
+blocking_use_namespace = MagicMock()
+blocking_use_database = MagicMock()
 
 # operations mixins
 blocking_create = MagicMock()
