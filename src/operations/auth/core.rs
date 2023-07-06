@@ -118,7 +118,7 @@ mod tests {
             start(&mut engine).await;
 
             let connection: WrappedConnection;
-            match create_conn(10).await {
+            match create_conn(20).await {
                 Ok(conn) => {
                     connection = conn;
                 },
@@ -156,7 +156,7 @@ mod tests {
             start(&mut engine).await;
 
             let connection: WrappedConnection;
-            match create_conn(10).await {
+            match create_conn(20).await {
                 Ok(conn) => {
                     connection = conn;
                 },

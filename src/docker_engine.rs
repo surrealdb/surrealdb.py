@@ -7,11 +7,9 @@ use bollard::models::HostConfig;
 use bollard::models::PortBinding;
 use once_cell::sync::Lazy;
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 
 pub static DOCKER_ENGINE: Lazy<Arc<Mutex<DockerEngine>>> = Lazy::new(|| Arc::new(Mutex::new(DockerEngine { id: None })));
-pub static COUNTER: Lazy<AtomicUsize> = Lazy::new(|| AtomicUsize::new(0));
 
 
 pub struct DockerEngine {
@@ -19,20 +17,13 @@ pub struct DockerEngine {
 }
 
 pub async fn start(engine: &mut DockerEngine) {
-    let prev_value = COUNTER.fetch_add(1, Ordering::SeqCst);
-    if prev_value == 0 {
-        let id = start_database().await;
-        engine.id = Some(id);
-    }
+    let id = start_database().await;
+    engine.id = Some(id);
 }
 
 pub async fn shutdown(engine: &mut DockerEngine) {
-    let prev_value = COUNTER.fetch_sub(1, Ordering::SeqCst);
-
-    if prev_value == 1 {
-        let id = engine.id.as_ref().unwrap().clone();
-        shutdown_database(&id).await;
-    }
+    let id = engine.id.as_ref().unwrap().clone();
+    shutdown_database(&id).await;
 }
 
 
