@@ -28,6 +28,7 @@ from surrealdb.execution_mixins.auth import SignInMixin
 from surrealdb.execution_mixins.create import CreateMixin
 from surrealdb.execution_mixins.query import QueryMixin
 from surrealdb.execution_mixins.set import SetMixin
+from surrealdb.execution_mixins.update import UpdateMixin
 
 
 class ConnectionController(type):
@@ -83,6 +84,7 @@ class SurrealDB(
     SignInMixin,
     SetMixin,
     QueryMixin,
+    UpdateMixin,
     metaclass=ConnectionController
 ):
     """

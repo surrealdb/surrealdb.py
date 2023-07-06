@@ -53,7 +53,7 @@ pub fn blocking_invalidate(connection: WrappedConnection) -> Result<(), PyErr> {
 /// # Returns
 /// * `Ok(())` - The operation was successful
 #[pyfunction]
-pub fn blocking_authenticate(connection: WrappedConnection, jwt: String) -> Result<(), PyErr> {
+pub fn blocking_authenticate(connection: WrappedConnection, jwt: WrappedJwt) -> Result<(), PyErr> {
     RUNTIME.block_on(async move{
         return authenticate(connection, jwt).await.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
     })

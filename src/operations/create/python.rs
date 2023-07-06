@@ -5,7 +5,7 @@ use serde_json::value::Value;
 
 use crate::connection::interface::WrappedConnection;
 use crate::runtime::RUNTIME;
-use super::core::create;
+use super::core::{create, delete};
 
 
 /// Creates a new record in the database in an non-async manner.
@@ -27,4 +27,21 @@ pub fn blocking_create<'a>(connection: WrappedConnection, table_name: String, da
     });
     outcome?;
     Ok(())
+}
+
+
+/// Deletes a record or range of records from the database in an non-async manner.
+/// 
+/// # Arguments
+/// * `connection` - The database connection being used for the operation
+/// * `resource` - The resource to delete (can be a table or a range)
+/// 
+/// # Returns
+/// * `Ok(())` - The operation was successful
+#[pyfunction]
+pub fn blocking_delete(connection: WrappedConnection, resource: String) -> Result<String, PyErr> {
+    let outcome = RUNTIME.block_on(async move{
+        return delete(connection, resource).await.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
+    })?;
+    Ok(outcome.to_string())
 }

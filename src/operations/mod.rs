@@ -16,6 +16,7 @@ pub mod auth;
 /// * `()` - Nothing
 pub fn operations_module_factory(m: &PyModule) {
     let _ = m.add_wrapped(wrap_pyfunction!(create::python::blocking_create));
+    let _ = m.add_wrapped(wrap_pyfunction!(create::python::blocking_delete));
     let _ = m.add_wrapped(wrap_pyfunction!(set::python::blocking_set));
     let _ = m.add_wrapped(wrap_pyfunction!(set::python::blocking_unset));
     let _ = m.add_wrapped(wrap_pyfunction!(query::python::blocking_query));

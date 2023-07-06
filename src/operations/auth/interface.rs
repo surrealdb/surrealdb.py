@@ -3,6 +3,7 @@ use pyo3::prelude::*;
 use surrealdb::opt::auth::Jwt;
 
 
+#[derive(Debug, Clone)]
 #[pyclass]
 pub struct WrappedJwt {
     pub jwt: Jwt,
