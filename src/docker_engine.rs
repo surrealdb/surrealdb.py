@@ -9,12 +9,19 @@ use once_cell::sync::Lazy;
 use std::sync::{Arc, Mutex};
 
 
+/// The global docker engine instance. This is a Singleton to ensure that one instance of SurrealDB is running at a time.
 pub static DOCKER_ENGINE: Lazy<Arc<Mutex<DockerEngine>>> = Lazy::new(|| Arc::new(Mutex::new(DockerEngine { id: None })));
 
 
+/// The interface for handling a SurrealDB instance in docker.
+/// 
+/// # Fields
+/// * `id` - The container id of the SurrealDB instance
 pub struct DockerEngine {
     pub id: Option<String>
 }
+
+
 
 pub async fn start(engine: &mut DockerEngine) {
     let id = start_database().await;
@@ -31,7 +38,7 @@ pub async fn shutdown(engine: &mut DockerEngine) {
 /// 
 /// # Returns
 /// * `String` - The container id of the SurrealDB instance
-pub async fn start_database() -> String {
+async fn start_database() -> String {
     let docker = Docker::connect_with_socket_defaults().unwrap();
 
     let mut port_bindings = HashMap::new();
@@ -77,7 +84,7 @@ pub async fn start_database() -> String {
 /// 
 /// # Returns
 /// None 
-pub async fn shutdown_database(id: &str) {
+async fn shutdown_database(id: &str) {
     let docker = Docker::connect_with_socket_defaults().unwrap();
     docker.stop_container(id, None).await.unwrap();
     docker.remove_container(id, None).await.unwrap();

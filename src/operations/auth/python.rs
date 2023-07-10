@@ -1,4 +1,4 @@
-//! Python entry point signing up. 
+//! Python entry points for the auth operations against the database.
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 use serde_json::value::Value;

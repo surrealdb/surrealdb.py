@@ -1,3 +1,4 @@
+//! Defines the core functions for the auth operations against the database.
 use surrealdb::opt::auth::Scope;
 use serde_json::value::Value;
 
