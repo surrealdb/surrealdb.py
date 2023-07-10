@@ -51,13 +51,13 @@ jobs:
         shell: bash
         run: |
           echo "hello world"
-        #   rustup target add ${{ matrix.config.target }}
-        #   cargo build --release --target ${{ matrix.config.target }} --manifest-path ./Cargo.toml
+          rustup target add ${{ matrix.config.target }}
+          cargo build --release --target ${{ matrix.config.target }} --manifest-path ./Cargo.toml
 
       - name: Build Apple targets
         if: matrix.config.os == 'macOS-latest'
         shell: bash
         run: |
           echo "hello world"
-        #   rustup target add aarch64-apple-darwin
-        #   cargo build --release --target ${{ matrix.config.target }} --manifest-path ./Cargo.toml
+          rustup target add aarch64-apple-darwin
+          cargo build --release --target ${{ matrix.config.target }} --manifest-path ./Cargo.toml
