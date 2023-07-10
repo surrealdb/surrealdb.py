@@ -38,6 +38,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.x
+
+      - name: Update pip
+        run: python -m pip install --upgrade pip
+
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
@@ -45,19 +54,34 @@ jobs:
           profile: minimal
           override: true
           target: ${{ matrix.config.target }}
-
-      - name: Build target
-        if: matrix.config.os == 'ubuntu-latest'
+          
+      - name: Build wheel package
         shell: bash
         run: |
-          echo "hello world"
-          rustup target add ${{ matrix.config.target }}
-          cargo build --release --target ${{ matrix.config.target }} --manifest-path ./Cargo.toml
+          python setup.py bdist_wheel
 
-      - name: Build Apple targets
-        if: matrix.config.os == 'macOS-latest'
-        shell: bash
-        run: |
-          echo "hello world"
-          rustup target add aarch64-apple-darwin
-          cargo build --release --target ${{ matrix.config.target }} --manifest-path ./Cargo.toml
+    #   - name: Checkout
+    #     uses: actions/checkout@v3
+    #   - name: Install rust
+    #     uses: actions-rs/toolchain@v1
+    #     with:
+    #       toolchain: stable
+    #       profile: minimal
+    #       override: true
+    #       target: ${{ matrix.config.target }}
+
+    #   - name: Build target
+    #     if: matrix.config.os == 'ubuntu-latest'
+    #     shell: bash
+    #     run: |
+    #       echo "hello world"
+    #       rustup target add ${{ matrix.config.target }}
+    #       cargo build --release --target ${{ matrix.config.target }} --manifest-path ./Cargo.toml
+
+    #   - name: Build Apple targets
+    #     if: matrix.config.os == 'macOS-latest'
+    #     shell: bash
+    #     run: |
+    #       echo "hello world"
+    #       rustup target add aarch64-apple-darwin
+    #       cargo build --release --target ${{ matrix.config.target }} --manifest-path ./Cargo.toml
