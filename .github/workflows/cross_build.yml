@@ -5,13 +5,13 @@ on:
   push:
     branches:
       - rust-no-runtime
-    # tags:
-    #   - "v*.*.*"
+    tags:
+      - "v*.*.*"
 
 jobs:
   deploy:
     name: deploy
-    # if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ${{ matrix.config.os }}
     strategy:
       matrix:
@@ -61,6 +61,12 @@ jobs:
           python -m pip install wheel
           pip install setuptools_rust
           python setup.py bdist_wheel
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: wheel-package-${{ matrix.config.os }}-${{ github.ref }}
+          path: dist/*.whl
 
     #   - name: Checkout
     #     uses: actions/checkout@v3
