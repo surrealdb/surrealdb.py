@@ -58,6 +58,7 @@ jobs:
       - name: Build wheel package
         shell: bash
         run: |
+          python -m pip install wheel
           pip install setuptools_rust
           python setup.py bdist_wheel
 
