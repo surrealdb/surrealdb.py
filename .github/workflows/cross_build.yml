@@ -11,7 +11,7 @@ on:
 jobs:
   deploy:
     name: deploy
-    if: startsWith(github.ref, 'refs/tags/')
+    # if: startsWith(github.ref, 'refs/tags/')
     runs-on: ${{ matrix.config.os }}
     strategy:
       matrix:
