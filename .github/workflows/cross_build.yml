@@ -39,41 +39,42 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Echo the target
+      - name: extract the target
         shell: bash
         run: |
           input="${{ github.ref }}"
           version=${input##*/}
           version=${version#v}
-          echo "Version: $version"
+          echo "Version: version"
+          echo "##[set-output name=version;]$version"
 
-    #   - name: Set up Python
-    #     uses: actions/setup-python@v2
-    #     with:
-    #       python-version: 3.x
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.x
 
-    #   - name: Update pip
-    #     run: python -m pip install --upgrade pip
+      - name: Update pip
+        run: python -m pip install --upgrade pip
 
-    #   - name: Install rust
-    #     uses: actions-rs/toolchain@v1
-    #     with:
-    #       toolchain: stable
-    #       profile: minimal
-    #       override: true
-    #       target: ${{ matrix.config.target }}
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          target: ${{ matrix.config.target }}
 
-    #   - name: Build wheel package
-    #     shell: bash
-    #     run: |
-    #       python -m pip install wheel
-    #       pip install setuptools_rust
-    #       python setup.py bdist_wheel
+      - name: Build wheel package
+        shell: bash
+        run: |
+          python -m pip install wheel
+          pip install setuptools_rust
+          python setup.py bdist_wheel
 
-    #   - name: Upload artifact
-    #     uses: actions/upload-artifact@v2
-    #     with:
-    #       name: wheel-package-${{ matrix.config.os }}-${{ github.ref }}
-    #       path: dist/*.whl
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: wheel-package-${{ matrix.config.os }}-${{ steps.extract-version.outputs.version }}
+          path: dist/*.whl
 
  
