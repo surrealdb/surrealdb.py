@@ -54,10 +54,11 @@ jobs:
           profile: minimal
           override: true
           target: ${{ matrix.config.target }}
-          
+
       - name: Build wheel package
         shell: bash
         run: |
+          pip install setuptools_rust
           python setup.py bdist_wheel
 
     #   - name: Checkout
