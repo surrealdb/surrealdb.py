@@ -51,8 +51,8 @@ jobs:
       - name: echo
         shell: bash
         run: |
-          ONE=${cat test.txt}
-          TWO=${cat test_two.txt}
+          ONE=$(cat test.txt)
+          TWO=$(cat test_two.txt)
 
           echo $ONE
           echo $TWO
