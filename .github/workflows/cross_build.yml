@@ -48,7 +48,9 @@ jobs:
       - name: echo
         shell: bash
         run: |
-          echo ${{ env.FILENAME }}
+          mkdir dist_two
+          touch dist_two/${{ env.FILENAME }}.whl
+          ls dist_two/
 
 
     #   - name: extract the target
