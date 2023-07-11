@@ -77,7 +77,7 @@ jobs:
           FILENAME=$(ls dist/*.whl)
   
           # Exporting the variable to the environment
-          echo "FILENAME=$FILENAME" >> $GITHUB_ENV
+          echo "export FILENAME=$FILENAME" >> $GITHUB_ENV
           echo $FILENAME
           echo $FILENAME
 
