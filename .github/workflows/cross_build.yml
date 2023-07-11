@@ -39,71 +39,69 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
     
-      - name: export
-        shell: bash
-        run: |
-          mkdir dist_two
-          touch dist_two/test_dist_one.whl
-          FILENAME=$(ls dist_two/*.whl)
-          echo $FILENAME > test.txt
-          echo ${FILENAME#dist_two/} > test_two.txt
-    
-      - name: echo
-        shell: bash
-        run: |
-          ONE=$(cat test.txt)
-          TWO=$(cat test_two.txt)
-
-          echo $ONE
-          echo $TWO
-
-
-    #   - name: extract the target
+    #   - name: export
     #     shell: bash
     #     run: |
-    #       input="${{ github.ref }}"
-    #       version=${input##*/}
-    #       version=${version#v}
-    #       echo "Version: version"
-    #       echo "##[set-output name=version;]$version"
-
-    #   - name: Set up Python
-    #     uses: actions/setup-python@v2
-    #     with:
-    #       python-version: 3.x
-
-    #   - name: Update pip
-    #     run: python -m pip install --upgrade pip
-
-    #   - name: Install rust
-    #     uses: actions-rs/toolchain@v1
-    #     with:
-    #       toolchain: stable
-    #       profile: minimal
-    #       override: true
-    #       target: ${{ matrix.config.target }}
-
-    #   - name: Build wheel package
+    #       mkdir dist_two
+    #       touch dist_two/test_dist_one.whl
+    #       FILENAME=$(ls dist_two/*.whl)
+    #       echo $FILENAME > test.txt
+    #       echo ${FILENAME#dist_two/} > test_two.txt
+    
+    #   - name: echo
     #     shell: bash
     #     run: |
-    #       python -m pip install wheel
-    #       pip install setuptools_rust
-    #       python setup.py bdist_wheel
+    #       ONE=$(cat test.txt)
+    #       TWO=$(cat test_two.txt)
+
+    #       echo $ONE
+    #       echo $TWO
+
+
+      - name: extract the target
+        shell: bash
+        run: |
+          input="${{ github.ref }}"
+          version=${input##*/}
+          version=${version#v}
+          echo "Version: version"
+          echo "##[set-output name=version;]$version"
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.x
+
+      - name: Update pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          target: ${{ matrix.config.target }}
+
+      - name: Build wheel package
+        shell: bash
+        run: |
+          python -m pip install wheel
+          pip install setuptools_rust
+          python setup.py bdist_wheel
     
-    #   - name: Set file name
-    #     run: |
-    #       # Assigning a value to a variable
-    #       FILENAME=$(ls dist/*.whl)
+      - name: Set file name
+        run: |
+          # Assigning a value to a variable
+          FILENAME=$(ls dist/*.whl)
   
-    #       # Exporting the variable to the environment
-    #       echo "export FILENAME=$FILENAME" >> $GITHUB_ENV
-    #       echo $FILENAME
-    #       echo $FILENAME
+          echo $FILENAME > directory.txt
+          echo ${FILENAME#dist/} > file_name.txt
 
-    #   - name: Upload artifact
-    #     uses: actions/upload-artifact@v2
-    #     with:
-    #       name: ${FILENAME#dist/}
-    #       path: $FILENAME
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: $(cat file_name.txt)
+          path: $(cat directory.txt)
 
  
