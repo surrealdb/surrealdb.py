@@ -42,13 +42,13 @@ jobs:
       - name: export
         shell: bash
         run: |
-          export ONE="two"
-          echo "::set-env name=ONE::$ONE"
+          FILENAME="test"
+          echo "export FILENAME=$FILENAME" >> $GITHUB_ENV
     
       - name: echo
         shell: bash
         run: |
-          echo $ONE
+          echo ${{ env.FILENAME }}
 
 
     #   - name: extract the target
