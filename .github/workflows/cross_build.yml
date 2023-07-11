@@ -62,14 +62,14 @@ jobs:
           toolchain: stable
           profile: minimal
           override: true
-        #   target: ${{ matrix.config.target }}
+          target: ${{ matrix.config.target }}
 
       - name: Build wheel package
         shell: bash
         run: |
           python -m pip install wheel
           pip install setuptools_rust
-          python setup.py bdist_wheel --universal
+          python setup.py bdist_wheel --plat-name=${{ matrix.config.target }}
     
       - name: Check the files are there
         run: |
