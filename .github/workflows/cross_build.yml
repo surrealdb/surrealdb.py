@@ -43,6 +43,7 @@ jobs:
         shell: bash
         run: |
           export ONE="two"
+          echo "::set-env name=ONE::$ONE"
     
       - name: echo
         shell: bash
