@@ -79,12 +79,12 @@ jobs:
           # Exporting the variable to the environment
           echo "FILENAME=$FILENAME" >> $GITHUB_ENV
           echo $FILENAME
-          echo dist/$FILENAME
+          echo $FILENAME
 
       - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
-          name: $FILENAME
-          path: dist/$FILENAME
+          name: ${FILENAME#dist/}
+          path: $FILENAME
 
  
