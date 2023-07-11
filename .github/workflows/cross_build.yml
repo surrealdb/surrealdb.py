@@ -43,14 +43,12 @@ jobs:
         shell: bash
         run: |
           FILENAME="test"
-          echo "export FILENAME=$FILENAME" >> $GITHUB_ENV
+          echo "test" > test.txt
     
       - name: echo
         shell: bash
         run: |
-          mkdir dist_two
-          touch dist_two/${{ env.FILENAME }}.whl
-          ls dist_two/
+          cat test.txt
 
 
     #   - name: extract the target
