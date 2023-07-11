@@ -46,11 +46,13 @@ jobs:
           touch dist_two/test_dist_one.whl
           FILENAME=$(ls dist_two/*.whl)
           echo $FILENAME > test.txt
+          echo ${FILENAME#dist/} > test_two.txt
     
       - name: echo
         shell: bash
         run: |
           cat test.txt
+          cat test_two.txt
 
 
     #   - name: extract the target
