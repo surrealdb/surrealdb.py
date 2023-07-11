@@ -90,13 +90,10 @@ jobs:
           pip install setuptools_rust
           python setup.py bdist_wheel
     
-      - name: Set file name
+      - name: Check the files are there
         run: |
-          # Assigning a value to a variable
-          FILENAME=$(ls dist/*.whl)
-  
-          echo $FILENAME > directory.txt
-          echo ${FILENAME#dist/} > file_name.txt
+          ls dist/
+          ls dist/*.whl
 
       - name: Upload artifact
         uses: actions/upload-artifact@v2
