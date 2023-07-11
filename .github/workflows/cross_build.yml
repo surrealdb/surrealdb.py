@@ -42,8 +42,10 @@ jobs:
       - name: export
         shell: bash
         run: |
-          FILENAME="test"
-          echo "test" > test.txt
+          mkdir dist_two
+          touch dist_two/test_dist_one.whl
+          FILENAME=$(ls dist_two/*.whl)
+          echo $FILENAME > test.txt
     
       - name: echo
         shell: bash
