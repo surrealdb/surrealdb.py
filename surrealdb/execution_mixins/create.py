@@ -28,7 +28,7 @@ class CreateMixin:
         except Exception as e:
             SurrealDbError(e)
 
-    def delete(self: "SurrealDB", name: str) -> Union[List[dict], dict]
+    def delete(self: "SurrealDB", name: str) -> Union[List[dict], dict]:
         """
         Deletes a document in the database.
 

@@ -83,6 +83,6 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: $FILENAME
-          path: dist/*.whl
+          path: dist/$FILENAME
 
  
