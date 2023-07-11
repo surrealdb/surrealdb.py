@@ -93,13 +93,14 @@ jobs:
       - name: Check the files are there
         run: |
           mkdir dist/
-          touch dist/test_dist_one.whl
+          echo "test" > dist/test_dist_one.whl
           ls dist/*.whl
+          echo "file=$(ls dist/)" >> $GITHUB_ENV
 
       - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
-          name: $(ls dist)
+          name: ${{ env.file }}
           path: dist/*.whl
 
  
