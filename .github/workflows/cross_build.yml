@@ -62,7 +62,7 @@ jobs:
           toolchain: stable
           profile: minimal
           override: true
-          target: ${{ matrix.config.target }}
+        #   target: ${{ matrix.config.target }}
 
       - name: Build wheel package
         shell: bash
