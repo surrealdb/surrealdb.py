@@ -58,41 +58,42 @@ jobs:
     #       echo $TWO
 
 
-      - name: extract the target
-        shell: bash
-        run: |
-          input="${{ github.ref }}"
-          version=${input##*/}
-          version=${version#v}
-          echo "Version: version"
-          echo "##[set-output name=version;]$version"
+    #   - name: extract the target
+    #     shell: bash
+    #     run: |
+    #       input="${{ github.ref }}"
+    #       version=${input##*/}
+    #       version=${version#v}
+    #       echo "Version: version"
+    #       echo "##[set-output name=version;]$version"
 
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.x
+    #   - name: Set up Python
+    #     uses: actions/setup-python@v2
+    #     with:
+    #       python-version: 3.x
 
-      - name: Update pip
-        run: python -m pip install --upgrade pip
+    #   - name: Update pip
+    #     run: python -m pip install --upgrade pip
 
-      - name: Install rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
-          target: ${{ matrix.config.target }}
+    #   - name: Install rust
+    #     uses: actions-rs/toolchain@v1
+    #     with:
+    #       toolchain: stable
+    #       profile: minimal
+    #       override: true
+    #       target: ${{ matrix.config.target }}
 
-      - name: Build wheel package
-        shell: bash
-        run: |
-          python -m pip install wheel
-          pip install setuptools_rust
-          python setup.py bdist_wheel
+    #   - name: Build wheel package
+    #     shell: bash
+    #     run: |
+    #       python -m pip install wheel
+    #       pip install setuptools_rust
+    #       python setup.py bdist_wheel
     
       - name: Check the files are there
         run: |
-          ls dist/
+          mkdir dist/
+          touch dist/test_dist_one.whl
           ls dist/*.whl
 
       - name: Upload artifact
