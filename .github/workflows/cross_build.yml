@@ -51,8 +51,11 @@ jobs:
       - name: echo
         shell: bash
         run: |
-          cat test.txt
-          cat test_two.txt
+          ONE=${cat test.txt}
+          TWO=${cat test_two.txt}
+
+          echo $ONE
+          echo $TWO
 
 
     #   - name: extract the target
