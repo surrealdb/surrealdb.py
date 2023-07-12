@@ -28,20 +28,20 @@ jobs:
           - os: macos
             arch: alt
             alt_arch_name: 'arm64 universal2'
-        exclude:
-          - os: windows
-            arch: alt
-          - os: macos
-            python-version: 'pp37'
-            arch: alt
-          - os: macos
-            python-version: 'pp38'
-            arch: alt
-          - os: macos
-            python-version: 'pp39'
-            arch: alt
-          - os: ubuntu
-            arch: alt
+        # exclude:
+        #   - os: windows
+        #     arch: alt
+        #   - os: macos
+        #     python-version: 'pp37'
+        #     arch: alt
+        #   - os: macos
+        #     python-version: 'pp38'
+        #     arch: alt
+        #   - os: macos
+        #     python-version: 'pp39'
+        #     arch: alt
+        #   - os: ubuntu
+        #     arch: alt
 
     runs-on: ${{ format('{0}-latest', matrix.os) }}
     steps:
