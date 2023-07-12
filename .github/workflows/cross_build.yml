@@ -6,91 +6,138 @@ on:
     branches:
       - rust-no-runtime
 
+env:
+CARGO_TERM_COLOR: always
+
 jobs:
-  build_wheels:
-    name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        # os: [ubuntu-latest, windows-latest, macos-latest]
-        os: [windows-latest, macos-latest]
+build: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.github/workflows/ci.yml
+name: >
+    build ${{ matrix.python-version }} on ${{ matrix.platform || matrix.os }}
+    (${{ matrix.alt_arch_name || matrix.arch }})
+strategy:
+    fail-fast: false
+    matrix:
+      os: [ubuntu, macos, windows]
+      python-version: ['cp310', 'pp37', 'pp38', 'pp39']
+      arch: [main, alt]
+      include:
+        - os: ubuntu
+          platform: linux
+        - os: windows
+          ls: dir
+        - os: macos
+          arch: alt
+          alt_arch_name: 'arm64 universal2'
+      exclude:
+        - os: windows
+          arch: alt
+        - os: macos
+          python-version: 'pp37'
+          arch: alt
+        - os: macos
+          python-version: 'pp38'
+          arch: alt
+        - os: macos
+          python-version: 'pp39'
+          arch: alt
+        - os: ubuntu
+          arch: alt
 
-    env:
-       CIBW_BUILD_VERBOSITY: 1
-       CIBW_BEFORE_ALL_LINUX: "curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain stable -y && yum install -y openssl-devel"
-       CIBW_BEFORE_BUILD_LINUX: "pip3 install --upgrade keyrings.alt"
-       CIBW_ARCHS_LINUX: "auto aarch64"
-       CIBW_ENVIRONMENT: 'PATH="$PATH:$HOME/.cargo/bin"'
-       CIBW_SKIP: "cp36-* cp37-* pp* *-win32 *-musllinux*"
-
+    runs-on: ${{ format('{0}-latest', matrix.os) }}
     steps:
-      - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+    - name: set up python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
 
-      - if: runner.os == 'Windows'
-        run: |
-            echo 'PATH=/c/Python38:/c/Python38/Scripts:/c/Strawberry/perl/site/bin:/c/Strawberry/perl/bin:/c/Strawberry/c/bin:$PATH' >> $GITHUB_ENV
-            echo 'RUSTFLAGS=-Ctarget-feature=+crt-static' >> $GITHUB_ENV
-            echo 'RUSTFLAGS=-Ctarget-feature=+crt-static' >> $GITHUB_ENV
-            echo 'CIBW_BEFORE_BUILD=python -m pip install --upgrade pip' >> $GITHUB_ENV
+    - name: set up rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
 
-      - if: runner.os != 'Linux'
-        run: |
-            echo "CIBW_SKIP=$CIBW_SKIP cp38-*" >> $GITHUB_ENV # Also skip Python 3.7 as build is too slow
+    - name: Setup Rust cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        key: ${{ matrix.alt_arch_name }}
 
-      - if: runner.os != 'Linux'
-        name: Setup env when not using docker
-        run: |
-          python -m pip install --upgrade wheel setuptools setuptools-rust
+    - run: rustup target add aarch64-apple-darwin
+      if: matrix.os == 'macos'
 
-      - if: runner.os == 'Linux'
-        name: Set up QEMU
-        id: qemu
-        uses: docker/setup-qemu-action@v1
-        with:
-          image: tonistiigi/binfmt:latest
-          platforms: arm64
+    - run: rustup toolchain install stable-i686-pc-windows-msvc
+      if: matrix.os == 'windows'
 
-      - uses: actions/setup-python@v2
-        name: Install Python
-        with:
-          python-version: '3.7'
+    - run: rustup target add i686-pc-windows-msvc
+      if: matrix.os == 'windows'
 
-      - name: Install cibuildwheel
-        run: |
-          python -m pip install cibuildwheel
+    - name: Get pip cache dir
+      id: pip-cache
+      if: matrix.os != 'windows'
+      run: |
+        echo "dir=$(pip cache dir)" >> $GITHUB_OUTPUT
 
-      - name: Build wheels
-        run: |
-          python -m cibuildwheel --output-dir wheelhouse
+    - name: Get pip cache dir
+      id: pip-cache-win
+      if: matrix.os == 'windows'
+      run: |
+        "dir=$(pip cache dir)" >> $env:GITHUB_OUTPUT
 
-      - uses: actions/upload-artifact@v2
-        with:
-          path: ./wheelhouse/*.whl
+    - name: Cache python dependencies
+      uses: actions/cache@v3
+      with:
+        path: ${{ steps.pip-cache.outputs.dir || steps.pip-cache-win.outputs.dir }}
+        key: ${{ runner.os }}-pip-${{ matrix.python-version }}
 
-  build_sdist:
-    name: Build source distribution
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
+    - name: install python dependencies
+      run: pip install -U setuptools wheel twine cibuildwheel platformdirs
 
-      - uses: actions/setup-python@v2
-        name: Install Python
-        with:
-          python-version: '3.7'
+    - name: Display cibuildwheel cache dir
+      id: cibuildwheel-cache
+      run: |
+        from platformdirs import user_cache_path
+        import os
 
-      - name: Install setuptools and setuptools-rust
-        run: |
-          python -m pip install --upgrade wheel setuptools setuptools-rust
+        with open(os.getenv('GITHUB_OUTPUT'), 'w') as f:
+        f.write(f"dir={str(user_cache_path(appname='cibuildwheel', appauthor='pypa'))}")
+      shell: python
 
-      - name: Build sdist
-        run: python setup.py sdist
+    - name: Cache cibuildwheel tools
+      uses: actions/cache@v3
+      with:
+        path: ${{ steps.cibuildwheel-cache.outputs.dir }}
+        key: ${{ runner.os }}-cibuildwheel-${{ matrix.python-version }}
 
-      - uses: actions/upload-artifact@v2
-        with:
-          path: dist/*.tar.gz
+    - name: build sdist
+      if: matrix.os == 'ubuntu' && matrix.python-version == 'cp310'
+      run: |
+        pip install maturin build
+        python -m build --sdist -o wheelhouse
+
+    - name: build ${{ matrix.platform || matrix.os }} binaries
+      run: cibuildwheel --output-dir wheelhouse
+      env:
+        CIBW_BUILD: '${{ matrix.python-version }}-*'
+        # rust doesn't seem to be available for musl linux on i686
+        CIBW_SKIP: '*-musllinux_i686'
+        # we build for "alt_arch_name" if it exists, else 'auto'
+        CIBW_ARCHS: ${{ matrix.alt_arch_name || 'auto' }}
+        CIBW_ENVIRONMENT: 'PATH="$HOME/.cargo/bin:$PATH" CARGO_TERM_COLOR="always"'
+        CIBW_ENVIRONMENT_WINDOWS: 'PATH="$UserProfile\.cargo\bin;$PATH"'
+        CIBW_BEFORE_BUILD: rustup show
+        CIBW_BEFORE_BUILD_LINUX: >
+          curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain=stable --profile=minimal -y &&
+          rustup show
+        CIBW_TEST_COMMAND: 'pytest {project}/test'
+        CIBW_TEST_REQUIRES: pytest requests
+        CIBW_TEST_SKIP: '*-macosx_arm64 *-macosx_universal2:arm64'
+        CIBW_BUILD_VERBOSITY: 1
+
+    - run: ${{ matrix.ls || 'ls -lh' }} wheelhouse/
+
+    - run: twine check wheelhouse/*
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: wheels
+        path: wheelhouse
