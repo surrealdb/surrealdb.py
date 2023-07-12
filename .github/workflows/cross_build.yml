@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu, macos, windows]
-        python-version: ['cp310', 'pp37', 'pp38', 'pp39']
+        python-version: ['cp310', 'pp37', 'pp38', 'pp39', 'pp311']
         arch: [main, alt]
         include:
           - os: ubuntu
@@ -31,15 +31,15 @@ jobs:
         # exclude:
         #   - os: windows
         #     arch: alt
-        #   - os: macos
-        #     python-version: 'pp37'
-        #     arch: alt
-        #   - os: macos
-        #     python-version: 'pp38'
-        #     arch: alt
-        #   - os: macos
-        #     python-version: 'pp39'
-        #     arch: alt
+          - os: macos
+            python-version: 'pp37'
+            arch: alt
+          - os: macos
+            python-version: 'pp38'
+            arch: alt
+          - os: macos
+            python-version: 'pp39'
+            arch: alt
         #   - os: ubuntu
         #     arch: alt
 
