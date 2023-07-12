@@ -16,7 +16,7 @@ def install_libclang_mac():
     subprocess.run(["brew", "install", "llvm"], check=True)
 
 def install_libclang_linux():
-    distro = platform.dist()[0].lower()
+    distro = platform.linux_distribution()[0].lower()
     if distro in ["ubuntu", "debian"]:
         subprocess.run(["sudo", "apt-get", "install", "libclang-dev"], check=True)
     elif distro == "fedora":
@@ -31,7 +31,7 @@ def solve_libclang_error():
     
     if platform.system() == "Darwin":
         try:
-            libclang_path = subprocess.check_output(["ls", "/usr/local/lib/libclang.dylib"]).decode().strip()
+            libclang_path = subprocess.check_output(["brew", "--prefix", "llvm"]).decode().strip() + "/lib/libclang.dylib"
         except subprocess.CalledProcessError:
             install_libclang_mac()
             libclang_path = "/usr/local/opt/llvm/lib/libclang.dylib"
@@ -42,7 +42,7 @@ def solve_libclang_error():
             print("Libclang not found. Please install LLVM and set LIBCLANG_PATH manually.")
     elif platform.system() == "Linux":
         try:
-            libclang_path = subprocess.check_output(["ls", "/usr/lib/libclang.so"]).decode().strip()
+            libclang_path = subprocess.check_output(["find", "/usr", "-name", "libclang.so"]).decode().strip()
         except subprocess.CalledProcessError:
             install_libclang_linux()
             libclang_path = "/usr/lib/libclang.so"
@@ -55,6 +55,7 @@ def solve_libclang_error():
 
 # Run the script to solve the libclang error
 solve_libclang_error()
+
 
 
 setup(
