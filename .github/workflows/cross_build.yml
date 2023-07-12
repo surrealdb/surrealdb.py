@@ -5,117 +5,91 @@ on:
   push:
     branches:
       - rust-no-runtime
-    # tags:
-    #   - "v*.*.*"
+
 jobs:
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04, windows-2019, macOS-11]    
-    steps:
-      - uses: actions/checkout@v3
-    
-        # Used to host cibuildwheel
-      - uses: actions/setup-python@v3
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
-      - name: Install rust
-        uses: actions-rs/toolchain@v1
+    env:
+       CIBW_BUILD_VERBOSITY: 1
+       CIBW_BEFORE_ALL_LINUX: "curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain stable -y && yum install -y openssl-devel"
+       CIBW_BEFORE_BUILD_LINUX: "pip3 install --upgrade keyrings.alt"
+       CIBW_ARCHS_LINUX: "auto aarch64"
+       CIBW_ENVIRONMENT: 'PATH="$PATH:$HOME/.cargo/bin"'
+       CIBW_SKIP: "cp36-* cp37-* pp* *-win32 *-musllinux*"
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
           profile: minimal
+          toolchain: stable
           override: true
-    
+
+      - if: runner.os == 'Windows'
+        run: |
+            echo 'PATH=/c/Python38:/c/Python38/Scripts:/c/Strawberry/perl/site/bin:/c/Strawberry/perl/bin:/c/Strawberry/c/bin:$PATH' >> $GITHUB_ENV
+            echo 'RUSTFLAGS=-Ctarget-feature=+crt-static' >> $GITHUB_ENV
+            echo 'RUSTFLAGS=-Ctarget-feature=+crt-static' >> $GITHUB_ENV
+            echo 'CIBW_BEFORE_BUILD=python -m pip install --upgrade pip' >> $GITHUB_ENV
+
+      - if: runner.os != 'Linux'
+        run: |
+            echo "CIBW_SKIP=$CIBW_SKIP cp38-*" >> $GITHUB_ENV # Also skip Python 3.7 as build is too slow
+
+      - if: runner.os != 'Linux'
+        name: Setup env when not using docker
+        run: |
+          python -m pip install --upgrade wheel setuptools setuptools-rust
+
+      - if: runner.os == 'Linux'
+        name: Set up QEMU
+        id: qemu
+        uses: docker/setup-qemu-action@v1
+        with:
+          image: tonistiigi/binfmt:latest
+          platforms: arm64
+
+      - uses: actions/setup-python@v2
+        name: Install Python
+        with:
+          python-version: '3.7'
+
       - name: Install cibuildwheel
-        run: python -m pip install cibuildwheel==2.14.0
-    
+        run: |
+          python -m pip install cibuildwheel
+
       - name: Build wheels
         run: |
-          python -m pip install --upgrade pip
-          pip install setuptools_rust
           python -m cibuildwheel --output-dir wheelhouse
-            # to supply options, put them in 'env', like:
-            # env:
-            #   CIBW_SOME_OPTION: value
-    
-      - uses: actions/upload-artifact@v3
+
+      - uses: actions/upload-artifact@v2
         with:
           path: ./wheelhouse/*.whl
 
-# jobs:
-#   deploy:
-#     name: deploy
-#     # if: startsWith(github.ref, 'refs/tags/')
-#     runs-on: ${{ matrix.config.os }}
-#     strategy:
-#       matrix:
-#         config:
-#         #   - os: ubuntu-latest
-#         #     target: aarch64-unknown-linux-gnu
-#         #   - os: ubuntu-latest
-#         #     target: armv7-unknown-linux-gnueabihf
-#         #   - os: ubuntu-latest
-#         #     target: i686-unknown-linux-gnu
-#         #   - os: ubuntu-latest
-#         #     target: i686-unknown-linux-musl
-#         #   - os: ubuntu-latest
-#         #     target: arm-unknown-linux-gnueabi
-#         #   - os: ubuntu-latest
-#         #     target: x86_64-unknown-linux-gnu
-#           - os: ubuntu-latest
-#             target: x86_64-unknown-linux-musl
+  build_sdist:
+    name: Build source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
 
-#         #   - os: macOS-latest
-#         #     target: aarch64-apple-darwin
-#           - os: macOS-latest
-#             target: x86_64-apple-darwin
-#     steps:
-#       - name: Checkout
-#         uses: actions/checkout@v3
+      - uses: actions/setup-python@v2
+        name: Install Python
+        with:
+          python-version: '3.7'
 
-#       - name: extract the target
-#         shell: bash
-#         run: |
-#           input="${{ github.ref }}"
-#           version=${input##*/}
-#           version=${version#v}
-#           echo "Version: version"
-#           echo "##[set-output name=version;]$version"
+      - name: Install setuptools and setuptools-rust
+        run: |
+          python -m pip install --upgrade wheel setuptools setuptools-rust
 
-#       - name: Set up Python
-#         uses: actions/setup-python@v2
-#         with:
-#           python-version: 3.9
+      - name: Build sdist
+        run: python setup.py sdist
 
-#       - name: Update pip
-#         run: python -m pip install --upgrade pip
-
-#       - name: Install rust
-#         uses: actions-rs/toolchain@v1
-#         with:
-#           toolchain: stable
-#           profile: minimal
-#           override: true
-#           target: ${{ matrix.config.target }}
-
-#       - name: Build wheel package
-#         shell: bash
-#         run: |
-#           python -m pip install wheel
-#           pip install setuptools_rust
-#           python setup.py bdist_wheel --plat-name=${{ matrix.config.target }}
-    
-#       - name: Check the files are there
-#         run: |
-#           ls dist/*.whl
-#           echo "file=$(ls dist/)" >> $GITHUB_ENV
-#           pip install $(ls dist/*.whl)
-
-#       - name: Upload artifact
-#         uses: actions/upload-artifact@v2
-#         with:
-#           name: ${{ env.file }}
-#           path: dist/*.whl
-
- 
+      - uses: actions/upload-artifact@v2
+        with:
+          path: dist/*.tar.gz
