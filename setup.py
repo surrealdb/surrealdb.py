@@ -10,19 +10,24 @@ def set_libclang_path(libclang_path):
     if platform.system() == "Windows":
         os.environ["LIBCLANG_PATH"] = libclang_path
     else:
-        subprocess.run(["export", f"LIBCLANG_PATH={libclang_path}"], shell=True, check=True)
+        outcome = subprocess.run(["export", f"LIBCLANG_PATH={libclang_path}"], shell=True)
+        outcome.wait()
 
 def install_libclang_mac():
-    subprocess.run(["brew", "install", "llvm"], check=True)
+    outcome = subprocess.run(["brew", "install", "llvm"], shell=True)
+    outcome.wait()
 
 def install_libclang_linux():
     distro = platform.linux_distribution()[0].lower()
     if distro in ["ubuntu", "debian"]:
-        subprocess.run(["sudo", "apt-get", "install", "libclang-dev"], check=True)
+        outcome = subprocess.run(["sudo", "apt-get", "install", "libclang-dev"], shell=True)
+        outcome.wait()
     elif distro == "fedora":
-        subprocess.run(["sudo", "dnf", "install", "libclang-devel"], check=True)
+        outcome = subprocess.run(["sudo", "dnf", "install", "libclang-devel"], shell=True)
+        outcome.wait()
     elif distro == "arch":
-        subprocess.run(["sudo", "pacman", "-S", "clang"], check=True)
+        outcome = subprocess.run(["sudo", "pacman", "-S", "clang"], shell=True)
+        outcome.wait()
     else:
         print("Unsupported Linux distribution. Please install libclang manually.")
 
@@ -31,7 +36,7 @@ def solve_libclang_error():
     
     if platform.system() == "Darwin":
         try:
-            libclang_path = subprocess.check_output(["brew", "--prefix", "llvm"]).decode().strip() + "/lib/libclang.dylib"
+            libclang_path = subprocess.check_output(["brew", "--prefix", "llvm"], shell=True).decode().strip() + "/lib/libclang.dylib"
         except subprocess.CalledProcessError:
             install_libclang_mac()
             libclang_path = "/usr/local/opt/llvm/lib/libclang.dylib"
