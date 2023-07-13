@@ -28,7 +28,7 @@ jobs:
           - os: macos
             arch: alt
             alt_arch_name: 'arm64 universal2'
-        # exclude:
+        exclude:
         #   - os: windows
         #     arch: alt
           - os: macos
