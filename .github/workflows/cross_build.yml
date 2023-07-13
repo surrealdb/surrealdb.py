@@ -73,29 +73,30 @@ jobs:
         run: |
           python -m pip install wheel
           pip install setuptools_rust
+          echo "--plat-name=${{ matrix.config.target }}"
           python setup.py bdist_wheel --plat-name=${{ matrix.config.target }}
     
-      - name: Check the files are there
-        run: |
-          ls dist/*.whl
-          echo "file=$(ls dist/)" >> $GITHUB_ENV
-          echo "file_path=$(ls dist/*.whl)" >> $GITHUB_ENV
-          pip install $(ls dist/*.whl)
+#       - name: Check the files are there
+#         run: |
+#           ls dist/*.whl
+#           echo "file=$(ls dist/)" >> $GITHUB_ENV
+#           echo "file_path=$(ls dist/*.whl)" >> $GITHUB_ENV
+#           pip install $(ls dist/*.whl)
     
-      - name: Store Files in Cache
-        id: cache-files
-        uses: actions/cache@v3
-        with:
-          path: dist
-          key: ${{ env.file }}
+#       - name: Store Files in Cache
+#         id: cache-files
+#         uses: actions/cache@v3
+#         with:
+#           path: dist
+#           key: ${{ env.file }}
 
-  upload:
-    name: Upload Artifacts
-    needs: deploy
-    runs-on: ubuntu-latest
-    steps:
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: wheels
-          path: dist
+#   upload:
+#     name: Upload Artifacts
+#     needs: deploy
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Upload artifact
+#         uses: actions/upload-artifact@v3
+#         with:
+#           name: wheels
+#           path: dist
