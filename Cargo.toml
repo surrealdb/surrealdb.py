@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 # surrealdb = {git = "https://github.com/surrealdb/surrealdb", features = ["protocol-ws", "protocol-http", "kv-mem", "kv-rocksdb"], rev = "9cd25566ac2f202315aa29a090bfb50e5d76c4eb"}
-surrealdb = {git = "https://github.com/surrealdb/surrealdb", features = ["protocol-ws", "protocol-http", "kv-mem", "kv-rocksdb"], rev = "ee3a1c211fd1c1ddc513f0307fa374dbb551542b"}
+surrealdb = {git = "https://github.com/surrealdb/surrealdb", features = ["protocol-ws", "protocol-http", "kv-mem"], rev = "ee3a1c211fd1c1ddc513f0307fa374dbb551542b"}
 serde = "^1.0.164"
 tokio = { version = "1.29.1", features = ["full"] }
 once_cell = "^1.18.0"
