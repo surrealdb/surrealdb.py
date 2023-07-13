@@ -5,7 +5,18 @@ on:
   push:
     branches:
       - rust-no-runtime
-
+# def get_wheel_platform_tag(plat: str, arch: str) -> str:
+# # See https://packaging.python.org/specifications/platform-compatibility-tags/
+# if plat == "windows" and arch == "x86_64":
+#     return "win_amd64"
+# elif plat == "windows" and arch == "i386":
+#     return "win32"
+# elif plat == "linux" and arch == "x86_64":
+#     return "manylinux1_x86_64"
+# elif plat == "linux" and arch == "i386":
+#     return "manylinux1_i686"
+# elif plat == "macos" and arch == "x86_64":
+#     return "macosx_10_9_x86_64"
 
 jobs:
   deploy:
@@ -15,30 +26,45 @@ jobs:
     strategy:
       matrix:
         config:
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: armv7-unknown-linux-gnueabihf
-          - os: ubuntu-latest
-            target: i686-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: i686-unknown-linux-musl
-          - os: ubuntu-latest
-            target: arm-unknown-linux-gnueabi
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
+            - os: ubuntu-latest
+              target: manylinux1_x86_64
+            - os: ubuntu-latest
+              target: manylinux1_i686
+  
+            - os: macOS-latest
+              target: aarch64-apple-darwin
+            - os: macOS-latest
+              target: x86_64-apple-darwin
+  
+            - os: windows-latest
+              target: win_amd64
+            - os: windows-latest
+              target: win32
+        # config:
+        #   - os: ubuntu-latest
+        #     target: aarch64-unknown-linux-gnu
+        #   - os: ubuntu-latest
+        #     target: armv7-unknown-linux-gnueabihf
+        #   - os: ubuntu-latest
+        #     target: i686-unknown-linux-gnu
+        #   - os: ubuntu-latest
+        #     target: i686-unknown-linux-musl
+        #   - os: ubuntu-latest
+        #     target: arm-unknown-linux-gnueabi
+        #   - os: ubuntu-latest
+        #     target: x86_64-unknown-linux-gnu
+        #   - os: ubuntu-latest
+        #     target: x86_64-unknown-linux-musl
 
-          - os: macOS-latest
-            target: aarch64-apple-darwin
-          - os: macOS-latest
-            target: x86_64-apple-darwin
+        #   - os: macOS-latest
+        #     target: aarch64-apple-darwin
+        #   - os: macOS-latest
+        #     target: x86_64-apple-darwin
 
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-          - os: windows-latest
-            target: i686-pc-windows-msvc
+        #   - os: windows-latest
+        #     target: x86_64-pc-windows-msvc
+        #   - os: windows-latest
+        #     target: i686-pc-windows-msvc
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -74,14 +100,16 @@ jobs:
           python -m pip install wheel
           pip install setuptools_rust
           echo "--plat-name=${{ matrix.config.target }}"
-          python setup.py bdist_wheel --plat-name=${{ matrix.config.target }}
+          ARCHFLAGS="-arch x86_64 -arch arm64"
+          sh ./build-wheels.sh
+        #   python setup.py bdist_wheel --plat-name=${{ matrix.config.target }}
     
       - name: Check the files are there
         run: |
           ls dist/*.whl
           echo "file=$(ls dist/)" >> $GITHUB_ENV
           echo "file_path=$(ls dist/*.whl)" >> $GITHUB_ENV
-          pip install $(ls dist/*.whl)
+        #   pip install $(ls dist/*.whl)
     
 #       - name: Store Files in Cache
 #         id: cache-files
