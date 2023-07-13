@@ -5,110 +5,238 @@ on:
   push:
     branches:
       - rust-no-runtime
-# def get_wheel_platform_tag(plat: str, arch: str) -> str:
-# # See https://packaging.python.org/specifications/platform-compatibility-tags/
-# if plat == "windows" and arch == "x86_64":
-#     return "win_amd64"
-# elif plat == "windows" and arch == "i386":
-#     return "win32"
-# elif plat == "linux" and arch == "x86_64":
-#     return "manylinux1_x86_64"
-# elif plat == "linux" and arch == "i386":
-#     return "manylinux1_i686"
-# elif plat == "macos" and arch == "x86_64":
-#     return "macosx_10_9_x86_64"
-
 jobs:
-  deploy:
-    name: deploy
-    # if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ${{ matrix.config.os }}
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}  - ${{ matrix.vers }}
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        config:
-            - os: ubuntu-latest
-              target: manylinux1_x86_64
-            - os: ubuntu-latest
-              target: manylinux1_i686
-  
-            - os: macOS-latest
-              target: aarch64-apple-darwin
-            - os: macOS-latest
-              target: x86_64-apple-darwin
-  
-            - os: windows-latest
-              target: win_amd64
-            - os: windows-latest
-              target: win32
-        # config:
-        #   - os: ubuntu-latest
-        #     target: aarch64-unknown-linux-gnu
-        #   - os: ubuntu-latest
-        #     target: armv7-unknown-linux-gnueabihf
-        #   - os: ubuntu-latest
-        #     target: i686-unknown-linux-gnu
-        #   - os: ubuntu-latest
-        #     target: i686-unknown-linux-musl
-        #   - os: ubuntu-latest
-        #     target: arm-unknown-linux-gnueabi
-        #   - os: ubuntu-latest
-        #     target: x86_64-unknown-linux-gnu
-        #   - os: ubuntu-latest
-        #     target: x86_64-unknown-linux-musl
+        include:
+          - vers: i686
+            os: ubuntu-20.04
+          - vers: aarch64
+            os: ubuntu-20.04
+          - vers: auto64
+            os: ubuntu-20.04
+          - vers: arm64
+            os: macos-10.15
+          - vers: auto64
+            os: macos-10.15
+          - vers: auto64
+            os: windows-2019
 
-        #   - os: macOS-latest
-        #     target: aarch64-apple-darwin
-        #   - os: macOS-latest
-        #     target: x86_64-apple-darwin
+    env:
+      SCCACHE_VERSION: 0.2.13
+      CIBW_BEFORE_ALL_LINUX: "curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain stable -y && yum install -y openssl-devel"
+      CIBW_BUILD_VERBOSITY: "1" # Make some more noise so that travis doesn't stall
+      CIBW_ENVIRONMENT: 'PATH="$PATH:$HOME/.cargo/bin"'
+      CIBW_SKIP: "cp27-* cp34-* cp35-* pp* *-win32"
 
-        #   - os: windows-latest
-        #     target: x86_64-pc-windows-msvc
-        #   - os: windows-latest
-        #     target: i686-pc-windows-msvc
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v2
 
-      - name: extract the target
-        shell: bash
-        run: |
-          input="${{ github.ref }}"
-          version=${input##*/}
-          version=${version#v}
-          echo "Version: version"
-          echo "##[set-output name=version;]$version"
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v2
+        name: Install Python
         with:
-          python-version: "3.10"
+          python-version: "3.8"
 
-      - name: Update pip
-        run: python -m pip install --upgrade pip
+      - name: Install Visual C++ for Python 2.7
+        if: runner.os == 'Windows'
+        run: choco install vcpython27 -f -y
+
+      - name: Set up QEMU
+        if: runner.os == 'Linux'
+        uses: docker/setup-qemu-action@v1
+        with:
+          platforms: all
+
+      - name: wheels Linux ${{ matrix.vers }}
+        if: runner.os == 'Linux'
+        uses: joerick/cibuildwheel@v1.10.0
+        env:
+          CIBW_ARCHS_LINUX: ${{ matrix.vers }}
+
+      - name: wheels Macos ${{ matrix.vers }}
+        if: runner.os == 'Macos'
+        uses: joerick/cibuildwheel@v1.10.0
+        env:
+          CIBW_ARCHS_MACOS: ${{ matrix.vers }}
+
+      - name: wheels Windows ${{ matrix.vers }}
+        if: runner.os == 'Windows'
+        uses: joerick/cibuildwheel@v1.10.0
+        env:
+          CIBW_ARCHS_WINDOWS: ${{ matrix.vers }}
+
+      - uses: actions/upload-artifact@v2
+        with:
+          path: ./wheelhouse/*.whl
+
+  build_sdist:
+    name: Build source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
 
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           profile: minimal
-          override: true
-          target: ${{ matrix.config.target }}
 
-      - name: Build wheel package
-        shell: bash
+      - uses: actions/setup-python@v2
+        name: Install Python
+        with:
+          python-version: "3.8"
+
+      - name: Build sdist
         run: |
-          python -m pip install wheel
-          pip install setuptools_rust
-          echo "--plat-name=${{ matrix.config.target }}"
-          ARCHFLAGS="-arch x86_64 -arch arm64"
-          sh ./build-wheels.sh
-        #   python setup.py bdist_wheel --plat-name=${{ matrix.config.target }}
+          python -m pip install setuptools-rust setuptools wheel
+          python setup.py sdist
+
+      - uses: actions/upload-artifact@v2
+        with:
+          path: dist/*.tar.gz
+#   release:
+#     needs: [build_wheels, build_sdist]
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/download-artifact@v2
+#         with:
+#           name: artifact
+#           path: dist
+
+#       - name: Release
+#         uses: softprops/action-gh-release@v1
+#         with:
+#           body: |
+#             view the CHANGELOG.md for full changes
+#           files: |
+#             dist/*
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#       - uses: pypa/gh-action-pypi-publish@master
+#         with:
+#           user: __token__
+#           password: ${{ secrets.pypi_password }}
+
+
+
+
+
+
+# name: cross-build
+
+# on:
+#   pull_request:
+#   push:
+#     branches:
+#       - rust-no-runtime
+# # def get_wheel_platform_tag(plat: str, arch: str) -> str:
+# # # See https://packaging.python.org/specifications/platform-compatibility-tags/
+# # if plat == "windows" and arch == "x86_64":
+# #     return "win_amd64"
+# # elif plat == "windows" and arch == "i386":
+# #     return "win32"
+# # elif plat == "linux" and arch == "x86_64":
+# #     return "manylinux1_x86_64"
+# # elif plat == "linux" and arch == "i386":
+# #     return "manylinux1_i686"
+# # elif plat == "macos" and arch == "x86_64":
+# #     return "macosx_10_9_x86_64"
+
+# jobs:
+#   deploy:
+#     name: deploy
+#     # if: startsWith(github.ref, 'refs/tags/')
+#     runs-on: ${{ matrix.config.os }}
+#     strategy:
+#       matrix:
+#         config:
+#             - os: ubuntu-latest
+#               target: manylinux1_x86_64
+#             - os: ubuntu-latest
+#               target: manylinux1_i686
+  
+#             - os: macOS-latest
+#               target: aarch64-apple-darwin
+#             - os: macOS-latest
+#               target: x86_64-apple-darwin
+  
+#             - os: windows-latest
+#               target: win_amd64
+#             - os: windows-latest
+#               target: win32
+#         # config:
+#         #   - os: ubuntu-latest
+#         #     target: aarch64-unknown-linux-gnu
+#         #   - os: ubuntu-latest
+#         #     target: armv7-unknown-linux-gnueabihf
+#         #   - os: ubuntu-latest
+#         #     target: i686-unknown-linux-gnu
+#         #   - os: ubuntu-latest
+#         #     target: i686-unknown-linux-musl
+#         #   - os: ubuntu-latest
+#         #     target: arm-unknown-linux-gnueabi
+#         #   - os: ubuntu-latest
+#         #     target: x86_64-unknown-linux-gnu
+#         #   - os: ubuntu-latest
+#         #     target: x86_64-unknown-linux-musl
+
+#         #   - os: macOS-latest
+#         #     target: aarch64-apple-darwin
+#         #   - os: macOS-latest
+#         #     target: x86_64-apple-darwin
+
+#         #   - os: windows-latest
+#         #     target: x86_64-pc-windows-msvc
+#         #   - os: windows-latest
+#         #     target: i686-pc-windows-msvc
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v3
+
+#       - name: extract the target
+#         shell: bash
+#         run: |
+#           input="${{ github.ref }}"
+#           version=${input##*/}
+#           version=${version#v}
+#           echo "Version: version"
+#           echo "##[set-output name=version;]$version"
+
+#       - name: Set up Python
+#         uses: actions/setup-python@v4
+#         with:
+#           python-version: "3.10"
+
+#       - name: Update pip
+#         run: python -m pip install --upgrade pip
+
+#       - name: Install rust
+#         uses: actions-rs/toolchain@v1
+#         with:
+#           toolchain: stable
+#           profile: minimal
+#           override: true
+#           target: ${{ matrix.config.target }}
+
+#       - name: Build wheel package
+#         shell: bash
+#         run: |
+#           python -m pip install wheel
+#           pip install setuptools_rust
+#           echo "--plat-name=${{ matrix.config.target }}"
+#           ARCHFLAGS="-arch x86_64 -arch arm64"
+#           sh ./build-wheels.sh
+#         #   python setup.py bdist_wheel --plat-name=${{ matrix.config.target }}
     
-      - name: Check the files are there
-        run: |
-          ls dist/*.whl
-          echo "file=$(ls dist/)" >> $GITHUB_ENV
-          echo "file_path=$(ls dist/*.whl)" >> $GITHUB_ENV
+#       - name: Check the files are there
+#         run: |
+#           ls dist/*.whl
+#           echo "file=$(ls dist/)" >> $GITHUB_ENV
+#           echo "file_path=$(ls dist/*.whl)" >> $GITHUB_ENV
         #   pip install $(ls dist/*.whl)
     
 #       - name: Store Files in Cache
