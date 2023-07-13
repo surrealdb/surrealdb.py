@@ -74,7 +74,7 @@ jobs:
           python -m pip install wheel
           pip install setuptools_rust
           echo "--plat-name=${{ matrix.config.target }}"
-          python setup.py bdist_wheel --plat-name=${{ matrix.config.target }}
+        #   python setup.py bdist_wheel --plat-name=${{ matrix.config.target }}
     
 #       - name: Check the files are there
 #         run: |
