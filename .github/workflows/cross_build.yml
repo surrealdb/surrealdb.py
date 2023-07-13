@@ -89,6 +89,11 @@ jobs:
           path: dist
           key: ${{ env.file }}
 
+  upload:
+    name: Upload Artifacts
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
