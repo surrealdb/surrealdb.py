@@ -30,7 +30,7 @@ print(f"llvm version: {llvm_version}")
 
 print("configuring llvm...")
 # exporting the path of llvm
-export_command = f"export PATH=$PATH:/usr/lib/llvm-{llvm_version}/bin/"
+export_command = f"export PATH=$PATH:/usr/lib/llvm-13/bin/"
 export_path = subprocess.Popen([export_command], shell=True)
 export_path.wait()
 print("configuring llvm... Done")
@@ -40,7 +40,7 @@ print("installing clang...")
 llvm_lib_path = subprocess.check_output(["llvm-config", "--libdir"]).decode().strip()
 
 # Set the LIBCLANG_PATH environment variable
-os.environ["LIBCLANG_PATH"] = llvm_lib_path
+os.environ["LIBCLANG_PATH"] = "/usr/lib/llvm-13/bin/"
 print("installing clang... Done")
 
 
