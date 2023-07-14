@@ -21,7 +21,8 @@ jobs:
         os: [ubuntu]
         # python-version: ['cp310', 'pp37', 'pp38', 'pp39']
         python-version: ['cp310', 'pp39']
-        arch: [main, alt]
+        # arch: [main, alt]
+        arch: [main]
         include:
           - os: ubuntu
             platform: linux
