@@ -22,11 +22,11 @@ print(f"user_lib_ls: {user_lib_ls}")
 # install_llvm.wait()
 # print("Installing llvmlite... Done")
 
-print("getting llvm version...")
+# print("getting llvm version...")
 # getting the version of llvm
-llvm_version: str = subprocess.check_output(["dpkg -l | grep llvm"]).decode().strip()
-print("getting llvm version... Done")
-print(f"llvm version: {llvm_version}")
+# llvm_version: str = subprocess.check_output(["dpkg -l | grep llvm"]).decode().strip()
+# print("getting llvm version... Done")
+# print(f"llvm version: {llvm_version}")
 
 print("configuring llvm...")
 # exporting the path of llvm
