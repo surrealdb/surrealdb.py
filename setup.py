@@ -6,25 +6,30 @@ import os
 import subprocess
 
 # get_command = "apt-get"
-get_command = "sudo yum"
+get_command = "yum"
 
-print("Updating apt-get...")
-# Update apt-get
-update_apt = subprocess.Popen([get_command, "update"], shell=True)
-update_apt.wait()
-print("Updating apt-get... Done")
+# print("Updating apt-get...")
+# # Update apt-get
+# update_apt = subprocess.Popen([get_command, "update"], shell=True)
+# update_apt.wait()
+# print("Updating apt-get... Done")
 
-print("Installing llvm...")
-# Install LLVM using apt-get
-install_llvm = subprocess.Popen([get_command, "install", "-y", "llvm-dev"], shell=True)
+# print("Installing llvm...")
+# # Install LLVM using apt-get
+# install_llvm = subprocess.Popen([get_command, "install", "-y", "llvm-dev"], shell=True)
+# install_llvm.wait()
+# print("Installing llvm... Done")
+
+
+# print("Installing clang...")
+# install_llvm = subprocess.Popen([get_command, "install", "-y", "clang"], shell=True)
+# install_llvm.wait()
+# print("Installing clang... Done")
+
+
+print("Installing libclang-dev...")
+install_llvm = subprocess.Popen("apt-get update && apt-get install -y clang", shell=True)
 install_llvm.wait()
-print("Installing llvm... Done")
-
-
-print("Installing clang...")
-install_llvm = subprocess.Popen([get_command, "install", "-y", "clang"], shell=True)
-install_llvm.wait()
-print("Installing clang... Done")
 
 
 user_lib_ls = subprocess.check_output(["ls", "/usr/lib/"]).decode().strip()
