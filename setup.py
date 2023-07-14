@@ -44,6 +44,7 @@ for pattern in file_patterns:
     matching_files = glob.glob(pattern)
     file_paths.extend(matching_files)
 
+print("file_paths from python:")
 for i in file_paths:
     print(i)
 
