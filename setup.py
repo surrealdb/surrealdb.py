@@ -2,14 +2,17 @@
 from setuptools import setup
 from setuptools_rust import Binding, RustExtension
 
-# import subprocess
-# import sys
+import os
+import subprocess
 
-# def install_package(package):
-#     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+# Install LLVM using pip
+subprocess.run(["pip", "install", "llvmlite"])
 
+# Get the LLVM library path
+llvm_lib_path = subprocess.check_output(["llvm-config", "--libdir"]).decode().strip()
 
-# install_package("libclang")
+# Set the LIBCLANG_PATH environment variable
+os.environ["LIBCLANG_PATH"] = llvm_lib_path
 
 
 setup(
