@@ -6,7 +6,7 @@ import os
 import subprocess
 
 # get_command = "apt-get"
-get_command = "yum"
+get_command = "sudo yum"
 
 print("Updating apt-get...")
 # Update apt-get
