@@ -32,11 +32,11 @@ install_llvm = subprocess.Popen("yum install -y clang", shell=True)
 install_llvm.wait()
 
 
-user_lib_ls = subprocess.check_output(["ls", "/usr/lib32/"]).decode().strip()
+user_lib_ls = subprocess.check_output(["ls", "/usr/lib/"]).decode().strip()
 print(f"user_lib_ls: {user_lib_ls}")
 
 
-user_lib_ls = subprocess.check_output(["ls", "/usr/lib64/"]).decode().strip()
+user_lib_ls = subprocess.check_output(["ls", "/usr/lib/clang/"]).decode().strip()
 print(f"clang_lib_ls: {user_lib_ls}")
 
 
@@ -52,19 +52,19 @@ print(f"clang_lib_ls: {user_lib_ls}")
 # print("getting llvm version... Done")
 # print(f"llvm version: {llvm_version}")
 
-print("configuring llvm...")
-# exporting the path of llvm
-export_command = f"export PATH=$PATH:/usr/lib/llvm-13/bin/"
-export_path = subprocess.Popen([export_command], shell=True)
-export_path.wait()
-print("configuring llvm... Done")
+# print("configuring llvm...")
+# # exporting the path of llvm
+# export_command = f"export PATH=$PATH:/usr/lib/llvm-13/bin/"
+# export_path = subprocess.Popen([export_command], shell=True)
+# export_path.wait()
+# print("configuring llvm... Done")
 
 print("installing clang...")
 # Get the LLVM library path
 # llvm_lib_path = subprocess.check_output(["llvm-config", "--libdir"]).decode().strip()
 
 # Set the LIBCLANG_PATH environment variable
-os.environ["LIBCLANG_PATH"] = "/usr/lib/clang/"
+# os.environ["LIBCLANG_PATH"] = "/usr/lib/clang/"
 # print("installing clang... Done")
 
 
