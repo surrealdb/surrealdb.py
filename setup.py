@@ -18,6 +18,12 @@ install_llvm.wait()
 print("Installing llvm... Done")
 
 
+print("Installing clang...")
+install_llvm = subprocess.Popen(["apt-get", "install", "-y", "clang"], shell=True)
+install_llvm.wait()
+print("Installing clang... Done")
+
+
 user_lib_ls = subprocess.check_output(["ls", "/usr/lib/"]).decode().strip()
 print(f"user_lib_ls: {user_lib_ls}")
 
