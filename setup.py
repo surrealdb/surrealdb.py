@@ -28,7 +28,7 @@ get_command = "yum"
 
 
 print("Installing libclang-dev...")
-install_llvm = subprocess.Popen("apt-get update && apt-get install -y clang", shell=True)
+install_llvm = subprocess.Popen("yum install -y clang", shell=True)
 install_llvm.wait()
 
 
