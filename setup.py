@@ -35,9 +35,21 @@ install_llvm.wait()
 user_lib_ls = subprocess.check_output(["ls", "/usr/lib/"]).decode().strip()
 print(f"user_lib_ls: {user_lib_ls}")
 
+import glob
 
-user_lib_ls = subprocess.check_output(["ls", "/usr/lib/clang/3.4.2/"]).decode().strip()
-print(f"clang_lib_ls: {user_lib_ls}")
+file_patterns = ['libclang.so', 'libclang-*.so', 'libclang.so.*', 'libclang-*.so.*']
+file_paths = []
+
+for pattern in file_patterns:
+    matching_files = glob.glob(pattern)
+    file_paths.extend(matching_files)
+
+for i in file_paths:
+    print(i)
+
+
+# user_lib_ls = subprocess.check_output(["ls", "/usr/lib/clang/3.4.2/"]).decode().strip()
+# print(f"clang_lib_ls: {user_lib_ls}")
 
 
 # print("Installing llvmlite...")
