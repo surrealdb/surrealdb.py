@@ -12,7 +12,7 @@ install_pip.wait()
 print("Installing llvm... Done")
 
 
-user_lib_ls = subprocess.check_output(["ls", "/usr/lib/"]).decode().strip()
+user_lib_ls = subprocess.check_output(["ls", "/usr/lib/llvm-13/"]).decode().strip()
 print(f"user_lib_ls: {user_lib_ls}")
 
 
