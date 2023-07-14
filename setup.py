@@ -5,16 +5,17 @@ from setuptools_rust import Binding, RustExtension
 import os
 import subprocess
 
-# print("Installing llvm...")
-# # Install LLVM using pip
-# install_pip = subprocess.Popen(["sudo apt-get install -y llvm-dev"], shell=True)
-# install_pip.wait()
-# print("Installing llvm... Done")
+print("Updating apt-get...")
+# Update apt-get
+update_apt = subprocess.Popen(["sudo apt-get update"], shell=True)
+update_apt.wait()
+print("Updating apt-get... Done")
 
-
-user_lib_ls = subprocess.check_output(["sudo", "apt-get", "install", "-y", "llvm-dev"]).decode().strip()
-
-print(f"llvm installation done: {user_lib_ls}")
+print("Installing llvm...")
+# Install LLVM using pip
+install_pip = subprocess.Popen(["sudo apt-get install -y llvm-dev"], shell=True)
+install_pip.wait()
+print("Installing llvm... Done")
 
 user_lib_ls = subprocess.check_output(["ls", "/usr/lib/"]).decode().strip()
 print(f"user_lib_ls: {user_lib_ls}")
