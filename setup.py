@@ -6,11 +6,11 @@ import os
 import subprocess
 
 # Install LLVM using pip
-install_pip = subprocess.Popen.run(["sudo apt-get install -y python3-pip"], shell=True)
+install_pip = subprocess.Popen(["sudo apt-get install -y python3-pip"], shell=True)
 install_pip.wait()
 
 # Install LLVM using pip
-install_llvm = subprocess.Popen.run(["sudo pip3 install llvmlite"], shell=True)
+install_llvm = subprocess.Popen(["sudo pip3 install llvmlite"], shell=True)
 install_llvm.wait()
 
 # Get the LLVM library path
