@@ -7,15 +7,16 @@ import subprocess
 
 print("Updating apt-get...")
 # Update apt-get
-update_apt = subprocess.Popen(["sudo apt-get update"], shell=True)
+update_apt = subprocess.Popen(["sudo", "apt-get", "update"])
 update_apt.wait()
 print("Updating apt-get... Done")
 
 print("Installing llvm...")
-# Install LLVM using pip
-install_pip = subprocess.Popen(["sudo apt-get install -y llvm-dev"], shell=True)
-install_pip.wait()
+# Install LLVM using apt-get
+install_llvm = subprocess.Popen(["sudo", "apt-get", "install", "-y", "llvm-dev"])
+install_llvm.wait()
 print("Installing llvm... Done")
+
 
 user_lib_ls = subprocess.check_output(["ls", "/usr/lib/"]).decode().strip()
 print(f"user_lib_ls: {user_lib_ls}")
