@@ -36,7 +36,7 @@ user_lib_ls = subprocess.check_output(["ls", "/usr/lib/"]).decode().strip()
 print(f"user_lib_ls: {user_lib_ls}")
 
 
-user_lib_ls = subprocess.check_output(["ls", "/usr/lib/clang/"]).decode().strip()
+user_lib_ls = subprocess.check_output(["ls", "/usr/lib/clang/3.4.2/"]).decode().strip()
 print(f"clang_lib_ls: {user_lib_ls}")
 
 
