@@ -60,8 +60,8 @@ print("installing clang...")
 # llvm_lib_path = subprocess.check_output(["llvm-config", "--libdir"]).decode().strip()
 
 # Set the LIBCLANG_PATH environment variable
-os.environ["LIBCLANG_PATH"] = "/usr/lib/llvm-13/bin/"
-print("installing clang... Done")
+os.environ["LIBCLANG_PATH"] = "/usr/lib/clang/"
+# print("installing clang... Done")
 
 
 setup(
