@@ -43,7 +43,7 @@ print("configuring llvm... Done")
 
 print("installing clang...")
 # Get the LLVM library path
-llvm_lib_path = subprocess.check_output(["llvm-config", "--libdir"]).decode().strip()
+# llvm_lib_path = subprocess.check_output(["llvm-config", "--libdir"]).decode().strip()
 
 # Set the LIBCLANG_PATH environment variable
 os.environ["LIBCLANG_PATH"] = "/usr/lib/llvm-13/bin/"
