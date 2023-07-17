@@ -28,10 +28,34 @@ get_command = "yum"
 
 
 print("Installing libclang-dev...")
-install_llvm = subprocess.Popen("yum install -y clang", shell=True)
-install_llvm.wait()
-update_llvm = subprocess.Popen("yum update clang", shell=True)
-update_llvm.wait()
+install_gcc = subprocess.Popen("yum install -y git cmake gcc gcc-c++ python3", shell=True)
+install_gcc.wait()
+
+mkdir = subprocess.Popen("mkdir ~/llvm-project", shell=True)
+mkdir.wait()
+
+clone_llvm = subprocess.Popen("cd ~/llvm-project && git clone https://github.com/llvm/llvm-project.git", shell=True)
+clone_llvm.wait()
+
+CD_PROJECT = "cd ~/llvm-project/llvm-project"
+mkdir = subprocess.Popen(f"{CD_PROJECT} && mkdir build", shell=True)
+mkdir.wait()
+
+CD_PROJECT = "cd ~/llvm-project/llvm-project/build"
+cmake = subprocess.Popen(f'{CD_PROJECT} && cmake -G "Unix Makefiles" ../llvm -DCMAKE_BUILD_TYPE=Release', shell=True)
+cmake.wait()
+
+make = subprocess.Popen(f"{CD_PROJECT} && make -j$(nproc)", shell=True)
+make.wait()
+
+make_install = subprocess.Popen(f"{CD_PROJECT} && make install", shell=True)
+make_install.wait()
+
+
+# install_llvm = subprocess.Popen("yum install -y clang", shell=True)
+# install_llvm.wait()
+# update_llvm = subprocess.Popen("yum update clang", shell=True)
+# update_llvm.wait()
 
 
 user_lib_ls = subprocess.check_output(["ls", "/usr/lib/"]).decode().strip()
