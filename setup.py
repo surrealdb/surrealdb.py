@@ -35,6 +35,9 @@ install_llvm.wait()
 user_lib_ls = subprocess.check_output(["ls", "/usr/lib/"]).decode().strip()
 print(f"user_lib_ls: {user_lib_ls}")
 
+clang_version = subprocess.check_output(["clang", "--version"]).decode().strip()
+print(f"\n\n\n\n\nclang_version: {clang_version}\n\n\n\n\n")
+
 import glob
 
 file_patterns = ['libclang.so', 'libclang-*.so', 'libclang.so.*', 'libclang-*.so.*']
