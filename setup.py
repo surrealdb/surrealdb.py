@@ -30,6 +30,8 @@ get_command = "yum"
 print("Installing libclang-dev...")
 install_llvm = subprocess.Popen("yum install -y clang", shell=True)
 install_llvm.wait()
+update_llvm = subprocess.Popen("yum update clang", shell=True)
+update_llvm.wait()
 
 
 user_lib_ls = subprocess.check_output(["ls", "/usr/lib/"]).decode().strip()
