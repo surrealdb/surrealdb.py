@@ -67,6 +67,7 @@ jobs:
         run: |
           python -m pip install wheel
           pip install setuptools_rust
+          apt install -y libclang-dev
           python setup.py bdist_wheel --plat-name=${{ matrix.config.target }}
     
       - name: Check the files are there
