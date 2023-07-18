@@ -118,7 +118,7 @@ print("installing clang...")
 # llvm_lib_path = subprocess.check_output(["llvm-config", "--libdir"]).decode().strip()
 
 # Set the LIBCLANG_PATH environment variable
-os.environ["LIBCLANG_PATH"] = "/usr/lib/clang/"
+os.environ["LIBCLANG_PATH"] = "/usr/lib/clang"
 # print("installing clang... Done")
 
 
