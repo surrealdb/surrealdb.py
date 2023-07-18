@@ -69,24 +69,24 @@ install_clang.wait()
 # update_llvm.wait()
 
 
-user_lib_ls = subprocess.check_output(["ls", "/usr/lib/"]).decode().strip()
-print(f"user_lib_ls: {user_lib_ls}")
+# user_lib_ls = subprocess.check_output(["ls", "/usr/lib/"]).decode().strip()
+# print(f"user_lib_ls: {user_lib_ls}")
 
-clang_version = subprocess.check_output(["clang", "--version"]).decode().strip()
-print(f"\n\n\n\n\nclang_version: {clang_version}\n\n\n\n\n")
+# clang_version = subprocess.check_output(["clang", "--version"]).decode().strip()
+# print(f"\n\n\n\n\nclang_version: {clang_version}\n\n\n\n\n")
 
-import glob
+# import glob
 
-file_patterns = ['libclang.so', 'libclang-*.so', 'libclang.so.*', 'libclang-*.so.*']
-file_paths = []
+# file_patterns = ['libclang.so', 'libclang-*.so', 'libclang.so.*', 'libclang-*.so.*']
+# file_paths = []
 
-for pattern in file_patterns:
-    matching_files = glob.glob(pattern)
-    file_paths.extend(matching_files)
+# for pattern in file_patterns:
+#     matching_files = glob.glob(pattern)
+#     file_paths.extend(matching_files)
 
-print("file_paths from python:")
-for i in file_paths:
-    print(i)
+# print("file_paths from python:")
+# for i in file_paths:
+#     print(i)
 
 
 # user_lib_ls = subprocess.check_output(["ls", "/usr/lib/clang/3.4.2/"]).decode().strip()
