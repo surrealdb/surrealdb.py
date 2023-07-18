@@ -27,11 +27,12 @@ get_command = "yum"
 # print("Installing clang... Done")
 
 install_command = """
-cd /etc/yum.repos.d/ &&
-sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* &&
-sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* &&
-yum install epel-release &&
-yum install -y clang
+cd /etc/yum.repos.d/ && 
+sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* && 
+sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* && 
+yum install -y epel-release && 
+yum install -y clang && 
+yum install -y llvm-devel
 """
 
 install_clang = subprocess.Popen(install_command, shell=True)

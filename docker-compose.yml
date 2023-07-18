@@ -1,11 +1,20 @@
+# version: '3'
+# services:
+#   surrealdb:
+#     image: surrealdb/surrealdb
+#     command: "start"
+#     environment:
+#       - SURREAL_USER=root
+#       - SURREAL_PASS=root
+#       - SURREAL_LOG=trace
+#     ports:
+#       - 8000:8000
+
+
 version: '3'
 services:
-  surrealdb:
-    image: surrealdb/surrealdb
-    command: "start"
-    environment:
-      - SURREAL_USER=root
-      - SURREAL_PASS=root
-      - SURREAL_LOG=trace
+  test_package_build:
+    build: .
+    container_name: package_build
     ports:
-      - 8000:8000
+      - 18000:18000
