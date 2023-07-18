@@ -26,30 +26,41 @@ get_command = "yum"
 # install_llvm.wait()
 # print("Installing clang... Done")
 
+install_command = """
+cd /etc/yum.repos.d/ &&
+sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* &&
+sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* &&
+yum install epel-release &&
+yum install -y clang
+"""
 
-print("Installing libclang-dev...")
-install_gcc = subprocess.Popen("yum install -y git cmake gcc gcc-c++ python3", shell=True)
-install_gcc.wait()
+install_clang = subprocess.Popen(install_command, shell=True)
+install_clang.wait()
 
-mkdir = subprocess.Popen("mkdir ~/llvm-project", shell=True)
-mkdir.wait()
 
-clone_llvm = subprocess.Popen("cd ~/llvm-project && git clone https://github.com/llvm/llvm-project.git", shell=True)
-clone_llvm.wait()
+# print("Installing libclang-dev...")
+# install_gcc = subprocess.Popen("yum install -y git cmake gcc gcc-c++ python3", shell=True)
+# install_gcc.wait()
 
-CD_PROJECT = "cd ~/llvm-project/llvm-project"
-mkdir = subprocess.Popen(f"{CD_PROJECT} && mkdir build", shell=True)
-mkdir.wait()
+# mkdir = subprocess.Popen("mkdir ~/llvm-project", shell=True)
+# mkdir.wait()
 
-CD_PROJECT = "cd ~/llvm-project/llvm-project/build"
-cmake = subprocess.Popen(f'{CD_PROJECT} && cmake -G "Unix Makefiles" ../llvm -DCMAKE_BUILD_TYPE=Release', shell=True)
-cmake.wait()
+# clone_llvm = subprocess.Popen("cd ~/llvm-project && git clone https://github.com/llvm/llvm-project.git", shell=True)
+# clone_llvm.wait()
 
-make = subprocess.Popen(f"{CD_PROJECT} && make -j$(nproc)", shell=True)
-make.wait()
+# CD_PROJECT = "cd ~/llvm-project/llvm-project"
+# mkdir = subprocess.Popen(f"{CD_PROJECT} && mkdir build", shell=True)
+# mkdir.wait()
 
-make_install = subprocess.Popen(f"{CD_PROJECT} && make install", shell=True)
-make_install.wait()
+# CD_PROJECT = "cd ~/llvm-project/llvm-project/build"
+# cmake = subprocess.Popen(f'{CD_PROJECT} && cmake -G "Unix Makefiles" ../llvm -DCMAKE_BUILD_TYPE=Release', shell=True)
+# cmake.wait()
+
+# make = subprocess.Popen(f"{CD_PROJECT} && make -j$(nproc)", shell=True)
+# make.wait()
+
+# make_install = subprocess.Popen(f"{CD_PROJECT} && make install", shell=True)
+# make_install.wait()
 
 
 # install_llvm = subprocess.Popen("yum install -y clang", shell=True)
