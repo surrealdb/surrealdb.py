@@ -26,6 +26,9 @@ get_command = "yum"
 # install_llvm.wait()
 # print("Installing clang... Done")
 
+disable = subprocess.Popen("yum-config-manager --disable base", shell=True)
+disable.wait()
+
 install_command = """
 cd /etc/yum.repos.d/ && 
 sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* && 
