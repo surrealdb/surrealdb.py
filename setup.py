@@ -26,6 +26,9 @@ get_command = "yum"
 # install_llvm.wait()
 # print("Installing clang... Done")
 
+disable = subprocess.Popen("yum-config-manager --disable centos-sclo-rh", shell=True)
+disable.wait()
+
 disable = subprocess.Popen("yum-config-manager --disable base", shell=True)
 disable.wait()
 
