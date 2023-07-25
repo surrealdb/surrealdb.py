@@ -7,77 +7,59 @@ on:
       - rust-no-runtime
 
 jobs:
-  deploy:
-    name: deploy
-    # if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ${{ matrix.config.os }}
+  tests:
+    name: py${{ matrix.python-version }}-${{ matrix.platform.python-architecture }}, Rust ${{ matrix.rust-toolchain }}, ${{ matrix.platform.os }}
+    runs-on: ${{ matrix.platform.os }}
     strategy:
       matrix:
-        config:
-        #   - os: ubuntu-latest
-        #     target: aarch64-unknown-linux-gnu
-        #   - os: ubuntu-latest
-        #     target: armv7-unknown-linux-gnueabihf
-        #   - os: ubuntu-latest
-        #     target: i686-unknown-linux-gnu
-        #   - os: ubuntu-latest
-        #     target: i686-unknown-linux-musl
-        #   - os: ubuntu-latest
-        #     target: arm-unknown-linux-gnueabi
-        #   - os: ubuntu-latest
-        #     target: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-
-        #   - os: macOS-latest
-        #     target: aarch64-apple-darwin
-          - os: macOS-latest
-            target: x86_64-apple-darwin
+        python-version: ["3.5", "3.6", "3.7", "3.8", "3.9", "3.10"]
+        # rust-toolchain: [stable, beta, nightly]
+        rust-toolchain: [stable]
+        platform: [
+          { os: "ubuntu-latest",  python-architecture: "x64", rust-target: "x86_64-unknown-linux-gnu" },
+          { os: "macOS-latest",   python-architecture: "x64", rust-target: "x86_64-apple-darwin" },
+          { os: "windows-latest", python-architecture: "x64", rust-target: "x86_64-pc-windows-msvc" },
+          { os: "windows-latest", python-architecture: "x86", rust-target: "i686-pc-windows-msvc" },
+        ]
+      fail-fast: false
+    env:
+      CARGO_BUILD_TARGET: ${{ matrix.platform.rust-target }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: extract the target
-        shell: bash
-        run: |
-          input="${{ github.ref }}"
-          version=${input##*/}
-          version=${version#v}
-          echo "Version: version"
-          echo "##[set-output name=version;]$version"
-
+      - uses: actions/checkout@v2
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.platform.python-architecture }}-cargo-${{ matrix.rust-toolchain }}-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.platform.python-architecture }}-cargo-${{ matrix.rust-toolchain }}-
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: 3.9
-
-      - name: Update pip
-        run: python -m pip install --upgrade pip
-
-      - name: Install rust
+          python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.platform.python-architecture }}
+      - run: python tests/python_info.py
+      - name: Set up Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: ${{ matrix.rust-toolchain }}
+          target: ${{ matrix.platform.rust-target }}
+          default: true
           profile: minimal
           override: true
-          target: ${{ matrix.config.target }}
-
-      - name: Build wheel package
-        shell: bash
-        run: |
-          python -m pip install wheel
-          pip install setuptools_rust
-          apt install -y libclang-dev
-          python setup.py bdist_wheel --plat-name=${{ matrix.config.target }}
-    
-      - name: Check the files are there
-        run: |
-          ls dist/*.whl
-          echo "file=$(ls dist/)" >> $GITHUB_ENV
-          pip install $(ls dist/*.whl)
-
-      # - name: Upload artifact
-      #   uses: actions/upload-artifact@v2
-      #   with:
-      #     name: ${{ env.file }}
-      #     path: dist/*.whl
+      - name: Install LLVM and Clang # required for bindgen to work, see https://github.com/rust-lang/rust-bindgen/issues/1797
+        uses: KyleMayes/install-llvm-action@v1
+        if: runner.os == 'Windows'
+        with:
+          version: "11.0"
+          directory: ${{ runner.temp }}/llvm
+      - name: Set LIBCLANG_PATH
+        run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
+      - name: Install pytest
+        run: pip install pytest
+      - name: Run build.py
+        run: python -u tests/build.py
+#      - name: Run pytest
+#        run: python -u -m pytest --verbose

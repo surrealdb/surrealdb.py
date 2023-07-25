@@ -4,16 +4,16 @@ from surrealdb import SurrealDB
 
 app = Flask(__name__)
 
-# with app.app_context():
-#     global ROCKS_CONNECTION
-#     global MEMORY_CONNECTION
-#     ROCKS_CONNECTION = SurrealDB("rocksdb:///tmp/test.db")
-#     ROCKS_CONNECTION.use_namespace("rocks_namespace")
-#     ROCKS_CONNECTION.use_database("rocks_database")
+with app.app_context():
+    global ROCKS_CONNECTION
+    global MEMORY_CONNECTION
+    ROCKS_CONNECTION = SurrealDB("rocksdb:///tmp/test.db")
+    ROCKS_CONNECTION.use_namespace("rocks_namespace")
+    ROCKS_CONNECTION.use_database("rocks_database")
 
-#     MEMORY_CONNECTION = SurrealDB("memory")
-#     MEMORY_CONNECTION.use_namespace("mem_namespace")
-#     MEMORY_CONNECTION.use_database("mem_database")
+    MEMORY_CONNECTION = SurrealDB("memory")
+    MEMORY_CONNECTION.use_namespace("mem_namespace")
+    MEMORY_CONNECTION.use_database("mem_database")
 
 
 def create_connection():

@@ -1,4 +1,4 @@
-FROM centos:latest
+FROM ubuntu:latest
 
 # Set the working directory
 WORKDIR /app
@@ -20,6 +20,21 @@ COPY pyproject.toml /app/pyproject.toml
 
 # Copy the setup.py file
 COPY setup.py /app/setup.py
+
+RUN apt update
+RUN apt install -y clang
+RUN apt-get install -y libclang-dev
+RUN apt install -y python3
+RUN apt install -y python3-pip
+RUN apt install -y curl
+RUN apt install -y vim
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+RUN export PATH="$HOME/.cargo/bin:$PATH"
+RUN pip3 install setuptools_rust
+RUN python3 setup.py bdist_wheel
+
+# docker build . -t package-test
+# docker run -d -p 18000:18000 package-test
 
 EXPOSE 18000
 

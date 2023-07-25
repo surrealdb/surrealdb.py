@@ -26,23 +26,23 @@ get_command = "yum"
 # install_llvm.wait()
 # print("Installing clang... Done")
 
-disable = subprocess.Popen("yum-config-manager --disable centos-sclo-rh", shell=True)
-disable.wait()
+# disable = subprocess.Popen("yum-config-manager --disable centos-sclo-rh", shell=True)
+# disable.wait()
 
-disable = subprocess.Popen("yum-config-manager --disable base", shell=True)
-disable.wait()
+# disable = subprocess.Popen("yum-config-manager --disable base", shell=True)
+# disable.wait()
 
-install_command = """
-cd /etc/yum.repos.d/ && 
-sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* && 
-sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* && 
-yum install -y epel-release && 
-yum install -y clang && 
-yum install -y llvm-devel
-"""
+# install_command = """
+# cd /etc/yum.repos.d/ && 
+# sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* && 
+# sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* && 
+# yum install -y epel-release && 
+# yum install -y clang && 
+# yum install -y llvm-devel
+# """
 
-install_clang = subprocess.Popen(install_command, shell=True)
-install_clang.wait()
+# install_clang = subprocess.Popen(install_command, shell=True)
+# install_clang.wait()
 
 
 # print("Installing libclang-dev...")
@@ -124,7 +124,7 @@ print("installing clang...")
 # llvm_lib_path = subprocess.check_output(["llvm-config", "--libdir"]).decode().strip()
 
 # Set the LIBCLANG_PATH environment variable
-os.environ["LIBCLANG_PATH"] = "/usr/lib/clang"
+# os.environ["LIBCLANG_PATH"] = "/usr/lib/clang"
 # print("installing clang... Done")
 
 
