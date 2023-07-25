@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches:
-      - rust-no-runtime
+      - build-test
 
 jobs:
   tests:
