@@ -7,7 +7,7 @@ import subprocess
 
 
 setup(
-    name="surrealdb",
+    name="pansurg",
     version="1.0",
     rust_extensions=[RustExtension("surrealdb.rust_surrealdb", binding=Binding.PyO3)],
     packages=[

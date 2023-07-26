@@ -54,5 +54,3 @@ pub async fn authenticate(connection: WrappedConnection, jwt: WrappedJwt) -> Res
     return Ok(())
 }
 
-
-
