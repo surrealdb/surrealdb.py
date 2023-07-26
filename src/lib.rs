@@ -7,8 +7,6 @@ mod connection;
 mod operations;
 mod runtime;
 
-#[cfg(test)]
-mod docker_engine;
 
 
 use connection::python::{

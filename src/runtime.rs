@@ -1,3 +1,4 @@
+//! Defines the Tokio runtime to be referenced throughouth the program.
 use once_cell::sync::Lazy;
 use tokio::runtime::{Builder, Runtime};
 
