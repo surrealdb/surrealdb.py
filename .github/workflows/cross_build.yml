@@ -159,7 +159,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v2
         with:
-          name: artifact
+          name: wheels
           path: wheelhouse
 
 #       # - name: Release
