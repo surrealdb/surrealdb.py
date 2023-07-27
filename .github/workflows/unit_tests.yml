@@ -34,6 +34,7 @@ jobs:
         run: python -m coverage report
 
   run-rust-unit-tests:
+    needs: run-unit-tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
