@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches:
+      # - main
       - rust-no-runtime
 
 env:
@@ -114,7 +115,7 @@ jobs:
         run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
         if: runner.os == 'Windows'
 
-      - name: build sdist
+      - name: build_sdist
         if: matrix.os == 'ubuntu' && matrix.python-version == 'cp310'
         run: |
           pip install maturin build
@@ -146,25 +147,25 @@ jobs:
         with:
           name: wheels
           path: wheelhouse
-#   release:
-#     needs: [build_wheels, build_sdist]
-#     runs-on: ubuntu-latest
-#     steps:
-#       - uses: actions/download-artifact@v2
-#         with:
-#           name: artifact
-#           path: dist
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v2
+        with:
+          name: artifact
+          path: wheelhouse
 
-#       - name: Release
-#         uses: softprops/action-gh-release@v1
-#         with:
-#           body: |
-#             view the CHANGELOG.md for full changes
-#           files: |
-#             dist/*
-#         env:
-#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#       - uses: pypa/gh-action-pypi-publish@master
-#         with:
-#           user: __token__
-#           password: ${{ secrets.pypi_password }}
+      # - name: Release
+      #   uses: softprops/action-gh-release@v1
+      #   with:
+      #     body: |
+      #       view the CHANGELOG.md for full changes
+      #     files: |
+      #       wheelhouse/*
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # - uses: pypa/gh-action-pypi-publish@master
+      #   with:
+      #     user: __token__
+      #     password: ${{ secrets.pypi_password }}
