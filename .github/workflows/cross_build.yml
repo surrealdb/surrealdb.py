@@ -5,7 +5,7 @@ on:
   push:
     branches:
       # - main
-      - rust-no-runtime
+      - build-test
   workflow_run:
     workflows: ["unit-tests"]
     types:
