@@ -117,7 +117,7 @@ class SurrealDB(
         :return: the connection id of the connection
         """
         return blocking_make_connection(url)
-    
+
     def use_namespace(self, namespace: str) -> None:
         """
         Uses the given namespace in the connection.
