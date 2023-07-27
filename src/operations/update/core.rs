@@ -46,6 +46,16 @@ pub async fn merge(connection: WrappedConnection, resource: String, data: Value)
 }
 
 
+pub async fn patch(connection: WrappedConnection, resource: String, data: Value) -> Result<Value, String> {
+    let patch = match resource.parse::<Range>() {
+        Ok(range) => connection.connection.update(Resource::from(range.tb)).range((range.beg, range.end)),
+        Err(_) => connection.connection.update(Resource::from(resource))
+    };
+    // let mut patches: VecDeque<Patch> = 
+    Err("test".to_string())
+}
+
+
 #[cfg(test)]
 mod tests {
 

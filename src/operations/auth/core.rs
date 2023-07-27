@@ -53,4 +53,3 @@ pub async fn authenticate(connection: WrappedConnection, jwt: WrappedJwt) -> Res
     connection.connection.authenticate(jwt.jwt).await.map_err(|e| e.to_string())?;
     return Ok(())
 }
-

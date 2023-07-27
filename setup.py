@@ -2,17 +2,12 @@
 from setuptools import setup
 from setuptools_rust import Binding, RustExtension
 
-import os
-import subprocess
-
-
 setup(
     name="pansurg",
     version="1.0",
     rust_extensions=[RustExtension("surrealdb.rust_surrealdb", binding=Binding.PyO3)],
     packages=[
-        "surrealdb", 
-        "surrealdb.models",
+        "surrealdb",
         "surrealdb.execution_mixins"
     ],
     package_data={
