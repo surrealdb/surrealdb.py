@@ -6,11 +6,23 @@ on:
     branches:
       # - main
       - rust-no-runtime
+  workflow_run:
+    workflows: ["unit-tests"]
+    types:
+      - completed
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+
+  wait-for-other-workflow:
+    name: Wait for Other Workflow
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Other Workflow to Complete
+        run: "echo 'Waiting for other workflow to complete...'"
+
   build: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.github/workflows/ci.yml
     name: >
       build ${{ matrix.python-version }} on ${{ matrix.platform || matrix.os }}
@@ -39,7 +51,6 @@ jobs:
           - os: macos
             python-version: "pp39"
             arch: alt
-
     runs-on: ${{ format('{0}-latest', matrix.os) }}
     steps:
       - uses: actions/checkout@v3
