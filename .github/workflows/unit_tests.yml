@@ -32,3 +32,17 @@ jobs:
           python -m coverage run -m unittest discover -s unit_tests -p 'test_*.py'
       - name: Generate coverage report
         run: python -m coverage report
+
+  run-rust-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+  
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+  
+      - name: Build and Run Unit Tests
+        run: cargo test
