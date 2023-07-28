@@ -179,6 +179,9 @@ jobs:
 
       - name: Publish to PyPI
         run: twine upload wheelhouse/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
 
       # - name: Release
       #   uses: softprops/action-gh-release@v1
