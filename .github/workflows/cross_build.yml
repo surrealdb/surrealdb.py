@@ -178,7 +178,7 @@ jobs:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
 
       - name: Publish to PyPI
-        run: twine upload wheels/*
+        run: twine upload wheelhouse/*
 
       # - name: Release
       #   uses: softprops/action-gh-release@v1
