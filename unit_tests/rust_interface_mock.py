@@ -33,4 +33,4 @@ blocking_set = MagicMock()
 # update mixins
 blocking_merge = MagicMock()
 blocking_update = MagicMock()
-
+blocking_patch = MagicMock()
