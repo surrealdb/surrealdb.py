@@ -3,8 +3,8 @@ from setuptools import setup
 from setuptools_rust import Binding, RustExtension
 
 setup(
-    name="pansurg",
-    version="1.0",
+    name="surrealdb-beta",
+    version="0.0.1",
     rust_extensions=[RustExtension("surrealdb.rust_surrealdb", binding=Binding.PyO3)],
     packages=[
         "surrealdb",
