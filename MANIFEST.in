@@ -1,1 +1,2 @@
 recursive-include surrealdb *.so
+recursive-include surrealdb *.txt

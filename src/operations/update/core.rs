@@ -2,7 +2,31 @@
 use serde_json::value::Value;
 use surrealdb::sql::Range;
 use surrealdb::opt::Resource;
+use surrealdb::opt::PatchOp;
 use crate::connection::interface::WrappedConnection;
+use serde::Deserialize;
+use std::collections::VecDeque;
+use serde_json::from_str;
+use std::fmt;
+
+#[derive(Clone, PartialEq)]
+pub struct Diff {
+    pub operation: i32,
+    pub text: String,
+}
+
+impl Diff {
+    /// A new diff diff object created.
+    pub fn new(operation: i32, text: String) -> Diff {
+        Diff { operation, text }
+    }
+}
+
+impl fmt::Debug for Diff {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "\n  {{ {}: {} }}", self.operation, self.text)
+    }
+}
 
 
 /// Performs an update on the database for a particular resource.
@@ -43,6 +67,110 @@ pub async fn merge(connection: WrappedConnection, resource: String, data: Value)
     };
     let response = update.merge(data).await.map_err(|e| e.to_string())?;
     Ok(response.into_json())
+}
+
+
+/// Performs a patch on the database for a particular resource.
+/// 
+/// # Arguments
+/// * `connection` - The connection to perform the patch with
+/// * `resource` - The resource to patch (can be a table or a range)
+/// * `data` - The data to patch the resource with
+/// 
+/// # Data Examples
+/// For instance, if you wanted to update the last name of the user for all users in the `users` table,
+/// you would do the following:
+/// ```json
+/// [{
+///    "op": "replace",
+///    "path": "/users/last_name",
+///    "value": "Smith"
+/// }]
+/// ```
+/// # Returns
+/// an array of the results of the patch for each row that was updated with the patch operation.
+pub async fn patch(connection: WrappedConnection, resource: String, data: Value) -> Result<Value, String> {
+    let patch = match resource.parse::<Range>() {
+        Ok(range) => connection.connection.update(Resource::from(range.tb)).range((range.beg, range.end)),
+        Err(_) => connection.connection.update(Resource::from(resource))
+    };
+    let data_str = serde_json::to_string(&data).map_err(|e| e.to_string())?;
+
+    let mut patches: VecDeque<Patch> = from_str(&data_str).map_err(|e| e.to_string())?;
+    let mut patch = match patches.pop_front() {
+        Some(p) => patch.patch(match p {
+            Patch::Add {
+                path,
+                value,
+            } => PatchOp::add(&path, value),
+            Patch::Remove {
+                path,
+            } => PatchOp::remove(&path),
+            Patch::Replace {
+                path,
+                value,
+            } => PatchOp::replace(&path, value),
+            // Patch::Change {
+            //     path,
+            //     diff,
+            // } => PatchOp::change(&path, diff),
+        }),
+        None => {
+            let response = patch.await.map_err(|e| e.to_string())?;
+            return Ok(response.into_json())
+        }
+    };
+    for p in patches {
+        patch = patch.patch(match p {
+            Patch::Add {
+                path,
+                value,
+            } => PatchOp::add(&path, value),
+            Patch::Remove {
+                path,
+            } => PatchOp::remove(&path),
+            Patch::Replace {
+                path,
+                value,
+            } => PatchOp::replace(&path, value),
+            // Patch::Change {
+            //     path,
+            //     diff,
+            // } => PatchOp::change(&path, diff),
+        });
+    }
+    let response = patch.await.map_err(|e| e.to_string())?;
+    Ok(response.into_json())
+}
+
+
+#[derive(Deserialize)]
+#[serde(remote = "Diff")]
+struct DiffDef {
+	operation: i32,
+	text: String,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "op")]
+#[serde(rename_all = "lowercase")]
+pub enum Patch {
+	Add {
+		path: String,
+		value: Value,
+	},
+	Remove {
+		path: String,
+	},
+	Replace {
+		path: String,
+		value: Value,
+	},
+	// Change {
+	// 	path: String,
+	// 	// #[serde(with = "DiffDef")]
+	// 	diff: Diff,
+	// },
 }
 
 
@@ -212,6 +340,36 @@ mod tests {
         assert_eq!(outcome[0].as_array().unwrap()[2]["name"]["last"], "three".to_string());
         assert_eq!(outcome[0].as_array().unwrap()[3]["name"]["last"], "four".to_string());
         assert_eq!(outcome[0].as_array().unwrap().len(), 4);
+    }
+
+
+    #[test]
+    fn test_patch() {
+
+        let json_string = r#"
+            [{
+                "op": "replace",
+                "path": "/name/last",
+                "value": "Doe"
+            }]
+        "#;
+        let json_value: Value = from_str(json_string).unwrap();
+
+        let runtime = Runtime::new().unwrap();
+
+        let outcome = runtime.block_on(async {
+            let connection = make_connection("memory".to_string()).await.unwrap();
+			connection.connection.use_ns("test_namespace").await.unwrap();
+			connection.connection.use_db("test_database").await.unwrap();
+
+            prime_merge_database(connection.clone()).await;
+            let outcome = patch(connection.clone(), "user".to_string(), json_value).await.unwrap();
+            println!("{:?}", outcome);
+            query(connection.clone(), "SELECT * FROM user;".to_string(), None).await.unwrap()
+        });
+        for i in outcome[0].as_array().unwrap() {
+            assert_eq!(i["name"]["last"], "Doe".to_string());
+        }
     }
 
 }

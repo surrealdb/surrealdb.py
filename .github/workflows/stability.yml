@@ -27,12 +27,12 @@ jobs:
 
       - id: ruff
         if: always()
-        run: poetry run ruff --format=github surrealdb/
+        run: poetry run ruff --format=github python_package/surrealdb/
 
       - id: Black
         if: always()
-        run: poetry run black surrealdb/ --check --verbose --diff --color
+        run: poetry run black python_package/surrealdb/ --check --verbose --diff --color
 
       - id: mypy
         if: always()
-        run: poetry run mypy surrealdb/
+        run: poetry run mypy python_package/surrealdb/
