@@ -21,7 +21,7 @@ def write_version_to_file(version_number: str) -> None:
         version_number: (str) the version to be written to the file
     Returns: None
     """
-    version_file_path: str = str(pathlib.Path(__file__).parent.absolute()) + "/surrealdb/version.py"
+    version_file_path: str = str(pathlib.Path(__file__).parent.absolute()) + "/surrealdb/VERSION.txt"
 
     if os.path.exists(version_file_path):
         os.remove(version_file_path)
