@@ -4,19 +4,7 @@ on:
   pull_request:
     types: [closed]
     branches:
-      # - main
-      - rust-no-runtime
-
-# on:
-#   pull_request:
-#   push:
-#     branches:
-#       - main
-#       - build-test
-#   workflow_run:
-#     workflows: ["unit-tests"]
-#     types:
-#       - completed
+      - main
 
 env:
   CARGO_TERM_COLOR: always
