@@ -1,10 +1,27 @@
 #!/usr/bin/env python
+import pathlib
+
 from setuptools import setup
 from setuptools_rust import Binding, RustExtension
 
+
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+
+
+with open(str(pathlib.Path(__file__).parent.absolute()) +
+          "/surrealdb/version.py", "r") as fh:
+    version = fh.read().split("=")[1].replace("'", "")
+
+
 setup(
     name="surrealdb-beta",
-    version="0.0.1",
+    author="Maxwell Flitton",
+    author_email="maxwell@gmail.com",
+    description="Calculates a Fibonacci number",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    version=version,
     rust_extensions=[RustExtension("surrealdb.rust_surrealdb", binding=Binding.PyO3)],
     packages=[
         "surrealdb",
