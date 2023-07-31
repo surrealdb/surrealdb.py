@@ -27,7 +27,7 @@ class QueryMixin:
             return json.loads(blocking_query(self._connection, query))[0]
         except Exception as e:
             SurrealDbError(e)
-    
+
     def select(self: "SurrealDB", resource: str) -> Union[List[dict], dict]:
         """
         Performs a select query on the database for a particular resource.

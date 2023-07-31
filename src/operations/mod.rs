@@ -26,4 +26,5 @@ pub fn operations_module_factory(m: &PyModule) {
     let _ = m.add_wrapped(wrap_pyfunction!(auth::python::blocking_authenticate));
     let _ = m.add_wrapped(wrap_pyfunction!(update::python::blocking_update));
     let _ = m.add_wrapped(wrap_pyfunction!(update::python::blocking_merge));
+    let _ = m.add_wrapped(wrap_pyfunction!(update::python::blocking_patch));
 }

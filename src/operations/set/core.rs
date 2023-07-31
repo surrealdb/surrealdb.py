@@ -1,8 +1,4 @@
-//! Defines the core functions for setting key values. These functions should not be called directly
-//! from the Python API but rather from the TCP connection in the runtime module. In this
-//! module we can do the following:
-//! 
-//! * Set a key value in the database
+//! Defines the core functions for setting key values.
 use serde_json::value::Value;
 
 use crate::connection::interface::WrappedConnection;

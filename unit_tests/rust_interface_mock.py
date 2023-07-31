@@ -9,13 +9,28 @@ that the python bindings are still working as expected.
 """
 from unittest.mock import MagicMock
 
-
+# connection interface
 blocking_make_connection = MagicMock()
-blocking_sign_in = MagicMock()
-blocking_set = MagicMock()
-blocking_query = MagicMock()
 blocking_use_namespace = MagicMock()
 blocking_use_database = MagicMock()
 
-# operations mixins
+# auth mixins
+blocking_sign_in = MagicMock()
+blocking_authenticate = MagicMock()
+blocking_sign_up = MagicMock()
+
+# create mixins
 blocking_create = MagicMock()
+blocking_delete = MagicMock()
+
+# query mixins 
+blocking_query= MagicMock()
+blocking_select = MagicMock()
+
+# set mixins
+blocking_set = MagicMock()
+
+# update mixins
+blocking_merge = MagicMock()
+blocking_update = MagicMock()
+blocking_patch = MagicMock()

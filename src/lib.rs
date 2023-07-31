@@ -1,14 +1,12 @@
+#![recursion_limit = "256"]
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
-
 
 mod connection;
 
 mod operations;
 mod runtime;
 
-#[cfg(test)]
-mod docker_engine;
 
 
 use connection::python::{

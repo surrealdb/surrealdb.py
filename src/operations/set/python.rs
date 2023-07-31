@@ -1,4 +1,4 @@
-//! Python entry point for setting a new key.
+//! Python entry points for setting and unsetting keys against the connection.
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 use serde_json::value::Value;
