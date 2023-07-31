@@ -5,7 +5,7 @@ on:
     types: [closed]
     branches:
       # - main
-      - build-test
+      - rust-no-runtime
 
 # on:
 #   pull_request:
