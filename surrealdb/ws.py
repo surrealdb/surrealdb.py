@@ -94,7 +94,7 @@ class Request(pydantic.BaseModel):
     class Config:
         """Represents the configuration of the RPC request."""
 
-        allow_mutation = False
+        frozen = True
 
 
 class ResponseSuccess(pydantic.BaseModel):
@@ -112,10 +112,10 @@ class ResponseSuccess(pydantic.BaseModel):
         """Represents the configuration of the RPC request.
 
         Attributes:
-            allow_mutation: Whether to allow mutation.
+            frozen: Whether to prohibit mutation.
         """
 
-        allow_mutation = False
+        frozen = True
 
 
 class ResponseError(pydantic.BaseModel):
@@ -133,10 +133,10 @@ class ResponseError(pydantic.BaseModel):
         """Represents the configuration of the RPC request.
 
         Attributes:
-            allow_mutation: Whether to allow mutation.
+            frozen: Whether to prohibit mutation.
         """
 
-        allow_mutation = False
+        frozen = True
 
 
 def _validate_response(
