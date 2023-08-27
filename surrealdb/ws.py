@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import pydantic
 import websockets
+from pydantic import ConfigDict
 
 __all__ = ("Surreal",)
 
@@ -90,11 +91,9 @@ class Request(pydantic.BaseModel):
         if value is None:
             return tuple()
         return value
-
-    class Config:
-        """Represents the configuration of the RPC request."""
-
-        allow_mutation = False
+    # TODO[pydantic]: The following keys were removed: `allow_mutation`.
+    # Check https://docs.pydantic.dev/dev-v2/migration/#changes-to-config for more information.
+    model_config = ConfigDict(allow_mutation=False)
 
 
 class ResponseSuccess(pydantic.BaseModel):
@@ -106,16 +105,10 @@ class ResponseSuccess(pydantic.BaseModel):
     """
 
     id: str
-    result: Any
-
-    class Config:
-        """Represents the configuration of the RPC request.
-
-        Attributes:
-            allow_mutation: Whether to allow mutation.
-        """
-
-        allow_mutation = False
+    result: Any = None
+    # TODO[pydantic]: The following keys were removed: `allow_mutation`.
+    # Check https://docs.pydantic.dev/dev-v2/migration/#changes-to-config for more information.
+    model_config = ConfigDict(allow_mutation=False)
 
 
 class ResponseError(pydantic.BaseModel):
@@ -128,15 +121,9 @@ class ResponseError(pydantic.BaseModel):
 
     code: int
     message: str
-
-    class Config:
-        """Represents the configuration of the RPC request.
-
-        Attributes:
-            allow_mutation: Whether to allow mutation.
-        """
-
-        allow_mutation = False
+    # TODO[pydantic]: The following keys were removed: `allow_mutation`.
+    # Check https://docs.pydantic.dev/dev-v2/migration/#changes-to-config for more information.
+    model_config = ConfigDict(allow_mutation=False)
 
 
 def _validate_response(
