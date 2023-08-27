@@ -91,9 +91,7 @@ class Request(pydantic.BaseModel):
         if value is None:
             return tuple()
         return value
-    # TODO[pydantic]: The following keys were removed: `allow_mutation`.
-    # Check https://docs.pydantic.dev/dev-v2/migration/#changes-to-config for more information.
-    model_config = ConfigDict(allow_mutation=False)
+    model_config = ConfigDict(frozen=False)
 
 
 class ResponseSuccess(pydantic.BaseModel):
@@ -106,9 +104,7 @@ class ResponseSuccess(pydantic.BaseModel):
 
     id: str
     result: Any = None
-    # TODO[pydantic]: The following keys were removed: `allow_mutation`.
-    # Check https://docs.pydantic.dev/dev-v2/migration/#changes-to-config for more information.
-    model_config = ConfigDict(allow_mutation=False)
+    model_config = ConfigDict(frozen=False)
 
 
 class ResponseError(pydantic.BaseModel):
@@ -121,9 +117,7 @@ class ResponseError(pydantic.BaseModel):
 
     code: int
     message: str
-    # TODO[pydantic]: The following keys were removed: `allow_mutation`.
-    # Check https://docs.pydantic.dev/dev-v2/migration/#changes-to-config for more information.
-    model_config = ConfigDict(allow_mutation=False)
+    model_config = ConfigDict(frozen=False)
 
 
 def _validate_response(
