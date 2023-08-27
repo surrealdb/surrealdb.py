@@ -179,7 +179,7 @@ class Surreal:
             await db.signin({"user": "root", "pass": "root"})
 
         Connect to a remote endpoint
-            db = Surreal('ws://cloud.surrealdb.com/rpc')
+            db = Surreal('http://cloud.surrealdb.com/rpc')
             await db.connect()
             await db.signin({"user": "root", "pass": "root"})
 
@@ -189,10 +189,11 @@ class Surreal:
 
     """
 
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: Optional[str] = None, token: Optional[str] = None, max_size: Optional[int] = None) -> None:        
         self.url = url
+        self.token = token
+        self.max_size = max_size
         self.client_state = ConnectionState.CONNECTING
-        self.token: Optional[str] = None
         self.ws: Optional[websockets.WebSocketClientProtocol] = None  # type: ignore
 
     async def __aenter__(self) -> Surreal:
@@ -219,21 +220,48 @@ class Surreal:
         """
         await self.close()
 
-    async def connect(self) -> None:
-        """Connect to a local or remote database endpoint.
+    async def connect(self, url: Optional[str] = None, max_size: Optional[int] = None) -> None:
+        """Connects to a local or remote database endpoint.
+
+        Args:
+            url: The URL of the Surreal server.
 
         Examples:
             Connect to a local endpoint
                 db = Surreal()
                 await db.connect('ws://127.0.0.1:8000/rpc')
                 await db.signin({"user": "root", "pass": "root"})
+
+            Connect to a remote endpoint
+                db = Surreal()
+                await db.connect('http://cloud.surrealdb.com/rpc')
+                await db.signin({"user": "root", "pass": "root"})
         """
-        self.ws = await websockets.connect(self.url)  # type: ignore
+        if url is not None:
+            self.url = url
+        else:
+            self.url
+        if max_size is not None:
+            self.max_size = max_size
+        else:
+            # default max size is 1MB
+            self.max_size = 2**20
+        # helping people when they type the url in wrong
+        if "http" in self.url:
+            self.url = self.url.replace("http://", "ws://")
+        elif "https" in self.url:
+            self.url = self.url.replace("https://", "wss://")
+        if "/rpc" not in self.url:
+            self.url = "".join([self.url, "/rpc"])
+        self.ws = await websockets.connect(self.url, max_size=self.max_size)  # type: ignore
         self.client_state = ConnectionState.CONNECTED
 
+    # Missing method - wait - Waits for the connection to the database to succeed
+    # Not sure if needed though
+
     async def close(self) -> None:
-        """Close the persistent connection to the database."""
-        await self.ws.close()
+        """Closes the persistent connection to the database."""
+        await self.ws.close()  # type: ignore
         self.client_state = ConnectionState.DISCONNECTED
 
     async def use(self, namespace: str, database: str) -> None:
@@ -252,7 +280,7 @@ class Surreal:
         _validate_response(response)
 
     async def signup(self, vars: Dict[str, Any]) -> str:
-        """Sign this connection up to a specific authentication scope.
+        """Signs this connection up to a specific authentication scope.
 
         Args:
             vars: Variables used in a signup query.
@@ -271,7 +299,7 @@ class Surreal:
         return self.token
 
     async def signin(self, vars: Dict[str, Any]) -> str:
-        """Sign this connection in to a specific authentication scope.
+        """Signs this connection in to a specific authentication scope.
 
         Args:
             vars: Variables used in a signin query.
@@ -290,7 +318,7 @@ class Surreal:
         return self.token
 
     async def invalidate(self) -> None:
-        """Invalidate the authentication for the current connection."""
+        """Invalidates the authentication for the current connection."""
         response = await self._send_receive(
             Request(
                 id=generate_uuid(),
@@ -301,7 +329,7 @@ class Surreal:
         self.token = None
 
     async def authenticate(self, token: str) -> None:
-        """Authenticate the current connection with a JWT token.
+        """Authenticates the current connection with a JWT token.
 
         Args:
             token: The token to use for the connection.
@@ -315,7 +343,7 @@ class Surreal:
         _validate_response(response, SurrealAuthenticationException)
 
     async def let(self, key: str, value: Any) -> None:
-        """Assign a value as a parameter for this connection.
+        """Assigns a value as a parameter for this connection.
 
         Args:
             key: Specifies the name of the variable.
@@ -370,7 +398,7 @@ class Surreal:
     async def query(
         self, sql: str, vars: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
-        """Run a set of SurrealQL statements against the database.
+        """Runs a set of SurrealQL statements against the database.
 
         Args:
             sql: Specifies the SurrealQL statements.
@@ -400,7 +428,7 @@ class Surreal:
         return success.result
 
     async def select(self, thing: str) -> List[Dict[str, Any]]:
-        """Select all records in a table (or other entity),
+        """Selects all records in a table (or other entity),
         or a specific record, in the database.
 
         This function will run the following query in the database:
@@ -463,9 +491,9 @@ class Surreal:
         return success.result
 
     async def update(
-        self, thing: str, data: Optional[Dict[str, Any]]
+        self, thing, data: Optional[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Update all records in a table, or a specific record, in the database.
+        """Updates all records in a table, or a specific record, in the database.
 
         This function replaces the current document / record data with the
         specified data.
@@ -505,7 +533,7 @@ class Surreal:
     async def merge(
         self, thing: str, data: Optional[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Modify by deep merging all records in a table, or a specific record, in the database.
+        """Modifies by deep merging all records in a table, or a specific record, in the database.
 
         This function merges the current document / record data with the
         specified data.
@@ -539,15 +567,16 @@ class Surreal:
                 params=(thing,) if data is None else (thing, data),
             ),
         )
-        success: ResponseSuccess = _validate_response(
-            response, SurrealPermissionException
-        )
-        return success.result
+        _validate_response(response, SurrealPermissionException)
+        # success: ResponseSuccess = _validate_response(
+            # response, SurrealPermissionException
+        # )
+        # return success.result
 
     async def patch(
         self, thing: str, data: Optional[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Apply JSON Patch changes to all records, or a specific record, in the database.
+        """Applies JSON Patch changes to all records, or a specific record, in the database.
 
         This function patches the current document / record data with
         the specified JSON Patch data.
@@ -584,7 +613,7 @@ class Surreal:
         return success.result
 
     async def delete(self, thing: str) -> List[Dict[str, Any]]:
-        """Delete all records in a table, or a specific record, from the database.
+        """Deletes all records in a table, or a specific record, from the database.
 
         This function will run the following query in the database:
         delete * from $thing
@@ -610,7 +639,7 @@ class Surreal:
     # Surreal library methods - undocumented but implemented in js library
 
     async def info(self) -> Optional[Dict[str, Any]]:
-        """Retrieve info about the current Surreal instance.
+        """Retreive info about the current Surreal instance.
 
         Returns:
             The information of the Surreal server.
@@ -692,10 +721,10 @@ class Surreal:
             Exception: If the client is not connected to the Surreal server.
         """
         self._validate_connection()
-        await self.ws.send(json.dumps(request.dict(), ensure_ascii=False))
+        await self.ws.send(json.dumps(request.dict(), ensure_ascii=False))  # type: ignore
 
     async def _recv(self) -> Union[ResponseSuccess, ResponseError]:
-        """Receive a response from the Surreal server.
+        """Receives a response from the Surreal server.
 
         Returns:
             The response from the Surreal server.
@@ -705,7 +734,7 @@ class Surreal:
             Exception: If the response contains an error.
         """
         self._validate_connection()
-        response = json.loads(await self.ws.recv())
+        response = json.loads(await self.ws.recv())  # type: ignore
         if response.get("error"):
             return ResponseError(**response["error"])
         return ResponseSuccess(**response)
