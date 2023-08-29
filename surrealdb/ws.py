@@ -189,7 +189,7 @@ class Surreal:
 
     """
 
-    def __init__(self, url: Optional[str] = None, token: Optional[str] = None, max_size: Optional[int] = None) -> None:        
+    def __init__(self, url: Optional[str] = None, token: Optional[str] = None, max_size: Optional[int] = 2**20) -> None:        
         self.url = url
         self.token = token
         self.max_size = max_size
@@ -243,9 +243,7 @@ class Surreal:
             self.url
         if max_size is not None:
             self.max_size = max_size
-        else:
-            # default max size is 1MB
-            self.max_size = 2**20
+        
         # helping people when they type the url in wrong
         if "http" in self.url:
             self.url = self.url.replace("http://", "ws://")
