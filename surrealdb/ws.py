@@ -84,7 +84,7 @@ class Request(pydantic.BaseModel):
     method: str
     params: Optional[Tuple] = None
 
-    @pydantic.validator("params", pre=True, always=True)
+    @pydantic.field_validator("params")
     def validate_params(cls, value):  # pylint: disable=no-self-argument
         """Validate the parameters of the request."""
         if value is None:
