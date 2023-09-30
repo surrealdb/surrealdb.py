@@ -80,6 +80,8 @@ class Request(pydantic.BaseModel):
         params: The parameters of the request.
     """
 
+    model_config = pydantic.ConfigDict(frozen=True)
+
     id: str
     method: str
     params: Optional[Tuple] = None
@@ -91,14 +93,6 @@ class Request(pydantic.BaseModel):
             return tuple()
         return value
 
-    class Config:
-        """Represents the configuration of the RPC request.
-        
-        .. _Pydantic Configuration:
-            https://docs.pydantic.dev/latest/api/config/
-        """
-        frozen = True
-
 
 class ResponseSuccess(pydantic.BaseModel):
     """Represents a successful RPC response from a Surreal server.
@@ -108,16 +102,10 @@ class ResponseSuccess(pydantic.BaseModel):
         result: The result of the request.
     """
 
+    model_config = pydantic.ConfigDict(frozen=True)
+
     id: str
     result: Any
-
-    class Config:
-        """Represents the configuration of the RPC request.
-        
-        .. _Pydantic Configuration:
-            https://docs.pydantic.dev/latest/api/config/
-        """
-        frozen = True
 
 
 class ResponseError(pydantic.BaseModel):
@@ -128,16 +116,10 @@ class ResponseError(pydantic.BaseModel):
         message: The message of the error.
     """
 
+    model_config = pydantic.ConfigDict(frozen=True)
+
     code: int
     message: str
-
-    class Config:
-        """Represents the configuration of the RPC request.
-        
-        .. _Pydantic Configuration:
-            https://docs.pydantic.dev/latest/api/config/
-        """
-        frozen = True
 
 
 def _validate_response(
