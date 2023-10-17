@@ -76,7 +76,11 @@ pip install surrealdb
 ```
 
 Alternatively, you can use install it using [Poetry](https://python-poetry.org/)
-
+```
+poetry add surrealdb
+```
+### Connect to SurrealDB
+Create a new surreal.py file and add the following code to try out some basic operations using the SurrealDB SDK.
 ```python
 from surrealdb import Surreal
 
