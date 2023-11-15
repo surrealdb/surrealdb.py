@@ -17,10 +17,10 @@ use crate::connection::interface::WrappedConnection;
 /// 
 /// # Returns
 /// * `Ok(())` - The record was created successfully
-pub async fn create(connection: WrappedConnection, table_name: String, data: Value) -> Result<Value, String> {
+pub async fn create(connection: WrappedConnection, table_name: String, data: Value) -> Result<String, String> {
     let resource = Resource::from(table_name.clone());
     let outcome = connection.connection.create(resource).content(data).await.map_err(|e| e.to_string())?;
-    Ok(outcome.into_json())
+    Ok(outcome.into_json().to_string())
 }
 
 
@@ -32,7 +32,7 @@ pub async fn create(connection: WrappedConnection, table_name: String, data: Val
 /// 
 /// # Returns
 /// 
-pub async fn delete(connection: WrappedConnection, resource: String) -> Result<Value, String> {
+pub async fn delete(connection: WrappedConnection, resource: String) -> Result<String, String> {
     let response = match resource.parse::<Range>() {
         Ok(range) => {
             connection.connection.delete(Resource::from(range.tb)).range((range.beg, range.end))
@@ -41,7 +41,7 @@ pub async fn delete(connection: WrappedConnection, resource: String) -> Result<V
         Err(_) => connection.connection.delete(Resource::from(resource))
                                        .await.map_err(|e| e.to_string())?
     };
-    Ok(response.into_json())
+    Ok(response.into_json().to_string())
 }
 
 
@@ -52,7 +52,7 @@ mod tests {
     use crate::operations::query::core::query;
     use crate::connection::core::make_connection;
 	use tokio::runtime::Runtime;
-    use serde_json::from_str;
+    use serde_json::{from_str, Value};
 
 
     fn generate_json(name: &str, age: i32) -> Value {
@@ -87,8 +87,9 @@ mod tests {
             create(connection.clone(), "user".to_string(), json_value).await
         });
 
-        assert_eq!(outcome.clone().unwrap()["name"], "John Doe");
-        assert_eq!(outcome.unwrap()["age"], 43);
+        let outcome: Value = from_str(outcome.unwrap().as_str()).unwrap();
+        assert_eq!(outcome.clone()["name"], "John Doe");
+        assert_eq!(outcome["age"], 43);
     }
 
     #[test]
@@ -104,6 +105,7 @@ mod tests {
             let _ = create(connection.clone(), "user".to_string(), json_value).await;
             query(connection.clone(), "SELECT * FROM user;".to_string(), None).await.unwrap()
         });
+        let outcome: Value = from_str(&outcome).unwrap();
         assert_eq!(outcome[0].as_array().unwrap().len(), 2);
     }
 
@@ -117,10 +119,11 @@ mod tests {
 			connection.connection.use_db("test_database").await.unwrap();
             prime_database(connection.clone()).await;
 
-            let outcome = delete(connection.clone(), "user".to_string()).await.unwrap();
+            let outcome: Value = from_str(delete(connection.clone(), "user".to_string()).await.unwrap().as_str()).unwrap();
             assert_eq!(outcome.as_array().unwrap().len(), 4);
             query(connection.clone(), "SELECT * FROM user;".to_string(), None).await.unwrap()
         });
+        let outcome: Value = from_str(&outcome).unwrap();
         assert_eq!(outcome[0].as_array().unwrap().len(), 0);
     }
 
@@ -134,11 +137,12 @@ mod tests {
 			connection.connection.use_db("test_database").await.unwrap();
             prime_database(connection.clone()).await;
 
-            let outcome = delete(connection.clone(), "user:2..4".to_string()).await.unwrap();
+            let outcome: Value = from_str(delete(connection.clone(), "user:2..4".to_string()).await.unwrap().as_str()).unwrap();
             assert_eq!(outcome.as_array().unwrap().len(), 2);
             query(connection.clone(), "SELECT * FROM user;".to_string(), None).await.unwrap()
         });
 
+        let outcome: Value = from_str(&outcome).unwrap();
         assert_eq!(outcome[0].as_array().unwrap().len(), 2);
         assert_eq!(outcome[0].as_array().unwrap()[0]["name"], "Tobie");
         assert_eq!(outcome[0].as_array().unwrap()[1]["name"], "Tom");
@@ -154,13 +158,14 @@ mod tests {
 			connection.connection.use_db("test_database").await.unwrap();
             prime_database(connection.clone()).await;
 
-            let outcome = delete(connection.clone(), "user:2".to_string()).await.unwrap();
+            let outcome: Value = from_str(delete(connection.clone(), "user:2".to_string()).await.unwrap().as_str()).unwrap();
             assert_eq!(outcome["name"], "Jaime");
             assert_eq!(outcome["age"], 1);
             assert_eq!(outcome["id"], "user:2");
             query(connection.clone(), "SELECT * FROM user;".to_string(), None).await.unwrap()
         });
 
+        let outcome: Value = from_str(&outcome).unwrap();
         assert_eq!(outcome[0].as_array().unwrap().len(), 3);
     }
 

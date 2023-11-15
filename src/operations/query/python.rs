@@ -4,8 +4,8 @@ use pyo3::types::PyAny;
 use serde_json::value::Value;
 
 use crate::connection::interface::WrappedConnection;
-use crate::runtime::RUNTIME;
 use super::core::{query, select};
+use crate::py_future_wrapper;
 
 
 /// Creates a new record in the database in an non-async manner.
@@ -18,7 +18,7 @@ use super::core::{query, select};
 /// # Returns
 /// * `Ok(())` - The operation was successful
 #[pyfunction]
-pub fn blocking_query<'a>(connection: WrappedConnection, sql: String, bindings: Option<&'a PyAny>) -> Result<String, PyErr> {
+pub fn blocking_query<'a>(py: Python<'a>, connection: WrappedConnection, sql: String, bindings: Option<&'a PyAny>) -> Result<&'a PyAny, PyErr> {
 
     let processed_bindings = match bindings {
         Some(bindings) => {
@@ -27,11 +27,7 @@ pub fn blocking_query<'a>(connection: WrappedConnection, sql: String, bindings: 
         },
         None => None
     };
-
-    let outcome = RUNTIME.block_on(async move{
-        return query(connection, sql, processed_bindings).await.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
-    }).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))?;
-    Ok(outcome.to_string())
+    py_future_wrapper!(py, query(connection, sql, processed_bindings))
 }
 
 
@@ -44,9 +40,6 @@ pub fn blocking_query<'a>(connection: WrappedConnection, sql: String, bindings: 
 /// # Returns
 /// * `Ok(String)` - The result of the select
 #[pyfunction]
-pub fn blocking_select(connection: WrappedConnection, resource: String) -> Result<String, PyErr> {
-    let outcome = RUNTIME.block_on(async move{
-        return select(connection, resource).await
-    }).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))?;
-    Ok(outcome.to_string())
+pub fn blocking_select(py: Python, connection: WrappedConnection, resource: String) -> Result<&PyAny, PyErr> {
+    py_future_wrapper!(py, select(connection, resource))
 }

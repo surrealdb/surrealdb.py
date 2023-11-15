@@ -156,7 +156,7 @@ CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5002", "--timeout", "900", "main:app"
 You can change the python version and the `CMD` could change depending on your application. Now that we have our
 python application installing and running with SurrealDB, we can move onto using the python library.
 
-### Using the Python Library
+### Using the blocking Python Library
 
 We can then import the library and create the connection with the following code:
 
@@ -200,4 +200,39 @@ This will give you the following JSON output:
         "name": "Tobie"
     }
 ]
+```
+
+### Using the async Python Library
+
+We can then import the library and create the connection with the following code:
+
+```python
+from surrealdb import AsyncSurrealDB
+
+connection = AsyncSurrealDB("ws://localhost:8000/database/namespace")
+await connection.connect()
+```
+
+Essentially the interface is exactly the same however, the functions are async. Below is a way to run the async code:
+
+```python
+import asyncio
+from surrealdb import AsyncSurrealDB
+
+
+async def main():
+    connection = AsyncSurrealDB("ws://localhost:8000/database/namespace")
+    await connection.connect()
+    await connection.signin({
+        "username": "root",
+        "password": "root",
+    })
+    await connection.query("CREATE user:tobie SET name = 'Tobie';")
+    await connection.query("CREATE user:jaime SET name = 'Jaime';")
+    outcome = await connection.query("SELECT * FROM user;")
+    print(outcome)
+
+
+# Run the main function
+asyncio.run(main())
 ```

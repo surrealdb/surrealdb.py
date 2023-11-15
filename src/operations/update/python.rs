@@ -4,12 +4,12 @@ use pyo3::types::PyAny;
 use serde_json::value::Value;
 
 use crate::connection::interface::WrappedConnection;
-use crate::runtime::RUNTIME;
 use super::core::{
     update,
     merge,
     patch
 };
+use crate::py_future_wrapper;
 
 
 /// Performs an update operation against the database in a blocking manner.
@@ -22,12 +22,9 @@ use super::core::{
 /// # Returns
 /// * `Ok(String)` - The outcome of the update operation
 #[pyfunction]
-pub fn blocking_update<'a>(connection: WrappedConnection, resource: String, data: &'a PyAny) -> Result<String, PyErr> {
+pub fn blocking_update<'a>(py: Python<'a>, connection: WrappedConnection, resource: String, data: &'a PyAny) -> Result<&'a PyAny, PyErr> {
     let data: Value = serde_json::from_str(&data.to_string()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-    let outcome = RUNTIME.block_on(async move{
-        return update(connection, resource, data).await.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
-    }).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))?;
-    Ok(outcome.to_string())
+    py_future_wrapper!(py, update(connection, resource, data))
 }
 
 
@@ -41,12 +38,9 @@ pub fn blocking_update<'a>(connection: WrappedConnection, resource: String, data
 /// # Returns
 /// * `Ok(String)` - The outcome of the merge operation
 #[pyfunction]
-pub fn blocking_merge<'a>(connection: WrappedConnection, resource: String, data: &'a PyAny) -> Result<String, PyErr> {
+pub fn blocking_merge<'a>(py: Python<'a>, connection: WrappedConnection, resource: String, data: &'a PyAny) -> Result<&'a PyAny, PyErr> {
     let data: Value = serde_json::from_str(&data.to_string()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-    let outcome = RUNTIME.block_on(async move{
-        return merge(connection, resource, data).await.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
-    }).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))?;
-    Ok(outcome.to_string())
+    py_future_wrapper!(py, merge(connection, resource, data))
 }
 
 
@@ -60,10 +54,7 @@ pub fn blocking_merge<'a>(connection: WrappedConnection, resource: String, data:
 /// # Returns
 /// * `Ok(String)` - The outcome of the patch operation
 #[pyfunction]
-pub fn blocking_patch<'a>(connection: WrappedConnection, resource: String, data: &'a PyAny) -> Result<String, PyErr> {
+pub fn blocking_patch<'a>(py: Python<'a>, connection: WrappedConnection, resource: String, data: &'a PyAny) -> Result<&'a PyAny, PyErr> {
     let data: Value = serde_json::from_str(&data.to_string()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-    let outcome = RUNTIME.block_on(async move{
-        return patch(connection, resource, data).await.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
-    }).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))?;
-    Ok(outcome.to_string())
+    py_future_wrapper!(py, patch(connection, resource, data))
 }

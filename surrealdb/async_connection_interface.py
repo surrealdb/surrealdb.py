@@ -21,15 +21,14 @@ from typing import Optional
 from surrealdb.rust_surrealdb import blocking_make_connection
 from surrealdb.rust_surrealdb import blocking_use_namespace
 from surrealdb.rust_surrealdb import blocking_use_database
-from surrealdb.asyncio_runtime import AsyncioRuntime
-
-from surrealdb.execution_mixins.auth import SignInMixin
 
 # import the mixins for operations for the connection
-from surrealdb.execution_mixins.create import CreateMixin
-from surrealdb.execution_mixins.query import QueryMixin
-from surrealdb.execution_mixins.set import SetMixin
-from surrealdb.execution_mixins.update import UpdateMixin
+from surrealdb.async_execution_mixins.create import AsyncCreateMixin
+from surrealdb.async_execution_mixins.auth import AsyncSignInMixin
+from surrealdb.async_execution_mixins.set import AsyncSetMixin
+from surrealdb.async_execution_mixins.query import AsyncQueryMixin
+from surrealdb.async_execution_mixins.set import AsyncSetMixin
+from surrealdb.async_execution_mixins.update import AsyncUpdateMixin
 
 
 class ConnectionController(type):
@@ -80,16 +79,16 @@ class ConnectionController(type):
         return super(ConnectionController, cls).__call__(*args, **kwargs)
 
 
-class SurrealDB(
-    CreateMixin,
-    SignInMixin,
-    SetMixin,
-    QueryMixin,
-    UpdateMixin,
+class AsyncSurrealDB(
+    AsyncCreateMixin,
+    AsyncSignInMixin,
+    AsyncSetMixin,
+    AsyncQueryMixin,
+    AsyncUpdateMixin,
     metaclass=ConnectionController
 ):
     """
-    This class is responsible for managing the connection to SurrealDB and managing operations on the connection.
+    This class is responsible for managing the async connection to SurrealDB and managing operations on the connection.
     """
     def __init__(self,
                  url: Optional[str] = None,
@@ -104,12 +103,16 @@ class SurrealDB(
         :param keep_connection: wether or not to keep the connection open after this object is destroyed
         :param existing_connection_id: the existing connection id to use instead of making a new connection
         """
-        self._connection: Optional[str] = self._make_connection(url=url)
+        self._connection: Optional[str] = None
+        self.url: str = url
         self.id: str = str(uuid.uuid4()) if existing_connection_id is None else existing_connection_id
         self.keep_connection: bool = keep_connection
         self.main_connection: bool = main_connection
 
-    def _make_connection(self, url: str) -> str:
+    async def connect(self):
+        self._connection = await self._make_connection(url=self.url)
+
+    async def _make_connection(self, url: str) -> str:
         """
         Makes a connection to SurrealDB or establishes an existing connection.
 
@@ -117,35 +120,23 @@ class SurrealDB(
         :param existing_connection_id: the existing connection id to use instead of making a new connection
         :return: the connection id of the connection
         """
-        async def async_make_connection(url: str):
-            return await blocking_make_connection(url)
-        
-        loop_manager = AsyncioRuntime()
-        connection_id = loop_manager.loop.run_until_complete(async_make_connection(url))
+        connection_id = await blocking_make_connection(url)
         return connection_id
 
-    def use_namespace(self, namespace: str) -> None:
+    async def use_namespace(self, namespace: str) -> None:
         """
         Uses the given namespace in the connection.
 
         :param namespace: the namespace to use
         :return: None
         """
-        async def async_use_namespace(namespace: str):
-            return await blocking_use_namespace(self._connection, namespace)
-        
-        loop_manager = AsyncioRuntime()
-        loop_manager.loop.run_until_complete(async_use_namespace(namespace))
+        await blocking_use_namespace(self._connection, namespace)
 
-    def use_database(self, database: str) -> None:
+    async def use_database(self, database: str) -> None:
         """
         Uses the given database in the connection.
 
         :param database: the database to use
         :return: None
         """
-        async def async_use_database(database: str):
-            return await blocking_use_database(self._connection, database)
-        
-        loop_manager = AsyncioRuntime()
-        loop_manager.loop.run_until_complete(async_use_database(database))
+        await blocking_use_database(self._connection, database)

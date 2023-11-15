@@ -10,14 +10,13 @@ from surrealdb.rust_surrealdb import blocking_query
 from surrealdb.rust_surrealdb import blocking_select
 
 from surrealdb.errors import SurrealDbError
-from surrealdb.asyncio_runtime import AsyncioRuntime 
 
 
-class QueryMixin:
+class AsyncQueryMixin:
     """
     This class is responsible for the interface between python and the Rust SurrealDB library for creating a document.
     """
-    def query(self: "SurrealDB", query: str) -> List[dict]:
+    async def query(self: "SurrealDB", query: str) -> List[dict]:
         """
         queries the database.
 
@@ -25,16 +24,12 @@ class QueryMixin:
 
         :return: None
         """
-        async def _query(connection, query):
-            return await blocking_query(connection, query)
-
         try:
-            loop_manager = AsyncioRuntime()
-            return json.loads(loop_manager.loop.run_until_complete(_query(self._connection, query)))[0]
+            return json.loads(await blocking_query(self._connection, query))[0]
         except Exception as e:
             SurrealDbError(e)
 
-    def select(self: "SurrealDB", resource: str) -> Union[List[dict], dict]:
+    async def select(self: "SurrealDB", resource: str) -> Union[List[dict], dict]:
         """
         Performs a select query on the database for a particular resource.
 
@@ -42,8 +37,4 @@ class QueryMixin:
 
         :return: the result of the select
         """
-        async def _select(connection, resource):
-            return await blocking_select(connection, resource)
-        
-        loop_manager = AsyncioRuntime()
-        return loop_manager.loop.run_until_complete(_select(self._connection, resource))
+        return await blocking_select(self._connection, resource)

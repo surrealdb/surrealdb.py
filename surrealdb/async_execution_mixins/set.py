@@ -6,14 +6,13 @@ import json
 from surrealdb.rust_surrealdb import blocking_set
 
 from surrealdb.errors import SurrealDbError
-from surrealdb.asyncio_runtime import AsyncioRuntime 
 
 
-class SetMixin:
+class AsyncSetMixin:
     """
     This class is responsible for the interface between python and the Rust SurrealDB library for creating a document.
     """
-    def set(self: "SurrealDB", key: str, value: dict) -> None:
+    async def set(self: "SurrealDB", key: str, value: dict) -> None:
         """
         Creates a new document in the database.
 
@@ -22,9 +21,6 @@ class SetMixin:
 
         :return: None
         """
-        async def _set(connection, key, value):
-            return await blocking_set(connection, key, json.dumps(value))
-
         json_str = None
         try:
             json_str = json.dumps(value)
@@ -33,7 +29,6 @@ class SetMixin:
             SurrealDbError(e)
         if json_str is not None:
             try:
-                loop_manager = AsyncioRuntime()
-                loop_manager.loop.run_until_complete(_set(self._connection, key, json_str))
+                await blocking_set(self._connection, key, json.dumps(value))
             except Exception as e:
                 SurrealDbError(e)

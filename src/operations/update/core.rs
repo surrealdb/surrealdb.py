@@ -38,7 +38,7 @@ impl fmt::Debug for Diff {
 /// 
 /// # Returns
 /// * `Ok(Value)` - The result of the update
-pub async fn update(connection: WrappedConnection, resource: String, data: Value) -> Result<Value, String> {
+pub async fn update(connection: WrappedConnection, resource: String, data: Value) -> Result<String, String> {
     let update = match resource.parse::<Range>() {
         Ok(range) => connection.connection.update(Resource::from(range.tb)).range((range.beg, range.end)),
         Err(_) => connection.connection.update(Resource::from(resource)),
@@ -48,7 +48,7 @@ pub async fn update(connection: WrappedConnection, resource: String, data: Value
         Value::Object(_) => update.content(data).await,
         _ => update.await,
     }.map_err(|e| e.to_string())?;
-    Ok(outcome.into_json())
+    Ok(outcome.into_json().to_string())
 }
 
 
@@ -60,13 +60,13 @@ pub async fn update(connection: WrappedConnection, resource: String, data: Value
 /// 
 /// # Returns
 /// * `Ok(Value)` - The result of the merge
-pub async fn merge(connection: WrappedConnection, resource: String, data: Value) -> Result<Value, String> {
+pub async fn merge(connection: WrappedConnection, resource: String, data: Value) -> Result<String, String> {
     let update = match resource.parse::<Range>() {
         Ok(range) => connection.connection.update(Resource::from(range.tb)).range((range.beg, range.end)),
         Err(_) => connection.connection.update(Resource::from(resource)),
     };
     let response = update.merge(data).await.map_err(|e| e.to_string())?;
-    Ok(response.into_json())
+    Ok(response.into_json().to_string())
 }
 
 
@@ -89,7 +89,7 @@ pub async fn merge(connection: WrappedConnection, resource: String, data: Value)
 /// ```
 /// # Returns
 /// an array of the results of the patch for each row that was updated with the patch operation.
-pub async fn patch(connection: WrappedConnection, resource: String, data: Value) -> Result<Value, String> {
+pub async fn patch(connection: WrappedConnection, resource: String, data: Value) -> Result<String, String> {
     let patch = match resource.parse::<Range>() {
         Ok(range) => connection.connection.update(Resource::from(range.tb)).range((range.beg, range.end)),
         Err(_) => connection.connection.update(Resource::from(resource))
@@ -117,7 +117,7 @@ pub async fn patch(connection: WrappedConnection, resource: String, data: Value)
         }),
         None => {
             let response = patch.await.map_err(|e| e.to_string())?;
-            return Ok(response.into_json())
+            return Ok(response.into_json().to_string())
         }
     };
     for p in patches {
@@ -140,7 +140,7 @@ pub async fn patch(connection: WrappedConnection, resource: String, data: Value)
         });
     }
     let response = patch.await.map_err(|e| e.to_string())?;
-    Ok(response.into_json())
+    Ok(response.into_json().to_string())
 }
 
 
@@ -181,7 +181,7 @@ mod tests {
     use crate::operations::query::core::query;
     use crate::connection::core::make_connection;
 	use tokio::runtime::Runtime;
-    use serde_json::from_str;
+    use serde_json::{from_str, Value};
 
 
     async fn prime_database(connection: WrappedConnection) {
@@ -232,6 +232,7 @@ mod tests {
             update(connection.clone(), "user".to_string(), json_value).await.unwrap()
         });
 
+        let outcome: Value = from_str(&outcome).unwrap();
         assert_eq!(outcome.as_array().unwrap().len(), 4);
         assert_eq!(outcome[0]["name"], "John Doe");
 		assert_eq!(outcome[1]["name"], "John Doe");
@@ -253,6 +254,7 @@ mod tests {
             query(connection.clone(), "SELECT * FROM user;".to_string(), None).await.unwrap()
         });
 
+        let outcome: Value = from_str(&outcome).unwrap();
         assert_eq!(outcome[0].as_array().unwrap().len(), 4);
         assert_eq!(outcome[0].as_array().unwrap()[0]["name"], "Tobie");
 		assert_eq!(outcome[0].as_array().unwrap()[1]["name"], "John Doe");
@@ -274,6 +276,7 @@ mod tests {
             query(connection.clone(), "SELECT * FROM user;".to_string(), None).await.unwrap()
         });
 
+        let outcome: Value = from_str(&outcome).unwrap();
         assert_eq!(outcome[0].as_array().unwrap().len(), 4);
         assert_eq!(outcome[0].as_array().unwrap()[0]["name"], "Tobie");
 		assert_eq!(outcome[0].as_array().unwrap()[1]["name"], "John Doe");
@@ -294,6 +297,8 @@ mod tests {
             prime_merge_database(connection.clone()).await;
             merge(connection.clone(), "user".to_string(), json_value).await.unwrap()
         });
+
+        let outcome: Value = from_str(&outcome).unwrap();
         assert_eq!(outcome[0]["name"]["last"], "Doe".to_string());
         assert_eq!(outcome[1]["name"]["last"], "Doe".to_string());
         assert_eq!(outcome[2]["name"]["last"], "Doe".to_string());
@@ -315,6 +320,8 @@ mod tests {
             let _ = merge(connection.clone(), "user:2..4".to_string(), json_value).await.unwrap();
             query(connection.clone(), "SELECT * FROM user;".to_string(), None).await.unwrap()
         });
+
+        let outcome: Value = from_str(&outcome).unwrap();
         assert_eq!(outcome[0].as_array().unwrap()[0]["name"]["last"], "one".to_string());
         assert_eq!(outcome[0].as_array().unwrap()[1]["name"]["last"], "Doe".to_string());
         assert_eq!(outcome[0].as_array().unwrap()[2]["name"]["last"], "Doe".to_string());
@@ -335,6 +342,8 @@ mod tests {
             let _ = merge(connection.clone(), "user:2".to_string(), json_value).await.unwrap();
             query(connection.clone(), "SELECT * FROM user;".to_string(), None).await.unwrap()
         });
+
+        let outcome: Value = from_str(&outcome).unwrap();
         assert_eq!(outcome[0].as_array().unwrap()[0]["name"]["last"], "one".to_string());
         assert_eq!(outcome[0].as_array().unwrap()[1]["name"]["last"], "Doe".to_string());
         assert_eq!(outcome[0].as_array().unwrap()[2]["name"]["last"], "three".to_string());
@@ -367,6 +376,8 @@ mod tests {
             println!("{:?}", outcome);
             query(connection.clone(), "SELECT * FROM user;".to_string(), None).await.unwrap()
         });
+
+        let outcome: Value = from_str(&outcome).unwrap();
         for i in outcome[0].as_array().unwrap() {
             assert_eq!(i["name"]["last"], "Doe".to_string());
         }

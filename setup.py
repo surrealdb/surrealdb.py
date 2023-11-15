@@ -24,7 +24,8 @@ setup(
     rust_extensions=[RustExtension("surrealdb.rust_surrealdb", binding=Binding.PyO3)],
     packages=[
         "surrealdb",
-        "surrealdb.execution_mixins"
+        "surrealdb.execution_mixins",
+        "surrealdb.async_execution_mixins"
     ],
     package_data={
         "surrealdb": ["binaries/*"],

@@ -8,14 +8,13 @@ from surrealdb.rust_surrealdb import blocking_create
 from surrealdb.rust_surrealdb import blocking_delete
 
 from surrealdb.errors import SurrealDbError
-from surrealdb.asyncio_runtime import AsyncioRuntime 
 
 
-class CreateMixin:
+class AsyncCreateMixin:
     """
     This class is responsible for the interface between python and the Rust SurrealDB library for creating a document.
     """
-    def create(self: "SurrealDB", name: str, data: dict) -> None:
+    async def create(self: "SurrealDB", name: str, data: dict) -> None:
         """
         Creates a new document in the database.
 
@@ -24,16 +23,12 @@ class CreateMixin:
 
         :return: None
         """
-        async def _create(connection, name, data):
-            return await blocking_create(connection, name, json.dumps(data))
-
         try:
-            loop_manager = AsyncioRuntime()
-            loop_manager.loop.run_until_complete(_create(self._connection, name, data))
+            return await blocking_create(self._connection, name, json.dumps(data))
         except Exception as e:
             SurrealDbError(e)
 
-    def delete(self: "SurrealDB", name: str) -> Union[List[dict], dict]:
+    async def delete(self: "SurrealDB", name: str) -> Union[List[dict], dict]:
         """
         Deletes a document in the database.
 
@@ -41,11 +36,7 @@ class CreateMixin:
 
         :return: the record or records that were deleted
         """
-        async def _delete(connection, name):
-            return await blocking_delete(connection, name)
-
         try:
-            loop_manager = AsyncioRuntime()
-            return loop_manager.loop.run_until_complete(_delete(self._connection, name))
+            return await blocking_delete(self._connection, name)
         except Exception as e:
             SurrealDbError(e)

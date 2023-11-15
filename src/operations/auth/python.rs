@@ -4,10 +4,10 @@ use pyo3::types::PyAny;
 use serde_json::value::Value;
 
 use crate::connection::interface::WrappedConnection;
-use crate::runtime::RUNTIME;
 
 use super::core::{sign_up, invalidate, authenticate};
 use super::interface::WrappedJwt;
+use crate::py_future_wrapper;
 
 
 /// Creates a new record in the database in an non-async manner.
@@ -20,12 +20,9 @@ use super::interface::WrappedJwt;
 /// # Returns
 /// * `Ok(())` - The operation was successful
 #[pyfunction]
-pub fn blocking_sign_up<'a>(connection: WrappedConnection, params: &'a PyAny, namespace: String, database: String, scope: String) -> Result<WrappedJwt, PyErr> {
+pub fn blocking_sign_up<'a>(py: Python<'a>, connection: WrappedConnection, params: &'a PyAny, namespace: String, database: String, scope: String) -> Result<&'a PyAny, PyErr> {
     let params: Value = serde_json::from_str(&params.to_string()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-
-    RUNTIME.block_on(async move{
-        return sign_up(connection, params, namespace, database, scope).await.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
-    })
+    py_future_wrapper!(py, sign_up(connection, params, namespace, database, scope))
 }
 
 
@@ -37,10 +34,8 @@ pub fn blocking_sign_up<'a>(connection: WrappedConnection, params: &'a PyAny, na
 /// # Returns
 /// * `Ok(())` - The operation was successful
 #[pyfunction]
-pub fn blocking_invalidate(connection: WrappedConnection) -> Result<(), PyErr> {
-    RUNTIME.block_on(async move{
-        return invalidate(connection).await.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
-    })
+pub fn blocking_invalidate(py: Python, connection: WrappedConnection) -> Result<&PyAny, PyErr> {
+    py_future_wrapper!(py, invalidate(connection))
 }
 
 
@@ -53,8 +48,6 @@ pub fn blocking_invalidate(connection: WrappedConnection) -> Result<(), PyErr> {
 /// # Returns
 /// * `Ok(())` - The operation was successful
 #[pyfunction]
-pub fn blocking_authenticate(connection: WrappedConnection, jwt: WrappedJwt) -> Result<(), PyErr> {
-    RUNTIME.block_on(async move{
-        return authenticate(connection, jwt).await.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
-    })
+pub fn blocking_authenticate(py: Python, connection: WrappedConnection, jwt: WrappedJwt) -> Result<&PyAny, PyErr> {
+    py_future_wrapper!(py, authenticate(connection, jwt))
 }

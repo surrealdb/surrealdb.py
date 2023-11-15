@@ -19,7 +19,7 @@ use surrealdb::sql::Range;
 /// 
 /// # Returns
 /// * `Ok(Value)` - The result of the query
-pub async fn query(connection: WrappedConnection, sql: String, bindings: Option<Value>) -> Result<Value, String> {
+pub async fn query(connection: WrappedConnection, sql: String, bindings: Option<Value>) -> Result<String, String> {
 	let mut response = match bindings {
 		Some(bind) => {connection.connection.query(sql).bind(bind).await},
 		None => {connection.connection.query(sql).await}
@@ -35,7 +35,7 @@ pub async fn query(connection: WrappedConnection, sql: String, bindings: Option<
 		output.push(value.into_json());
 	}
 	let json_value: Value = Value::Array(output);
-	Ok(json_value)
+	Ok(json_value.to_string())
 }
 
 /// Performs a select on the database.
@@ -46,7 +46,7 @@ pub async fn query(connection: WrappedConnection, sql: String, bindings: Option<
 /// 
 /// # Returns
 /// * `Ok(Value)` - The result of the select
-pub async fn select(connection: WrappedConnection, resource: String) -> Result<Value, String> {
+pub async fn select(connection: WrappedConnection, resource: String) -> Result<String, String> {
 	let response = match resource.parse::<Range>() {
 		Ok(range) => {
 			connection.connection.select(Resource::from(range.tb)).range((range.beg, range.end))
@@ -55,7 +55,7 @@ pub async fn select(connection: WrappedConnection, resource: String) -> Result<V
 		Err(_) => connection.connection.select(Resource::from(resource))
 									   .await.map_err(|e| e.to_string())?
 	};
-	Ok(response.into_json())
+	Ok(response.into_json().to_string())
 }
 
 
@@ -64,6 +64,7 @@ mod tests {
 	use super::*;
 	use crate::connection::core::make_connection;
 	use tokio::runtime::Runtime;
+	use serde_json::{from_str, Value};
 
 	#[test]
 	fn test_query() {
@@ -81,6 +82,7 @@ mod tests {
 			query(connection, "SELECT * FROM user;".to_string(), None).await.unwrap()
 		});
 
+		let outcome: Value = from_str(&outcome).unwrap();
 		assert_eq!(outcome[0].as_array().unwrap()[0]["name"], "Jaime");
 		assert_eq!(outcome[0].as_array().unwrap()[1]["name"], "Tobie");
 	}
@@ -102,6 +104,7 @@ mod tests {
 			select(connection, "user".to_string()).await.unwrap()
 		});
 
+		let outcome: Value = from_str(&outcome).unwrap();
 		assert_eq!(outcome.as_array().unwrap().len(), 3);
 		assert_eq!(outcome[0]["name"], "Tobie");
 		assert_eq!(outcome[1]["name"], "Jaime");
@@ -125,6 +128,7 @@ mod tests {
 			select(connection, "user:1..4".to_string()).await.unwrap()
 		});
 
+		let outcome: Value = from_str(&outcome).unwrap();
 		assert_eq!(outcome.as_array().unwrap().len(), 3);
 		assert_eq!(outcome[0]["name"], "Tobie");
 		assert_eq!(outcome[1]["name"], "Jaime");
@@ -148,6 +152,7 @@ mod tests {
 			select(connection, "user:2".to_string()).await.unwrap()
 		});
 
+		let outcome: Value = from_str(&outcome).unwrap();
 		assert_eq!(outcome["name"], "Jaime");
 		assert_eq!(outcome["id"], "user:2");
 	}

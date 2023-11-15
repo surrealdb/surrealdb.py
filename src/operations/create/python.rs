@@ -4,8 +4,8 @@ use pyo3::types::PyAny;
 use serde_json::value::Value;
 
 use crate::connection::interface::WrappedConnection;
-use crate::runtime::RUNTIME;
 use super::core::{create, delete};
+use crate::py_future_wrapper;
 
 
 /// Creates a new record in the database in an non-async manner.
@@ -19,14 +19,9 @@ use super::core::{create, delete};
 /// # Returns
 /// * `Ok(())` - The operation was successful
 #[pyfunction]
-pub fn blocking_create<'a>(connection: WrappedConnection, table_name: String, data: &'a PyAny) -> Result<(), PyErr> {
+pub fn blocking_create<'a>(py: Python<'a>, connection: WrappedConnection, table_name: String, data: &'a PyAny) -> Result<&'a PyAny, PyErr> {
     let data: Value = serde_json::from_str(&data.to_string()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-
-    let outcome = RUNTIME.block_on(async move{
-        return create(connection, table_name, data).await.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
-    });
-    outcome?;
-    Ok(())
+    py_future_wrapper!(py, create(connection, table_name, data))
 }
 
 
@@ -39,9 +34,6 @@ pub fn blocking_create<'a>(connection: WrappedConnection, table_name: String, da
 /// # Returns
 /// * `Ok(())` - The operation was successful
 #[pyfunction]
-pub fn blocking_delete(connection: WrappedConnection, resource: String) -> Result<String, PyErr> {
-    let outcome = RUNTIME.block_on(async move{
-        return delete(connection, resource).await.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
-    })?;
-    Ok(outcome.to_string())
+pub fn blocking_delete(py: Python, connection: WrappedConnection, resource: String) -> Result<&PyAny, PyErr> {
+    py_future_wrapper!(py, delete(connection, resource))
 }
