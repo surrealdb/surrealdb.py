@@ -6,8 +6,8 @@ https://github.com/surrealdb/surrealdb/blob/main/lib/tests/fetch.rs
 import json
 from typing import List, Union
 
-from surrealdb.rust_surrealdb import blocking_query
-from surrealdb.rust_surrealdb import blocking_select
+from surrealdb.rust_surrealdb import rust_query_future
+from surrealdb.rust_surrealdb import rust_select_future
 
 from surrealdb.errors import SurrealDbError
 from surrealdb.asyncio_runtime import AsyncioRuntime 
@@ -26,7 +26,7 @@ class QueryMixin:
         :return: None
         """
         async def _query(connection, query):
-            return await blocking_query(connection, query)
+            return await rust_query_future(connection, query)
 
         try:
             loop_manager = AsyncioRuntime()
@@ -43,7 +43,7 @@ class QueryMixin:
         :return: the result of the select
         """
         async def _select(connection, resource):
-            return await blocking_select(connection, resource)
-        
+            return await rust_select_future(connection, resource)
+
         loop_manager = AsyncioRuntime()
         return loop_manager.loop.run_until_complete(_select(self._connection, resource))

@@ -18,16 +18,15 @@ connection = SurrealDB(url="ws://localhost:8080", existing_connection_id="some_c
 import uuid
 from typing import Optional
 
-from surrealdb.rust_surrealdb import blocking_make_connection
-from surrealdb.rust_surrealdb import blocking_use_namespace
-from surrealdb.rust_surrealdb import blocking_use_database
+from surrealdb.rust_surrealdb import rust_make_connection_future
+from surrealdb.rust_surrealdb import rust_use_namespace_future
+from surrealdb.rust_surrealdb import rust_use_database_future
 
 # import the mixins for operations for the connection
 from surrealdb.async_execution_mixins.create import AsyncCreateMixin
 from surrealdb.async_execution_mixins.auth import AsyncSignInMixin
 from surrealdb.async_execution_mixins.set import AsyncSetMixin
 from surrealdb.async_execution_mixins.query import AsyncQueryMixin
-from surrealdb.async_execution_mixins.set import AsyncSetMixin
 from surrealdb.async_execution_mixins.update import AsyncUpdateMixin
 
 
@@ -120,7 +119,7 @@ class AsyncSurrealDB(
         :param existing_connection_id: the existing connection id to use instead of making a new connection
         :return: the connection id of the connection
         """
-        connection_id = await blocking_make_connection(url)
+        connection_id = await rust_make_connection_future(url)
         return connection_id
 
     async def use_namespace(self, namespace: str) -> None:
@@ -130,7 +129,7 @@ class AsyncSurrealDB(
         :param namespace: the namespace to use
         :return: None
         """
-        await blocking_use_namespace(self._connection, namespace)
+        await rust_use_namespace_future(self._connection, namespace)
 
     async def use_database(self, database: str) -> None:
         """
@@ -139,4 +138,4 @@ class AsyncSurrealDB(
         :param database: the database to use
         :return: None
         """
-        await blocking_use_database(self._connection, database)
+        await rust_use_database_future(self._connection, database)

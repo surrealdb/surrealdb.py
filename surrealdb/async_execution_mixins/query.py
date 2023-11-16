@@ -6,8 +6,8 @@ https://github.com/surrealdb/surrealdb/blob/main/lib/tests/fetch.rs
 import json
 from typing import List, Union
 
-from surrealdb.rust_surrealdb import blocking_query
-from surrealdb.rust_surrealdb import blocking_select
+from surrealdb.rust_surrealdb import rust_query_future
+from surrealdb.rust_surrealdb import rust_select_future
 
 from surrealdb.errors import SurrealDbError
 
@@ -25,7 +25,7 @@ class AsyncQueryMixin:
         :return: None
         """
         try:
-            return json.loads(await blocking_query(self._connection, query))[0]
+            return json.loads(await rust_query_future(self._connection, query))[0]
         except Exception as e:
             SurrealDbError(e)
 
@@ -37,4 +37,4 @@ class AsyncQueryMixin:
 
         :return: the result of the select
         """
-        return await blocking_select(self._connection, resource)
+        return await rust_select_future(self._connection, resource)

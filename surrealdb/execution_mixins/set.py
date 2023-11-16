@@ -3,7 +3,7 @@ This file defines the interface between python and the Rust SurrealDB library fo
 """
 import json
 
-from surrealdb.rust_surrealdb import blocking_set
+from surrealdb.rust_surrealdb import rust_set_future
 
 from surrealdb.errors import SurrealDbError
 from surrealdb.asyncio_runtime import AsyncioRuntime 
@@ -23,7 +23,7 @@ class SetMixin:
         :return: None
         """
         async def _set(connection, key, value):
-            return await blocking_set(connection, key, json.dumps(value))
+            return await rust_set_future(connection, key, json.dumps(value))
 
         json_str = None
         try:

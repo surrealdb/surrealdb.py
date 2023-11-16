@@ -2,7 +2,6 @@
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 use serde_json::value::Value;
-use futures::executor::block_on;
 
 use crate::connection::interface::WrappedConnection;
 use super::core::{
@@ -22,7 +21,7 @@ use crate::py_future_wrapper;
 /// # Returns
 /// * `Ok(())` - The operation was successful
 #[pyfunction]
-pub fn blocking_set<'a>(py: Python<'a>, connection: WrappedConnection, key: String, value: &'a PyAny) -> Result<&'a PyAny, PyErr> {
+pub fn rust_set_future<'a>(py: Python<'a>, connection: WrappedConnection, key: String, value: &'a PyAny) -> Result<&'a PyAny, PyErr> {
     let value: Value = serde_json::from_str(&value.to_string()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
     py_future_wrapper!(py, set(connection, key, value))
 }
@@ -37,6 +36,6 @@ pub fn blocking_set<'a>(py: Python<'a>, connection: WrappedConnection, key: Stri
 /// # Returns
 /// * `Ok(())` - The operation was successful
 #[pyfunction]
-pub fn blocking_unset(py: Python, connection: WrappedConnection, key: String) -> Result<&PyAny, PyErr> {
+pub fn rust_unset_future(py: Python, connection: WrappedConnection, key: String) -> Result<&PyAny, PyErr> {
     py_future_wrapper!(py, unset(connection, key))
 }

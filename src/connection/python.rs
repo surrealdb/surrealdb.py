@@ -20,7 +20,7 @@ use crate::py_future_wrapper;
 /// # Returns
 /// * `Ok(String)` - The unique ID for the connection that was just made
 #[pyfunction]
-pub fn blocking_make_connection(py: Python, url: String) -> PyResult<&PyAny> {
+pub fn rust_make_connection_future(py: Python, url: String) -> PyResult<&PyAny> {
     py_future_wrapper!(py, make_connection(url))
 }
 
@@ -34,7 +34,7 @@ pub fn blocking_make_connection(py: Python, url: String) -> PyResult<&PyAny> {
 /// # Returns
 /// * `Ok(String)` - Simple message that the connection has been assigned a namespace
 #[pyfunction]
-pub fn blocking_use_namespace(py: Python, connection: WrappedConnection, namespace: String) -> Result<&PyAny, PyErr> {
+pub fn rust_use_namespace_future(py: Python, connection: WrappedConnection, namespace: String) -> Result<&PyAny, PyErr> {
     py_future_wrapper!(py, use_namespace(connection, namespace))
 }
 
@@ -48,7 +48,7 @@ pub fn blocking_use_namespace(py: Python, connection: WrappedConnection, namespa
 /// # Returns
 /// * `Ok(String)` - Simple message that the connection has been assigned a database
 #[pyfunction]
-pub fn blocking_use_database(py: Python, connection: WrappedConnection, database: String) -> Result<&PyAny, PyErr> {
+pub fn rust_use_database_future(py: Python, connection: WrappedConnection, database: String) -> Result<&PyAny, PyErr> {
     py_future_wrapper!(py, use_database(connection, database))
 }
 
@@ -63,6 +63,6 @@ pub fn blocking_use_database(py: Python, connection: WrappedConnection, database
 /// # Returns
 /// * `Ok(())` - If the sign in was successful
 #[pyfunction]
-pub fn blocking_sign_in(py: Python, connection: WrappedConnection, username: String, password: String) -> Result<&PyAny, PyErr> {
+pub fn rust_sign_in_future(py: Python, connection: WrappedConnection, username: String, password: String) -> Result<&PyAny, PyErr> {
     py_future_wrapper!(py, sign_in(connection, username, password))
 }

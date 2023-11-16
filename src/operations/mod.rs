@@ -15,16 +15,16 @@ pub mod auth;
 /// # Returns
 /// * `()` - Nothing
 pub fn operations_module_factory(m: &PyModule) {
-    let _ = m.add_wrapped(wrap_pyfunction!(create::python::blocking_create));
-    let _ = m.add_wrapped(wrap_pyfunction!(create::python::blocking_delete));
-    let _ = m.add_wrapped(wrap_pyfunction!(set::python::blocking_set));
-    let _ = m.add_wrapped(wrap_pyfunction!(set::python::blocking_unset));
-    let _ = m.add_wrapped(wrap_pyfunction!(query::python::blocking_query));
-    let _ = m.add_wrapped(wrap_pyfunction!(query::python::blocking_select));
-    let _ = m.add_wrapped(wrap_pyfunction!(auth::python::blocking_sign_up));
-    let _ = m.add_wrapped(wrap_pyfunction!(auth::python::blocking_invalidate));
-    let _ = m.add_wrapped(wrap_pyfunction!(auth::python::blocking_authenticate));
-    let _ = m.add_wrapped(wrap_pyfunction!(update::python::blocking_update));
-    let _ = m.add_wrapped(wrap_pyfunction!(update::python::blocking_merge));
-    let _ = m.add_wrapped(wrap_pyfunction!(update::python::blocking_patch));
+    let _ = m.add_wrapped(wrap_pyfunction!(create::python::rust_create_future));
+    let _ = m.add_wrapped(wrap_pyfunction!(create::python::rust_delete_future));
+    let _ = m.add_wrapped(wrap_pyfunction!(set::python::rust_set_future));
+    let _ = m.add_wrapped(wrap_pyfunction!(set::python::rust_unset_future));
+    let _ = m.add_wrapped(wrap_pyfunction!(query::python::rust_query_future));
+    let _ = m.add_wrapped(wrap_pyfunction!(query::python::rust_select_future));
+    let _ = m.add_wrapped(wrap_pyfunction!(auth::python::rust_sign_up_future));
+    let _ = m.add_wrapped(wrap_pyfunction!(auth::python::rust_invalidate_future));
+    let _ = m.add_wrapped(wrap_pyfunction!(auth::python::rust_authenticate_future));
+    let _ = m.add_wrapped(wrap_pyfunction!(update::python::rust_update_future));
+    let _ = m.add_wrapped(wrap_pyfunction!(update::python::rust_merge_future));
+    let _ = m.add_wrapped(wrap_pyfunction!(update::python::rust_patch_future));
 }

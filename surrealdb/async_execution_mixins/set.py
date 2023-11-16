@@ -3,7 +3,7 @@ This file defines the interface between python and the Rust SurrealDB library fo
 """
 import json
 
-from surrealdb.rust_surrealdb import blocking_set
+from surrealdb.rust_surrealdb import rust_set_future
 
 from surrealdb.errors import SurrealDbError
 
@@ -29,6 +29,6 @@ class AsyncSetMixin:
             SurrealDbError(e)
         if json_str is not None:
             try:
-                await blocking_set(self._connection, key, json.dumps(value))
+                await rust_set_future(self._connection, key, json.dumps(value))
             except Exception as e:
                 SurrealDbError(e)

@@ -22,7 +22,7 @@ use crate::py_future_wrapper;
 /// # Returns
 /// * `Ok(String)` - The outcome of the update operation
 #[pyfunction]
-pub fn blocking_update<'a>(py: Python<'a>, connection: WrappedConnection, resource: String, data: &'a PyAny) -> Result<&'a PyAny, PyErr> {
+pub fn rust_update_future<'a>(py: Python<'a>, connection: WrappedConnection, resource: String, data: &'a PyAny) -> Result<&'a PyAny, PyErr> {
     let data: Value = serde_json::from_str(&data.to_string()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
     py_future_wrapper!(py, update(connection, resource, data))
 }
@@ -38,7 +38,7 @@ pub fn blocking_update<'a>(py: Python<'a>, connection: WrappedConnection, resour
 /// # Returns
 /// * `Ok(String)` - The outcome of the merge operation
 #[pyfunction]
-pub fn blocking_merge<'a>(py: Python<'a>, connection: WrappedConnection, resource: String, data: &'a PyAny) -> Result<&'a PyAny, PyErr> {
+pub fn rust_merge_future<'a>(py: Python<'a>, connection: WrappedConnection, resource: String, data: &'a PyAny) -> Result<&'a PyAny, PyErr> {
     let data: Value = serde_json::from_str(&data.to_string()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
     py_future_wrapper!(py, merge(connection, resource, data))
 }
@@ -54,7 +54,7 @@ pub fn blocking_merge<'a>(py: Python<'a>, connection: WrappedConnection, resourc
 /// # Returns
 /// * `Ok(String)` - The outcome of the patch operation
 #[pyfunction]
-pub fn blocking_patch<'a>(py: Python<'a>, connection: WrappedConnection, resource: String, data: &'a PyAny) -> Result<&'a PyAny, PyErr> {
+pub fn rust_patch_future<'a>(py: Python<'a>, connection: WrappedConnection, resource: String, data: &'a PyAny) -> Result<&'a PyAny, PyErr> {
     let data: Value = serde_json::from_str(&data.to_string()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
     py_future_wrapper!(py, patch(connection, resource, data))
 }

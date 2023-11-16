@@ -19,7 +19,7 @@ use crate::py_future_wrapper;
 /// # Returns
 /// * `Ok(())` - The operation was successful
 #[pyfunction]
-pub fn blocking_create<'a>(py: Python<'a>, connection: WrappedConnection, table_name: String, data: &'a PyAny) -> Result<&'a PyAny, PyErr> {
+pub fn rust_create_future<'a>(py: Python<'a>, connection: WrappedConnection, table_name: String, data: &'a PyAny) -> Result<&'a PyAny, PyErr> {
     let data: Value = serde_json::from_str(&data.to_string()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
     py_future_wrapper!(py, create(connection, table_name, data))
 }
@@ -34,6 +34,6 @@ pub fn blocking_create<'a>(py: Python<'a>, connection: WrappedConnection, table_
 /// # Returns
 /// * `Ok(())` - The operation was successful
 #[pyfunction]
-pub fn blocking_delete(py: Python, connection: WrappedConnection, resource: String) -> Result<&PyAny, PyErr> {
+pub fn rust_delete_future(py: Python, connection: WrappedConnection, resource: String) -> Result<&PyAny, PyErr> {
     py_future_wrapper!(py, delete(connection, resource))
 }

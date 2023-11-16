@@ -18,7 +18,7 @@ use crate::py_future_wrapper;
 /// # Returns
 /// * `Ok(())` - The operation was successful
 #[pyfunction]
-pub fn blocking_query<'a>(py: Python<'a>, connection: WrappedConnection, sql: String, bindings: Option<&'a PyAny>) -> Result<&'a PyAny, PyErr> {
+pub fn rust_query_future<'a>(py: Python<'a>, connection: WrappedConnection, sql: String, bindings: Option<&'a PyAny>) -> Result<&'a PyAny, PyErr> {
 
     let processed_bindings = match bindings {
         Some(bindings) => {
@@ -40,6 +40,6 @@ pub fn blocking_query<'a>(py: Python<'a>, connection: WrappedConnection, sql: St
 /// # Returns
 /// * `Ok(String)` - The result of the select
 #[pyfunction]
-pub fn blocking_select(py: Python, connection: WrappedConnection, resource: String) -> Result<&PyAny, PyErr> {
+pub fn rust_select_future(py: Python, connection: WrappedConnection, resource: String) -> Result<&PyAny, PyErr> {
     py_future_wrapper!(py, select(connection, resource))
 }

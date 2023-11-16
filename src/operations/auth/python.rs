@@ -20,7 +20,7 @@ use crate::py_future_wrapper;
 /// # Returns
 /// * `Ok(())` - The operation was successful
 #[pyfunction]
-pub fn blocking_sign_up<'a>(py: Python<'a>, connection: WrappedConnection, params: &'a PyAny, namespace: String, database: String, scope: String) -> Result<&'a PyAny, PyErr> {
+pub fn rust_sign_up_future<'a>(py: Python<'a>, connection: WrappedConnection, params: &'a PyAny, namespace: String, database: String, scope: String) -> Result<&'a PyAny, PyErr> {
     let params: Value = serde_json::from_str(&params.to_string()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
     py_future_wrapper!(py, sign_up(connection, params, namespace, database, scope))
 }
@@ -34,7 +34,7 @@ pub fn blocking_sign_up<'a>(py: Python<'a>, connection: WrappedConnection, param
 /// # Returns
 /// * `Ok(())` - The operation was successful
 #[pyfunction]
-pub fn blocking_invalidate(py: Python, connection: WrappedConnection) -> Result<&PyAny, PyErr> {
+pub fn rust_invalidate_future(py: Python, connection: WrappedConnection) -> Result<&PyAny, PyErr> {
     py_future_wrapper!(py, invalidate(connection))
 }
 
@@ -48,6 +48,6 @@ pub fn blocking_invalidate(py: Python, connection: WrappedConnection) -> Result<
 /// # Returns
 /// * `Ok(())` - The operation was successful
 #[pyfunction]
-pub fn blocking_authenticate(py: Python, connection: WrappedConnection, jwt: WrappedJwt) -> Result<&PyAny, PyErr> {
+pub fn rust_authenticate_future(py: Python, connection: WrappedConnection, jwt: WrappedJwt) -> Result<&PyAny, PyErr> {
     py_future_wrapper!(py, authenticate(connection, jwt))
 }

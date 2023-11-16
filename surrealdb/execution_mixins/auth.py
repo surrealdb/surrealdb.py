@@ -3,9 +3,9 @@ This file defines the interface between python and the Rust SurrealDB library fo
 """
 from typing import Dict, Optional
 
-from surrealdb.rust_surrealdb import blocking_authenticate
-from surrealdb.rust_surrealdb import blocking_sign_in
-from surrealdb.rust_surrealdb import blocking_sign_up
+from surrealdb.rust_surrealdb import rust_authenticate_future
+from surrealdb.rust_surrealdb import rust_sign_in_future
+from surrealdb.rust_surrealdb import rust_sign_up_future
 
 from surrealdb.errors import SurrealDbError
 from surrealdb.asyncio_runtime import AsyncioRuntime
@@ -25,7 +25,7 @@ class SignInMixin:
         :return: None
         """
         async def _signin(connection, password, username):
-            return await blocking_sign_in(connection, password, username)
+            return await rust_sign_in_future(connection, password, username)
 
         if data is None:
             data = dict()
@@ -50,7 +50,7 @@ class SignInMixin:
         :return: an JWT for that auth scope
         """
         async def _signup(connection, data, namespace, database):
-            return await blocking_sign_up(connection, data, namespace, database)
+            return await rust_sign_up_future(connection, data, namespace, database)
 
         try:
             loop_manager = AsyncioRuntime()
@@ -66,7 +66,7 @@ class SignInMixin:
         :return: None
         """
         async def _authenticate(connection, jwt):
-            return await blocking_authenticate(connection, jwt)
+            return await rust_authenticate_future(connection, jwt)
 
         try:
             loop_manager = AsyncioRuntime()

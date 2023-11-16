@@ -4,8 +4,8 @@ This file defines the interface between python and the Rust SurrealDB library fo
 import json
 from typing import List, Union
 
-from surrealdb.rust_surrealdb import blocking_create
-from surrealdb.rust_surrealdb import blocking_delete
+from surrealdb.rust_surrealdb import rust_create_future
+from surrealdb.rust_surrealdb import rust_delete_future
 
 from surrealdb.errors import SurrealDbError
 from surrealdb.asyncio_runtime import AsyncioRuntime 
@@ -25,7 +25,7 @@ class CreateMixin:
         :return: None
         """
         async def _create(connection, name, data):
-            return await blocking_create(connection, name, json.dumps(data))
+            return await rust_create_future(connection, name, json.dumps(data))
 
         try:
             loop_manager = AsyncioRuntime()
@@ -42,7 +42,7 @@ class CreateMixin:
         :return: the record or records that were deleted
         """
         async def _delete(connection, name):
-            return await blocking_delete(connection, name)
+            return await rust_delete_future(connection, name)
 
         try:
             loop_manager = AsyncioRuntime()

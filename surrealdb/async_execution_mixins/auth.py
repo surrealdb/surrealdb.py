@@ -3,9 +3,9 @@ This file defines the interface between python and the Rust SurrealDB library fo
 """
 from typing import Dict, Optional
 
-from surrealdb.rust_surrealdb import blocking_authenticate
-from surrealdb.rust_surrealdb import blocking_sign_in
-from surrealdb.rust_surrealdb import blocking_sign_up
+from surrealdb.rust_surrealdb import rust_authenticate_future
+from surrealdb.rust_surrealdb import rust_sign_in_future
+from surrealdb.rust_surrealdb import rust_sign_up_future
 
 from surrealdb.errors import SurrealDbError
 
@@ -29,7 +29,7 @@ class AsyncSignInMixin:
 
         password: str = data.get("password", data.get("pass", data.get("p", "root")))
         username: str = data.get("username", data.get("user", data.get("u", "root")))
-        await blocking_sign_in(self._connection, password, username)
+        await rust_sign_in_future(self._connection, password, username)
 
     async def signup(self: "SurrealDB", namespace: str, database: str, data: Optional[Dict[str, str]] = None) -> str:
         """
@@ -40,7 +40,7 @@ class AsyncSignInMixin:
         :param data: the data to sign up with
         :return: an JWT for that auth scope
         """
-        return await blocking_sign_up(self._connection, data, namespace, database)
+        return await rust_sign_up_future(self._connection, data, namespace, database)
 
     async def authenticate(self: "SurrealDB", jwt: str) -> bool:
         """
@@ -50,6 +50,6 @@ class AsyncSignInMixin:
         :return: None
         """
         try:
-            return await blocking_authenticate(self._connection, jwt)
+            return await rust_authenticate_future(self._connection, jwt)
         except Exception as e:
             SurrealDbError(e)

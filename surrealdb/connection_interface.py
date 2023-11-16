@@ -18,9 +18,9 @@ connection = SurrealDB(url="ws://localhost:8080", existing_connection_id="some_c
 import uuid
 from typing import Optional
 
-from surrealdb.rust_surrealdb import blocking_make_connection
-from surrealdb.rust_surrealdb import blocking_use_namespace
-from surrealdb.rust_surrealdb import blocking_use_database
+from surrealdb.rust_surrealdb import rust_make_connection_future
+from surrealdb.rust_surrealdb import rust_use_namespace_future
+from surrealdb.rust_surrealdb import rust_use_database_future
 from surrealdb.asyncio_runtime import AsyncioRuntime
 
 from surrealdb.execution_mixins.auth import SignInMixin
@@ -118,8 +118,8 @@ class SurrealDB(
         :return: the connection id of the connection
         """
         async def async_make_connection(url: str):
-            return await blocking_make_connection(url)
-        
+            return await rust_make_connection_future(url)
+
         loop_manager = AsyncioRuntime()
         connection_id = loop_manager.loop.run_until_complete(async_make_connection(url))
         return connection_id
@@ -132,8 +132,8 @@ class SurrealDB(
         :return: None
         """
         async def async_use_namespace(namespace: str):
-            return await blocking_use_namespace(self._connection, namespace)
-        
+            return await rust_use_namespace_future(self._connection, namespace)
+
         loop_manager = AsyncioRuntime()
         loop_manager.loop.run_until_complete(async_use_namespace(namespace))
 
@@ -145,7 +145,7 @@ class SurrealDB(
         :return: None
         """
         async def async_use_database(database: str):
-            return await blocking_use_database(self._connection, database)
-        
+            return await rust_use_database_future(self._connection, database)
+
         loop_manager = AsyncioRuntime()
         loop_manager.loop.run_until_complete(async_use_database(database))

@@ -4,9 +4,9 @@ This file defines the interface between python and the Rust SurrealDB library fo
 import json
 from typing import List, Union
 
-from surrealdb.rust_surrealdb import blocking_merge
-from surrealdb.rust_surrealdb import blocking_update
-from surrealdb.rust_surrealdb import blocking_patch
+from surrealdb.rust_surrealdb import rust_merge_future
+from surrealdb.rust_surrealdb import rust_update_future
+from surrealdb.rust_surrealdb import rust_patch_future
 
 from surrealdb.errors import SurrealDbError
 from surrealdb.asyncio_runtime import AsyncioRuntime 
@@ -25,7 +25,7 @@ class UpdateMixin:
         :return: the updated resource such as an individual row or a list of rows
         """
         async def _update(connection, resource, data):
-            return await blocking_update(connection, resource, data)
+            return await rust_update_future(connection, resource, data)
 
         try:
             loop_manager = AsyncioRuntime()
@@ -42,7 +42,7 @@ class UpdateMixin:
         :return: the updated resource such as an individual row or a list of rows
         """
         async def _merge(connection, resource, data):
-            return await blocking_merge(connection, resource, data)
+            return await rust_merge_future(connection, resource, data)
 
         try:
             loop_manager = AsyncioRuntime()
@@ -59,7 +59,7 @@ class UpdateMixin:
         :return: the updated resource such as an individual row or a list of rows
         """
         async def _patch(connection, resource, data):
-            return await blocking_patch(connection, resource, data)
+            return await rust_patch_future(connection, resource, data)
 
         try:
             loop_manager = AsyncioRuntime()
