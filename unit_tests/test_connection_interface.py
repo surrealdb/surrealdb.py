@@ -29,10 +29,10 @@ class TestSurrealDB(TestCase):
         Resets all rust interface functions.
         """
         from surrealdb.connection_interface import ConnectionController
-        rust_interface_mock.blocking_make_connection.reset_mock()
-        rust_interface_mock.blocking_sign_in.reset_mock()
-        rust_interface_mock.blocking_set.reset_mock()
-        rust_interface_mock.blocking_query.reset_mock()
+        rust_interface_mock.rust_make_connection_future.reset_mock()
+        rust_interface_mock.rust_sign_in_future.reset_mock()
+        rust_interface_mock.rust_set_future.reset_mock()
+        rust_interface_mock.rust_query_future.reset_mock()
         ConnectionController.instances = {}
         ConnectionController.main_connection = None
 

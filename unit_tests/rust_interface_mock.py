@@ -10,27 +10,27 @@ that the python bindings are still working as expected.
 from unittest.mock import MagicMock
 
 # connection interface
-blocking_make_connection = MagicMock()
-blocking_use_namespace = MagicMock()
-blocking_use_database = MagicMock()
+rust_make_connection_future = MagicMock()
+rust_use_namespace_future = MagicMock()
+rust_use_database_future = MagicMock()
 
 # auth mixins
-blocking_sign_in = MagicMock()
-blocking_authenticate = MagicMock()
-blocking_sign_up = MagicMock()
+rust_sign_in_future = MagicMock()
+rust_authenticate_future = MagicMock()
+rust_sign_up_future = MagicMock()
 
 # create mixins
-blocking_create = MagicMock()
-blocking_delete = MagicMock()
+rust_create_future = MagicMock()
+rust_delete_future = MagicMock()
 
 # query mixins 
-blocking_query= MagicMock()
-blocking_select = MagicMock()
+rust_query_future = MagicMock()
+rust_select_future = MagicMock()
 
 # set mixins
-blocking_set = MagicMock()
+rust_set_future = MagicMock()
 
 # update mixins
-blocking_merge = MagicMock()
-blocking_update = MagicMock()
-blocking_patch = MagicMock()
+rust_merge_future = MagicMock()
+rust_update_future = MagicMock()
+rust_patch_future = MagicMock()

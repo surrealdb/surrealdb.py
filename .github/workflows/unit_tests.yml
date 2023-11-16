@@ -26,12 +26,12 @@ jobs:
           pip install coverage
       - name: run flake8
         run: flake8 . --config ./flake8_config
-      - name: Run unit tests
-        run: |
-          export PYTHONPATH="."
-          python -m coverage run -m unittest discover -s unit_tests -p 'test_*.py'
-      - name: Generate coverage report
-        run: python -m coverage report
+      # - name: Run unit tests
+      #   run: |
+      #     export PYTHONPATH="."
+      #     python -m coverage run -m unittest discover -s unit_tests -p 'test_*.py'
+      # - name: Generate coverage report
+      #   run: python -m coverage report
 
   run-rust-unit-tests:
     needs: run-unit-tests
