@@ -19,7 +19,7 @@ import enum
 import json
 import uuid
 from types import TracebackType
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union, AsyncIterator
 
 import pydantic
 import websockets
@@ -69,6 +69,7 @@ class ConnectionState(enum.Enum):
     CONNECTING = 0
     CONNECTED = 1
     DISCONNECTED = 2
+    LISTENING = 3
 
 
 class Request(pydantic.BaseModel):
@@ -105,7 +106,7 @@ class ResponseSuccess(pydantic.BaseModel):
         result: The result of the request.
     """
 
-    id: str
+    id: Optional[str]
     result: Any
 
     class Config:
@@ -161,6 +162,44 @@ def _validate_response(
         raise exception(response.message)
     return response
 
+
+# ------------------------------------------------------------------------
+# Live Stream Manager
+
+class LiveStream:
+    def __init__(self, client: Surreal, request: Request):
+        self.client = client
+        self.request = request
+        self.query_id = None
+
+    async def __aenter__(self):
+        # Setup connection and get query ID
+        response = await self.client._send_receive(
+            self.request
+        )
+        success: ResponseSuccess = _validate_response(response)
+        if isinstance(success.result, str):
+            self.query_id = success.result
+        else:
+            self.query_id = success.result[0]['result']
+        self.client.client_state = ConnectionState.LISTENING
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        # Teardown connection using query ID
+        if self.query_id:
+            await self.client._send_receive(
+                Request(id=generate_uuid(), method="kill", params=(self.query_id,))
+            )
+        self.client.client_state = ConnectionState.CONNECTED
+    
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        response = await self.client._recv()
+        success: ResponseSuccess = _validate_response(response)
+        return success.result
 
 # ------------------------------------------------------------------------
 # Surreal library methods - exposed to user
@@ -624,20 +663,44 @@ class Surreal:
         success: ResponseSuccess = _validate_response(response)
         return success.result
 
-    async def live(self, table: str) -> str:
+    def live(self, table: str, diff=False) -> LiveStream:
         """Get a live stream of changes to a table.
 
         Args:
             table: The table name.
 
         Returns:
-            The records.
+            Live Stream Manager for accessing records
+        
+        Examples:
+            Get a live stream of changes to a table
+                async with db.live("person") as stream:
+                    async for record in stream:
+                        print(record)
         """
-        response = await self._send_receive(
-            Request(id=generate_uuid(), method="live", params=(table,)),
-        )
-        success: ResponseSuccess = _validate_response(response)
-        return success.result
+        return LiveStream(self, Request(id=generate_uuid(), method="live", params=(table, diff)))
+
+    def live_query(self, sql: str, vars: Optional[Dict[str, Any]] = None) -> LiveStream:
+        """Get a live stream of changes to a query.
+
+        Args:
+            query: The query.
+
+        Returns:
+            Live Stream Manager for accessing records
+        
+        Examples:
+            Get a live stream of changes to a query
+                async with db.live_query("LIVE SELECT * FROM person") as stream:
+                    async for record in stream:
+                        print(record)
+        """
+        
+        return LiveStream(self, Request(
+                id=generate_uuid(),
+                method="query",
+                params=(sql,) if vars is None else (sql, vars),
+            ))
 
     async def ping(self) -> bool:
         """Ping the Surreal server."""
@@ -704,13 +767,13 @@ class Surreal:
             Exception: If the client is not connected to the Surreal server.
             Exception: If the response contains an error.
         """
-        self._validate_connection()
+        self._validate_connection(valid_states=[ConnectionState.CONNECTED, ConnectionState.LISTENING])
         response = json.loads(await self.ws.recv())
         if response.get("error"):
             return ResponseError(**response["error"])
         return ResponseSuccess(**response)
 
-    def _validate_connection(self) -> None:
+    def _validate_connection(self, valid_states=[ConnectionState.CONNECTED]) -> None:
         """Validate the connection to the Surreal server."""
-        if self.client_state != ConnectionState.CONNECTED:
-            raise SurrealException("Not connected to Surreal server.")
+        if self.client_state not in valid_states:
+            raise SurrealException("Client connection state does not support this operation.")
