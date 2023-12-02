@@ -187,11 +187,11 @@ class LiveStream:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         # Teardown connection using query ID
+        self.client.client_state = ConnectionState.CONNECTED
         if self.query_id:
             await self.client._send_receive(
                 Request(id=generate_uuid(), method="kill", params=(self.query_id,))
             )
-        self.client.client_state = ConnectionState.CONNECTED
     
     def __aiter__(self):
         return self
