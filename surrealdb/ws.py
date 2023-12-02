@@ -19,7 +19,7 @@ import enum
 import json
 import uuid
 from types import TracebackType
-from typing import Any, Dict, List, Optional, Tuple, Type, Union, AsyncIterator
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import pydantic
 import websockets
