@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import pydantic
 import websockets
+import asyncio
 
 __all__ = ("Surreal",)
 
@@ -57,21 +58,6 @@ class SurrealPermissionException(SurrealException):
 # Connections
 
 
-class ConnectionState(enum.Enum):
-    """Represents the state of the connection.
-
-    Attributes:
-        CONNECTING: The connection is in progress.
-        CONNECTED:  The connection is established.
-        DISCONNECTED: The connection is closed.
-    """
-
-    CONNECTING = 0
-    CONNECTED = 1
-    DISCONNECTED = 2
-    LISTENING = 3
-
-
 class Request(pydantic.BaseModel):
     """Represents an RPC request to a Surreal server.
 
@@ -81,7 +67,7 @@ class Request(pydantic.BaseModel):
         params: The parameters of the request.
     """
 
-    id: str
+    id: str = pydantic.Field(default_factory=generate_uuid)
     method: str
     params: Optional[Tuple] = None
 
@@ -106,7 +92,7 @@ class ResponseSuccess(pydantic.BaseModel):
         result: The result of the request.
     """
 
-    id: Optional[str]
+    id: Optional[str]  # missing for live query responses
     result: Any
 
     class Config:
@@ -140,66 +126,141 @@ class ResponseError(pydantic.BaseModel):
         allow_mutation = False
 
 
-def _validate_response(
-    response: Union[ResponseSuccess, ResponseError],
-    exception: Type[Exception] = SurrealException,
-) -> ResponseSuccess:
-    """Validate the response.
-    The response is validated by checking if it is an error. If it is an error,
-    the exception is raised. Otherwise, the response is returned.
+# ------------------------------------------------------------------------
+# Websocket Connection
 
-    Args:
-        response: The response to validate.
-        exception: The exception to raise if the response is an error.
 
-    Returns:
-        The original response.
+class WebSocketConnection:
+    """Represents a websocket connection to a Surreal server."""
 
-    Raises:
-        SurrealDBException: If the response is an error.
-    """
-    if isinstance(response, ResponseError):
-        raise exception(response.message)
-    return response
+    def __init__(
+        self,
+    ) -> None:
+        self.ws: Optional[websockets.WebSocketClientProtocol] = None  # type: ignore
+        self.routes: Dict[int, asyncio.Queue] = {}
+        self.live_queries: Dict[str, asyncio.Queue] = {}
+
+    async def connect(self, address: str, capacity: int = 0) -> None:
+        """Connect to a Surreal server.
+
+        Args:
+            address: The address of the Surreal server.
+            capacity: The capacity of the Surreal server.
+        """
+        self.router_queue = asyncio.Queue(capacity)
+        self.ws = await websockets.connect(address)
+        asyncio.create_task(self._router())
+
+    async def close(self) -> None:
+        """Close the connection to the Surreal server."""
+        await self.ws.close()
+
+    async def _router(self) -> None:
+        """Handle incoming websocket messages and redistribute them as needed."""
+        while True:
+            try:
+                message = await self.ws.recv()
+                response = json.loads(message)
+                if response.get("id"):
+                    await self.routes.pop(response["id"]).put(message)
+                else:
+                    await self.live_queries.get(response["result"]["id"]).put(message)
+            except websockets.exceptions.ConnectionClosed:
+                break
+            except Exception as e:
+                raise e
+
+    async def send_receive(self, request: Request) -> ResponseSuccess:
+        """Send a request to the Surreal server and receive a response."""
+        chan = await self.send(request)
+        return await self.recv(chan)
+
+    async def send(self, request: Request) -> None:
+        """Send a request to the Surreal server.
+
+        Args:
+            request: The request to send.
+
+        Raises:
+            Exception: If the client is not connected to the Surreal server.
+        """
+        if request.method == "kill":
+            self.live_queries.pop(request.params[0])
+        response_chan = asyncio.Queue(maxsize=1)
+        self.routes[request.id] = response_chan
+
+        await self.ws.send(json.dumps(request.dict(), ensure_ascii=False))
+        return response_chan
+
+    def listen_live(self, query_id: str) -> None:
+        """Track a live query.
+
+        Args:
+            query_id: The ID of the live query.
+        """
+        live_channel = asyncio.Queue()
+        self.live_queries[query_id] = live_channel
+        return live_channel
+
+    async def recv(
+        self, queue_channel: asyncio.Queue
+    ) -> Union[ResponseSuccess, ResponseError]:
+        """Receive a response from the Surreal server.
+
+        Returns:
+            The response from the Surreal server.
+
+        Raises:
+            Exception: If the client is not connected to the Surreal server.
+            Exception: If the response contains an error.
+        """
+        response = json.loads(await queue_channel.get())
+        if response.get("error"):
+            parsed_response = ResponseError(**response["error"])
+            raise SurrealException(parsed_response.message)
+        return ResponseSuccess(**response)
 
 
 # ------------------------------------------------------------------------
 # Live Stream Manager
 
+
 class LiveStream:
     def __init__(self, client: Surreal, request: Request):
         self.client = client
         self.request = request
-        self.query_id = None
+        self.response_channel: Optional[asyncio.Queue] = None
 
     async def __aenter__(self):
         # Setup connection and get query ID
-        response = await self.client._send_receive(
-            self.request
-        )
-        success: ResponseSuccess = _validate_response(response)
-        if isinstance(success.result, str):
-            self.query_id = success.result
+        if self.request.method == "live":
+            # then use traditional live path
+            response = await self.client.connection.send_receive(self.request)
+            self.query_id = response.result
         else:
-            self.query_id = success.result[0]['result']
-        self.client.client_state = ConnectionState.LISTENING
+            # then we are doing a custom live query
+            response = await self.client.connection.send_receive(self.request)
+            self.query_id = response.result[0]["result"]
+
+        self.response_channel = self.client.connection.listen_live(self.query_id)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         # Teardown connection using query ID
-        self.client.client_state = ConnectionState.CONNECTED
         if self.query_id:
-            await self.client._send_receive(
-                Request(id=generate_uuid(), method="kill", params=(self.query_id,))
+            await self.client.connection.send_receive(
+                Request(method="kill", params=(self.query_id,))
             )
-    
+        self.response_channel = None
+
     def __aiter__(self):
         return self
 
     async def __anext__(self):
-        response = await self.client._recv()
-        success: ResponseSuccess = _validate_response(response)
-        return success.result
+        if self.response_channel is None:
+            raise StopAsyncIteration
+        return await self.response_channel.get()
+
 
 # ------------------------------------------------------------------------
 # Surreal library methods - exposed to user
@@ -230,9 +291,12 @@ class Surreal:
 
     def __init__(self, url: str) -> None:
         self.url = url
-        self.client_state = ConnectionState.CONNECTING
         self.token: Optional[str] = None
-        self.ws: Optional[websockets.WebSocketClientProtocol] = None  # type: ignore
+        self.connection: WebSocketConnection = WebSocketConnection()
+
+    async def connect(self) -> None:
+        await self.connection.connect(self.url)
+        return self
 
     async def __aenter__(self) -> Surreal:
         """Create a connection when entering the context manager.
@@ -240,8 +304,11 @@ class Surreal:
         Returns:
             The Surreal client.
         """
-        await self.connect()
-        return self
+        return await self.connect()
+
+    async def close(self) -> None:
+        """Close the connection to the Surreal server."""
+        await self.connection.close()
 
     async def __aexit__(
         self,
@@ -256,24 +323,7 @@ class Surreal:
             exc_value: The value of the exception.
             traceback: The traceback of the exception.
         """
-        await self.close()
-
-    async def connect(self) -> None:
-        """Connect to a local or remote database endpoint.
-
-        Examples:
-            Connect to a local endpoint
-                db = Surreal()
-                await db.connect('ws://127.0.0.1:8000/rpc')
-                await db.signin({"user": "root", "pass": "root"})
-        """
-        self.ws = await websockets.connect(self.url)  # type: ignore
-        self.client_state = ConnectionState.CONNECTED
-
-    async def close(self) -> None:
-        """Close the persistent connection to the database."""
-        await self.ws.close()
-        self.client_state = ConnectionState.DISCONNECTED
+        return await self.close()
 
     async def use(self, namespace: str, database: str) -> None:
         """Switch to a specific namespace and database.
@@ -285,10 +335,9 @@ class Surreal:
         Examples:
             await db.use('test', 'test')
         """
-        response = await self._send_receive(
-            Request(id=generate_uuid(), method="use", params=(namespace, database)),
+        response = await self.connection.send_receive(
+            Request(method="use", params=(namespace, database)),
         )
-        _validate_response(response)
 
     async def signup(self, vars: Dict[str, Any]) -> str:
         """Sign this connection up to a specific authentication scope.
@@ -299,13 +348,10 @@ class Surreal:
         Examples:
             await db.signup({"user": "bob", "pass": "123456"})
         """
-        response = await self._send_receive(
-            Request(id=generate_uuid(), method="signup", params=(vars,)),
+        response = await self.connection.send_receive(
+            Request(method="signup", params=(vars,)),
         )
-        success: ResponseSuccess = _validate_response(
-            response, SurrealAuthenticationException
-        )
-        token: str = success.result
+        token: str = response.result
         self.token = token
         return self.token
 
@@ -318,25 +364,20 @@ class Surreal:
         Examples:
             await db.signin({"user": "root", "pass": "root"})
         """
-        response = await self._send_receive(
-            Request(id=generate_uuid(), method="signin", params=(vars,)),
+        response = await self.connection.send_receive(
+            Request(method="signin", params=(vars,)),
         )
-        success: ResponseSuccess = _validate_response(
-            response, SurrealAuthenticationException
-        )
-        token: str = success.result
+        token: str = response.result
         self.token = token
         return self.token
 
     async def invalidate(self) -> None:
         """Invalidate the authentication for the current connection."""
-        response = await self._send_receive(
+        await self.connection.send_receive(
             Request(
-                id=generate_uuid(),
                 method="invalidate",
             ),
         )
-        _validate_response(response, SurrealAuthenticationException)
         self.token = None
 
     async def authenticate(self, token: str) -> None:
@@ -348,10 +389,9 @@ class Surreal:
         Examples:
             await db.authenticate('JWT token here')
         """
-        response = await self._send_receive(
-            Request(id=generate_uuid(), method="authenticate", params=(token,)),
+        await self.connection.send_receive(
+            Request(method="authenticate", params=(token,)),
         )
-        _validate_response(response, SurrealAuthenticationException)
 
     async def let(self, key: str, value: Any) -> None:
         """Assign a value as a parameter for this connection.
@@ -369,9 +409,8 @@ class Surreal:
             Use the variable in a subsequent query
                 await db.query('create person set name = $name')
         """
-        response = await self._send_receive(
+        response = await self.connection.send_receive(
             Request(
-                id=generate_uuid(),
                 method="let",
                 params=(
                     key,
@@ -379,10 +418,7 @@ class Surreal:
                 ),
             ),
         )
-        success: ResponseSuccess = _validate_response(
-            response, SurrealPermissionException
-        )
-        return success.result
+        return response.result
 
     async def set(self, key: str, value: Any) -> None:
         """Alias for `let`. Assigns a value as a parameter for this connection.
@@ -391,9 +427,8 @@ class Surreal:
             key: Specifies the name of the variable.
             value: Assigns the value to the variable name.
         """
-        response = await self._send_receive(
+        response = await self.connection.send_receive(
             Request(
-                id=generate_uuid(),
                 method="let",
                 params=(
                     key,
@@ -401,10 +436,7 @@ class Surreal:
                 ),
             ),
         )
-        success: ResponseSuccess = _validate_response(
-            response, SurrealPermissionException
-        )
-        return success.result
+        return response.result
 
     async def query(
         self, sql: str, vars: Optional[Dict[str, Any]] = None
@@ -428,15 +460,13 @@ class Surreal:
             Get all of the results from the second query
                 result[1]['result']
         """
-        response = await self._send_receive(
+        response = await self.connection.send_receive(
             Request(
-                id=generate_uuid(),
                 method="query",
                 params=(sql,) if vars is None else (sql, vars),
             ),
         )
-        success: ResponseSuccess = _validate_response(response)
-        return success.result
+        return response.result
 
     async def select(self, thing: str) -> List[Dict[str, Any]]:
         """Select all records in a table (or other entity),
@@ -458,11 +488,10 @@ class Surreal:
             Select a specific record from a table (or other entity)
                 person = await db.select('person:h5wxrf2ewk8xjxosxtyc')
         """
-        response = await self._send_receive(
-            Request(id=generate_uuid(), method="select", params=(thing,)),
+        response = await self.connection.send_receive(
+            Request(method="select", params=(thing,)),
         )
-        success: ResponseSuccess = _validate_response(response)
-        return success.result
+        return response.result
 
     async def create(
         self, thing: str, data: Optional[Dict[str, Any]] = None
@@ -489,17 +518,13 @@ class Surreal:
                         },
                 })
         """
-        response = await self._send_receive(
+        response = await self.connection.send_receive(
             Request(
-                id=generate_uuid(),
                 method="create",
                 params=(thing,) if data is None else (thing, data),
             ),
         )
-        success: ResponseSuccess = _validate_response(
-            response, SurrealPermissionException
-        )
-        return success.result
+        return response.result
 
     async def update(
         self, thing: str, data: Optional[Dict[str, Any]]
@@ -529,17 +554,13 @@ class Surreal:
                         },
                 })
         """
-        response = await self._send_receive(
+        response = await self.connection.send_receive(
             Request(
-                id=generate_uuid(),
                 method="update",
                 params=(thing,) if data is None else (thing, data),
             ),
         )
-        success: ResponseSuccess = _validate_response(
-            response, SurrealPermissionException
-        )
-        return success.result
+        return response.result
 
     async def merge(
         self, thing: str, data: Optional[Dict[str, Any]]
@@ -571,17 +592,13 @@ class Surreal:
                     })
 
         """
-        response = await self._send_receive(
+        response = await self.connection.send_receive(
             Request(
-                id=generate_uuid(),
                 method="change",
                 params=(thing,) if data is None else (thing, data),
             ),
         )
-        success: ResponseSuccess = _validate_response(
-            response, SurrealPermissionException
-        )
-        return success.result
+        return response.result
 
     async def patch(
         self, thing: str, data: Optional[Dict[str, Any]]
@@ -610,17 +627,13 @@ class Surreal:
                 { 'op': "remove", "path": "/temp" },
             ])
         """
-        response = await self._send_receive(
+        response = await self.connection.send_receive(
             Request(
-                id=generate_uuid(),
                 method="modify",
                 params=(thing,) if data is None else (thing, data),
             ),
         )
-        success: ResponseSuccess = _validate_response(
-            response, SurrealPermissionException
-        )
-        return success.result
+        return response.result
 
     async def delete(self, thing: str) -> List[Dict[str, Any]]:
         """Delete all records in a table, or a specific record, from the database.
@@ -637,13 +650,10 @@ class Surreal:
             Delete a specific record from a table
                 await db.delete('person:h5wxrf2ewk8xjxosxtyc')
         """
-        response = await self._send_receive(
-            Request(id=generate_uuid(), method="delete", params=(thing,)),
+        response = await self.connection.send_receive(
+            Request(method="delete", params=(thing,)),
         )
-        success: ResponseSuccess = _validate_response(
-            response, SurrealPermissionException
-        )
-        return success.result
+        return response.result
 
     # ------------------------------------------------------------------------
     # Surreal library methods - undocumented but implemented in js library
@@ -654,14 +664,12 @@ class Surreal:
         Returns:
             The information of the Surreal server.
         """
-        response = await self._send_receive(
+        response = await self.connection.send_receive(
             Request(
-                id=generate_uuid(),
                 method="info",
             ),
         )
-        success: ResponseSuccess = _validate_response(response)
-        return success.result
+        return response.result
 
     def live(self, table: str, diff=False) -> LiveStream:
         """Get a live stream of changes to a table.
@@ -671,14 +679,14 @@ class Surreal:
 
         Returns:
             Live Stream Manager for accessing records
-        
+
         Examples:
             Get a live stream of changes to a table
                 async with db.live("person") as stream:
                     async for record in stream:
                         print(record)
         """
-        return LiveStream(self, Request(id=generate_uuid(), method="live", params=(table, diff)))
+        return LiveStream(self, Request(method="live", params=(table, diff)))
 
     def live_query(self, sql: str, vars: Optional[Dict[str, Any]] = None) -> LiveStream:
         """Get a live stream of changes to a query.
@@ -688,30 +696,30 @@ class Surreal:
 
         Returns:
             Live Stream Manager for accessing records
-        
+
         Examples:
             Get a live stream of changes to a query
                 async with db.live_query("LIVE SELECT * FROM person") as stream:
                     async for record in stream:
                         print(record)
         """
-        
-        return LiveStream(self, Request(
-                id=generate_uuid(),
+
+        return LiveStream(
+            self,
+            Request(
                 method="query",
                 params=(sql,) if vars is None else (sql, vars),
-            ))
+            ),
+        )
 
     async def ping(self) -> bool:
         """Ping the Surreal server."""
-        response = await self._send_receive(
+        response = await self.connection.send_receive(
             Request(
-                id=generate_uuid(),
                 method="ping",
             ),
         )
-        success: ResponseSuccess = _validate_response(response)
-        return success.result
+        return response.result
 
     async def kill(self, query: str) -> None:
         """Kill a specific query.
@@ -719,61 +727,7 @@ class Surreal:
         Args:
             query: The query to kill.
         """
-        response = await self._send_receive(
-            Request(id=generate_uuid(), method="kill", params=(query,)),
+        response = await self.connection.send_receive(
+            Request(method="kill", params=(query,)),
         )
-        success: ResponseSuccess = _validate_response(response)
-        return success.result
-
-    # ------------------------------------------------------------------------
-    # Send & Receive methods
-
-    async def _send_receive(
-        self, request: Request
-    ) -> Union[ResponseSuccess, ResponseError]:
-        """Send a request to the Surreal server and receive a response.
-
-        Args:
-            request: The request to send.
-
-        Returns:
-            The response from the Surreal server.
-
-        Raises:
-            Exception: If the client is not connected to the Surreal server.
-        """
-        await self._send(request)
-        return await self._recv()
-
-    async def _send(self, request: Request) -> None:
-        """Send a request to the Surreal server.
-
-        Args:
-            request: The request to send.
-
-        Raises:
-            Exception: If the client is not connected to the Surreal server.
-        """
-        self._validate_connection()
-        await self.ws.send(json.dumps(request.dict(), ensure_ascii=False))
-
-    async def _recv(self) -> Union[ResponseSuccess, ResponseError]:
-        """Receive a response from the Surreal server.
-
-        Returns:
-            The response from the Surreal server.
-
-        Raises:
-            Exception: If the client is not connected to the Surreal server.
-            Exception: If the response contains an error.
-        """
-        self._validate_connection(valid_states=[ConnectionState.CONNECTED, ConnectionState.LISTENING])
-        response = json.loads(await self.ws.recv())
-        if response.get("error"):
-            return ResponseError(**response["error"])
-        return ResponseSuccess(**response)
-
-    def _validate_connection(self, valid_states=[ConnectionState.CONNECTED]) -> None:
-        """Validate the connection to the Surreal server."""
-        if self.client_state not in valid_states:
-            raise SurrealException("Client connection state does not support this operation.")
+        return response.result
