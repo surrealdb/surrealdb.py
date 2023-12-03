@@ -131,7 +131,6 @@ class SurrealHTTP:
     # Missing method - invalidate
     # Missing method - authenticate
     # Missing method - let
-    # Missing method - merge
     # TODO fix signup and signin methods
     # TODO: Review type: ignore comments.
 
@@ -283,6 +282,40 @@ class SurrealHTTP:
             data=json.dumps(data, ensure_ascii=False),
         )
         return response[0]["result"]  # type: ignore
+    
+    async def merge(self, thing: str, data: Any) -> Dict[str, Any]:
+        """Partially update records in a table, or a specific record, in the database.
+
+        This function partially replaces the current document / record data with the
+        specified data.
+
+        This function will run the following query in the database:
+        update $thing merge $data
+
+        Args:
+            thing: The table or record ID.
+            data: The document / record data to update.
+
+        Examples:
+            Update all records in a table
+                person = await db.merge('person')
+
+            Update a record with a specific ID
+                record = await db.merge('person:tobie', {
+                    'name': 'Tobie',
+                    'settings': {
+                        'active': true,
+                        'marketing': true,
+                        },
+                })
+        """
+        table, record_id = thing.split(":") if ":" in thing else (thing, None)
+        response = await self._request(
+            method="PATCH",
+            uri=f"/key/{table}/{record_id}" if record_id else f"/key/{table}",
+            data=json.dumps(data, ensure_ascii=False),
+        )
+        return response[0]['result']
 
     async def patch(self, thing: str, data: Any) -> Dict[str, Any]:
         """Apply JSON Patch changes to all records, or a specific record, in the database.
