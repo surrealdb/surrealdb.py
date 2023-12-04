@@ -15,50 +15,27 @@ limitations under the License.
 """
 from __future__ import annotations
 
-import enum
 import json
-import uuid
 from types import TracebackType
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
-
-import pydantic
+from typing import Any, Dict, List, Optional, Type, Union, Tuple
 import websockets
 import asyncio
+from pydantic import BaseModel, Field, validator
+from .common import SurrealException, generate_uuid
 
-__all__ = ("Surreal",)
-
-# ------------------------------------------------------------------------
-# ID
-
-
-def generate_uuid() -> str:
-    """Generate a UUID.
-
-    Returns:
-        A UUID as a string.
-    """
-    return str(uuid.uuid4())
-
-
-# ------------------------------------------------------------------------
-# Exceptions
-class SurrealException(Exception):
-    """Base exception for SurrealDB client library."""
-
-
-class SurrealAuthenticationException(SurrealException):
-    """Exception raised for errors with the SurrealDB authentication."""
-
-
-class SurrealPermissionException(SurrealException):
-    """Exception raised for errors with the SurrealDB permissions."""
+__all__ = (
+    "Surreal",
+    "Request",
+    "Response",
+    "LiveStream",
+)
 
 
 # ------------------------------------------------------------------------
 # Connections
 
 
-class Request(pydantic.BaseModel):
+class Request(BaseModel):
     """Represents an RPC request to a Surreal server.
 
     Attributes:
@@ -67,11 +44,11 @@ class Request(pydantic.BaseModel):
         params: The parameters of the request.
     """
 
-    id: str = pydantic.Field(default_factory=generate_uuid)
+    id: str = Field(default_factory=generate_uuid)
     method: str
     params: Optional[Tuple] = None
 
-    @pydantic.validator("params", pre=True, always=True)
+    @validator("params", pre=True, always=True)
     def validate_params(cls, value):  # pylint: disable=no-self-argument
         """Validate the parameters of the request."""
         if value is None:
@@ -84,7 +61,7 @@ class Request(pydantic.BaseModel):
         allow_mutation = False
 
 
-class ResponseSuccess(pydantic.BaseModel):
+class Response(BaseModel):
     """Represents a successful RPC response from a Surreal server.
 
     Attributes:
@@ -105,7 +82,7 @@ class ResponseSuccess(pydantic.BaseModel):
         allow_mutation = False
 
 
-class ResponseError(pydantic.BaseModel):
+class ResponseError(BaseModel):
     """Represents an RPC error.
 
     Attributes:
@@ -170,7 +147,7 @@ class WebSocketConnection:
             except Exception as e:
                 raise e
 
-    async def send_receive(self, request: Request) -> ResponseSuccess:
+    async def send_receive(self, request: Request) -> Response:
         """Send a request to the Surreal server and receive a response."""
         chan = await self.send(request)
         return await self.recv(chan)
@@ -204,7 +181,7 @@ class WebSocketConnection:
 
     async def recv(
         self, queue_channel: asyncio.Queue
-    ) -> Union[ResponseSuccess, ResponseError]:
+    ) -> Union[Response, ResponseError]:
         """Receive a response from the Surreal server.
 
         Returns:
@@ -218,7 +195,7 @@ class WebSocketConnection:
         if response.get("error"):
             parsed_response = ResponseError(**response["error"])
             raise SurrealException(parsed_response.message)
-        return ResponseSuccess(**response)
+        return Response(**response)
 
 
 # ------------------------------------------------------------------------

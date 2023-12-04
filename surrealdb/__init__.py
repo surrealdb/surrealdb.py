@@ -15,5 +15,12 @@ limitations under the License.
 """
 from .http import SurrealHTTP
 from .ws import Surreal
+from .common import (
+    SurrealException,
+)
 
-__all__ = ("Surreal", "SurrealHTTP")
+__all__ = [
+    "SurrealHTTP",
+    "Surreal",
+    "SurrealException",
+]

@@ -19,14 +19,10 @@ import json
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Any, Dict, List, Optional, Type
-
+from .common import SurrealException
 import httpx
 
 __all__ = ("SurrealHTTP",)
-
-
-class SurrealException(Exception):
-    """Base exception for SurrealDB client library."""
 
 
 @dataclass(frozen=True)
