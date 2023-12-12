@@ -27,7 +27,7 @@ jobs:
 
       - id: ruff
         if: always()
-        run: poetry run ruff --format=github surrealdb/
+        run: poetry run ruff check surrealdb/
 
       - id: Black
         if: always()

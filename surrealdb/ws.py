@@ -189,7 +189,7 @@ class Surreal:
 
     """
 
-    def __init__(self, url: str, max_size: Optional[int] = 2 ** 20) -> None:
+    def __init__(self, url: str, max_size: Optional[int] = 2**20) -> None:
         self.url = url
         self.max_size = max_size
         self.client_state = ConnectionState.CONNECTING
@@ -221,8 +221,7 @@ class Surreal:
         await self.close()
 
     async def connect(self) -> None:
-        """Connect to a local or remote database endpoint.
-        """
+        """Connect to a local or remote database endpoint."""
         self.ws = await websockets.connect(self.url)  # type: ignore
         self.client_state = ConnectionState.CONNECTED
 
@@ -601,11 +600,14 @@ class Surreal:
         )
         return success.result
 
-    async def live(self, table: str, diff=False) -> str:
-        """Initiates a live query. 
+    async def live(self, table: str, diff: bool = False) -> str:
+        """Initiates a live query.
 
         Args:
             table: The table name to listen for changes for.
+            diff: If set to true, live notifications will include
+                an array of JSON Patch objects,
+                rather than the entire record for each notification.
 
         Returns:
             UUID string.
@@ -616,14 +618,14 @@ class Surreal:
         success: ResponseSuccess = _validate_response(response)
         return success.result
 
-    async def kill(self, queryUuid: str) -> None:
-        """Kills a running live query by it's UUID
+    async def kill(self, query_uuid: str) -> None:
+        """Kills a running live query by it's UUID.
 
         Args:
-            queryUuid: The UUID of the live query you wish to kill.
+            query_uuid: The UUID of the live query you wish to kill.
         """
         response = await self._send_receive(
-            Request(id=generate_uuid(), method="kill", params=(queryUuid,)),
+            Request(id=generate_uuid(), method="kill", params=(query_uuid,)),
         )
         success: ResponseSuccess = _validate_response(response)
         return success.result
