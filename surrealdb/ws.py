@@ -105,7 +105,7 @@ class ResponseSuccess(pydantic.BaseModel):
         result: The result of the request.
     """
 
-    id: str
+    id: Optional[str] = None
     result: Any
 
     class Config:
@@ -189,8 +189,9 @@ class Surreal:
 
     """
 
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, max_size: Optional[int] = 2**20) -> None:
         self.url = url
+        self.max_size = max_size
         self.client_state = ConnectionState.CONNECTING
         self.token: Optional[str] = None
         self.ws: Optional[websockets.WebSocketClientProtocol] = None  # type: ignore
@@ -220,14 +221,7 @@ class Surreal:
         await self.close()
 
     async def connect(self) -> None:
-        """Connect to a local or remote database endpoint.
-
-        Examples:
-            Connect to a local endpoint
-                db = Surreal()
-                await db.connect('ws://127.0.0.1:8000/rpc')
-                await db.signin({"user": "root", "pass": "root"})
-        """
+        """Connect to a local or remote database endpoint."""
         self.ws = await websockets.connect(self.url)  # type: ignore
         self.client_state = ConnectionState.CONNECTED
 
@@ -606,58 +600,32 @@ class Surreal:
         )
         return success.result
 
-    # ------------------------------------------------------------------------
-    # Surreal library methods - undocumented but implemented in js library
-
-    async def info(self) -> Optional[Dict[str, Any]]:
-        """Retrieve info about the current Surreal instance.
-
-        Returns:
-            The information of the Surreal server.
-        """
-        response = await self._send_receive(
-            Request(
-                id=generate_uuid(),
-                method="info",
-            ),
-        )
-        success: ResponseSuccess = _validate_response(response)
-        return success.result
-
-    async def live(self, table: str) -> str:
-        """Get a live stream of changes to a table.
+    async def live(self, table: str, diff: bool = False) -> str:
+        """Initiates a live query.
 
         Args:
-            table: The table name.
+            table: The table name to listen for changes for.
+            diff: If set to true, live notifications will include
+                an array of JSON Patch objects,
+                rather than the entire record for each notification.
 
         Returns:
-            The records.
+            UUID string.
         """
         response = await self._send_receive(
-            Request(id=generate_uuid(), method="live", params=(table,)),
+            Request(id=generate_uuid(), method="live", params=(table, diff)),
         )
         success: ResponseSuccess = _validate_response(response)
         return success.result
 
-    async def ping(self) -> bool:
-        """Ping the Surreal server."""
-        response = await self._send_receive(
-            Request(
-                id=generate_uuid(),
-                method="ping",
-            ),
-        )
-        success: ResponseSuccess = _validate_response(response)
-        return success.result
-
-    async def kill(self, query: str) -> None:
-        """Kill a specific query.
+    async def kill(self, query_uuid: str) -> None:
+        """Kills a running live query by it's UUID.
 
         Args:
-            query: The query to kill.
+            query_uuid: The UUID of the live query you wish to kill.
         """
         response = await self._send_receive(
-            Request(id=generate_uuid(), method="kill", params=(query,)),
+            Request(id=generate_uuid(), method="kill", params=(query_uuid,)),
         )
         success: ResponseSuccess = _validate_response(response)
         return success.result
