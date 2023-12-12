@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "surrealdb"
-version = "0.3.1"
+version = "0.3.2"
 description = "The official SurrealDB library for Python."
 readme = "README.md"
 authors = ["SurrealDB"]
@@ -24,7 +24,7 @@ classifiers = [
 [tool.poetry.dependencies]
 python = "^3.7"
 httpx = ">=0.23.0"
-pydantic = "^1.10.6"
+pydantic = "^2.1.0"
 websockets = "^10.4"
 
 [tool.poetry.dev-dependencies]
