@@ -529,7 +529,7 @@ class Surreal:
         response = await self._send_receive(
             Request(
                 id=generate_uuid(),
-                method="change",
+                method="merge",
                 params=(thing,) if data is None else (thing, data),
             ),
         )
