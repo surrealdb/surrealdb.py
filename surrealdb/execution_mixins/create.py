@@ -31,7 +31,7 @@ class CreateMixin:
             loop_manager = AsyncioRuntime()
             loop_manager.loop.run_until_complete(_create(self._connection, name, data))
         except Exception as e:
-            SurrealDbError(e)
+            raise SurrealDbError(e)
 
     def delete(self: "SurrealDB", name: str) -> Union[List[dict], dict]:
         """
@@ -48,4 +48,4 @@ class CreateMixin:
             loop_manager = AsyncioRuntime()
             return loop_manager.loop.run_until_complete(_delete(self._connection, name))
         except Exception as e:
-            SurrealDbError(e)
+            raise SurrealDbError(e)

@@ -52,4 +52,4 @@ class AsyncSignInMixin:
         try:
             return await rust_authenticate_future(self._connection, jwt)
         except Exception as e:
-            SurrealDbError(e)
+            raise SurrealDbError(e)

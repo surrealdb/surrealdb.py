@@ -26,7 +26,7 @@ class AsyncUpdateMixin:
         try:
             return json.loads(rust_update_future(self._connection, resource, data))
         except Exception as e:
-            SurrealDbError(e)
+            raise SurrealDbError(e)
 
     async def merge(self: "SurrealDB", resource: str, data: dict) -> Union[List[dict], dict]:
         """
@@ -39,7 +39,7 @@ class AsyncUpdateMixin:
         try:
             return json.loads(await rust_merge_future(self._connection, resource, data))
         except Exception as e:
-            SurrealDbError(e)
+            raise SurrealDbError(e)
 
     async def patch(self: "SurrealDB", resource: str, data: dict) -> Union[List[dict], dict]:
         """
@@ -52,4 +52,4 @@ class AsyncUpdateMixin:
         try:
             return await rust_patch_future(self._connection, resource, data)
         except Exception as e:
-            SurrealDbError(e)
+            raise SurrealDbError(e)

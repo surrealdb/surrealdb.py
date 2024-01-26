@@ -9,12 +9,3 @@ services:
       - SURREAL_LOG=trace
     ports:
       - 8000:8000
-
-
-version: '3'
-services:
-  test_package_build:
-    build: .
-    container_name: package_build
-    ports:
-      - 18000:18000

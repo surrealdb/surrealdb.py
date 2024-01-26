@@ -31,7 +31,7 @@ class UpdateMixin:
             loop_manager = AsyncioRuntime()
             return json.loads(loop_manager.loop.run_until_complete(_update(self._connection, resource, data)))
         except Exception as e:
-            SurrealDbError(e)
+            raise SurrealDbError(e)
 
     def merge(self: "SurrealDB", resource: str, data: dict) -> Union[List[dict], dict]:
         """
@@ -48,7 +48,7 @@ class UpdateMixin:
             loop_manager = AsyncioRuntime()
             return json.loads(loop_manager.loop.run_until_complete(_merge(self._connection, resource, data)))
         except Exception as e:
-            SurrealDbError(e)
+            raise SurrealDbError(e)
 
     def patch(self: "SurrealDB", resource: str, data: dict) -> Union[List[dict], dict]:
         """
@@ -65,4 +65,4 @@ class UpdateMixin:
             loop_manager = AsyncioRuntime()
             return loop_manager.loop.run_until_complete(_patch(self._connection, resource, data))
         except Exception as e:
-            SurrealDbError(e)
+            raise SurrealDbError(e)

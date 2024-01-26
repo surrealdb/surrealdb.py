@@ -30,10 +30,10 @@ class SetMixin:
             json_str = json.dumps(value)
         except json.JSONEncodeError as e:
             print(f"cannot serialize value {type(value)} to json")
-            SurrealDbError(e)
+            raise SurrealDbError(e)
         if json_str is not None:
             try:
                 loop_manager = AsyncioRuntime()
                 loop_manager.loop.run_until_complete(_set(self._connection, key, json_str))
             except Exception as e:
-                SurrealDbError(e)
+                raise SurrealDbError(e)

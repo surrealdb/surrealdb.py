@@ -27,7 +27,7 @@ class AsyncQueryMixin:
         try:
             return json.loads(await rust_query_future(self._connection, query))[0]
         except Exception as e:
-            SurrealDbError(e)
+            raise SurrealDbError(e)
 
     async def select(self: "SurrealDB", resource: str) -> Union[List[dict], dict]:
         """

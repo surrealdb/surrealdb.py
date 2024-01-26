@@ -32,7 +32,7 @@ class QueryMixin:
             loop_manager = AsyncioRuntime()
             return json.loads(loop_manager.loop.run_until_complete(_query(self._connection, query)))[0]
         except Exception as e:
-            SurrealDbError(e)
+            raise SurrealDbError(e)
 
     def select(self: "SurrealDB", resource: str) -> Union[List[dict], dict]:
         """
