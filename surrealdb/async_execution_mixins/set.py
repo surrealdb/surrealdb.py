@@ -26,9 +26,9 @@ class AsyncSetMixin:
             json_str = json.dumps(value)
         except json.JSONEncodeError as e:
             print(f"cannot serialize value {type(value)} to json")
-            SurrealDbError(e)
+            raise SurrealDbError(e)
         if json_str is not None:
             try:
                 await rust_set_future(self._connection, key, json.dumps(value))
             except Exception as e:
-                SurrealDbError(e)
+                raise SurrealDbError(e)

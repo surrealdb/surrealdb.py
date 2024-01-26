@@ -26,7 +26,7 @@ class AsyncCreateMixin:
         try:
             return await rust_create_future(self._connection, name, json.dumps(data))
         except Exception as e:
-            SurrealDbError(e)
+            raise SurrealDbError(e)
 
     async def delete(self: "SurrealDB", name: str) -> Union[List[dict], dict]:
         """
@@ -39,4 +39,4 @@ class AsyncCreateMixin:
         try:
             return await rust_delete_future(self._connection, name)
         except Exception as e:
-            SurrealDbError(e)
+            raise SurrealDbError(e)

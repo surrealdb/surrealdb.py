@@ -38,7 +38,7 @@ class SignInMixin:
             loop_manager = AsyncioRuntime()
             loop_manager.loop.run_until_complete(_signin(self._connection, password, username))
         except Exception as e:
-            SurrealDbError(e)
+            raise SurrealDbError(e)
 
     def signup(self: "SurrealDB", namespace: str, database: str, data: Optional[Dict[str, str]] = None) -> str:
         """
@@ -56,7 +56,7 @@ class SignInMixin:
             loop_manager = AsyncioRuntime()
             return loop_manager.loop.run_until_complete(_signup(self._connection, data, namespace, database))
         except Exception as e:
-            SurrealDbError(e)
+            raise SurrealDbError(e)
 
     def authenticate(self: "SurrealDB", jwt: str) -> bool:
         """
@@ -72,4 +72,4 @@ class SignInMixin:
             loop_manager = AsyncioRuntime()
             return loop_manager.loop.run_until_complete(_authenticate(self._connection, jwt))
         except Exception as e:
-            SurrealDbError(e)
+            raise SurrealDbError(e)
