@@ -94,7 +94,11 @@ class Request(pydantic.BaseModel):
     class Config:
         """Represents the configuration of the RPC request."""
 
+<<<<<<< HEAD
         allow_mutation = False
+=======
+        frozen = True
+>>>>>>> 89bdd361d0a92f69deff137958279ab21161f00c
 
 
 class ResponseSuccess(pydantic.BaseModel):
@@ -105,17 +109,28 @@ class ResponseSuccess(pydantic.BaseModel):
         result: The result of the request.
     """
 
+<<<<<<< HEAD
     id: str
+=======
+    id: Optional[str] = None
+>>>>>>> 89bdd361d0a92f69deff137958279ab21161f00c
     result: Any
 
     class Config:
         """Represents the configuration of the RPC request.
 
         Attributes:
+<<<<<<< HEAD
             allow_mutation: Whether to allow mutation.
         """
 
         allow_mutation = False
+=======
+            frozen: Whether to prohibit mutation.
+        """
+
+        frozen = True
+>>>>>>> 89bdd361d0a92f69deff137958279ab21161f00c
 
 
 class ResponseError(pydantic.BaseModel):
@@ -133,10 +148,17 @@ class ResponseError(pydantic.BaseModel):
         """Represents the configuration of the RPC request.
 
         Attributes:
+<<<<<<< HEAD
             allow_mutation: Whether to allow mutation.
         """
 
         allow_mutation = False
+=======
+            frozen: Whether to prohibit mutation.
+        """
+
+        frozen = True
+>>>>>>> 89bdd361d0a92f69deff137958279ab21161f00c
 
 
 def _validate_response(
@@ -189,8 +211,14 @@ class Surreal:
 
     """
 
+<<<<<<< HEAD
     def __init__(self, url: str) -> None:
         self.url = url
+=======
+    def __init__(self, url: str, max_size: Optional[int] = 2**20) -> None:
+        self.url = url
+        self.max_size = max_size
+>>>>>>> 89bdd361d0a92f69deff137958279ab21161f00c
         self.client_state = ConnectionState.CONNECTING
         self.token: Optional[str] = None
         self.ws: Optional[websockets.WebSocketClientProtocol] = None  # type: ignore
@@ -220,6 +248,7 @@ class Surreal:
         await self.close()
 
     async def connect(self) -> None:
+<<<<<<< HEAD
         """Connect to a local or remote database endpoint.
 
         Examples:
@@ -228,6 +257,9 @@ class Surreal:
                 await db.connect('ws://127.0.0.1:8000/rpc')
                 await db.signin({"user": "root", "pass": "root"})
         """
+=======
+        """Connect to a local or remote database endpoint."""
+>>>>>>> 89bdd361d0a92f69deff137958279ab21161f00c
         self.ws = await websockets.connect(self.url)  # type: ignore
         self.client_state = ConnectionState.CONNECTED
 
@@ -606,6 +638,7 @@ class Surreal:
         )
         return success.result
 
+<<<<<<< HEAD
     # ------------------------------------------------------------------------
     # Surreal library methods - undocumented but implemented in js library
 
@@ -635,10 +668,27 @@ class Surreal:
         """
         response = await self._send_receive(
             Request(id=generate_uuid(), method="live", params=(table,)),
+=======
+    async def live(self, table: str, diff: bool = False) -> str:
+        """Initiates a live query.
+
+        Args:
+            table: The table name to listen for changes for.
+            diff: If set to true, live notifications will include
+                an array of JSON Patch objects,
+                rather than the entire record for each notification.
+
+        Returns:
+            UUID string.
+        """
+        response = await self._send_receive(
+            Request(id=generate_uuid(), method="live", params=(table, diff)),
+>>>>>>> 89bdd361d0a92f69deff137958279ab21161f00c
         )
         success: ResponseSuccess = _validate_response(response)
         return success.result
 
+<<<<<<< HEAD
     async def ping(self) -> bool:
         """Ping the Surreal server."""
         response = await self._send_receive(
@@ -658,6 +708,16 @@ class Surreal:
         """
         response = await self._send_receive(
             Request(id=generate_uuid(), method="kill", params=(query,)),
+=======
+    async def kill(self, query_uuid: str) -> None:
+        """Kills a running live query by it's UUID.
+
+        Args:
+            query_uuid: The UUID of the live query you wish to kill.
+        """
+        response = await self._send_receive(
+            Request(id=generate_uuid(), method="kill", params=(query_uuid,)),
+>>>>>>> 89bdd361d0a92f69deff137958279ab21161f00c
         )
         success: ResponseSuccess = _validate_response(response)
         return success.result
