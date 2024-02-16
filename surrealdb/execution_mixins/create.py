@@ -15,7 +15,7 @@ class CreateMixin:
     """
     This class is responsible for the interface between python and the Rust SurrealDB library for creating a document.
     """
-    def create(self: "SurrealDB", name: str, data: dict) -> None:
+    def create(self: "SurrealDB", name: str, data: dict) -> dict:
         """
         Creates a new document in the database.
 
@@ -29,7 +29,7 @@ class CreateMixin:
 
         try:
             loop_manager = AsyncioRuntime()
-            loop_manager.loop.run_until_complete(_create(self._connection, name, data))
+            return json.loads(loop_manager.loop.run_until_complete(_create(self._connection, name, data)))
         except Exception as e:
             raise SurrealDbError(e)
 

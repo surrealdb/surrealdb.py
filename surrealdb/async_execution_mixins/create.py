@@ -24,7 +24,7 @@ class AsyncCreateMixin:
         :return: None
         """
         try:
-            return await rust_create_future(self._connection, name, json.dumps(data))
+            return json.loads(await rust_create_future(self._connection, name, json.dumps(data)))
         except Exception as e:
             raise SurrealDbError(e)
 

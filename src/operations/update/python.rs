@@ -23,7 +23,11 @@ use crate::py_future_wrapper;
 /// * `Ok(String)` - The outcome of the update operation
 #[pyfunction]
 pub fn rust_update_future<'a>(py: Python<'a>, connection: WrappedConnection, resource: String, data: &'a PyAny) -> Result<&'a PyAny, PyErr> {
-    let data: Value = serde_json::from_str(&data.to_string()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+    let data = data.to_string();
+    // data.replace("None", "null");
+    let data = data.replace("True", "true");
+    let data = data.replace("False", "false");
+    let data: Value = serde_json::from_str(&data).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
     py_future_wrapper!(py, update(connection, resource, data))
 }
 

@@ -7,4 +7,8 @@ cd $SCRIPTPATH
 cd ..
 
 
+export CONNECTION_PROTOCOL="http"
+python -m unittest discover
+
+export CONNECTION_PROTOCOL="ws"
 python -m unittest discover

@@ -43,7 +43,6 @@ pub async fn update(connection: WrappedConnection, resource: String, data: Value
         Ok(range) => connection.connection.update(Resource::from(range.tb)).range((range.beg, range.end)),
         Err(_) => connection.connection.update(Resource::from(resource)),
     };
-
     let outcome = match data {
         Value::Object(_) => update.content(data).await,
         _ => update.await,

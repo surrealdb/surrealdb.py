@@ -20,7 +20,8 @@ use crate::connection::interface::WrappedConnection;
 pub async fn create(connection: WrappedConnection, table_name: String, data: Value) -> Result<String, String> {
     let resource = Resource::from(table_name.clone());
     let outcome = connection.connection.create(resource).content(data).await.map_err(|e| e.to_string())?;
-    Ok(outcome.into_json().to_string())
+    let outcome_string = outcome.into_json().to_string();
+    Ok(outcome_string)
 }
 
 

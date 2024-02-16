@@ -24,7 +24,7 @@ class AsyncUpdateMixin:
         :return: the updated resource such as an individual row or a list of rows
         """
         try:
-            return json.loads(rust_update_future(self._connection, resource, data))
+            return json.loads(await rust_update_future(self._connection, resource, json.dumps(data)))
         except Exception as e:
             raise SurrealDbError(e)
 
@@ -37,7 +37,7 @@ class AsyncUpdateMixin:
         :return: the updated resource such as an individual row or a list of rows
         """
         try:
-            return json.loads(await rust_merge_future(self._connection, resource, data))
+            return json.loads(await rust_merge_future(self._connection, resource, json.dumps(data)))
         except Exception as e:
             raise SurrealDbError(e)
 
@@ -50,6 +50,6 @@ class AsyncUpdateMixin:
         :return: the updated resource such as an individual row or a list of rows
         """
         try:
-            return await rust_patch_future(self._connection, resource, data)
+            return json.loads(await rust_patch_future(self._connection, resource, json.dumps(data)))
         except Exception as e:
             raise SurrealDbError(e)
