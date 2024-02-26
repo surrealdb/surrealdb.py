@@ -54,30 +54,23 @@ class TestAsyncSet(TestCase):
 
     def test_set(self):
         self.queries = ["DELETE person;"]
-        query = "CREATE person:100;"
+        query = "CREATE person:100 SET name = $name;"
 
         async def set():
-            _ = await self.connection.query(query)
-            outcome = await self.connection.set(
-                "person:`100`",
+            _ = await self.connection.set(
+                "name",
                 {
                     "name": "Tobie",
-                    "company": "SurrealDB",
-                    "skills": ["Rust", "Go", "JavaScript"]
+                    "last": "Morgan Hitchcock",
                 }
             )
-            # self.assertEqual(
-            #     [
-            #         {
-            #             'id': 'person:100',
-            #             'name': 'Tobie',
-            #             'company': 'SurrealDB',
-            #             'skills': ['Rust', 'Go', 'JavaScript']
-            #         }
-            #     ],
-            #     outcome
-            # )
-        # asyncio.run(set())
+            _ = await self.connection.query(query)
+            outcome = await self.connection.query("SELECT * FROM person;")
+            self.assertEqual(
+                [{'id': 'person:100', 'name': {'last': 'Morgan Hitchcock', 'name': 'Tobie'}}],
+                outcome
+            )
+        asyncio.run(set())
 
 
 if __name__ == "__main__":

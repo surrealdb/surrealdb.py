@@ -43,28 +43,21 @@ class TestSet(TestCase):
 
     def test_set(self):
         self.queries = ["DELETE person;"]
-        query = "CREATE person:100;"
+        query = "CREATE person:100 SET name = $name;"
 
+        self.connection.set(
+            "name",
+            {
+                "name": "Tobie",
+                "last": "Morgan Hitchcock",
+            }
+        )
         _ = self.connection.query(query)
-        # _ = self.connection.set(
-        #     "person:`100`",
-        #     {
-        #         "name": "Tobie",
-        #         "company": "SurrealDB",
-        #         "skills": ["Rust", "Go", "JavaScript"]
-        #     }
-        # )
-        # self.assertEqual(
-        #     [
-        #         {
-        #             'id': 'person:100',
-        #             'name': 'Tobie',
-        #             'company': 'SurrealDB',
-        #             'skills': ['Rust', 'Go', 'JavaScript']
-        #         }
-        #     ],
-        #     outcome
-        # )
+        outcome = self.connection.query("SELECT * FROM person;")
+        self.assertEqual(
+            [{'id': 'person:100', 'name': {'last': 'Morgan Hitchcock', 'name': 'Tobie'}}],
+            outcome
+        )
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ class AsyncSetMixin:
     """
     This class is responsible for the interface between python and the Rust SurrealDB library for creating a document.
     """
-    async def set(self: "SurrealDB", key: str, value: dict) -> dict:
+    async def set(self: "SurrealDB", key: str, value: dict) -> None:
         """
         Creates a new document in the database.
 
@@ -29,8 +29,6 @@ class AsyncSetMixin:
             raise SurrealDbError(e)
         if json_str is not None:
             try:
-                response = await rust_set_future(self._connection, key, json.dumps(value))
-                print(f"\n\n\nresponse: {response}\n\n\n")
-                return json.loads(response)
+                _ = await rust_set_future(self._connection, key, json.dumps(value))
             except Exception as e:
                 raise SurrealDbError(e)

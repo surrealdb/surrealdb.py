@@ -17,6 +17,28 @@ class QueryMixin:
     """
     This class is responsible for the interface between python and the Rust SurrealDB library for creating a document.
     """
+
+    @staticmethod
+    def convert_nested_json_strings(data):
+        """
+        For some reason, if there is a dict in the query result, the value is a string. This does not happen with the
+        raw async method but the implementation is the same. For now this method will be used to convert the string
+        values to JSON in the query result to valid JSON but we should look into why this is happening.
+
+        :param data: The query result data to be checked
+        :return: The processed query data
+        """
+        for item in data:
+            for key, value in item.items():
+                if isinstance(value, str):  # Check if the value is a string
+                    try:
+                        # Attempt to load the string as JSON
+                        item[key] = json.loads(value)
+                    except json.JSONDecodeError:
+                        # If it's not a valid JSON string, do nothing
+                        pass
+        return data
+
     def query(self: "SurrealDB", query: str) -> List[dict]:
         """
         queries the database.
@@ -30,7 +52,9 @@ class QueryMixin:
 
         try:
             loop_manager = AsyncioRuntime()
-            return json.loads(loop_manager.loop.run_until_complete(_query(self._connection, query)))[0]
+            return self.convert_nested_json_strings(
+                json.loads(loop_manager.loop.run_until_complete(_query(self._connection, query)))[0]
+            )
         except Exception as e:
             raise SurrealDbError(e)
 
