@@ -1,20 +1,17 @@
 """
 Tests the Set operation of the AsyncSurrealDB class.
 """
-import asyncio
 from typing import List
 from unittest import TestCase, main
 
 from surrealdb import SurrealDB
-import os
+from tests.integration.url import Url
 
 
 class TestSet(TestCase):
 
     def setUp(self):
-        self.connection = SurrealDB(
-            f"{os.environ.get('CONNECTION_PROTOCOL', 'http')}://localhost:8000/database/namespace"
-        )
+        self.connection = SurrealDB(Url().url)
         self.queries: List[str] = []
         self.connection.signin({
             "username": "root",

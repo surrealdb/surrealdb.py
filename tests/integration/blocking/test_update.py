@@ -1,19 +1,17 @@
 """
 Tests the Update operation of the AsyncSurrealDB class with query and update function.
 """
-import os
 from typing import List
 from unittest import TestCase, main
 
 from surrealdb import SurrealDB
+from tests.integration.url import Url
 
 
 class TestAsyncHttpUpdate(TestCase):
 
     def setUp(self):
-        self.connection = SurrealDB(
-            f"{os.environ.get('CONNECTION_PROTOCOL', 'http')}://localhost:8000/database/namespace"
-        )
+        self.connection = SurrealDB(Url().url)
         self.queries: List[str] = []
 
         self.connection.signin({

@@ -6,14 +6,13 @@ from unittest import TestCase, main
 
 from surrealdb import SurrealDB
 from surrealdb.errors import SurrealDbError
+from tests.integration.url import Url
 
 
 class TestAuth(TestCase):
 
     def setUp(self):
-        self.connection = SurrealDB(
-            f"{os.environ.get('CONNECTION_PROTOCOL', 'http')}://localhost:8000/database/namespace"
-        )
+        self.connection = SurrealDB(Url().url)
 
     def tearDown(self):
         pass

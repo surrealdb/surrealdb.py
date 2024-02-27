@@ -2,19 +2,17 @@
 Tests the Update operation of the AsyncSurrealDB class with query and merge function.
 """
 import asyncio
-import os
 from typing import List
 from unittest import TestCase, main
 
 from surrealdb import AsyncSurrealDB
+from tests.integration.url import Url
 
 
 class TestAsyncHttpMerge(TestCase):
 
     def setUp(self):
-        self.connection = AsyncSurrealDB(
-            f"{os.environ.get('CONNECTION_PROTOCOL', 'http')}://localhost:8000/database/namespace"
-        )
+        self.connection = AsyncSurrealDB(Url().url)
         self.queries: List[str] = []
 
         async def login():

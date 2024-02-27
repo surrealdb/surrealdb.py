@@ -6,14 +6,13 @@ import os
 from unittest import TestCase, main
 
 from surrealdb import AsyncSurrealDB
+from tests.integration.url import Url
 
 
 class TestAsyncAuth(TestCase):
 
     def setUp(self):
-        self.connection = AsyncSurrealDB(
-            f"{os.environ.get('CONNECTION_PROTOCOL', 'http')}://localhost:8000/database/namespace"
-        )
+        self.connection = AsyncSurrealDB(Url().url)
 
     def tearDown(self):
         pass
