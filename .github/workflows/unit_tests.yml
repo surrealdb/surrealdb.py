@@ -22,9 +22,11 @@ jobs:
       - name: Build for tests
         run: |
           python tests/scripts/local_build_ci.py
-          docker-compose build
-          docker-compose up -d
-          sleep 2
+          pip install docker
+          pip install requests
+#          docker-compose build
+#          docker-compose up -d
+#          sleep 2
 
       - name: Run Tests
         run: sh scripts/run_tests.sh
