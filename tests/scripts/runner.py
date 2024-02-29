@@ -23,14 +23,15 @@ class DbInstance:
         container (docker.models.containers.Container): The Docker container instance.
         id (str): The id of the Docker container.
     """
-    def __init__(self, version: str) -> None:
+    def __init__(self, version: str, port: int = 8000) -> None:
         """
         The constructor for the DbInstance class.
 
         :param version: The version of the SurrealDB to run.
+        :param port: The port to run the SurrealDB on.
         """
-        self.version = f"v{version}"
-        self.port = int(f"8{version.replace('.', '')}")
+        self.version: str = version
+        self.port: int = port
         self.container = None
         self.id = None
 
@@ -61,6 +62,14 @@ class DbInstance:
         """
         self.container.stop()
 
+    def remove(self) -> None:
+        """
+        Removes the Docker container.
+
+        :return: None
+        """
+        self.container.remove()
+
 
 def run_tests(port: int, protocol: str) -> None:
     os.environ["CONNECTION_PROTOCOL"] = f"{protocol}"
@@ -72,13 +81,14 @@ def run_tests(port: int, protocol: str) -> None:
 
 
 if __name__ == "__main__":
-    for version in ["1.2.1", "1.2.0", "1.0.1", "1.1.1", "1.1.0", "1.0.1"]:
-        container = DbInstance(version=version)
+    port = 8000
+    for version in ["v1.2.1", "v1.2.0", "v1.0.1", "v1.1.1", "v1.1.0", "v1.0.1", "1.0.0"]:
+        container = DbInstance(version=version, port=port)
         container.start()
-        time.sleep(1)
+        time.sleep(0.3)
+        print(f"Running tests for version {version} on port {container.port}")
         run_tests(port=container.port, protocol="http")
         run_tests(port=container.port, protocol="ws")
-
-        # container_check = DOCKER_CLIENT.containers.get(container.id)
         container.stop()
-        # container_check.stop()
+        container.remove()
+        port += 1
