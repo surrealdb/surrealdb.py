@@ -1,0 +1,51 @@
+version: '3'
+services:
+  surrealdb:
+    image: surrealdb/surrealdb
+    command: "start"
+    environment:
+      - SURREAL_USER=root
+      - SURREAL_PASS=root
+      - SURREAL_LOG=trace
+    ports:
+      - 8000:8000
+
+  surrealdb_121:
+    image: surrealdb/surrealdb:v1.2.1
+    command: "start"
+    environment:
+      - SURREAL_USER=root
+      - SURREAL_PASS=root
+      - SURREAL_LOG=trace
+    ports:
+      - 8121:8000
+
+  surrealdb_120:
+    image: surrealdb/surrealdb:v1.2.0
+    command: "start"
+    environment:
+      - SURREAL_USER=root
+      - SURREAL_PASS=root
+      - SURREAL_LOG=trace
+    ports:
+      - 8120:8000
+
+  surrealdb_101:
+    image: surrealdb/surrealdb:v1.0.1
+    command: "start"
+    environment:
+      - SURREAL_USER=root
+      - SURREAL_PASS=root
+      - SURREAL_LOG=trace
+    ports:
+      - 8101:8000
+
+  surrealdb_111:
+    image: surrealdb/surrealdb:v1.1.1
+    command: "start"
+    environment:
+      - SURREAL_USER=root
+      - SURREAL_PASS=root
+      - SURREAL_LOG=trace
+    ports:
+      - 8111:8000

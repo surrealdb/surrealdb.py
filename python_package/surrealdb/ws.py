@@ -94,7 +94,7 @@ class Request(pydantic.BaseModel):
     class Config:
         """Represents the configuration of the RPC request."""
 
-        frozen = True
+        allow_mutation = False
 
 
 class ResponseSuccess(pydantic.BaseModel):
@@ -105,17 +105,17 @@ class ResponseSuccess(pydantic.BaseModel):
         result: The result of the request.
     """
 
-    id: Optional[str] = None
+    id: str
     result: Any
 
     class Config:
         """Represents the configuration of the RPC request.
 
         Attributes:
-            frozen: Whether to prohibit mutation.
+            allow_mutation: Whether to allow mutation.
         """
 
-        frozen = True
+        allow_mutation = False
 
 
 class ResponseError(pydantic.BaseModel):
@@ -133,10 +133,10 @@ class ResponseError(pydantic.BaseModel):
         """Represents the configuration of the RPC request.
 
         Attributes:
-            frozen: Whether to prohibit mutation.
+            allow_mutation: Whether to allow mutation.
         """
 
-        frozen = True
+        allow_mutation = False
 
 
 def _validate_response(
@@ -189,9 +189,8 @@ class Surreal:
 
     """
 
-    def __init__(self, url: str, max_size: Optional[int] = 2**20) -> None:
+    def __init__(self, url: str) -> None:
         self.url = url
-        self.max_size = max_size
         self.client_state = ConnectionState.CONNECTING
         self.token: Optional[str] = None
         self.ws: Optional[websockets.WebSocketClientProtocol] = None  # type: ignore
@@ -221,7 +220,14 @@ class Surreal:
         await self.close()
 
     async def connect(self) -> None:
-        """Connect to a local or remote database endpoint."""
+        """Connect to a local or remote database endpoint.
+
+        Examples:
+            Connect to a local endpoint
+                db = Surreal()
+                await db.connect('ws://127.0.0.1:8000/rpc')
+                await db.signin({"user": "root", "pass": "root"})
+        """
         self.ws = await websockets.connect(self.url)  # type: ignore
         self.client_state = ConnectionState.CONNECTED
 
@@ -600,32 +606,58 @@ class Surreal:
         )
         return success.result
 
-    async def live(self, table: str, diff: bool = False) -> str:
-        """Initiates a live query.
+    # ------------------------------------------------------------------------
+    # Surreal library methods - undocumented but implemented in js library
 
-        Args:
-            table: The table name to listen for changes for.
-            diff: If set to true, live notifications will include
-                an array of JSON Patch objects,
-                rather than the entire record for each notification.
+    async def info(self) -> Optional[Dict[str, Any]]:
+        """Retrieve info about the current Surreal instance.
 
         Returns:
-            UUID string.
+            The information of the Surreal server.
         """
         response = await self._send_receive(
-            Request(id=generate_uuid(), method="live", params=(table, diff)),
+            Request(
+                id=generate_uuid(),
+                method="info",
+            ),
         )
         success: ResponseSuccess = _validate_response(response)
         return success.result
 
-    async def kill(self, query_uuid: str) -> None:
-        """Kills a running live query by it's UUID.
+    async def live(self, table: str) -> str:
+        """Get a live stream of changes to a table.
 
         Args:
-            query_uuid: The UUID of the live query you wish to kill.
+            table: The table name.
+
+        Returns:
+            The records.
         """
         response = await self._send_receive(
-            Request(id=generate_uuid(), method="kill", params=(query_uuid,)),
+            Request(id=generate_uuid(), method="live", params=(table,)),
+        )
+        success: ResponseSuccess = _validate_response(response)
+        return success.result
+
+    async def ping(self) -> bool:
+        """Ping the Surreal server."""
+        response = await self._send_receive(
+            Request(
+                id=generate_uuid(),
+                method="ping",
+            ),
+        )
+        success: ResponseSuccess = _validate_response(response)
+        return success.result
+
+    async def kill(self, query: str) -> None:
+        """Kill a specific query.
+
+        Args:
+            query: The query to kill.
+        """
+        response = await self._send_receive(
+            Request(id=generate_uuid(), method="kill", params=(query,)),
         )
         success: ResponseSuccess = _validate_response(response)
         return success.result

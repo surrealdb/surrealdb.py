@@ -1,0 +1,4 @@
+[flake8]
+max-line-length = 160
+exclude = tests/* venv/* build/ examples/ integration_tests/ unit_tests/ surrealdb/__init__.py python_package/ /surrealdb/version.py
+ignore = W291, W605, F821

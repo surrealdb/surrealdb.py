@@ -1,0 +1,128 @@
+[tool.poetry]
+name = "surrealdb"
+version = "0.3.1"
+description = "The official SurrealDB library for Python."
+readme = "README.md"
+authors = ["SurrealDB"]
+license = "Apache-2.0"
+repository = "https://github.com/surrealdb/surrealdb.py"
+documentation = "https://surrealdb.com/docs/integration/libraries/python"
+
+keywords = ["SurrealDB", "Database"]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Topic :: Database",
+    "Topic :: Database :: Front-Ends",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+httpx = ">=0.23.0"
+pydantic = "^1.10.6"
+websockets = "^10.4"
+
+[tool.poetry.dev-dependencies]
+pre-commit = ">=2.20.0"
+black = ">=22.8.0"
+ruff = ">=0.0.245"
+mypy = ">=1.2.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+color = true
+
+exclude = '''
+/(
+    \.bzr
+    | \.direnv
+    | \.eggs
+    | \.git
+    | \.hg
+    | \.mypy_cache
+    | \.nox
+    | \.pants\.d
+    | \.ruff_cache
+    | \.__pypackages__
+    | \.svn
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+    | env
+    | venv
+)/
+'''
+
+[tool.ruff]
+select = ["I", "D", "N", "UP"]
+line-length = 88
+
+ignore = [
+    "D100",  # Missing docstring in public module
+    "D104",  # Missing docstring in public package
+    "D107",  # Missing docstring in __init__
+    "D205",  # 1 blank line required between summary line and description
+    "D212",  # Multi-line docstring summary should start at the first line
+    "N805",  # First argument of a method should be named self
+    "N818",  # Exception name ... should be named with an Error suffix
+    "UP035"  # Typing deprecations
+]
+
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    ".git",
+    "__pycache__",
+]
+
+[tool.ruff.pydocstyle]
+convention = "google"
+
+[tool.ruff.pyupgrade]
+keep-runtime-typing = true
+
+[tool.mypy]
+python_version = 3.8
+pretty = true
+show_traceback = true
+color_output = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+ignore_missing_imports = true
+implicit_reexport = true
+strict_equality = true
+strict_optional = false
+warn_no_return = true
+warn_redundant_casts = true
+warn_unreachable = true
+warn_unused_configs = true
+warn_unused_ignores = true

@@ -57,28 +57,8 @@ cover/
 .vscode/
 __pycache__/
 dist/
-build/
 
 # -----------------------------------
 # IDE
 # -----------------------------------
 .idea/
-# -----------------------------------
-# Rust
-# -----------------------------------
-/target/
-Cargo.lock
-# -----------------------------------
-# Packaging
-# -----------------------------------
-*.egg-info/
-*.egg
-.eggs/
-*.so
-/build/
-# -----------------------------------
-# server tests
-# -----------------------------------
-integration_tests/flask/app/surreal.py/
-integration_tests/package-lock.json
-integration_tests/node_modules/
