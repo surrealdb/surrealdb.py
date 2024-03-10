@@ -18,16 +18,17 @@ connection = SurrealDB(url="ws://localhost:8080", existing_connection_id="some_c
 import uuid
 from typing import Optional
 
-from surrealdb.rust_surrealdb import rust_make_connection_future
-from surrealdb.rust_surrealdb import rust_use_namespace_future
-from surrealdb.rust_surrealdb import rust_use_database_future
+from ._rust_surrealdb import rust_make_connection_future
+from ._rust_surrealdb import rust_use_namespace_future
+from ._rust_surrealdb import rust_use_database_future
 
+from .asyncio_runtime import AsyncioRuntime
+from .execution_mixins.auth import SignInMixin
 # import the mixins for operations for the connection
-from surrealdb.async_execution_mixins.create import AsyncCreateMixin
-from surrealdb.async_execution_mixins.auth import AsyncSignInMixin
-from surrealdb.async_execution_mixins.set import AsyncSetMixin
-from surrealdb.async_execution_mixins.query import AsyncQueryMixin
-from surrealdb.async_execution_mixins.update import AsyncUpdateMixin
+from .execution_mixins.create import CreateMixin
+from .execution_mixins.query import QueryMixin
+from .execution_mixins.set import SetMixin
+from .execution_mixins.update import UpdateMixin
 
 
 class ConnectionController(type):
@@ -78,16 +79,16 @@ class ConnectionController(type):
         return super(ConnectionController, cls).__call__(*args, **kwargs)
 
 
-class AsyncSurrealDB(
-    AsyncCreateMixin,
-    AsyncSignInMixin,
-    AsyncSetMixin,
-    AsyncQueryMixin,
-    AsyncUpdateMixin,
+class SurrealDB(
+    CreateMixin,
+    SignInMixin,
+    SetMixin,
+    QueryMixin,
+    UpdateMixin,
     metaclass=ConnectionController
 ):
     """
-    This class is responsible for managing the async connection to SurrealDB and managing operations on the connection.
+    This class is responsible for managing the connection to SurrealDB and managing operations on the connection.
     """
     def __init__(self,
                  url: Optional[str] = None,
@@ -102,16 +103,12 @@ class AsyncSurrealDB(
         :param keep_connection: wether or not to keep the connection open after this object is destroyed
         :param existing_connection_id: the existing connection id to use instead of making a new connection
         """
-        self._connection: Optional[str] = None
-        self.url: str = url
+        self._connection: Optional[str] = self._make_connection(url=url)
         self.id: str = str(uuid.uuid4()) if existing_connection_id is None else existing_connection_id
         self.keep_connection: bool = keep_connection
         self.main_connection: bool = main_connection
 
-    async def connect(self):
-        self._connection = await self._make_connection(url=self.url)
-
-    async def _make_connection(self, url: str) -> str:
+    def _make_connection(self, url: str) -> str:
         """
         Makes a connection to SurrealDB or establishes an existing connection.
 
@@ -119,23 +116,35 @@ class AsyncSurrealDB(
         :param existing_connection_id: the existing connection id to use instead of making a new connection
         :return: the connection id of the connection
         """
-        connection_id = await rust_make_connection_future(url)
+        async def async_make_connection(url: str):
+            return await rust_make_connection_future(url)
+
+        loop_manager = AsyncioRuntime()
+        connection_id = loop_manager.loop.run_until_complete(async_make_connection(url))
         return connection_id
 
-    async def use_namespace(self, namespace: str) -> None:
+    def use_namespace(self, namespace: str) -> None:
         """
         Uses the given namespace in the connection.
 
         :param namespace: the namespace to use
         :return: None
         """
-        await rust_use_namespace_future(self._connection, namespace)
+        async def async_use_namespace(namespace: str):
+            return await rust_use_namespace_future(self._connection, namespace)
 
-    async def use_database(self, database: str) -> None:
+        loop_manager = AsyncioRuntime()
+        loop_manager.loop.run_until_complete(async_use_namespace(namespace))
+
+    def use_database(self, database: str) -> None:
         """
         Uses the given database in the connection.
 
         :param database: the database to use
         :return: None
         """
-        await rust_use_database_future(self._connection, database)
+        async def async_use_database(database: str):
+            return await rust_use_database_future(self._connection, database)
+
+        loop_manager = AsyncioRuntime()
+        loop_manager.loop.run_until_complete(async_use_database(database))

@@ -6,11 +6,11 @@ https://github.com/surrealdb/surrealdb/blob/main/lib/tests/fetch.rs
 import json
 from typing import List, Union
 
-from surrealdb.rust_surrealdb import rust_query_future
-from surrealdb.rust_surrealdb import rust_select_future
+from .._rust_surrealdb import rust_query_future
+from .._rust_surrealdb import rust_select_future
 
-from surrealdb.errors import SurrealDbError
-from surrealdb.asyncio_runtime import AsyncioRuntime 
+from ..errors import SurrealDbError
+from ..asyncio_runtime import AsyncioRuntime
 
 
 class QueryMixin:

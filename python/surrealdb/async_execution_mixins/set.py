@@ -3,9 +3,9 @@ This file defines the interface between python and the Rust SurrealDB library fo
 """
 import json
 
-from surrealdb.rust_surrealdb import rust_set_future
+from .._rust_surrealdb import rust_set_future
 
-from surrealdb.errors import SurrealDbError
+from ..errors import SurrealDbError
 
 
 class AsyncSetMixin:

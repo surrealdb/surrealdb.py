@@ -4,11 +4,11 @@ This file defines the interface between python and the Rust SurrealDB library fo
 import json
 from typing import List, Union
 
-from surrealdb.rust_surrealdb import rust_create_future
-from surrealdb.rust_surrealdb import rust_delete_future
+from .._rust_surrealdb import rust_create_future
+from .._rust_surrealdb import rust_delete_future
 
-from surrealdb.errors import SurrealDbError
-from surrealdb.asyncio_runtime import AsyncioRuntime 
+from ..errors import SurrealDbError
+from ..asyncio_runtime import AsyncioRuntime
 
 
 class CreateMixin:
