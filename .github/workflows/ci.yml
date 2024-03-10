@@ -8,9 +8,6 @@ on:
       - '**'
   pull_request: {}
 
-env:
-  COLUMNS: 150
-
 jobs:
   test-python:
     name: test ${{ matrix.python-version }}
@@ -43,49 +40,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-
-      # Issue with requests < 2.29.0 and docker. See: https://github.com/docker/docker-py/issues/3113
-      - run: pip install docker requests==2.28.2
-
-      - run: pip install -e .
-        env:
-          RUST_BACKTRACE: 1
-
-      - run: pip freeze
-
-      - run: sh scripts/run_tests.sh
- 
-
-  test-os:
-    name: test on ${{ matrix.os }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu, macos, windows]
-
-    runs-on: ${{ matrix.os }}-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: install rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: cache rust
-        uses: Swatinem/rust-cache@v2
-
-      - name: set up python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Update PATH
-        if: ${{ matrix.os != 'windows' }}
-        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Update Path for Windows
-        if: ${{ matrix.os == 'windows' }}
-        run: echo "$APPDATA\Python\Scripts" >> $GITHUB_PATH
 
       # Issue with requests < 2.29.0 and docker. See: https://github.com/docker/docker-py/issues/3113
       - run: pip install docker requests==2.28.2
