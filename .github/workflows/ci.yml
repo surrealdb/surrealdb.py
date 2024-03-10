@@ -44,7 +44,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - run: pip install docker requests
+      # Issue with requests < 2.29.0 and docker. See: https://github.com/docker/docker-py/issues/3113
+      - run: pip install docker requests==2.28.2
 
       - run: pip install -e .
         env:
@@ -86,7 +87,8 @@ jobs:
         if: ${{ matrix.os == 'windows' }}
         run: echo "$APPDATA\Python\Scripts" >> $GITHUB_PATH
 
-      - run: pip install docker requests 
+      # Issue with requests < 2.29.0 and docker. See: https://github.com/docker/docker-py/issues/3113
+      - run: pip install docker requests==2.28.2
 
       - run: pip install -e .
         env:
@@ -97,5 +99,4 @@ jobs:
       - run: sh scripts/run_tests.sh
 
       - run: cargo test
-
 
