@@ -1,31 +1,21 @@
 [build-system]
-requires = ["maturin>=1.5,<2.0"]
+requires = [ "maturin>=1.5,<2.0",]
 build-backend = "maturin"
 
 [project]
 name = "surrealdb"
-version = "0.4.0"
+version = "0.0.5"
 description = "SurrealDB Python Client written in Rust"
-authors = [ 
-    { name = "Maxwell Flitton", email = "maxwellflitton@gmail.com" } 
-]
 readme = "README.md"
-license = { file = "LICENSE" }
 requires-python = ">=3.8"
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
-    "Operating System :: OS Independent",
-    "Programming Language :: Rust",
-    "Programming Language :: Python :: Implementation :: CPython",
-    "Programming Language :: Python :: Implementation :: PyPy",
-    "Topic :: Database",
-    "Topic :: Database :: Front-Ends",
-    "Topic :: Software Development",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-]
-keywords = ["SurrealDB", "Database"]
+classifiers = [ "Development Status :: 4 - Beta", "Intended Audience :: Developers", "License :: OSI Approved :: Apache Software License", "Operating System :: OS Independent", "Programming Language :: Rust", "Programming Language :: Python :: Implementation :: CPython", "Programming Language :: Python :: Implementation :: PyPy", "Topic :: Database", "Topic :: Database :: Front-Ends", "Topic :: Software Development", "Topic :: Software Development :: Libraries :: Python Modules",]
+keywords = [ "SurrealDB", "Database",]
+[[project.authors]]
+name = "Maxwell Flitton"
+email = "maxwellflitton@gmail.com"
+
+[project.license]
+file = "LICENSE"
 
 [project.urls]
 repository = "https://github.com/surrealdb/surrealdb.py"
@@ -34,4 +24,4 @@ documentation = "https://surrealdb.com/docs/integration/libraries/python"
 [tool.maturin]
 module-name = "surrealdb._rust_surrealdb"
 python-source = "python"
-features = ["pyo3/extension-module"]
+features = [ "pyo3/extension-module",]

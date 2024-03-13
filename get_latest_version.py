@@ -3,6 +3,7 @@ import pathlib
 from typing import Tuple, List, Union
 
 import requests
+import toml
 
 
 def get_latest_version_number() -> str:
@@ -73,6 +74,26 @@ def increase_version_number(version_buffer: Union[Tuple[int, int, int], List[int
     return [first, second, third]
 
 
+def update_toml():
+    """
+    Updates the pyproject.toml file with the latest version number.
+    Returns: None
+    """
+    toml_file_path: str = str(pathlib.Path(__file__).parent.absolute()) + "/pyproject.toml"
+    version_file_path: str = str(pathlib.Path(__file__).parent.absolute()) + "/surrealdb/VERSION.txt"
+
+    with open(version_file_path, "r") as fh:
+        version = fh.read().split("=")[1].replace("'", "")
+
+    with open(toml_file_path, "r") as f:
+        toml_data: dict = toml.load(f)
+
+    toml_data["project"]["version"] = version
+
+    with open(toml_file_path, "w") as f:
+        toml.dump(toml_data, f) 
+
+
 if __name__ == "__main__":
     write_version_to_file(
         version_number=pack_version_number(
@@ -83,3 +104,4 @@ if __name__ == "__main__":
             )
         )
     )
+    update_toml()
