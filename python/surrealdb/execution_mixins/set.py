@@ -3,10 +3,10 @@ This file defines the interface between python and the Rust SurrealDB library fo
 """
 import json
 
-from surrealdb.rust_surrealdb import rust_set_future
+from .._rust_surrealdb import rust_set_future
 
-from surrealdb.errors import SurrealDbError
-from surrealdb.asyncio_runtime import AsyncioRuntime 
+from ..errors import SurrealDbError
+from ..asyncio_runtime import AsyncioRuntime
 
 
 class SetMixin:

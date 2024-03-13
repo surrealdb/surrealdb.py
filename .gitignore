@@ -1,84 +1,77 @@
-# -----------------------------------
-# OS X
-# -----------------------------------
+/target
 
-# Directory files
-.DS_Store
-.AppleDouble
-.LSOverride
+# Byte-compiled / optimized / DLL files
+__pycache__/
+.pytest_cache/
+*.py[cod]
 
-# Thumbnail files
-._*
+# C extensions
+*.so
 
-# Files that might appear on external disk
-.Spotlight-V100
-.Trashes
-
-# Directories potentially created on remote AFP share
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
-
-# Environments
-.env
-.venv
+# Distribution / packaging
+.Python
+.venv/
 env/
-venv/
-ENV/
-env.bak/
-venv.bak/
 bin/
-lib64
-pyvenv.cfg
+build/
+develop-eggs/
+dist/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+include/
+man/
+venv/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+pip-selfcheck.json
 
 # Unit test / coverage reports
 htmlcov/
 .tox/
-.nox/
 .coverage
-.coverage.*
 .cache
 nosetests.xml
 coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-cover/
 
-# -----------------------------------
-# Files
-# -----------------------------------
+# Translations
+*.mo
 
-*.db
-*.pyc
-.vscode/
-__pycache__/
-dist/
-build/
+# Mr Developer
+.mr.developer.cfg
+.project
+.pydevproject
 
-# -----------------------------------
-# IDE
-# -----------------------------------
+# Rope
+.ropeproject
+
+# Django stuff:
+*.log
+*.pot
+
+.DS_Store
+
+# Sphinx documentation
+docs/_build/
+
+# PyCharm
 .idea/
-# -----------------------------------
-# Rust
-# -----------------------------------
-/target/
-Cargo.lock
-# -----------------------------------
-# Packaging
-# -----------------------------------
-*.egg-info/
-*.egg
-.eggs/
-*.so
-/build/
-# -----------------------------------
-# server tests
-# -----------------------------------
+
+# VSCode
+.vscode/
+
+# Pyenv
+.build/
+
+# Server tests
 integration_tests/flask/app/surreal.py/
 integration_tests/package-lock.json
 integration_tests/node_modules/

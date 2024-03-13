@@ -3,11 +3,11 @@ This file defines the interface between python and the Rust SurrealDB library fo
 """
 from typing import Dict, Optional
 
-from surrealdb.rust_surrealdb import rust_authenticate_future
-from surrealdb.rust_surrealdb import rust_sign_in_future
-from surrealdb.rust_surrealdb import rust_sign_up_future
+from .._rust_surrealdb import rust_authenticate_future
+from .._rust_surrealdb import rust_sign_in_future
+from .._rust_surrealdb import rust_sign_up_future
 
-from surrealdb.errors import SurrealDbError
+from ..errors import SurrealDbError
 
 
 class AsyncSignInMixin:
