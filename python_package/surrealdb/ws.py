@@ -13,16 +13,19 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
+
 from __future__ import annotations
 
 import enum
 import json
 import uuid
-from types import TracebackType
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 
 import pydantic
 import websockets
+
+if TYPE_CHECKING:
+    from types import TracebackType
 
 __all__ = ("Surreal",)
 
@@ -31,7 +34,8 @@ __all__ = ("Surreal",)
 
 
 def generate_uuid() -> str:
-    """Generate a UUID.
+    """
+    Generate a UUID.
 
     Returns:
         A UUID as a string.
@@ -58,7 +62,8 @@ class SurrealPermissionException(SurrealException):
 
 
 class ConnectionState(enum.Enum):
-    """Represents the state of the connection.
+    """
+    Represents the state of the connection.
 
     Attributes:
         CONNECTING: The connection is in progress.
@@ -72,7 +77,8 @@ class ConnectionState(enum.Enum):
 
 
 class Request(pydantic.BaseModel):
-    """Represents an RPC request to a Surreal server.
+    """
+    Represents an RPC request to a Surreal server.
 
     Attributes:
         id: The ID of the request.
@@ -88,7 +94,7 @@ class Request(pydantic.BaseModel):
     def validate_params(cls, value):  # pylint: disable=no-self-argument
         """Validate the parameters of the request."""
         if value is None:
-            return tuple()
+            return ()
         return value
 
     class Config:
@@ -98,7 +104,8 @@ class Request(pydantic.BaseModel):
 
 
 class ResponseSuccess(pydantic.BaseModel):
-    """Represents a successful RPC response from a Surreal server.
+    """
+    Represents a successful RPC response from a Surreal server.
 
     Attributes:
         id: The ID of the request.
@@ -109,7 +116,8 @@ class ResponseSuccess(pydantic.BaseModel):
     result: Any
 
     class Config:
-        """Represents the configuration of the RPC request.
+        """
+        Represents the configuration of the RPC request.
 
         Attributes:
             allow_mutation: Whether to allow mutation.
@@ -119,7 +127,8 @@ class ResponseSuccess(pydantic.BaseModel):
 
 
 class ResponseError(pydantic.BaseModel):
-    """Represents an RPC error.
+    """
+    Represents an RPC error.
 
     Attributes:
         code: The code of the error.
@@ -130,7 +139,8 @@ class ResponseError(pydantic.BaseModel):
     message: str
 
     class Config:
-        """Represents the configuration of the RPC request.
+        """
+        Represents the configuration of the RPC request.
 
         Attributes:
             allow_mutation: Whether to allow mutation.
@@ -143,7 +153,8 @@ def _validate_response(
     response: Union[ResponseSuccess, ResponseError],
     exception: Type[Exception] = SurrealException,
 ) -> ResponseSuccess:
-    """Validate the response.
+    """
+    Validate the response.
     The response is validated by checking if it is an error. If it is an error,
     the exception is raised. Otherwise, the response is returned.
 
@@ -167,7 +178,8 @@ def _validate_response(
 
 
 class Surreal:
-    """Surreal is a class that represents a Surreal server.
+    """
+    Surreal is a class that represents a Surreal server.
 
     Args:
         url: The URL of the Surreal server.
@@ -196,7 +208,8 @@ class Surreal:
         self.ws: Optional[websockets.WebSocketClientProtocol] = None  # type: ignore
 
     async def __aenter__(self) -> Surreal:
-        """Create a connection when entering the context manager.
+        """
+        Create a connection when entering the context manager.
 
         Returns:
             The Surreal client.
@@ -210,7 +223,8 @@ class Surreal:
         exc_value: Optional[Type[BaseException]] = None,
         traceback: Optional[Type[TracebackType]] = None,
     ) -> None:
-        """Close the connection when exiting the context manager.
+        """
+        Close the connection when exiting the context manager.
 
         Args:
             exc_type: The type of the exception.
@@ -220,7 +234,8 @@ class Surreal:
         await self.close()
 
     async def connect(self) -> None:
-        """Connect to a local or remote database endpoint.
+        """
+        Connect to a local or remote database endpoint.
 
         Examples:
             Connect to a local endpoint
@@ -237,7 +252,8 @@ class Surreal:
         self.client_state = ConnectionState.DISCONNECTED
 
     async def use(self, namespace: str, database: str) -> None:
-        """Switch to a specific namespace and database.
+        """
+        Switch to a specific namespace and database.
 
         Args:
             namespace: Switches to a specific namespace.
@@ -252,7 +268,8 @@ class Surreal:
         _validate_response(response)
 
     async def signup(self, vars: Dict[str, Any]) -> str:
-        """Sign this connection up to a specific authentication scope.
+        """
+        Sign this connection up to a specific authentication scope.
 
         Args:
             vars: Variables used in a signup query.
@@ -271,7 +288,8 @@ class Surreal:
         return self.token
 
     async def signin(self, vars: Dict[str, Any]) -> str:
-        """Sign this connection in to a specific authentication scope.
+        """
+        Sign this connection in to a specific authentication scope.
 
         Args:
             vars: Variables used in a signin query.
@@ -301,7 +319,8 @@ class Surreal:
         self.token = None
 
     async def authenticate(self, token: str) -> None:
-        """Authenticate the current connection with a JWT token.
+        """
+        Authenticate the current connection with a JWT token.
 
         Args:
             token: The token to use for the connection.
@@ -315,7 +334,8 @@ class Surreal:
         _validate_response(response, SurrealAuthenticationException)
 
     async def let(self, key: str, value: Any) -> None:
-        """Assign a value as a parameter for this connection.
+        """
+        Assign a value as a parameter for this connection.
 
         Args:
             key: Specifies the name of the variable.
@@ -346,7 +366,8 @@ class Surreal:
         return success.result
 
     async def set(self, key: str, value: Any) -> None:
-        """Alias for `let`. Assigns a value as a parameter for this connection.
+        """
+        Alias for `let`. Assigns a value as a parameter for this connection.
 
         Args:
             key: Specifies the name of the variable.
@@ -370,7 +391,8 @@ class Surreal:
     async def query(
         self, sql: str, vars: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
-        """Run a set of SurrealQL statements against the database.
+        """
+        Run a set of SurrealQL statements against the database.
 
         Args:
             sql: Specifies the SurrealQL statements.
@@ -400,7 +422,8 @@ class Surreal:
         return success.result
 
     async def select(self, thing: str) -> List[Dict[str, Any]]:
-        """Select all records in a table (or other entity),
+        """
+        Select all records in a table (or other entity),
         or a specific record, in the database.
 
         This function will run the following query in the database:
@@ -428,7 +451,8 @@ class Surreal:
     async def create(
         self, thing: str, data: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
-        """Create a record in the database.
+        """
+        Create a record in the database.
 
         This function will run the following query in the database:
         create $thing content $data
@@ -465,7 +489,8 @@ class Surreal:
     async def update(
         self, thing: str, data: Optional[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Update all records in a table, or a specific record, in the database.
+        """
+        Update all records in a table, or a specific record, in the database.
 
         This function replaces the current document / record data with the
         specified data.
@@ -505,7 +530,8 @@ class Surreal:
     async def merge(
         self, thing: str, data: Optional[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Modify by deep merging all records in a table, or a specific record, in the database.
+        """
+        Modify by deep merging all records in a table, or a specific record, in the database.
 
         This function merges the current document / record data with the
         specified data.
@@ -547,7 +573,8 @@ class Surreal:
     async def patch(
         self, thing: str, data: Optional[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Apply JSON Patch changes to all records, or a specific record, in the database.
+        """
+        Apply JSON Patch changes to all records, or a specific record, in the database.
 
         This function patches the current document / record data with
         the specified JSON Patch data.
@@ -584,7 +611,8 @@ class Surreal:
         return success.result
 
     async def delete(self, thing: str) -> List[Dict[str, Any]]:
-        """Delete all records in a table, or a specific record, from the database.
+        """
+        Delete all records in a table, or a specific record, from the database.
 
         This function will run the following query in the database:
         delete * from $thing
@@ -610,7 +638,8 @@ class Surreal:
     # Surreal library methods - undocumented but implemented in js library
 
     async def info(self) -> Optional[Dict[str, Any]]:
-        """Retrieve info about the current Surreal instance.
+        """
+        Retrieve info about the current Surreal instance.
 
         Returns:
             The information of the Surreal server.
@@ -625,7 +654,8 @@ class Surreal:
         return success.result
 
     async def live(self, table: str) -> str:
-        """Get a live stream of changes to a table.
+        """
+        Get a live stream of changes to a table.
 
         Args:
             table: The table name.
@@ -651,7 +681,8 @@ class Surreal:
         return success.result
 
     async def kill(self, query: str) -> None:
-        """Kill a specific query.
+        """
+        Kill a specific query.
 
         Args:
             query: The query to kill.
@@ -668,7 +699,8 @@ class Surreal:
     async def _send_receive(
         self, request: Request
     ) -> Union[ResponseSuccess, ResponseError]:
-        """Send a request to the Surreal server and receive a response.
+        """
+        Send a request to the Surreal server and receive a response.
 
         Args:
             request: The request to send.
@@ -683,7 +715,8 @@ class Surreal:
         return await self._recv()
 
     async def _send(self, request: Request) -> None:
-        """Send a request to the Surreal server.
+        """
+        Send a request to the Surreal server.
 
         Args:
             request: The request to send.
@@ -695,7 +728,8 @@ class Surreal:
         await self.ws.send(json.dumps(request.dict(), ensure_ascii=False))
 
     async def _recv(self) -> Union[ResponseSuccess, ResponseError]:
-        """Receive a response from the Surreal server.
+        """
+        Receive a response from the Surreal server.
 
         Returns:
             The response from the Surreal server.
@@ -713,4 +747,5 @@ class Surreal:
     def _validate_connection(self) -> None:
         """Validate the connection to the Surreal server."""
         if self.client_state != ConnectionState.CONNECTED:
-            raise SurrealException("Not connected to Surreal server.")
+            msg = "Not connected to Surreal server."
+            raise SurrealException(msg)

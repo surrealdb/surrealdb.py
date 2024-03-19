@@ -1,7 +1,7 @@
 """
 Handles the integration tests for creating and deleting using the create function and QL, and delete in QL.
 """
-import os
+
 from typing import List
 from unittest import TestCase, main
 
@@ -10,16 +10,17 @@ from tests.integration.url import Url
 
 
 class TestCreate(TestCase):
-
     def setUp(self):
         self.connection = SurrealDB(Url().url)
         self.queries: List[str] = []
 
         def login():
-            self.connection.signin({
-                "username": "root",
-                "password": "root",
-            })
+            self.connection.signin(
+                {
+                    "username": "root",
+                    "password": "root",
+                }
+            )
 
         login()
 
@@ -33,8 +34,11 @@ class TestCreate(TestCase):
         self.connection.query("CREATE user:jaime SET name = 'Jaime';")
         outcome = self.connection.query("SELECT * FROM user;")
         self.assertEqual(
-            [{'id': 'user:jaime', 'name': 'Jaime'}, {'id': 'user:tobie', 'name': 'Tobie'}],
-            outcome
+            [
+                {"id": "user:jaime", "name": "Jaime"},
+                {"id": "user:tobie", "name": "Tobie"},
+            ],
+            outcome,
         )
 
     def test_delete_ql(self):
@@ -60,9 +64,16 @@ class TestCreate(TestCase):
             """
         )
         self.assertEqual(
-            [{"id": "person:⟨失败⟩", "pass": "*æ失败", "really": True, "tags": ["python", "documentation"],
-              "user": "me"}],
-            outcome
+            [
+                {
+                    "id": "person:⟨失败⟩",
+                    "pass": "*æ失败",
+                    "really": True,
+                    "tags": ["python", "documentation"],
+                    "user": "me",
+                }
+            ],
+            outcome,
         )
 
     def test_create_person_with_tags(self):
@@ -74,14 +85,19 @@ class TestCreate(TestCase):
                 "pass": "*æ失败",
                 "really": False,
                 "tags": ["python", "test"],
-            }
+            },
         )
         self.assertEqual(
-            {"id": "person:⟨失败⟩", "pass": "*æ失败", "really": False, "tags": ["python", "test"],
-             "user": "still me"},
-            outcome
+            {
+                "id": "person:⟨失败⟩",
+                "pass": "*æ失败",
+                "really": False,
+                "tags": ["python", "test"],
+                "user": "still me",
+            },
+            outcome,
         )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

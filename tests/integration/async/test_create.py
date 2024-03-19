@@ -1,6 +1,7 @@
 """
 Handles the integration tests for creating and deleting using the create function and QL, and delete in QL.
 """
+
 import asyncio
 from typing import List
 from unittest import TestCase, main
@@ -10,17 +11,18 @@ from tests.integration.url import Url
 
 
 class TestAsyncCreate(TestCase):
-
     def setUp(self):
         self.connection = AsyncSurrealDB(Url().url)
         self.queries: List[str] = []
 
         async def login():
             await self.connection.connect()
-            await self.connection.signin({
-                "username": "root",
-                "password": "root",
-            })
+            await self.connection.signin(
+                {
+                    "username": "root",
+                    "password": "root",
+                }
+            )
 
         asyncio.run(login())
 
@@ -40,9 +42,13 @@ class TestAsyncCreate(TestCase):
 
             outcome = await self.connection.query("SELECT * FROM user;")
             self.assertEqual(
-                [{'id': 'user:jaime', 'name': 'Jaime'}, {'id': 'user:tobie', 'name': 'Tobie'}],
-                outcome
+                [
+                    {"id": "user:jaime", "name": "Jaime"},
+                    {"id": "user:tobie", "name": "Tobie"},
+                ],
+                outcome,
             )
+
         asyncio.run(create())
 
     def test_delete_ql(self):
@@ -74,9 +80,18 @@ class TestAsyncCreate(TestCase):
                 """
             )
             self.assertEqual(
-                [{"id": "person:⟨失败⟩", "pass": "*æ失败", "really": True, "tags": [ "python", "documentation" ], "user": "me" }],
-                outcome
+                [
+                    {
+                        "id": "person:⟨失败⟩",
+                        "pass": "*æ失败",
+                        "really": True,
+                        "tags": ["python", "documentation"],
+                        "user": "me",
+                    }
+                ],
+                outcome,
             )
+
         asyncio.run(create_person_with_tags())
 
     def test_create_person_with_tags(self):
@@ -90,16 +105,21 @@ class TestAsyncCreate(TestCase):
                     "pass": "*æ失败",
                     "really": False,
                     "tags": ["python", "test"],
-                }
+                },
             )
             self.assertEqual(
-                {"id": "person:⟨失败⟩", "pass": "*æ失败", "really": False, "tags": ["python", "test"],
-                 "user": "still me"},
-                outcome
+                {
+                    "id": "person:⟨失败⟩",
+                    "pass": "*æ失败",
+                    "really": False,
+                    "tags": ["python", "test"],
+                    "user": "still me",
+                },
+                outcome,
             )
 
         asyncio.run(create_person_with_tags())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

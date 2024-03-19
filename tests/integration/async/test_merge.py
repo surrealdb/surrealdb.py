@@ -1,6 +1,7 @@
 """
 Tests the Update operation of the AsyncSurrealDB class with query and merge function.
 """
+
 import asyncio
 from typing import List
 from unittest import TestCase, main
@@ -10,17 +11,18 @@ from tests.integration.url import Url
 
 
 class TestAsyncHttpMerge(TestCase):
-
     def setUp(self):
         self.connection = AsyncSurrealDB(Url().url)
         self.queries: List[str] = []
 
         async def login():
             await self.connection.connect()
-            await self.connection.signin({
-                "username": "root",
-                "password": "root",
-            })
+            await self.connection.signin(
+                {
+                    "username": "root",
+                    "password": "root",
+                }
+            )
 
         asyncio.run(login())
 
@@ -42,13 +44,14 @@ class TestAsyncHttpMerge(TestCase):
                 "user",
                 {
                     "active": True,
-                }
+                },
             )
-            self.assertEqual([
-                {'active': True, 'id': 'user:jaime', 'name': 'Jaime'},
-                {'active': True, 'id': 'user:tobie', 'name': 'Tobie'}
-            ],
-                await self.connection.query("SELECT * FROM user;")
+            self.assertEqual(
+                [
+                    {"active": True, "id": "user:jaime", "name": "Jaime"},
+                    {"active": True, "id": "user:tobie", "name": "Tobie"},
+                ],
+                await self.connection.query("SELECT * FROM user;"),
             )
 
         asyncio.run(merge_active())
