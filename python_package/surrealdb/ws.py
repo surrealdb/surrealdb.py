@@ -18,11 +18,17 @@ from __future__ import annotations
 
 import enum
 import json
-import uuid
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
+from uuid import uuid4
 
 import pydantic
 import websockets
+
+from .exceptions import (
+    SurrealAuthenticationException,
+    SurrealException,
+    SurrealPermissionException,
+)
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -40,21 +46,7 @@ def generate_uuid() -> str:
     Returns:
         A UUID as a string.
     """
-    return str(uuid.uuid4())
-
-
-# ------------------------------------------------------------------------
-# Exceptions
-class SurrealException(Exception):
-    """Base exception for SurrealDB client library."""
-
-
-class SurrealAuthenticationException(SurrealException):
-    """Exception raised for errors with the SurrealDB authentication."""
-
-
-class SurrealPermissionException(SurrealException):
-    """Exception raised for errors with the SurrealDB permissions."""
+    return str(uuid4())
 
 
 # ------------------------------------------------------------------------
@@ -354,10 +346,7 @@ class Surreal:
             Request(
                 id=generate_uuid(),
                 method="let",
-                params=(
-                    key,
-                    value,
-                ),
+                params=(key, value),
             ),
         )
         success: ResponseSuccess = _validate_response(
@@ -377,10 +366,7 @@ class Surreal:
             Request(
                 id=generate_uuid(),
                 method="let",
-                params=(
-                    key,
-                    value,
-                ),
+                params=(key, value),
             ),
         )
         success: ResponseSuccess = _validate_response(

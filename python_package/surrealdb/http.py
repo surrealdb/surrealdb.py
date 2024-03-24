@@ -22,14 +22,12 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type
 
 import httpx
 
+from .exceptions import SurrealException
+
 if TYPE_CHECKING:
     from types import TracebackType
 
 __all__ = ("SurrealHTTP",)
-
-
-class SurrealException(Exception):
-    """Base exception for SurrealDB client library."""
 
 
 @dataclass(frozen=True)
