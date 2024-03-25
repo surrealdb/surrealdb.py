@@ -1,6 +1,7 @@
 """
 Tests the Set operation of the AsyncSurrealDB class.
 """
+
 import asyncio
 from typing import List
 from unittest import TestCase, main
@@ -10,17 +11,18 @@ from tests.integration.url import Url
 
 
 class TestAsyncSet(TestCase):
-
     def setUp(self):
         self.connection = AsyncSurrealDB(Url().url)
         self.queries: List[str] = []
 
         async def login():
             await self.connection.connect()
-            await self.connection.signin({
-                "username": "root",
-                "password": "root",
-            })
+            await self.connection.signin(
+                {
+                    "username": "root",
+                    "password": "root",
+                }
+            )
 
         asyncio.run(login())
 
@@ -40,14 +42,15 @@ class TestAsyncSet(TestCase):
             self.assertEqual(
                 [
                     {
-                        'id': 'person:100',
-                        'name': 'Tobie',
-                        'company': 'SurrealDB',
-                        'skills': ['Rust', 'Go', 'JavaScript']
+                        "id": "person:100",
+                        "name": "Tobie",
+                        "company": "SurrealDB",
+                        "skills": ["Rust", "Go", "JavaScript"],
                     }
                 ],
-                outcome
+                outcome,
             )
+
         asyncio.run(set())
 
     def test_set(self):
@@ -60,14 +63,20 @@ class TestAsyncSet(TestCase):
                 {
                     "name": "Tobie",
                     "last": "Morgan Hitchcock",
-                }
+                },
             )
             _ = await self.connection.query(query)
             outcome = await self.connection.query("SELECT * FROM person;")
             self.assertEqual(
-                [{'id': 'person:100', 'name': {'last': 'Morgan Hitchcock', 'name': 'Tobie'}}],
-                outcome
+                [
+                    {
+                        "id": "person:100",
+                        "name": {"last": "Morgan Hitchcock", "name": "Tobie"},
+                    }
+                ],
+                outcome,
             )
+
         asyncio.run(set())
 
 

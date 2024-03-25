@@ -1,6 +1,7 @@
 """
 This file defines the URL to be used in the integration tests based off of the environment variables.
 """
+
 import os
 
 
@@ -22,8 +23,8 @@ class Url:
 
     @property
     def protocol(self) -> str:
-        return os.environ.get('CONNECTION_PROTOCOL', 'http')
+        return os.environ.get("CONNECTION_PROTOCOL", "http")
 
     @property
     def port(self) -> int:
-        return os.environ.get('CONNECTION_PORT', 8000)
+        return os.environ.get("CONNECTION_PORT", 8000)

@@ -1,6 +1,7 @@
 """
 Tests the Set operation of the AsyncSurrealDB class.
 """
+
 from typing import List
 from unittest import TestCase, main
 
@@ -9,14 +10,15 @@ from tests.integration.url import Url
 
 
 class TestSet(TestCase):
-
     def setUp(self):
         self.connection = SurrealDB(Url().url)
         self.queries: List[str] = []
-        self.connection.signin({
-            "username": "root",
-            "password": "root",
-        })
+        self.connection.signin(
+            {
+                "username": "root",
+                "password": "root",
+            }
+        )
 
     def tearDown(self):
         for query in self.queries:
@@ -29,13 +31,13 @@ class TestSet(TestCase):
         self.assertEqual(
             [
                 {
-                    'id': 'person:100',
-                    'name': 'Tobie',
-                    'company': 'SurrealDB',
-                    'skills': ['Rust', 'Go', 'JavaScript']
+                    "id": "person:100",
+                    "name": "Tobie",
+                    "company": "SurrealDB",
+                    "skills": ["Rust", "Go", "JavaScript"],
                 }
             ],
-            outcome
+            outcome,
         )
 
     def test_set(self):
@@ -47,13 +49,18 @@ class TestSet(TestCase):
             {
                 "name": "Tobie",
                 "last": "Morgan Hitchcock",
-            }
+            },
         )
         _ = self.connection.query(query)
         outcome = self.connection.query("SELECT * FROM person;")
         self.assertEqual(
-            [{'id': 'person:100', 'name': {'last': 'Morgan Hitchcock', 'name': 'Tobie'}}],
-            outcome
+            [
+                {
+                    "id": "person:100",
+                    "name": {"last": "Morgan Hitchcock", "name": "Tobie"},
+                }
+            ],
+            outcome,
         )
 
 
