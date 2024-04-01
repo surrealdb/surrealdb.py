@@ -373,20 +373,7 @@ class Surreal:
             key: Specifies the name of the variable.
             value: Assigns the value to the variable name.
         """
-        response = await self._send_receive(
-            Request(
-                id=generate_uuid(),
-                method="let",
-                params=(
-                    key,
-                    value,
-                ),
-            ),
-        )
-        success: ResponseSuccess = _validate_response(
-            response, SurrealPermissionException
-        )
-        return success.result
+        return await self.let(key, value)
 
     async def query(
         self, sql: str, vars: Optional[Dict[str, Any]] = None
