@@ -421,7 +421,9 @@ class Surreal:
         success: ResponseSuccess = _validate_response(response)
         return success.result
 
-    async def select(self, thing: str) -> List[Dict[str, Any]]:
+    async def select(
+        self, thing: str
+    ) -> Optional[Union[Dict[str, Any], List[Dict[str, Any]]]]:
         """
         Select all records in a table (or other entity),
         or a specific record, in the database.
@@ -450,7 +452,7 @@ class Surreal:
 
     async def create(
         self, thing: str, data: Optional[Dict[str, Any]] = None
-    ) -> List[Dict[str, Any]]:
+    ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """
         Create a record in the database.
 
@@ -488,7 +490,7 @@ class Surreal:
 
     async def update(
         self, thing: str, data: Optional[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """
         Update all records in a table, or a specific record, in the database.
 
@@ -529,7 +531,7 @@ class Surreal:
 
     async def merge(
         self, thing: str, data: Optional[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """
         Modify by deep merging all records in a table, or a specific record, in the database.
 
@@ -610,7 +612,9 @@ class Surreal:
         )
         return success.result
 
-    async def delete(self, thing: str) -> List[Dict[str, Any]]:
+    async def delete(
+        self, thing: str
+    ) -> Optional[Union[Dict[str, Any], List[Dict[str, Any]]]]:
         """
         Delete all records in a table, or a specific record, from the database.
 
