@@ -29,7 +29,9 @@ def delete_file(file_path: os.path) -> None:
         print(f"File '{file_path}' does not exist.")
 
 
-def find_and_move_rust_surrealdb_file(start_path: os.path, destination_path: os.path, new_name: str) -> None:
+def find_and_move_rust_surrealdb_file(
+    start_path: os.path, destination_path: os.path, new_name: str
+) -> None:
     """
     Finds the rust_surrealdb.so file and moves it to the surrealdb directory.
 
@@ -38,8 +40,8 @@ def find_and_move_rust_surrealdb_file(start_path: os.path, destination_path: os.
     :param new_name: the new name of the rust lib .so file.
     """
     for root, dirs, files in os.walk(start_path):
-        if 'lib' in root:
-            for filename in fnmatch.filter(files, 'rust_surrealdb*.so'):
+        if "lib" in root:
+            for filename in fnmatch.filter(files, "rust_surrealdb*.so"):
                 source_file = os.path.join(root, filename)
                 destination_file = os.path.join(destination_path, new_name)
                 shutil.move(source_file, destination_file)
@@ -81,7 +83,7 @@ def main():
     find_and_move_rust_surrealdb_file(
         start_path=build_dir,
         destination_path=surrealdb_dir,
-        new_name="rust_surrealdb.so"
+        new_name="rust_surrealdb.so",
     )
     print("local build: rust lib moved into surrealdb directory")
 
@@ -90,5 +92,5 @@ def main():
     delete_directory(dir_path=egg_info_dir)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

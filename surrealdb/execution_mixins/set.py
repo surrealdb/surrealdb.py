@@ -1,19 +1,24 @@
-"""
-This file defines the interface between python and the Rust SurrealDB library for setting a key value.
-"""
+"""This file defines the interface between python and the Rust SurrealDB library for setting a key value."""
+
+from __future__ import annotations
+
 import json
+from typing import TYPE_CHECKING
 
-from surrealdb.rust_surrealdb import rust_set_future
-
+from surrealdb.asyncio_runtime import AsyncioRuntime
 from surrealdb.errors import SurrealDbError
-from surrealdb.asyncio_runtime import AsyncioRuntime 
+from surrealdb.rust_surrealdb import (
+    rust_set_future,
+)
+
+if TYPE_CHECKING:
+    from surrealdb.connection_interface import SurrealDB
 
 
 class SetMixin:
-    """
-    This class is responsible for the interface between python and the Rust SurrealDB library for creating a document.
-    """
-    def set(self: "SurrealDB", key: str, value: dict) -> None:
+    """This class is responsible for the interface between python and the Rust SurrealDB library for creating a document."""
+
+    def set(self: SurrealDB, key: str, value: dict) -> None:
         """
         Creates a new document in the database.
 
@@ -22,6 +27,7 @@ class SetMixin:
 
         :return: None
         """
+
         async def _set(connection, key, value):
             return await rust_set_future(connection, key, json.dumps(value))
 
@@ -30,10 +36,13 @@ class SetMixin:
             json_str = json.dumps(value)
         except json.JSONEncodeError as e:
             print(f"cannot serialize value {type(value)} to json")
-            raise SurrealDbError(e)
+            raise SurrealDbError(e) from None
+
         if json_str is not None:
             try:
                 loop_manager = AsyncioRuntime()
-                loop_manager.loop.run_until_complete(_set(self._connection, key, json_str))
+                loop_manager.loop.run_until_complete(
+                    _set(self._connection, key, json_str)
+                )
             except Exception as e:
-                raise SurrealDbError(e)
+                raise SurrealDbError(e) from None

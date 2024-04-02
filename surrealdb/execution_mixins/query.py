@@ -1,22 +1,28 @@
 """
 This file defines the interface between python and the Rust SurrealDB library for querying the database.
 queries can be found in the link below:
-https://github.com/surrealdb/surrealdb/blob/main/lib/tests/fetch.rs
+https://github.com/surrealdb/surrealdb/blob/main/lib/tests/fetch.rs.
 """
+
+from __future__ import annotations
+
+import contextlib
 import json
-from typing import List, Union
+from typing import TYPE_CHECKING, List, Union
 
-from surrealdb.rust_surrealdb import rust_query_future
-from surrealdb.rust_surrealdb import rust_select_future
-
+from surrealdb.asyncio_runtime import AsyncioRuntime
 from surrealdb.errors import SurrealDbError
-from surrealdb.asyncio_runtime import AsyncioRuntime 
+from surrealdb.rust_surrealdb import (
+    rust_query_future,
+    rust_select_future,
+)
+
+if TYPE_CHECKING:
+    from surrealdb.connection_interface import SurrealDB
 
 
 class QueryMixin:
-    """
-    This class is responsible for the interface between python and the Rust SurrealDB library for creating a document.
-    """
+    """This class is responsible for the interface between python and the Rust SurrealDB library for creating a document."""
 
     @staticmethod
     def convert_nested_json_strings(data):
@@ -31,15 +37,13 @@ class QueryMixin:
         for item in data:
             for key, value in item.items():
                 if isinstance(value, str):  # Check if the value is a string
-                    try:
-                        # Attempt to load the string as JSON
-                        item[key] = json.loads(value)
-                    except json.JSONDecodeError:
+                    with contextlib.suppress(json.JSONDecodeError):
+                        # Attempt to load the string as JSON.
                         # If it's not a valid JSON string, do nothing
-                        pass
+                        item[key] = json.loads(value)
         return data
 
-    def query(self: "SurrealDB", query: str) -> List[dict]:
+    def query(self: SurrealDB, query: str) -> List[dict]:
         """
         queries the database.
 
@@ -47,18 +51,23 @@ class QueryMixin:
 
         :return: None
         """
+
         async def _query(connection, query):
             return await rust_query_future(connection, query)
 
         try:
             loop_manager = AsyncioRuntime()
             return self.convert_nested_json_strings(
-                json.loads(loop_manager.loop.run_until_complete(_query(self._connection, query)))[0]
+                json.loads(
+                    loop_manager.loop.run_until_complete(
+                        _query(self._connection, query)
+                    )
+                )[0]
             )
         except Exception as e:
-            raise SurrealDbError(e)
+            raise SurrealDbError(e) from None
 
-    def select(self: "SurrealDB", resource: str) -> Union[List[dict], dict]:
+    def select(self: SurrealDB, resource: str) -> Union[List[dict], dict]:
         """
         Performs a select query on the database for a particular resource.
 
@@ -66,6 +75,7 @@ class QueryMixin:
 
         :return: the result of the select
         """
+
         async def _select(connection, resource):
             return await rust_select_future(connection, resource)
 

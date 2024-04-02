@@ -12,26 +12,30 @@ Existing connections can be used by the following code:
 ```python
 from surrealdb.connection_interface import SurrealDB
 
-connection = SurrealDB(url="ws://localhost:8080", existing_connection_id="some_connection_id")
+connection = SurrealDB(
+    url="ws://localhost:8080", existing_connection_id="some_connection_id"
+)
 ```
 """
+
 import uuid
 from typing import Optional
 
-from surrealdb.rust_surrealdb import rust_make_connection_future
-from surrealdb.rust_surrealdb import rust_use_namespace_future
-from surrealdb.rust_surrealdb import rust_use_database_future
+from surrealdb.async_execution_mixins.auth import AsyncSignInMixin
 
 # import the mixins for operations for the connection
 from surrealdb.async_execution_mixins.create import AsyncCreateMixin
-from surrealdb.async_execution_mixins.auth import AsyncSignInMixin
-from surrealdb.async_execution_mixins.set import AsyncSetMixin
 from surrealdb.async_execution_mixins.query import AsyncQueryMixin
+from surrealdb.async_execution_mixins.set import AsyncSetMixin
 from surrealdb.async_execution_mixins.update import AsyncUpdateMixin
+from surrealdb.rust_surrealdb import (
+    rust_make_connection_future,
+    rust_use_database_future,
+    rust_use_namespace_future,
+)
 
 
 class ConnectionController(type):
-
     instances = {}
     main_connection = None
 
@@ -45,17 +49,16 @@ class ConnectionController(type):
         """
         del cls.instances[connection_id]
 
-    def __call__(cls, *args, **kwargs):
-
+    def __call__(cls, *args, **kwargs):  # noqa: D102
         # establish the main connection
         if kwargs.get("main_connection", False) is True:
             if cls.main_connection is None:
-                instance = super(ConnectionController, cls).__call__(*args, **kwargs)
+                instance = super().__call__(*args, **kwargs)
                 cls.main_connection = instance
             return cls.main_connection
         if len(args) > 4 and args[3] is True:
             if cls.main_connection is None:
-                instance = super(ConnectionController, cls).__call__(*args, **kwargs)
+                instance = super().__call__(*args, **kwargs)
                 cls.main_connection = instance
             return cls.main_connection
 
@@ -67,15 +70,15 @@ class ConnectionController(type):
 
         # store the connection
         if kwargs.get("keep_connection", False) is True:
-            instance = super(ConnectionController, cls).__call__(*args, **kwargs)
+            instance = super().__call__(*args, **kwargs)
             cls.instances[instance.id] = instance
             return instance
         if len(args) > 1 and args[1] is True:
-            instance = super(ConnectionController, cls).__call__(*args, **kwargs)
+            instance = super().__call__(*args, **kwargs)
             cls.instances[instance.id] = instance
             return instance
 
-        return super(ConnectionController, cls).__call__(*args, **kwargs)
+        return super().__call__(*args, **kwargs)
 
 
 class AsyncSurrealDB(
@@ -84,17 +87,17 @@ class AsyncSurrealDB(
     AsyncSetMixin,
     AsyncQueryMixin,
     AsyncUpdateMixin,
-    metaclass=ConnectionController
+    metaclass=ConnectionController,
 ):
-    """
-    This class is responsible for managing the async connection to SurrealDB and managing operations on the connection.
-    """
-    def __init__(self,
-                 url: Optional[str] = None,
-                 keep_connection: Optional[bool] = False,
-                 existing_connection_id: Optional[str] = None,
-                 main_connection: Optional[bool] = False
-                 ) -> None:
+    """This class is responsible for managing the async connection to SurrealDB and managing operations on the connection."""
+
+    def __init__(
+        self,
+        url: Optional[str] = None,
+        keep_connection: Optional[bool] = False,
+        existing_connection_id: Optional[str] = None,
+        main_connection: Optional[bool] = False,
+    ) -> None:
         """
         The constructor for the SurrealDB class.
 
@@ -104,11 +107,16 @@ class AsyncSurrealDB(
         """
         self._connection: Optional[str] = None
         self.url: str = url
-        self.id: str = str(uuid.uuid4()) if existing_connection_id is None else existing_connection_id
+        self.id: str = (
+            str(uuid.uuid4())
+            if existing_connection_id is None
+            else existing_connection_id
+        )
         self.keep_connection: bool = keep_connection
         self.main_connection: bool = main_connection
 
     async def connect(self):
+        """Connect to SurrealDB."""
         self._connection = await self._make_connection(url=self.url)
 
     async def _make_connection(self, url: str) -> str:
