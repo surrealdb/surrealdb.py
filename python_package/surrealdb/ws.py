@@ -571,8 +571,10 @@ class Surreal:
         return success.result
 
     async def patch(
-        self, thing: str, data: Optional[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self,
+        thing: str,
+        data: Optional[List[Dict[str, Any]]],
+    ) -> Union[dict[str, Any], List[Dict[str, Any]]]:
         """
         Apply JSON Patch changes to all records, or a specific record, in the database.
 
@@ -598,6 +600,7 @@ class Surreal:
                 { 'op': "remove", "path": "/temp" },
             ])
         """
+        data = data or []
         response = await self._send_receive(
             Request(
                 id=generate_uuid(),
