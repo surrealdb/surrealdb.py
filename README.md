@@ -36,18 +36,7 @@ The official SurrealDB SDK for Python.
 
 ## Documentation
 
-The documentation is available at
-[https://surrealdb.com/docs/integration/libraries/python](https://surrealdb.com/docs/integration/libraries/python)
-
-## Getting Started
-
-Below is a quick guide on how to get started with SurrealDB in Python.
-
-## Running SurrealDB
-Before we can do anything, we need to download SurrealDB and start the server.
-[See how to do that here](https://surrealdb.com/docs/surrealdb/installation/)
-
-After we have everything up and running, we can install the Python SDK.
+View the SDK documentation [here](https://surrealdb.com/docs/integration/libraries/python).
 
 ## How to install
 
@@ -58,6 +47,8 @@ pip install surrealdb
 ## Getting started
 
 ### Running within synchronous code
+
+> This example requires SurrealDB to be [installed](https://surrealdb.com/install) and running on port 8000.
 
 Import the SDK and create the database connection:
 
@@ -90,6 +81,8 @@ print(outcome)
 ```
 
 ### Running within asynchronous code
+
+> This example requires SurrealDB to be [installed](https://surrealdb.com/install) and running on port 8000.
 
 The async methods work in the same way, with two main differences:
 - Inclusion of `async def / await`.
