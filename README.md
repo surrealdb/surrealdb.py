@@ -55,9 +55,9 @@ pip install surrealdb
 Import the SDK and create the database connection:
 
 ```python
-from surrealdb import SurrealDB
+from surrealdb import Surreal
 
-db = SurrealDB("ws://localhost:8000/database/namespace")
+db = Surreal("ws://localhost:8000/rpc")
 ```
 
 Here, we can see that we defined the connection protocol as WebSocket using `ws://`. We then defined the host as `localhost` and the port as `8000`.
@@ -69,10 +69,17 @@ Now that we have our connection we need to signin:
 
 ```python
 db.signin({
-    "username": "root",
-    "password": "root",
+    "user": "root",
+    "pass": "root",
 })
 ```
+
+Now that we have signed in, we must select our database and namespace:
+
+```python
+db.use("testNamespace"), "testDatabase")
+```
+
 We can now run our queries to create some users, select them and print the outcome.
 
 ```python
