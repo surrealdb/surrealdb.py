@@ -99,15 +99,16 @@ The async methods work in the same way, with two main differences:
 
 ```python
 import asyncio
-from surrealdb import AsyncSurrealDB
+from surrealdb import Surreal
 
 async def main():
-    db = AsyncSurrealDB("ws://localhost:8000/database/namespace")
+    db = Surreal("ws://localhost:8000/database/namespace")
     await db.connect()
     await db.signin({
-        "username": "root",
-        "password": "root",
+        "user": "root",
+        "pass": "root",
     })
+    await db.use("testNamespace", "testDatabase")
     await db.query("CREATE user:tobie SET name = 'Tobie';")
     await db.query("CREATE user:jaime SET name = 'Jaime';")
     outcome = await db.query("SELECT * FROM user;")
