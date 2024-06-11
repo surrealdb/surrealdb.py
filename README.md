@@ -102,7 +102,7 @@ import asyncio
 from surrealdb import Surreal
 
 async def main():
-    db = Surreal("ws://localhost:8000/database/namespace")
+    db = Surreal("ws://localhost:8000/rpc")
     await db.connect()
     await db.signin({
         "user": "root",
