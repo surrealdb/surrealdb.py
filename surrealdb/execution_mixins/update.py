@@ -64,7 +64,7 @@ class UpdateMixin:
         except Exception as e:
             raise SurrealDbError(e) from None
 
-    def patch(self: SurrealDB, resource: str, data: dict) -> Union[List[dict], dict]:
+    def patch(self: SurrealDB, resource: str, data: List[dict]) -> Union[List[dict], dict]:
         """
         Patches the given resource with the given data.
 

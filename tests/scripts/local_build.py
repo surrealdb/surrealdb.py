@@ -1,3 +1,7 @@
+"""
+Builds the Rust part of the python library and moves the rust binary into the surrealdb directory
+so the python client can access the rust binary.
+"""
 import fnmatch
 import os
 import shutil

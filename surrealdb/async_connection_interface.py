@@ -33,6 +33,7 @@ from surrealdb.rust_surrealdb import (
     rust_use_database_future,
     rust_use_namespace_future,
 )
+from surrealdb.errors import SurrealDbError
 
 
 class ConnectionController(type):
@@ -106,7 +107,7 @@ class AsyncSurrealDB(
         :param existing_connection_id: the existing connection id to use instead of making a new connection
         """
         self._connection: Optional[str] = None
-        self.url: str = url
+        self.url: Optional[str] = url
         self.id: str = (
             str(uuid.uuid4())
             if existing_connection_id is None
@@ -147,3 +148,13 @@ class AsyncSurrealDB(
         :return: None
         """
         await rust_use_database_future(self._connection, database)
+
+    async def __aenter__(self):
+        if self.url is None:
+            raise SurrealDbError("url needs to be provided for scoped connection")
+        handler = AsyncSurrealDB(url=self.url)
+        await handler.connect()
+        return handler
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        del(self)
