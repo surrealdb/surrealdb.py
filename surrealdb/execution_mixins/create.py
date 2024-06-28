@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, List, Union
+from typing import TYPE_CHECKING, List, Union, Optional
 
 from surrealdb.asyncio_runtime import AsyncioRuntime
 from surrealdb.errors import SurrealDbError
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 class CreateMixin:
     """This class is responsible for the interface between python and the Rust SurrealDB library for creating a document."""
 
-    def create(self: SurrealDB, name: str, data: dict) -> dict:
+    def create(self: SurrealDB, name: str, data: Optional[dict] = None) -> dict:
         """
         Creates a new document in the database.
 
@@ -25,6 +25,8 @@ class CreateMixin:
 
         :return: None
         """
+        if data is None:
+            data = {}
 
         async def _create(connection, name, data):
             return await rust_create_future(connection, name, json.dumps(data))
@@ -53,6 +55,6 @@ class CreateMixin:
 
         try:
             loop_manager = AsyncioRuntime()
-            return loop_manager.loop.run_until_complete(_delete(self._connection, name))
+            return json.loads(loop_manager.loop.run_until_complete(_delete(self._connection, name)))
         except Exception as e:
             raise SurrealDbError(e) from None

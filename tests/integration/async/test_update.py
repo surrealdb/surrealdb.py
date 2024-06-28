@@ -60,6 +60,39 @@ class TestAsyncUpdate(TestCase):
 
         asyncio.run(update())
 
+    def test_create_method(self):
+        self.queries = ["DELETE person;"]
+        async def update():
+            await self.connection.create("person")
+            outcome_one = await self.connection.create("person:tobie", {
+                'name': 'Tobie',
+                'settings': {
+                    'active': True,
+                    'marketing': True,
+                },
+            })
+            self.assertEqual(
+                outcome_one,
+                {
+                    "id": "person:tobie",
+                    "name": "Tobie",
+                    "settings": {"active": True, "marketing": True}
+                }
+            )
+            outcome = await self.connection.query("SELECT * FROM person;")
+            self.assertEqual(2, len(outcome))
+            self.assertEqual(
+                outcome[1],
+                {
+                        'id': 'person:tobie',
+                        'name': 'Tobie',
+                        'settings': {'active': True, 'marketing': True
+                    }
+                }
+            )
+
+        asyncio.run(update())
+
     def test_update_person_with_tags(self):
         self.queries = ["DELETE person;"]
 
@@ -98,6 +131,45 @@ class TestAsyncUpdate(TestCase):
             )
 
         asyncio.run(update_person_with_tags())
+
+    def test_delete_method_single(self):
+        self.queries = ["DELETE user;"]
+        async def run_test():
+            await self.connection.query("CREATE user:tobie SET name = 'Tobie';")
+            await self.connection.query("CREATE user:jaime SET name = 'Jaime';")
+            outcome = await self.connection.delete("user:tobie")
+            self.assertEqual(
+                {"id": "user:tobie","name": "Tobie"},
+                outcome
+            )
+            outcome_two = await self.connection.query("SELECT * FROM user;")
+            self.assertEqual(
+                [{"id": "user:jaime", "name": "Jaime"}],
+                outcome_two
+            )
+
+        asyncio.run(run_test())
+
+    def test_method_full_delete(self):
+        self.queries = ["DELETE user;"]
+        async def run_test():
+            await self.connection.query("CREATE user:tobie SET name = 'Tobie';")
+            await self.connection.query("CREATE user:jaime SET name = 'Jaime';")
+            outcome = await self.connection.delete("user")
+            self.assertEqual(
+                [
+                    {"id": "user:jaime", "name": "Jaime"},
+                    {"id": "user:tobie", "name": "Tobie"}
+                ],
+                outcome
+            )
+            outcome_two = await self.connection.query("SELECT * FROM user;")
+            self.assertEqual(
+                [],
+                outcome_two
+            )
+
+        asyncio.run(run_test())
 
 
 if __name__ == "__main__":

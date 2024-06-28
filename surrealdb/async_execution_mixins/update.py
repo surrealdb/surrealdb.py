@@ -54,7 +54,7 @@ class AsyncUpdateMixin:
             raise SurrealDbError(e) from None
 
     async def patch(
-        self: SurrealDB, resource: str, data: dict
+        self: SurrealDB, resource: str, data: List[dict]
     ) -> Union[List[dict], dict]:
         """
         Patches the given resource with the given data.

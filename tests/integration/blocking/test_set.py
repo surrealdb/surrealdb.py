@@ -1,7 +1,6 @@
 """
 Tests the Set operation of the AsyncSurrealDB class.
 """
-
 from typing import List
 from unittest import TestCase, main
 
@@ -44,6 +43,11 @@ class TestSet(TestCase):
         self.queries = ["DELETE person;"]
         query = "CREATE person:100 SET name = $name;"
 
+        expected_person = {
+            "id": "person:100",
+            "name": {"last": "Morgan Hitchcock", "name": "Tobie"},
+        }
+
         self.connection.set(
             "name",
             {
@@ -55,13 +59,18 @@ class TestSet(TestCase):
         outcome = self.connection.query("SELECT * FROM person;")
         self.assertEqual(
             [
-                {
-                    "id": "person:100",
-                    "name": {"last": "Morgan Hitchcock", "name": "Tobie"},
-                }
+                expected_person
             ],
             outcome,
         )
+        outcome = self.connection.query("SELECT * FROM person WHERE name.first = $name.first")
+        self.assertEqual(
+            [
+                expected_person
+            ],
+            outcome
+        )
+
 
 
 if __name__ == "__main__":

@@ -23,6 +23,7 @@ from typing import Optional
 
 from surrealdb.asyncio_runtime import AsyncioRuntime
 from surrealdb.execution_mixins.auth import SignInMixin
+from surrealdb.errors import SurrealDbError
 
 # import the mixins for operations for the connection
 from surrealdb.execution_mixins.create import CreateMixin
@@ -106,6 +107,7 @@ class SurrealDB(
         :param keep_connection: wether or not to keep the connection open after this object is destroyed
         :param existing_connection_id: the existing connection id to use instead of making a new connection
         """
+        self.url: Optional[str] = url
         self._connection: Optional[str] = self._make_connection(url=url)
         self.id: str = (
             str(uuid.uuid4())
@@ -158,3 +160,11 @@ class SurrealDB(
 
         loop_manager = AsyncioRuntime()
         loop_manager.loop.run_until_complete(async_use_database(database))
+
+    def __enter__(self):
+        if self.url is None:
+            raise SurrealDbError("url needs to be provided for scoped connection")
+        return SurrealDB(url=self.url)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        del(self)

@@ -41,14 +41,72 @@ class TestCreate(TestCase):
             outcome,
         )
 
+    def test_create_method(self):
+        self.queries = ["DELETE person;"]
+        self.connection.create("person")
+        outcome_one = self.connection.create("person:tobie", {
+            'name': 'Tobie',
+            'settings': {
+                'active': True,
+                'marketing': True,
+            },
+        })
+        self.assertEqual(
+            outcome_one,
+            {
+                "id": "person:tobie",
+                "name": "Tobie",
+                "settings": {"active": True, "marketing": True}
+            }
+        )
+        outcome = self.connection.query("SELECT * FROM person;")
+        self.assertEqual(2, len(outcome))
+        self.assertEqual(
+            outcome[1],
+            {
+                    'id': 'person:tobie',
+                    'name': 'Tobie',
+                    'settings': {'active': True, 'marketing': True
+                }
+            }
+        )
+
     def test_delete_ql(self):
-        self.queries = ["DELETE user;"]
         self.test_create_ql()
         outcome = self.connection.query("DELETE user;")
         self.assertEqual([], outcome)
 
         outcome = self.connection.query("SELECT * FROM user;")
         self.assertEqual([], outcome)
+
+    def test_delete_method_single(self):
+        self.test_create_ql()
+        outcome = self.connection.delete("user:tobie")
+        self.assertEqual(
+            {"id": "user:tobie","name": "Tobie"},
+            outcome
+        )
+        outcome_two = self.connection.query("SELECT * FROM user;")
+        self.assertEqual(
+            [{"id": "user:jaime", "name": "Jaime"}],
+            outcome_two
+        )
+
+    def test_method_full_delete(self):
+        self.test_create_ql()
+        outcome = self.connection.delete("user")
+        self.assertEqual(
+            [
+                {"id": "user:jaime", "name": "Jaime"},
+                {"id": "user:tobie", "name": "Tobie"}
+            ],
+            outcome
+        )
+        outcome_two = self.connection.query("SELECT * FROM user;")
+        self.assertEqual(
+            [],
+            outcome_two
+        )
 
     def test_create_person_with_tags_ql(self):
         self.queries = ["DELETE person;"]

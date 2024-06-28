@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, List, Union
+from typing import TYPE_CHECKING, List, Union, Optional
 
 from surrealdb.errors import SurrealDbError
 from surrealdb.rust_surrealdb import (
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 class AsyncCreateMixin:
     """This class is responsible for the interface between python and the Rust SurrealDB library for creating a document."""
 
-    async def create(self: SurrealDB, name: str, data: dict) -> None:
+    async def create(self: SurrealDB, name: str, data: Optional[dict] = None) -> None:
         """
         Creates a new document in the database.
 
@@ -27,6 +27,8 @@ class AsyncCreateMixin:
 
         :return: None
         """
+        if data is None:
+            data = {}
         try:
             return json.loads(
                 await rust_create_future(self._connection, name, json.dumps(data))
@@ -43,6 +45,6 @@ class AsyncCreateMixin:
         :return: the record or records that were deleted
         """
         try:
-            return await rust_delete_future(self._connection, name)
+            return json.loads(await rust_delete_future(self._connection, name))
         except Exception as e:
             raise SurrealDbError(e) from None
