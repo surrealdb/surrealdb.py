@@ -1,8 +1,5 @@
 {
     "name": "SurrealDB Python SDK Dev Container",
-    // "build":{
-    //     "dockerfile": "../Dockerfile"
-    // },
     "image": "mcr.microsoft.com/devcontainers/python:3",
     "features": {
         "ghcr.io/devcontainers/features/rust:1": {},
@@ -18,6 +15,9 @@
                 "usernamehw.errorlens",
                 "aaron-bond.better-comments"
             ]
+        },
+        "codespaces": {
+            "openFiles": ["README.md"]
         }
     },
 
@@ -52,6 +52,8 @@
             "onAutoForward": "silent"
         }
     },
+
+    
 
     "postCreateCommand": "sudo cp .devcontainer/welcome.txt /usr/local/etc/vscode-dev-containers/first-run-notice.txt",
     "postStartCommand": "/bin/bash ./.devcontainer/setup.sh"
