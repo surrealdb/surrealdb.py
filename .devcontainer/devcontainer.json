@@ -1,0 +1,58 @@
+{
+    "name": "SurrealDB Python SDK Dev Container",
+    // "build":{
+    //     "dockerfile": "../Dockerfile"
+    // },
+    "image": "mcr.microsoft.com/devcontainers/python:3",
+    "features": {
+        "ghcr.io/devcontainers/features/rust:1": {},
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "rust-lang.rust-analyzer",
+                "eamodio.gitlens",
+                "VisualStudioExptTeam.vscodeintellicode",
+                "usernamehw.errorlens",
+                "aaron-bond.better-comments"
+            ]
+        }
+    },
+
+    "forwardPorts": [8000, 8001, 8002, 8003, 8004, 8005, 8006],
+    "portsAttributes": {
+        "8000": {
+            "label": "v1.2.1 Testing",
+            "onAutoForward": "silent"
+        },
+        "8001": {
+            "label": "v1.2.0 Testing",
+            "onAutoForward": "silent"
+        },
+        "8002": {
+            "label": "v1.0.1 Testing",
+            "onAutoForward": "silent"
+        },
+        "8003": {
+            "label": "v1.1.1 Testing",
+            "onAutoForward": "silent"
+        },
+        "8004": {
+            "label": "v1.1.0 Testing",
+            "onAutoForward": "silent"
+        },
+        "8005": {
+            "label": "v1.0.1 Testing",
+            "onAutoForward": "silent"
+        },
+        "8006": {
+            "label": "v1.0.0 Testing",
+            "onAutoForward": "silent"
+        }
+    },
+
+    "postCreateCommand": "sudo cp .devcontainer/welcome.txt /usr/local/etc/vscode-dev-containers/first-run-notice.txt",
+    "postStartCommand": "/bin/bash ./.devcontainer/setup.sh"
+}

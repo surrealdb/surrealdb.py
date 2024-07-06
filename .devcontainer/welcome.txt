@@ -1,0 +1,6 @@
+👋 Welcome to SurrealDB's Python SDK! You are on a custom defined configuration!
+   - This environment has Python and Rust installed
+
+💻 To get started, check out the README.md file or run './scripts/run_tests.sh'
+
+📝 Edit away, run your app as usual, and we'll automatically make it available for you to access.
