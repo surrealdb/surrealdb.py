@@ -1,0 +1,187 @@
+name: cross-build
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+  wait-for-other-workflow:
+    name: Wait for Other Workflow
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Other Workflow to Complete
+        run: "echo 'Waiting for other workflow to complete...'"
+
+  build: # Workflow credit to https://github.com/samuelcolvin/rtoml/blob/main/.github/workflows/ci.yml
+    if: github.event.pull_request.merged == true
+    name: >
+      build ${{ matrix.python-version }} on ${{ matrix.platform || matrix.os }}
+      (${{ matrix.alt_arch_name || matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu, macos, windows]
+        python-version: ["cp310", "pp37", "pp38", "pp39"]
+        arch: [main, alt]
+        include:
+          - os: ubuntu
+            platform: linux
+          - os: windows
+            ls: dir
+          - os: macos
+            arch: alt
+            alt_arch_name: "arm64 universal2"
+        exclude:
+          - os: macos
+            python-version: "pp37"
+            arch: alt
+          - os: macos
+            python-version: "pp38"
+            arch: alt
+          - os: macos
+            python-version: "pp39"
+            arch: alt
+    runs-on: ${{ format('{0}-latest', matrix.os) }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: set up python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      - name: set up rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: update pip version
+        run: |
+          pip install requests
+          python get_latest_version.py
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.alt_arch_name }}
+
+      - run: rustup target add aarch64-apple-darwin
+        if: matrix.os == 'macos'
+
+      - run: rustup toolchain install stable-i686-pc-windows-msvc
+        if: matrix.os == 'windows'
+
+      - run: rustup target add i686-pc-windows-msvc
+        if: matrix.os == 'windows'
+
+      - name: Get pip cache dir
+        id: pip-cache
+        if: matrix.os != 'windows'
+        run: |
+          echo "dir=$(pip cache dir)" >> $GITHUB_OUTPUT
+
+      - name: Get pip cache dir
+        id: pip-cache-win
+        if: matrix.os == 'windows'
+        run: |
+          "dir=$(pip cache dir)" >> $env:GITHUB_OUTPUT
+
+      - name: Cache python dependencies
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.pip-cache.outputs.dir || steps.pip-cache-win.outputs.dir }}
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}
+
+      - name: install python dependencies
+        run: pip install -U setuptools wheel twine cibuildwheel platformdirs
+
+      - name: Display cibuildwheel cache dir
+        id: cibuildwheel-cache
+        run: |
+          from platformdirs import user_cache_path
+          import os
+          with open(os.getenv('GITHUB_OUTPUT'), 'w') as f:
+            f.write(f"dir={str(user_cache_path(appname='cibuildwheel', appauthor='pypa'))}")
+        shell: python
+
+      - name: Cache cibuildwheel tools
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.cibuildwheel-cache.outputs.dir }}
+          key: ${{ runner.os }}-cibuildwheel-${{ matrix.python-version }}
+
+      - name: Install LLVM and Clang # required for bindgen to work, see https://github.com/rust-lang/rust-bindgen/issues/1797
+        uses: KyleMayes/install-llvm-action@v1
+        if: runner.os == 'Windows'
+        with:
+          version: "11.0"
+          directory: ${{ runner.temp }}/llvm
+
+      - name: Set LIBCLANG_PATH
+        run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
+        if: runner.os == 'Windows'
+
+      - name: build_sdist
+        if: matrix.os == 'ubuntu' && matrix.python-version == 'cp310'
+        run: |
+          pip install maturin build
+          python -m build --sdist -o wheelhouse
+      - name: build ${{ matrix.platform || matrix.os }} binaries
+        run: cibuildwheel --output-dir wheelhouse
+        env:
+          CIBW_BUILD: "${{ matrix.python-version }}-*"
+          # rust doesn't seem to be available for musl linux on i686
+          CIBW_SKIP: "*-musllinux_i686"
+          # we build for "alt_arch_name" if it exists, else 'auto'
+          CIBW_ARCHS: ${{ matrix.alt_arch_name || 'auto' }}
+          CIBW_ENVIRONMENT: 'PATH="$HOME/.cargo/bin:$PATH" CARGO_TERM_COLOR="always"'
+          CIBW_ENVIRONMENT_WINDOWS: 'PATH="$UserProfile\.cargo\bin;$PATH"'
+          CIBW_BEFORE_BUILD: rustup show
+          CIBW_BEFORE_BUILD_LINUX: >
+            curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain=stable --profile=minimal -y &&
+            rustup show
+          CIBW_BUILD_VERBOSITY: 1
+
+      - run: ${{ matrix.ls || 'ls -lh' }} wheelhouse/
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: wheels
+          path: wheelhouse
+
+  release:
+    if: github.event.pull_request.merged == true
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v2
+        with:
+          name: wheels
+          path: wheelhouse
+
+      - name: Install twine
+        run: python -m pip install --upgrade twine
+
+      - name: Create pypirc file
+        run: |
+          echo "[distutils]" > ~/.pypirc
+          echo "index-servers =" >> ~/.pypirc
+          echo "    pypi" >> ~/.pypirc
+          echo "" >> ~/.pypirc
+          echo "[pypi]" >> ~/.pypirc
+          echo "username: __token__" >> ~/.pypirc
+          echo "password: \${{ secrets.PYPI_TOKEN }}" >> ~/.pypirc
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+
+      - name: Publish to PyPI
+        run: twine upload wheelhouse/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
