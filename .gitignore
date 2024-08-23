@@ -32,6 +32,7 @@ venv.bak/
 bin/
 lib64
 pyvenv.cfg
+.mise.toml
 
 # Unit test / coverage reports
 htmlcov/

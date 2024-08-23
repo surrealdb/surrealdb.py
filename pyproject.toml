@@ -1,2 +1,92 @@
 [build-system]
 requires = ["setuptools", "wheel", "setuptools-rust"]
+
+[tool.black]
+line-length = 88
+color = true
+
+exclude = '''
+/(
+    \.bzr
+    | \.direnv
+    | \.eggs
+    | \.git
+    | \.hg
+    | \.mypy_cache
+    | \.nox
+    | \.pants\.d
+    | \.ruff_cache
+    | \.__pypackages__
+    | \.svn
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+    | env
+    | venv
+)/
+'''
+
+[tool.ruff]
+select = ["I", "D", "N", "UP"]
+line-length = 88
+
+ignore = [
+    "D100",  # Missing docstring in public module
+    "D104",  # Missing docstring in public package
+    "D107",  # Missing docstring in __init__
+    "D205",  # 1 blank line required between summary line and description
+    "D212",  # Multi-line docstring summary should start at the first line
+    "N805",  # First argument of a method should be named self
+    "N818",  # Exception name ... should be named with an Error suffix
+    "UP035"  # Typing deprecations
+]
+
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    ".git",
+    "__pycache__",
+]
+
+[tool.ruff.pydocstyle]
+convention = "google"
+
+[tool.ruff.pyupgrade]
+keep-runtime-typing = true
+
+[tool.mypy]
+python_version = "3.8"
+pretty = true
+show_traceback = true
+color_output = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+ignore_missing_imports = true
+implicit_reexport = true
+strict_equality = true
+strict_optional = false
+warn_no_return = true
+warn_redundant_casts = true
+warn_unreachable = true
+warn_unused_configs = true
+warn_unused_ignores = true
