@@ -23,7 +23,7 @@ jobs:
         uses: ./.github/actions
 
       - name: Install tools
-        run: poetry install --only dev
+        run: pip install -r dev_requirements.txt
 
       - id: ruff
         if: always()
