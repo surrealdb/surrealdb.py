@@ -17,16 +17,8 @@ runs:
       run: echo "version=$(python -c "import sys; print('-'.join(str(v) for v in sys.version_info))")" >> $GITHUB_OUTPUT
       shell: bash
 
-    - name: Bootstrap poetry
-      run: curl -sL https://install.python-poetry.org | python - -y
-      shell: bash
-
     - name: Update PATH
       run: echo "$HOME/.local/bin" >> $GITHUB_PATH
-      shell: bash
-
-    - name: Configure poetry
-      run: poetry config virtualenvs.in-project true
       shell: bash
 
     - name: Set up cache
@@ -38,9 +30,5 @@ runs:
 
     - name: Ensure cache is healthy
       if: steps.cache.outputs.cache-hit == 'true'
-      run: timeout 10s poetry run pip --version || rm -rf .venv
-      shell: bash
-
-    - name: Install Dependencies
-      run: poetry install
+      run: timeout 10s pip --version || rm -rf .venv
       shell: bash
