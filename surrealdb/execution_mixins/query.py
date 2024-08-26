@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import json
-from typing import TYPE_CHECKING, List, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Union, Optional
 
 from surrealdb.asyncio_runtime import AsyncioRuntime
 from surrealdb.errors import SurrealDbError
@@ -43,17 +43,20 @@ class QueryMixin:
                         item[key] = json.loads(value)
         return data
 
-    def query(self: SurrealDB, query: str) -> List[dict]:
+    def query(
+        self: SurrealDB, query: str, bind: Optional[Dict[str, Any]] = None
+    ) -> List[dict]:
         """
         queries the database.
 
         :param query: the query to run on the database
+        :param bind: Paramters to bind the query with.
 
         :return: None
         """
 
-        async def _query(connection, query):
-            return await rust_query_future(connection, query)
+        async def _query(connection, query, bind):
+            return await rust_query_future(connection, query, bind)
 
         try:
             loop_manager = AsyncioRuntime()

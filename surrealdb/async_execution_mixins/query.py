@@ -7,7 +7,7 @@ https://github.com/surrealdb/surrealdb/blob/main/lib/tests/fetch.rs.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, List, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Union
 
 from surrealdb.errors import SurrealDbError
 from surrealdb.rust_surrealdb import (
@@ -22,16 +22,19 @@ if TYPE_CHECKING:
 class AsyncQueryMixin:
     """This class is responsible for the interface between python and the Rust SurrealDB library for creating a document."""
 
-    async def query(self: SurrealDB, query: str) -> List[dict]:
+    async def query(
+        self: SurrealDB, query: str, bind: Optional[dict[str, Any]] = None
+    ) -> List[dict]:
         """
         queries the database.
 
         :param query: the query to run on the database
+        :param bind: Paramters to bind the query with.
 
         :return: None
         """
         try:
-            return json.loads(await rust_query_future(self._connection, query))[0]
+            return json.loads(await rust_query_future(self._connection, query, bind))[0]
         except Exception as e:
             raise SurrealDbError(e) from None
 
