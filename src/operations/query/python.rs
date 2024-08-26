@@ -1,10 +1,12 @@
 //! Python entry point for running a query.
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
+use pyo3::types::PyDict;
 use serde_json::value::Value;
+use serde_json::Value;
 
-use crate::connection::interface::WrappedConnection;
 use super::core::{query, select};
+use crate::connection::interface::WrappedConnection;
 use crate::py_future_wrapper;
 
 
@@ -18,15 +20,24 @@ use crate::py_future_wrapper;
 /// # Returns
 /// * `Ok(())` - The operation was successful
 #[pyfunction]
-pub fn rust_query_future<'a>(py: Python<'a>, connection: WrappedConnection, sql: String, bindings: Option<&'a PyAny>) -> Result<&'a PyAny, PyErr> {
+pub fn rust_query_future<'a>(
+    py: Python<'a>,
+    connection: WrappedConnection,
+    sql: String,
+    bindings: Option<&'a PyDict>,
+) -> Result<&'a PyAny, PyErr> {
+    let processed_bindings = bindings
+        .map(|dict| {
+            let value = dict.extract::<Value>().map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "Failed to convert bindings to Value: {}",
+                    e
+                ))
+            })?;
+            Ok(value)
+        })
+        .transpose()?;
 
-    let processed_bindings = match bindings {
-        Some(bindings) => {
-            let bindings: Value = serde_json::from_str(&bindings.to_string()).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-            Some(bindings)
-        },
-        None => None
-    };
     py_future_wrapper!(py, query(connection, sql, processed_bindings))
 }
 
