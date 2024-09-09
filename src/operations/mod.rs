@@ -5,6 +5,7 @@ pub mod set;
 pub mod query;
 pub mod update;
 pub mod auth;
+pub mod delete;
 
 
 /// Adds operations python entry points to a module handling this factory.
@@ -16,7 +17,7 @@ pub mod auth;
 /// * `()` - Nothing
 pub fn operations_module_factory(m: &PyModule) {
     let _ = m.add_wrapped(wrap_pyfunction!(create::python::rust_create_future));
-    let _ = m.add_wrapped(wrap_pyfunction!(create::python::rust_delete_future));
+    let _ = m.add_wrapped(wrap_pyfunction!(delete::python::rust_delete_future));
     let _ = m.add_wrapped(wrap_pyfunction!(set::python::rust_set_future));
     let _ = m.add_wrapped(wrap_pyfunction!(set::python::rust_unset_future));
     let _ = m.add_wrapped(wrap_pyfunction!(query::python::rust_query_future));
