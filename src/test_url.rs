@@ -15,7 +15,8 @@ pub fn get_test_url() -> String {
 }
 
 pub async fn get_test_connection() -> Surreal<Any> {
-    let connection: Surreal<Any> = connect("http://localhost:8000").await.unwrap();
+    let url = get_test_url();
+    let connection: Surreal<Any> = connect(url).await.unwrap();
     connection.use_db("database").await.unwrap();
     connection.use_ns("namespace").await.unwrap();
     connection
@@ -29,5 +30,11 @@ mod tests {
     fn test_get_test_url() {
         let url = get_test_url();
         assert_eq!(url, "http://localhost:8000");
+    }
+
+    #[tokio::test]
+    async fn test_get_test_connection() {
+        // test to just check that the connection is working
+        let _ = get_test_connection().await;
     }
 }

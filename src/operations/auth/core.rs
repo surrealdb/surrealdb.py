@@ -7,10 +7,10 @@ use super::interface::WrappedJwt;
 use crate::connection::interface::WrappedConnection;
 
 
-#[derive(Serialize)]
-struct Credentials<'a> {
-    email: &'a str,
-    pass: &'a str,
+#[derive(Debug, Serialize)]
+struct AuthParams {
+    email: String,
+    password: String,
 }
 
 
@@ -77,24 +77,32 @@ mod tests {
             username: "root",
             password: "root",
         }).await.unwrap();
-        let token = connection.signup(Scope {
-            namespace: "namespace",
-            database: "database",
-            scope: "user",
-            params: Credentials {
-                email: "info@surrealdb.com",
-                pass: "123456",
-            },
-        }).await.unwrap();
-        // let token = connection.signup(Scope {
-        //     namespace: "namespace",
-        //     database: "database",
-        //     scope: "user",
-        //     params: Credentials {
-        //         email: "root",
-        //         pass: "root",
-        //     },
-        // }).await.unwrap();
+        connection.use_ns("namespace").use_db("database").await.unwrap();
+
+        // Define the scope
+        let sql = r#"
+        DEFINE SCOPE user_scope SESSION 24h
+        SIGNUP ( CREATE user SET email = $email, password = crypto::argon2::generate($password) )
+        SIGNIN ( SELECT * FROM user WHERE email = $email AND crypto::argon2::compare(password, $password) )
+        "#;
+        connection.query(sql).await.unwrap().check().unwrap();
+
+        let auth_params = AuthParams {
+            email: "john.doe@example.com".to_string(), 
+            password: "password123".to_string(),
+        };
+        let auth_params_json = serde_json::to_value(auth_params).unwrap();
+
+        let wrapped_connection = WrappedConnection {connection};
+
+        // to to directly unwrap to assure that the signup is working
+        let _ = sign_up(
+            wrapped_connection, 
+            auth_params_json, 
+            "namespace".to_string(), 
+            "database".to_string(), 
+            "user_scope".to_string()
+        ).await.unwrap();
     }
 
 }

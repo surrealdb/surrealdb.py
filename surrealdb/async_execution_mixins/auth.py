@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Dict, Optional
+import json
 
 from surrealdb.errors import SurrealDbError
 from surrealdb.rust_surrealdb import (
@@ -40,6 +41,7 @@ class AsyncSignInMixin:
         self: SurrealDB,
         namespace: str,
         database: str,
+        scope: str,
         data: Optional[Dict[str, str]] = None,
     ) -> str:
         """
@@ -47,10 +49,15 @@ class AsyncSignInMixin:
 
         :param namespace: the namespace the auth scope is associated with
         :param database: the database the auth scope is associated with
+        :param scope: the scope the auth scope is associated with
         :param data: the data to sign up with
         :return: an JWT for that auth scope
         """
-        return await rust_sign_up_future(self._connection, data, namespace, database)
+        if data is None:
+            data = {}
+        data = json.dumps(data)
+
+        return await rust_sign_up_future(self._connection, data, namespace, database, scope)
 
     async def authenticate(self: SurrealDB, jwt: str) -> bool:
         """

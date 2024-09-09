@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Dict, Optional
 
 from surrealdb.asyncio_runtime import AsyncioRuntime
@@ -52,6 +53,7 @@ class SignInMixin:
         self: SurrealDB,
         namespace: str,
         database: str,
+        scope: str,
         data: Optional[Dict[str, str]] = None,
     ) -> str:
         """
@@ -59,17 +61,22 @@ class SignInMixin:
 
         :param namespace: the namespace the auth scope is associated with
         :param database: the database the auth scope is associated with
+        :param scope: the scope the auth scope is associated with
         :param data: the data to sign up with
         :return: an JWT for that auth scope
         """
 
-        async def _signup(connection, data, namespace, database):
-            return await rust_sign_up_future(connection, data, namespace, database)
+        if data is None:
+            data = {}
+        data = json.dumps(data)
+
+        async def _signup(connection, data, namespace, database, scope):
+            return await rust_sign_up_future(connection, data, namespace, database, scope)
 
         try:
             loop_manager = AsyncioRuntime()
             return loop_manager.loop.run_until_complete(
-                _signup(self._connection, data, namespace, database)
+                _signup(self._connection, data, namespace, database, scope)
             )
         except Exception as e:
             raise SurrealDbError(e) from None

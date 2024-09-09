@@ -34,6 +34,8 @@ class QueryMixin:
         :param data: The query result data to be checked
         :return: The processed query data
         """
+        if data is None:
+            data = []
         for item in data:
             for key, value in item.items():
                 if isinstance(value, str):  # Check if the value is a string

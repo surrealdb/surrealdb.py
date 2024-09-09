@@ -1,3 +1,6 @@
+"""
+Builds the Rust binary and links it to the surrealdb.py python client
+"""
 import fnmatch
 import os
 import shutil
