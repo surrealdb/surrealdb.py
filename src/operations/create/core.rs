@@ -19,10 +19,13 @@ use surrealdb::{RecordId, RecordIdKey};
 /// * `Ok(())` - The record was created successfully
 pub async fn create(
     connection: WrappedConnection,
-    table_name: String,
+    resource: String,
     data: Value,
 ) -> Result<String, String> {
-    let resource = Resource::from(table_name.clone());
+    let resource = match resource.parse::<Thing>() {
+        Ok(rid) => Resource::RecordId(RecordId::from_inner(rid)),
+        Err(_) => Resource::from(resource),
+    };
     let outcome = connection
         .connection
         .create(resource)
