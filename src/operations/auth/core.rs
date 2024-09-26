@@ -1,5 +1,6 @@
 //! Defines the core functions for the auth operations against the database.
 use serde_json::value::Value;
+use surrealdb::opt::auth::Record;
 
 use super::interface::WrappedJwt;
 use crate::connection::interface::WrappedConnection;
@@ -19,14 +20,14 @@ pub async fn sign_up(
     params: Value,
     namespace: String,
     database: String,
-    scope: String,
+    access: String,
 ) -> Result<WrappedJwt, String> {
     let token = connection
         .connection
-        .signup(Scope {
+        .signup(Record {
             namespace: namespace.as_str(),
             database: database.as_str(),
-            scope: scope.as_str(),
+            access: access.as_str(),
             params: params,
         })
         .await
