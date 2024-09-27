@@ -1,17 +1,16 @@
-/// Handles operations to the database. 
-use pyo3::prelude::{PyModule, wrap_pyfunction};
-pub mod create;
-pub mod set;
-pub mod query;
-pub mod update;
+/// Handles operations to the database.
+use pyo3::prelude::{wrap_pyfunction, PyModule};
 pub mod auth;
-
+pub mod create;
+pub mod query;
+pub mod set;
+pub mod update;
 
 /// Adds operations python entry points to a module handling this factory.
-/// 
+///
 /// # Arguments
 /// * `m` - The module to add the entry points to
-/// 
+///
 /// # Returns
 /// * `()` - Nothing
 pub fn operations_module_factory(m: &PyModule) {

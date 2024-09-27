@@ -85,13 +85,7 @@ def run_tests(port: int, protocol: str) -> None:
 if __name__ == "__main__":
     port = 8000
     for version in [
-        "v1.2.1",
-        "v1.2.0",
-        "v1.0.1",
-        "v1.1.1",
-        "v1.1.0",
-        "v1.0.1",
-        "1.0.0",
+        "v2.0.2",
     ]:
         container = DbInstance(version=version, port=port)
         container.start()

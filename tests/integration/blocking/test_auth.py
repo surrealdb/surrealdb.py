@@ -32,23 +32,17 @@ class TestAuth(TestCase):
         with self.assertRaises(SurrealDbError) as context:
             self.login("root", "wrong")
 
-        if os.environ.get("CONNECTION_PROTOCOL", "http") == "http":
-            self.assertEqual(True, "(401 Unauthorized)" in str(context.exception))
-        else:
-            self.assertEqual(
-                '"There was a problem with authentication"', str(context.exception)
-            )
+        self.assertEqual( True,
+            'There was a problem with authentication' in str(context.exception)
+        )
 
     def test_login_wrong_username(self):
         with self.assertRaises(SurrealDbError) as context:
             self.login("wrong", "root")
 
-        if os.environ.get("CONNECTION_PROTOCOL", "http") == "http":
-            self.assertEqual(True, "(401 Unauthorized)" in str(context.exception))
-        else:
-            self.assertEqual(
-                '"There was a problem with authentication"', str(context.exception)
-            )
+        self.assertEqual( True,
+            'There was a problem with authentication' in str(context.exception)
+        )
 
 
 if __name__ == "__main__":
