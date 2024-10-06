@@ -62,6 +62,7 @@ class SurrealHTTP:
         database: The database to use for the connection.
         username: The username to use for the connection.
         password: The password to use for the connection.
+        version: The version of SurrealDB (1 or 2). Defaults to 1.
     """
 
     def __init__(
@@ -71,12 +72,24 @@ class SurrealHTTP:
         database: str,
         username: str,
         password: str,
+        version: int = 1,
     ) -> None:
         self._url = url
         self._namespace = namespace
         self._database = database
         self._username = username
         self._password = password
+        self._version = version
+
+        # Determine header names based on version
+        if self._version == 1:
+            ns_header_key = "NS"
+            db_header_key = "DB"
+        elif self._version == 2:
+            ns_header_key = "surreal-ns"
+            db_header_key = "surreal-db"
+        else:
+            raise ValueError(f"Unsupported SurrealDB version: {self._version}")
 
         self._http = httpx.AsyncClient(
             base_url=self._url,
@@ -85,8 +98,8 @@ class SurrealHTTP:
                 password=self._password,
             ),
             headers={
-                "NS": self._namespace,
-                "DB": self._database,
+                ns_header_key: self._namespace,
+                db_header_key: self._database,
                 "Accept": "application/json",
                 "Content-Type": "application/json",
             },
