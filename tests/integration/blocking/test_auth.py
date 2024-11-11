@@ -12,13 +12,13 @@ from tests.integration.url import Url
 
 class TestAuth(TestCase):
     def setUp(self):
-        self.connection = SurrealDB(Url().url)
+        self.db = SurrealDB(Url().url)
 
     def tearDown(self):
         pass
 
     def login(self, username: str, password: str) -> None:
-        self.connection.signin(
+        self.db.sign_in(
             {
                 "username": username,
                 "password": password,

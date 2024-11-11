@@ -12,12 +12,12 @@ from tests.integration.url import Url
 
 class TestAsyncUpdate(TestCase):
     def setUp(self):
-        self.connection = AsyncSurrealDB(Url().url)
+        self.db = AsyncSurrealDB(Url().url)
         self.queries: List[str] = []
 
         async def login():
-            await self.connection.connect()
-            await self.connection.signin(
+            await self.db.connect()
+            await self.db.sign_in(
                 {
                     "username": "root",
                     "password": "root",
@@ -29,7 +29,7 @@ class TestAsyncUpdate(TestCase):
     def tearDown(self):
         async def teardown_queries():
             for query in self.queries:
-                await self.connection.query(query)
+                await self.db.query(query)
 
         asyncio.run(teardown_queries())
 
@@ -37,9 +37,9 @@ class TestAsyncUpdate(TestCase):
         self.queries = ["DELETE user;"]
 
         async def update():
-            await self.connection.query("CREATE user:tobie SET name = 'Tobie';")
-            await self.connection.query("CREATE user:jaime SET name = 'Jaime';")
-            outcome = await self.connection.query(
+            await self.db.query("CREATE user:tobie SET name = 'Tobie';")
+            await self.db.query("CREATE user:jaime SET name = 'Jaime';")
+            outcome = await self.db.query(
                 "UPDATE user SET lastname = 'Morgan Hitchcock';"
             )
             self.assertEqual(
@@ -64,7 +64,7 @@ class TestAsyncUpdate(TestCase):
         self.queries = ["DELETE person;"]
 
         async def update_person_with_tags():
-            _ = await self.connection.query(
+            _ = await self.db.query(
                 """
                 CREATE person:`失败` CONTENT
                 {
@@ -76,7 +76,7 @@ class TestAsyncUpdate(TestCase):
                 """
             )
 
-            outcome = await self.connection.update(
+            outcome = await self.db.update(
                 # "person:`失败`",
                 "person:`失败`",
                 {

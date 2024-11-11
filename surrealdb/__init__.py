@@ -1,4 +1,4 @@
-from surrealdb.async_connection_interface import AsyncSurrealDB
-from surrealdb.connection_interface import SurrealDB
+from surrealdb.async_surrealdb import AsyncSurrealDB
+from surrealdb.surrealdb import SurrealDB
 
 __all__ = ("SurrealDB", "AsyncSurrealDB")

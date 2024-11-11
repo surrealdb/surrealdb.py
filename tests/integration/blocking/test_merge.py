@@ -11,9 +11,9 @@ from tests.integration.url import Url
 
 class TestMerge(TestCase):
     def setUp(self):
-        self.connection = SurrealDB(Url().url)
+        self.db = SurrealDB(Url().url)
         self.queries: List[str] = []
-        self.connection.signin(
+        self.db.sign_in(
             {
                 "username": "root",
                 "password": "root",
@@ -22,15 +22,15 @@ class TestMerge(TestCase):
 
     def tearDown(self):
         for query in self.queries:
-            self.connection.query(query)
+            self.db.query(query)
 
     def test_merge_person_with_tags(self):
         self.queries = ["DELETE user;"]
 
-        self.connection.query("CREATE user:tobie SET name = 'Tobie';")
-        self.connection.query("CREATE user:jaime SET name = 'Jaime';")
+        self.db.query("CREATE user:tobie SET name = 'Tobie';")
+        self.db.query("CREATE user:jaime SET name = 'Jaime';")
 
-        _ = self.connection.merge(
+        _ = self.db.merge(
             "user",
             {
                 "active": True,
@@ -41,7 +41,7 @@ class TestMerge(TestCase):
                 {"active": True, "id": "user:jaime", "name": "Jaime"},
                 {"active": True, "id": "user:tobie", "name": "Tobie"},
             ],
-            self.connection.query("SELECT * FROM user;"),
+            self.db.query("SELECT * FROM user;"),
         )
 
 

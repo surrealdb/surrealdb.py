@@ -12,12 +12,12 @@ from tests.integration.url import Url
 
 class TestAsyncSet(TestCase):
     def setUp(self):
-        self.connection = AsyncSurrealDB(Url().url)
+        self.db = AsyncSurrealDB(Url().url)
         self.queries: List[str] = []
 
         async def login():
-            await self.connection.connect()
-            await self.connection.signin(
+            await self.db.connect()
+            await self.db.sign_in(
                 {
                     "username": "root",
                     "password": "root",
@@ -29,7 +29,7 @@ class TestAsyncSet(TestCase):
     def tearDown(self):
         async def teardown_queries():
             for query in self.queries:
-                await self.connection.query(query)
+                await self.db.query(query)
 
         asyncio.run(teardown_queries())
 
@@ -38,7 +38,7 @@ class TestAsyncSet(TestCase):
         query = "CREATE person:100 SET name = 'Tobie', company = 'SurrealDB', skills = ['Rust', 'Go', 'JavaScript'];"
 
         async def set():
-            outcome = await self.connection.query(query)
+            outcome = await self.db.query(query)
             self.assertEqual(
                 [
                     {
@@ -58,15 +58,15 @@ class TestAsyncSet(TestCase):
         query = "CREATE person:100 SET name = $name;"
 
         async def set():
-            _ = await self.connection.set(
+            _ = await self.db.set(
                 "name",
                 {
                     "name": "Tobie",
                     "last": "Morgan Hitchcock",
                 },
             )
-            _ = await self.connection.query(query)
-            outcome = await self.connection.query("SELECT * FROM person;")
+            _ = await self.db.query(query)
+            outcome = await self.db.query("SELECT * FROM person;")
             self.assertEqual(
                 [
                     {

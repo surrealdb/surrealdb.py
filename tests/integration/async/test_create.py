@@ -12,12 +12,12 @@ from tests.integration.url import Url
 
 class TestAsyncCreate(TestCase):
     def setUp(self):
-        self.connection = AsyncSurrealDB(Url().url)
+        self.db = AsyncSurrealDB(Url().url)
         self.queries: List[str] = []
 
         async def login():
-            await self.connection.connect()
-            await self.connection.signin(
+            await self.db.connect()
+            await self.db.signin(
                 {
                     "username": "root",
                     "password": "root",
@@ -29,7 +29,7 @@ class TestAsyncCreate(TestCase):
     def tearDown(self):
         async def teardown_queries():
             for query in self.queries:
-                await self.connection.query(query)
+                await self.db.query(query)
 
         asyncio.run(teardown_queries())
 
@@ -37,10 +37,10 @@ class TestAsyncCreate(TestCase):
         self.queries = ["DELETE user;"]
 
         async def create():
-            await self.connection.query("CREATE user:tobie SET name = 'Tobie';")
-            await self.connection.query("CREATE user:jaime SET name = 'Jaime';")
+            await self.db.query("CREATE user:tobie SET name = 'Tobie';")
+            await self.db.query("CREATE user:jaime SET name = 'Jaime';")
 
-            outcome = await self.connection.query("SELECT * FROM user;")
+            outcome = await self.db.query("SELECT * FROM user;")
             self.assertEqual(
                 [
                     {"id": "user:jaime", "name": "Jaime"},
@@ -56,10 +56,10 @@ class TestAsyncCreate(TestCase):
         self.test_create_ql()
 
         async def delete():
-            outcome = await self.connection.query("DELETE user;")
+            outcome = await self.db.query("DELETE user;")
             self.assertEqual([], outcome)
 
-            outcome = await self.connection.query("SELECT * FROM user;")
+            outcome = await self.db.query("SELECT * FROM user;")
             self.assertEqual([], outcome)
 
         asyncio.run(delete())
@@ -68,7 +68,7 @@ class TestAsyncCreate(TestCase):
         self.queries = ["DELETE person;"]
 
         async def create_person_with_tags():
-            outcome = await self.connection.query(
+            outcome = await self.db.query(
                 """
                 CREATE person:`失败` CONTENT
                 {
@@ -98,7 +98,7 @@ class TestAsyncCreate(TestCase):
         self.queries = ["DELETE person;"]
 
         async def create_person_with_tags():
-            outcome = await self.connection.create(
+            outcome = await self.db.create(
                 "person:`失败`",
                 {
                     "user": "still me",

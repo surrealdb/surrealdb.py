@@ -12,19 +12,14 @@ from tests.integration.url import Url
 
 class TestAsyncAuth(TestCase):
     def setUp(self):
-        self.connection = AsyncSurrealDB(Url().url)
+        self.db = AsyncSurrealDB(Url().url)
 
     def tearDown(self):
         pass
 
     async def login(self, username: str, password: str):
-        await self.connection.connect()
-        outcome = await self.connection.signin(
-            {
-                "username": username,
-                "password": password,
-            }
-        )
+        await self.db.connect()
+        outcome = await self.db.sign_in(username, password)
         return outcome
 
     def test_login_success(self):

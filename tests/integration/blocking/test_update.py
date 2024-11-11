@@ -11,10 +11,10 @@ from tests.integration.url import Url
 
 class TestAsyncHttpUpdate(TestCase):
     def setUp(self):
-        self.connection = SurrealDB(Url().url)
+        self.db = SurrealDB(Url().url)
         self.queries: List[str] = []
 
-        self.connection.signin(
+        self.db.sign_in(
             {
                 "username": "root",
                 "password": "root",
@@ -23,13 +23,13 @@ class TestAsyncHttpUpdate(TestCase):
 
     def tearDown(self):
         for query in self.queries:
-            self.connection.query(query)
+            self.db.query(query)
 
     def test_update_ql(self):
         self.queries = ["DELETE user;"]
-        self.connection.query("CREATE user:tobie SET name = 'Tobie';")
-        self.connection.query("CREATE user:jaime SET name = 'Jaime';")
-        outcome = self.connection.query(
+        self.db.query("CREATE user:tobie SET name = 'Tobie';")
+        self.db.query("CREATE user:jaime SET name = 'Jaime';")
+        outcome = self.db.query(
             "UPDATE user SET lastname = 'Morgan Hitchcock';"
         )
         self.assertEqual(
@@ -42,7 +42,7 @@ class TestAsyncHttpUpdate(TestCase):
 
     def test_update_person_with_tags(self):
         self.queries = ["DELETE person;"]
-        _ = self.connection.query(
+        _ = self.db.query(
             """
             CREATE person:`失败` CONTENT
             {
@@ -54,7 +54,7 @@ class TestAsyncHttpUpdate(TestCase):
             """
         )
 
-        outcome = self.connection.update(
+        outcome = self.db.update(
             "person:`失败`",
             {
                 "user": "still me",
