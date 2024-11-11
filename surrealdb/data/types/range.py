@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+
+
 class Bound:
     def __init__(self):
         pass
@@ -15,7 +18,8 @@ class BoundExcluded(Bound):
         self.value = value
 
 
+@dataclass
 class Range:
-    def __init__(self, begin: Bound, end: Bound):
-        self.begin = begin
-        self.end = end
+    begin: Bound
+    end: Bound
+
