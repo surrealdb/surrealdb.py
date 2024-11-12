@@ -17,7 +17,7 @@ setup(
     name="surrealdb-beta",
     author="Maxwell Flitton",
     author_email="maxwell@gmail.com",
-    description="SurrealDB python client written in Rust.",
+    description="SurrealDB python client.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     version=version,

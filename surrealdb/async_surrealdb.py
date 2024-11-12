@@ -139,13 +139,11 @@ class AsyncSurrealDB:
 
         return await self.__connection.send('version')
 
-    async def set(self, name: str, value) -> _Self:
+    async def set(self, name: str, value) -> None:
         await self.__connection.send('let', name, value)
-        return self
 
-    async def unset(self, name: str) -> _Self:
+    async def unset(self, name: str) -> None:
         await self.__connection.send('unset', name)
-        return self
 
     async def select(self, what: Union[str, Table, RecordID]) -> Union[List[dict], dict]:
         """

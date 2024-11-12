@@ -7,23 +7,23 @@ The database can be used by the following code:
 from surrealdb.async_surrealdb import AsyncSurrealDB
 
 db = SurrealDB(url="ws://localhost:8080")
-await db.connect()
-await db.use("ns", "db_name")
+db.connect()
+db.use("ns", "db_name")
 ```
 It can also be used as a context manager:
 ```python
-from surrealdb.async_surrealdb import AsyncSurrealDB
+from surrealdb.surrealdb import SurrealDB
 
-async with SurrealDB("ws://localhost:8080") as db:
-    await db.use("ns", "db_name")
+with SurrealDB("ws://localhost:8080") as db:
+    db.use("ns", "db_name")
 ```
 """
 
-from typing import Optional, TypeVar
+from typing import Optional, TypeVar, Union, List
 
 from surrealdb.constants import DEFAULT_CONNECTION_URL
 from surrealdb.connection_factory import create_connection_factory
-
+from surrealdb.data import RecordID, Table, Patch
 
 _Self = TypeVar('_Self', bound='SurrealDB')
 
@@ -41,24 +41,27 @@ class SurrealDB:
             url = DEFAULT_CONNECTION_URL
 
         self.__connection = create_connection_factory(url)
-
-    async def __aenter__(self):
-        await self.connect()
+    
+    def __enter__(self):
+        self.connect()
         return self
 
-    async def __aexit__(self, *args):
-        await self.close()
+    def __exit__(self, *args):
+        # self.close()
+        pass
 
-    async def connect(self) -> _Self:
+    def connect(self) -> _Self:
         """Connect to SurrealDB."""
-        await self.__connection.connect()
+        # self.__connection.connect()
+
         return self
 
-    async def close(self):
+    def close(self):
         """Close connection to SurrealDB."""
-        await self.__connection.close()
+        # self.__connection.close()
+        pass
 
-    async def use(self, namespace: str, database: str) -> None:
+    def use(self, namespace: str, database: str) -> None:
         """
         Uses the given namespace and database in the connection.
 
@@ -67,9 +70,10 @@ class SurrealDB:
         :return: None
         """
 
-        await self.__connection.use(namespace=namespace, database=database)
+        # self.__connection.use(namespace=namespace, database=database)
+        pass
 
-    async def sign_in(self, username: str, password: str) -> str:
+    def sign_in(self, username: str, password: str) -> str:
         """
         Signs in to the database.
 
@@ -79,12 +83,13 @@ class SurrealDB:
         :return: str
         """
 
-        token = await self.__connection.send('signin', {'user': username, 'pass': password})
-        self.__connection.set_token(token)
+        # token = self.__connection.send('signin', {'user': username, 'pass': password})
+        # self.__connection.set_token(token)
+        #
+        # return token
+        pass
 
-        return token
-
-    async def sign_up(self, username: str, password: str) -> str:
+    def sign_up(self, username: str, password: str) -> str:
         """
         Sign up a user to the database.
 
@@ -93,13 +98,14 @@ class SurrealDB:
 
         :return: str
         """
+        #
+        # token = self.__connection.send('signup', {'user': username, 'pass': password})
+        # self.__connection.set_token(token)
+        #
+        # return token
+        pass
 
-        token = await self.__connection.send('signup', {'user': username, 'pass': password})
-        self.__connection.set_token(token)
-
-        return token
-
-    async def authenticate(self, jwt: str) -> None:
+    def authenticate(self, jwt: str) -> None:
         """
         Authenticates a JWT.
 
@@ -107,10 +113,11 @@ class SurrealDB:
         :return: None
         """
 
-        await self.__connection.send('authenticate', jwt)
-        self.__connection.set_token(jwt)
+        # self.__connection.send('authenticate', jwt)
+        # self.__connection.set_token(jwt)
+        pass
 
-    async def invalidate(self, jwt: str) -> None:
+    def invalidate(self, jwt: str) -> None:
         """
         Invalidates a valid JWT.
 
@@ -118,115 +125,139 @@ class SurrealDB:
         :return: None
         """
 
-        await self.__connection.send('invalidate', jwt)
-        self.__connection.set_token()
+        # self.__connection.send('invalidate', jwt)
+        # self.__connection.set_token()
+        pass
 
-    async def info(self) -> dict:
+    def info(self) -> dict:
         """
         This returns the record of an authenticated record user.
 
         :return: dict
         """
 
-        return await self.__connection.send('info')
+        # return self.__connection.send('info')
+        pass
 
-    async def version(self) -> str:
+    def version(self) -> str:
         """
         This returns the version of the Server backend.
 
         :return: str
         """
 
-        return await self.__connection.send('version')
-
-    async def set(self, name: str, value) -> _Self:
-        await self.__connection.send('let', name, value)
-        return self
-
-    async def unset(self, name: str) -> _Self:
-        await self.__connection.send('unset', name)
-        return self
-
-    async def query(self):
-        """
-        queries the database.
-
-        :param query: the query to run on the database
-
-        :return: None
-        """
+        # return self.__connection.send('version')
         pass
 
-    async def create(self):
-        """
-        Creates a new document in the database.
-
-        :param name: the name of the document to create
-        :param data: the data to store in the document
-
-        :return: None
-        """
+    def set(self, name: str, value) -> None:
+        # self.__connection.send('let', name, value)
         pass
 
-    async def select(self):
+    def unset(self, name: str) -> None:
+        # self.__connection.send('unset', name)
+        pass
+
+    def select(self, what: Union[str, Table, RecordID]) -> Union[List[dict], dict]:
         """
         Performs a select query on the database for a particular resource.
 
-        :param resource: the resource to select from
+        :param what: the resource to select from.
 
         :return: the result of the select
         """
+        # return self.__connection.send('select', what)
         pass
 
-    async def insert(self):
+    def query(self, query: str, variables: dict = {}) -> List[dict]:
+        """
+        Queries sends a custom SurrealQL query.
+
+        :param query: The query to execute against SurrealDB. Queries are seperated by semicolons.
+        :param variables: A set of variables used by the query
+
+        :return: An array of query results
+        """
+        # return self.__connection.send('query', query, variables)
         pass
 
-    async def patch(self):
+    def create(self, thing: Union[str, RecordID, Table], data: Union[List[dict], dict]):
+        """
+        Creates a record either with a random or specified ID
+
+        :param thing: The Table or Record ID to create. Passing just a table will result in a randomly generated ID
+        :param data: The data to store in the document
+
+        :return: None
+        """
+        # return self.__connection.send('create', thing, data)
+        pass
+
+    def insert(self, thing: Union[str, Table], data: Union[List[dict], dict]):
+        """
+        Inserts a record either with a random or specified ID.
+
+        :param thing: The table to insert in to
+        :param data: One or multiple record(s)
+        :return:
+        """
+        # return self.__connection.send('insert', thing, data)
+        pass
+
+    def patch(self, thing: Union[str, RecordID, Table], patches: List[Patch], diff: Optional[bool] = False):
         """
         Patches the given resource with the given data.
 
-        :param resource: the resource to update
-        :param data: the data to patch the resource with
+        :param thing: The Table or Record ID to patch.
+        :param patches: An array of patches following the JSON Patch specification
+        :param diff: A boolean representing if just a diff should be returned.
+        :return: the patched resource such as a record/records or patches
+        """
+        if diff is None:
+            diff = False
+        # return self.__connection.send('insert', thing, patches, diff)
+        pass
+
+    def update(self, thing: Union[str, RecordID, Table], data: dict):
+        """
+        Updates replaces either all records in a table or a single record with specified data
+
+        :param thing: The Table or Record ID to update.
+        :param data: The content for the record
         :return: the updated resource such as an individual row or a list of rows
         """
+        # return self.__connection.send('update', thing, data)
         pass
 
-    async def update(self):
+    def upsert(self, thing: Union[str, RecordID, Table], data: dict):
         """
-        Updates the given resource with the given data.
+        Upsert replaces either all records in a table or a single record with specified data
 
-        :param resource: the resource to update
-        :param data: the data to update the resource with
-        :return: the updated resource such as an individual row or a list of rows
+        :param thing: The Table or Record ID to upsert.
+        :param data: The content for the record
+        :return: the upsert-ed records such as an individual row or a list of rows
         """
+        # return self.__connection.send('upsert', thing, data)
         pass
 
-    async def upsert(self):
-        pass
-
-    async def delete(self):
+    def delete(self, thing: Union[str, RecordID, Table]) -> Union[List[dict], dict]:
         """
-        Deletes a document in the database.
+        Deletes either all records in a table or a single record.
 
-        :param name: the name of the document to delete
+        :param thing: The Table or Record ID to update.
 
         :return: the record or records that were deleted
         """
+        # return self.__connection.send('delete', thing)
         pass
 
-    async def merge(self):
+    def merge(self, thing: Union[str, RecordID, Table], data: dict) -> Union[List[dict], dict]:
         """
-        Merges the given resource with the given data.
+        Merge specified data into either all records in a table or a single record
 
-        :param resource: the resource to update
-        :param data: the data to merge the resource with
+        :param thing: The Table or Record ID to merge into.
+        :param data: The content for the record.
         :return: the updated resource such as an individual row or a list of rows
         """
-        pass
-
-    async def relate(self):
-        pass
-
-    async def insert_relation(self):
+        # return  self.__connection.send('update', thing, data)
         pass
 

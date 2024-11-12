@@ -1,5 +1,6 @@
 anyio==3.7.0
 bleach==6.0.0
+cbor2==5.6.5
 certifi==2023.5.7
 charset-normalizer==3.2.0
 coverage==7.2.7
@@ -33,5 +34,6 @@ twine==4.0.2
 typing_extensions==4.6.3
 urllib3==2.0.4
 webencodings==0.5.1
+websocket-client==1.8.0
 websockets==10.4
 zipp==3.16.2
