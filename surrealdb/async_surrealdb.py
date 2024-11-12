@@ -66,7 +66,6 @@ class AsyncSurrealDB:
         :param database: the database to use
         :return: None
         """
-
         await self.__connection.use(namespace=namespace, database=database)
 
     async def sign_in(self, username: str, password: str) -> str:
@@ -78,7 +77,6 @@ class AsyncSurrealDB:
 
         :return: str
         """
-
         token = await self.__connection.send('signin', {'user': username, 'pass': password})
         self.__connection.set_token(token)
 
@@ -93,32 +91,29 @@ class AsyncSurrealDB:
 
         :return: str
         """
-
         token = await self.__connection.send('signup', {'user': username, 'pass': password})
         self.__connection.set_token(token)
 
         return token
 
-    async def authenticate(self, jwt: str) -> None:
+    async def authenticate(self, token: str) -> None:
         """
         Authenticates a JWT.
 
-        :param jwt: the JWT to authenticate
+        :param token: the JWT to authenticate
         :return: None
         """
+        await self.__connection.send('authenticate', token)
+        self.__connection.set_token(token)
 
-        await self.__connection.send('authenticate', jwt)
-        self.__connection.set_token(jwt)
-
-    async def invalidate(self, jwt: str) -> None:
+    async def invalidate(self, token: str) -> None:
         """
         Invalidates a valid JWT.
 
-        :param jwt: the JWT to invalidate
+        :param token: the JWT to invalidate
         :return: None
         """
-
-        await self.__connection.send('invalidate', jwt)
+        await self.__connection.send('invalidate', token)
         self.__connection.set_token()
 
     async def info(self) -> dict:
@@ -127,7 +122,6 @@ class AsyncSurrealDB:
 
         :return: dict
         """
-
         return await self.__connection.send('info')
 
     async def version(self) -> str:
@@ -136,7 +130,6 @@ class AsyncSurrealDB:
 
         :return: str
         """
-
         return await self.__connection.send('version')
 
     async def set(self, name: str, value) -> None:

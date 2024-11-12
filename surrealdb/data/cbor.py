@@ -8,6 +8,7 @@ from surrealdb.data.types.geometry import GeometryPoint, GeometryLine, GeometryP
 from surrealdb.data.types.range import BoundIncluded, BoundExcluded, Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
+from surrealdb.errors import SurrealDbDecodeError, SurrealDbEncodeError
 
 
 @cbor2.shareable_encoder
@@ -55,7 +56,7 @@ def default_encoder(encoder, obj):
         tagged = cbor2.CBORTag(constants.TAG_DURATION, obj.getSecondsAndNano())
 
     else:
-        raise Exception('cannot encode')
+        raise SurrealDbEncodeError('no encoder for type ', type(obj))
 
     encoder.encode(tagged)
 
@@ -104,7 +105,7 @@ def tag_decoder(decoder, tag, shareable_index=None):
         return Duration.parse(tag.value[0], tag.value[1])
 
     else:
-        return tag
+        raise SurrealDbDecodeError('no decoder for tag', tag.tag)
 
 
 def encode(obj):
