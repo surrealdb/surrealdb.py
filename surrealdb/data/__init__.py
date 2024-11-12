@@ -2,6 +2,7 @@ from surrealdb.data.types.geometry import GeometryPoint, GeometryLine, GeometryP
     GeometryMultiLine, GeometryMultiPolygon, GeometryCollection
 from surrealdb.data.types.table import Table
 from surrealdb.data.types.record_id import RecordID
+from surrealdb.data.models import Patch, QueryResponse
 
 __all__ = (
     "GeometryPoint",
@@ -12,5 +13,8 @@ __all__ = (
     "GeometryMultiPolygon",
     "GeometryCollection",
     "Table",
-    "RecordID"
+    "RecordID",
+
+    "Patch",
+    "QueryResponse"
 )

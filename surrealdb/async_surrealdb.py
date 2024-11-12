@@ -20,11 +20,11 @@ async with SurrealDB("ws://localhost:8080") as db:
 """
 
 import uuid
-from typing import Optional, TypeVar
+from typing import Optional, TypeVar, Union, List
 
 from surrealdb.connection.constants import DEFAULT_CONNECTION_URL
 from surrealdb.connection.factory import create_connection_factory
-
+from surrealdb.data import Table, RecordID, Patch
 
 _Self = TypeVar('_Self', bound='AsyncSurrealDB')
 
@@ -148,86 +148,99 @@ class AsyncSurrealDB:
         await self.__connection.send('unset', name)
         return self
 
-    async def query(self):
-        """
-        queries the database.
-
-        :param query: the query to run on the database
-
-        :return: None
-        """
-        pass
-
-    async def create(self):
-        """
-        Creates a new document in the database.
-
-        :param name: the name of the document to create
-        :param data: the data to store in the document
-
-        :return: None
-        """
-        pass
-
-    async def select(self):
+    async def select(self, what: Union[str, Table, RecordID]) -> Union[List[dict], dict]:
         """
         Performs a select query on the database for a particular resource.
 
-        :param resource: the resource to select from
+        :param what: the resource to select from.
 
         :return: the result of the select
         """
-        pass
+        return await self.__connection.send('select', what)
 
-    async def insert(self):
-        pass
+    async def query(self, query: str, variables: dict = {}) -> List[dict]:
+        """
+        Queries sends a custom SurrealQL query.
 
-    async def patch(self):
+        :param query: The query to execute against SurrealDB. Queries are seperated by semicolons.
+        :param variables: A set of variables used by the query
+
+        :return: An array of query results
+        """
+        return await self.__connection.send('query', query, variables)
+
+    async def create(self, thing: Union[str, RecordID, Table], data: Union[List[dict], dict]):
+        """
+        Creates a record either with a random or specified ID
+
+        :param thing: The Table or Record ID to create. Passing just a table will result in a randomly generated ID
+        :param data: The data to store in the document
+
+        :return: None
+        """
+        return await self.__connection.send('create', thing, data)
+
+    async def insert(self, thing: Union[str, Table], data: Union[List[dict], dict]):
+        """
+        Inserts a record either with a random or specified ID.
+
+        :param thing: The table to insert in to
+        :param data: One or multiple record(s)
+        :return:
+        """
+        return await self.__connection.send('insert', thing, data)
+
+    async def patch(self, thing: Union[str, RecordID, Table], patches: List[Patch], diff: Optional[bool] = False):
         """
         Patches the given resource with the given data.
 
-        :param resource: the resource to update
-        :param data: the data to patch the resource with
+        :param thing: The Table or Record ID to patch.
+        :param patches: An array of patches following the JSON Patch specification
+        :param diff: A boolean representing if just a diff should be returned.
+        :return: the patched resource such as a record/records or patches
+        """
+        if diff is None:
+            diff = False
+        return await self.__connection.send('insert', thing, patches, diff)
+
+    async def update(self, thing: Union[str, RecordID, Table], data: dict):
+        """
+        Updates replaces either all records in a table or a single record with specified data
+
+        :param thing: The Table or Record ID to update.
+        :param data: The content for the record
         :return: the updated resource such as an individual row or a list of rows
         """
-        pass
+        return await self.__connection.send('update', thing, data)
 
-    async def update(self):
+    async def upsert(self, thing: Union[str, RecordID, Table], data: dict):
         """
-        Updates the given resource with the given data.
+        Upsert replaces either all records in a table or a single record with specified data
 
-        :param resource: the resource to update
-        :param data: the data to update the resource with
-        :return: the updated resource such as an individual row or a list of rows
+        :param thing: The Table or Record ID to upsert.
+        :param data: The content for the record
+        :return: the upsert-ed records such as an individual row or a list of rows
         """
-        pass
+        return await self.__connection.send('upsert', thing, data)
 
-    async def upsert(self):
-        pass
-
-    async def delete(self):
+    async def delete(self, thing: Union[str, RecordID, Table]) -> Union[List[dict], dict]:
         """
-        Deletes a document in the database.
+        Deletes either all records in a table or a single record.
 
-        :param name: the name of the document to delete
+        :param thing: The Table or Record ID to update.
 
         :return: the record or records that were deleted
         """
-        pass
+        return await self.__connection.send('delete', thing)
 
-    async def merge(self):
+    async def merge(self, thing: Union[str, RecordID, Table], data: dict) -> Union[List[dict], dict]:
         """
-        Merges the given resource with the given data.
+        Merge specified data into either all records in a table or a single record
 
-        :param resource: the resource to update
-        :param data: the data to merge the resource with
+        :param thing: The Table or Record ID to merge into.
+        :param data: The content for the record.
         :return: the updated resource such as an individual row or a list of rows
         """
-        pass
+        return await self.__connection.send('update', thing, data)
 
-    async def relate(self):
-        pass
-
-    async def insert_relation(self):
-        pass
 

@@ -31,7 +31,7 @@ class Connection:
         pass
 
     async def send(self, method: str, *params):
-        print("Request: ", method, params)
+        # print("Request: ", method, params)
         request_data = {
             'id': request_id(REQUEST_ID_LENGTH),
             'method': method,
@@ -44,9 +44,9 @@ class Connection:
         if response.get("error") is not None:
             raise Exception(response.get("error"))
 
-        print("Result: ", response_data.hex())
-        print("Result: ", response.get("result"))
-        print("------------------------------------------------------------------------------------------------------------------------")
+        # print("Result: ", response_data.hex())
+        # print("Result: ", response.get("result"))
+        # print("------------------------------------------------------------------------------------------------------------------------")
         return response.get("result")
 
     def set_token(self, token: Optional[str] = None) -> None:

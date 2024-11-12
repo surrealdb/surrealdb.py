@@ -86,7 +86,7 @@ def tag_decoder(decoder, tag, shareable_index=None):
         return None
 
     elif tag.tag == constants.TAG_RECORD_ID:
-        return RecordID(tag.value)
+        return RecordID(tag.value[0], tag.value[1])
 
     elif tag.tag == constants.TAG_TABLE_NAME:
         return Table(tag.value)

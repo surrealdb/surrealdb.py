@@ -38,7 +38,7 @@ async def main():
             pass: 'very_safe',
             tags: ['python', 'documentation']
         };
-
+        
         """))
         print("read: ", await db.query("select * from person"))
 
@@ -48,7 +48,7 @@ async def main():
             pass: 'more_safe',
             tags: ['awesome']
         };
-
+        
         """))
         print("delete: ", await db.query("delete person"))
 

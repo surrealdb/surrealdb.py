@@ -1,7 +1,10 @@
 
 class RecordID:
-    def __init__(self, table_name: str, id):
+    def __init__(self, table_name: str, identifier):
         self.table_name = table_name
-        self.id = id
+        self.id = identifier
+
+    def __repr__(self) -> str:
+        return "".join([self.table_name, ":", self.id])
 
 
