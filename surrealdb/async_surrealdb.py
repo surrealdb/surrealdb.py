@@ -19,11 +19,10 @@ async with SurrealDB("ws://localhost:8080") as db:
 ```
 """
 
-import uuid
 from typing import Optional, TypeVar, Union, List
 
-from surrealdb.connection.constants import DEFAULT_CONNECTION_URL
-from surrealdb.connection.factory import create_connection_factory
+from surrealdb.constants import DEFAULT_CONNECTION_URL
+from surrealdb.connection_factory import create_connection_factory
 from surrealdb.data import Table, RecordID, Patch
 
 _Self = TypeVar('_Self', bound='AsyncSurrealDB')

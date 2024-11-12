@@ -1,28 +1,32 @@
+from typing import Tuple
+
 import requests
 
-from surrealdb.connection.connection import Connection
+from surrealdb.connection import Connection
+from surrealdb.errors import SurrealDbConnectionError
 
 
 class HTTPConnection(Connection):
 
     async def use(self, namespace: str, database: str) -> None:
+        print(namespace, database)
         self._namespace = namespace
         self._database = database
 
     async def connect(self) -> None:
         if self._base_url is None:
-            raise Exception('base url not set')
+            raise SurrealDbConnectionError('base url not set for http connection')
 
         response = requests.get(self._base_url + '/health')
         if response.status_code != 200:
-            raise Exception('connection failed. check server is up or base url is correct')
+            raise SurrealDbConnectionError('connection failed. check server is up and base url is correct')
 
-    async def _make_request(self, request_payload: bytes) -> bytes:
+    async def _make_request(self, request_payload: bytes) -> Tuple[bool, bytes]:
         if self._namespace is None:
-            raise Exception('namespace not set')
+            raise SurrealDbConnectionError('namespace not set')
 
         if self._database is None:
-            raise Exception('database not set')
+            raise SurrealDbConnectionError('database not set')
 
         headers = {
             'Content-Type': 'application/cbor',
@@ -36,7 +40,8 @@ class HTTPConnection(Connection):
 
         response = requests.post(self._base_url + '/rpc', data=request_payload, headers=headers)
 
+        successful = False
         if response.status_code >= 200 & response.status_code < 300:
-            return response.content
+            successful = True
 
-        raise Exception('rpc request failed')
+        return successful, response.content

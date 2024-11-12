@@ -7,12 +7,13 @@ import os
 from unittest import TestCase, main
 
 from surrealdb import AsyncSurrealDB
-from tests.integration.url import Url
+from tests.integration.connection_params import TestConnectionParams
 
 
 class TestAsyncAuth(TestCase):
     def setUp(self):
-        self.db = AsyncSurrealDB(Url().url)
+        self.params = TestConnectionParams()
+        self.db = AsyncSurrealDB(self.params.url)
 
     def tearDown(self):
         pass

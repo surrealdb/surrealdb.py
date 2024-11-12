@@ -4,8 +4,8 @@ from surrealdb import AsyncSurrealDB
 async def main():
     """Example of how to use the SurrealDB client."""
     async with AsyncSurrealDB("ws://localhost:8000") as db:
-        await db.sign_in("root", "root")
         await db.use("test", "test")
+        await db.sign_in("root", "root")
 
         print("Using methods")
         print("create: ", await db.create(

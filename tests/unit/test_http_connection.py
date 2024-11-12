@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from surrealdb.connection.http import HTTPConnection
+from surrealdb.http import HTTPConnection
 
 
 class TestWSConnection(TestCase):

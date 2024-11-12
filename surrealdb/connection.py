@@ -1,9 +1,10 @@
 import secrets
 import string
-from typing import Optional
+from typing import Optional, Tuple
 
-from surrealdb.connection.constants import REQUEST_ID_LENGTH
+from surrealdb.constants import REQUEST_ID_LENGTH
 from surrealdb.data.cbor import encode, decode
+from surrealdb.errors import SurrealDbConnectionError
 
 
 class Connection:
@@ -27,7 +28,7 @@ class Connection:
     async def close(self) -> None:
         pass
 
-    async def _make_request(self, request_payload: bytes) -> bytes:
+    async def _make_request(self, request_payload: bytes) -> Tuple[bool, bytes]:
         pass
 
     async def send(self, method: str, *params):
@@ -38,16 +39,24 @@ class Connection:
             'params': params
         }
 
-        response_data = await self._make_request(encode(request_data))
-        response = decode(response_data)
+        try:
+            successful, response_data = await self._make_request(encode(request_data))
+            response = decode(response_data)
 
-        if response.get("error") is not None:
-            raise Exception(response.get("error"))
+            if response.get("error") is not None or successful is not True:
+                error_msg = "request to rpc endpoint failed"
+                if response.get("error") is not None:
+                    error_msg = response.get("error").get("message")
+                raise SurrealDbConnectionError(error_msg)
 
-        # print("Result: ", response_data.hex())
-        # print("Result: ", response.get("result"))
-        # print("------------------------------------------------------------------------------------------------------------------------")
-        return response.get("result")
+            # print("Result: ", response_data.hex())
+            # print("Result: ", response.get("result"))
+            # print("------------------------------------------------------------------------------------------------------------------------")
+            return response.get("result")
+        except Exception as e:
+            raise e
+
+
 
     def set_token(self, token: Optional[str] = None) -> None:
         self._auth_token = token

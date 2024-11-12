@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from surrealdb.connection.ws import WebsocketConnection
+from surrealdb.ws import WebsocketConnection
 
 
 class TestWSConnection(TestCase):

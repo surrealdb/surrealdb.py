@@ -1,7 +1,8 @@
 import websockets
 
-from typing import Optional
-from surrealdb.connection.connection import Connection
+from typing import Optional, Tuple
+from surrealdb.connection import Connection
+from surrealdb.errors import SurrealDbConnectionError
 
 
 class WebsocketConnection(Connection):
@@ -14,7 +15,7 @@ class WebsocketConnection(Connection):
         try:
             self._ws = await websockets.connect(self._base_url + "/rpc", subprotocols=['cbor'])
         except Exception as e:
-            raise Exception('cannot connect websocket server', e)
+            raise SurrealDbConnectionError('cannot connect db server', e)
 
     async def use(self, namespace: str, database: str) -> None:
         self._namespace = namespace
@@ -26,12 +27,12 @@ class WebsocketConnection(Connection):
         if self._ws:
             await self._ws.close()
 
-    async def _make_request(self, request_payload: bytes) -> bytes:
+    async def _make_request(self, request_payload: bytes) -> Tuple[bool, bytes]:
         try:
             await self._ws.send(request_payload)
             response = await self._ws.recv()
-            return response
-        except websockets.ConnectionClosed:
-            print("conn closed")
+            return True, response
+        except websockets.ConnectionClosed as e:
+            raise SurrealDbConnectionError(e)
         except Exception as e:
-            print("failed", e)
+            raise e
