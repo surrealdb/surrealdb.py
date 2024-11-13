@@ -5,6 +5,6 @@ class RecordID:
         self.id = identifier
 
     def __repr__(self) -> str:
-        return "".join([self.table_name, ":", self.id])
+        return f"{self.table_name}:{self.id}"
 
 

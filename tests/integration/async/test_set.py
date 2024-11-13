@@ -2,84 +2,69 @@
 Tests the Set operation of the AsyncSurrealDB class.
 """
 
-import asyncio
 from typing import List
-from unittest import TestCase, main
+from unittest import main, IsolatedAsyncioTestCase
 
 from surrealdb import AsyncSurrealDB
 from tests.integration.connection_params import TestConnectionParams
 
 
-class TestAsyncSet(TestCase):
-    def setUp(self):
+class TestAsyncSet(IsolatedAsyncioTestCase):
+
+    async def asyncSetUp(self):
         self.params = TestConnectionParams()
         self.db = AsyncSurrealDB(self.params.url)
 
         self.queries: List[str] = []
 
-        async def login():
-            await self.db.connect()
-            await self.db.sign_in(
-                {
-                    "username": "root",
-                    "password": "root",
-                }
-            )
+        await self.db.connect()
+        await self.db.use(self.params.namespace, self.params.database)
+        await self.db.sign_in("root", "root")
 
-        asyncio.run(login())
+    async def asyncTearDown(self):
+        for query in self.queries:
+            await self.db.query(query)
+        await self.db.close()
 
-    def tearDown(self):
-        async def teardown_queries():
-            for query in self.queries:
-                await self.db.query(query)
-
-        asyncio.run(teardown_queries())
-
-    def test_set_ql(self):
+    async def test_set_ql(self):
         self.queries = ["DELETE person;"]
         query = "CREATE person:100 SET name = 'Tobie', company = 'SurrealDB', skills = ['Rust', 'Go', 'JavaScript'];"
 
-        async def set():
-            outcome = await self.db.query(query)
-            self.assertEqual(
-                [
-                    {
-                        "id": "person:100",
-                        "name": "Tobie",
-                        "company": "SurrealDB",
-                        "skills": ["Rust", "Go", "JavaScript"],
-                    }
-                ],
-                outcome,
-            )
+        outcome = await self.db.query(query)
+        self.assertEqual(
+            [
+                {
+                    "id": "person:100",
+                    "name": "Tobie",
+                    "company": "SurrealDB",
+                    "skills": ["Rust", "Go", "JavaScript"],
+                }
+            ],
+            outcome[0]['result'],
+        )
 
-        asyncio.run(set())
-
-    def test_set(self):
+    async def test_set(self):
         self.queries = ["DELETE person;"]
         query = "CREATE person:100 SET name = $name;"
 
-        async def set():
-            _ = await self.db.set(
-                "name",
+        _ = await self.db.set(
+            "name",
+            {
+                "name": "Tobie",
+                "last": "Morgan Hitchcock",
+            },
+        )
+        _ = await self.db.query(query)
+        outcome = await self.db.query("SELECT * FROM person;")
+        self.assertEqual(
+            [
                 {
-                    "name": "Tobie",
-                    "last": "Morgan Hitchcock",
-                },
-            )
-            _ = await self.db.query(query)
-            outcome = await self.db.query("SELECT * FROM person;")
-            self.assertEqual(
-                [
-                    {
-                        "id": "person:100",
-                        "name": {"last": "Morgan Hitchcock", "name": "Tobie"},
-                    }
-                ],
-                outcome,
-            )
-
-        asyncio.run(set())
+                    "id": "person:100",
+                    "name": {"last": "Morgan Hitchcock", "name": "Tobie"},
+                }
+            ],
+            outcome[0]['result'],
+        )
 
 
 if __name__ == "__main__":

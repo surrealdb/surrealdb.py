@@ -23,7 +23,7 @@ from typing import Optional, TypeVar, Union, List
 
 from surrealdb.constants import DEFAULT_CONNECTION_URL
 from surrealdb.connection_factory import create_connection_factory
-from surrealdb.data import Table, RecordID, Patch
+from surrealdb.data import Table, RecordID, Patch, QueryResponse
 
 _Self = TypeVar('_Self', bound='AsyncSurrealDB')
 
@@ -133,10 +133,10 @@ class AsyncSurrealDB:
         return await self.__connection.send('version')
 
     async def set(self, name: str, value) -> None:
-        await self.__connection.send('let', name, value)
+        await self.__connection.set(name, value)
 
     async def unset(self, name: str) -> None:
-        await self.__connection.send('unset', name)
+        await self.__connection.unset(name)
 
     async def select(self, what: Union[str, Table, RecordID]) -> Union[List[dict], dict]:
         """
@@ -148,7 +148,7 @@ class AsyncSurrealDB:
         """
         return await self.__connection.send('select', what)
 
-    async def query(self, query: str, variables: dict = {}) -> List[dict]:
+    async def query(self, query: str, variables: dict = {}) -> List[QueryResponse]:
         """
         Queries sends a custom SurrealQL query.
 

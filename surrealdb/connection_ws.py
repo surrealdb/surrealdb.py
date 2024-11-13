@@ -1,8 +1,8 @@
-import websockets
-
 from typing import Optional, Tuple
+from websockets import Subprotocol, ConnectionClosed
 from surrealdb.connection import Connection
 from surrealdb.errors import SurrealDbConnectionError
+from websockets.asyncio.client import connect
 
 
 class WebsocketConnection(Connection):
@@ -13,7 +13,7 @@ class WebsocketConnection(Connection):
 
     async def connect(self):
         try:
-            self._ws = await websockets.connect(self._base_url + "/rpc", subprotocols=['cbor'])
+            self._ws = await connect(self._base_url + "/rpc", subprotocols=[Subprotocol('cbor')])
         except Exception as e:
             raise SurrealDbConnectionError('cannot connect db server', e)
 
@@ -22,6 +22,12 @@ class WebsocketConnection(Connection):
         self._database = database
 
         await self.send("use", namespace, database)
+
+    async def set(self, key: str, value):
+        await self.send("let", key, value)
+
+    async def unset(self, key: str):
+        await self.send("unset", key)
 
     async def close(self):
         if self._ws:
@@ -32,7 +38,7 @@ class WebsocketConnection(Connection):
             await self._ws.send(request_payload)
             response = await self._ws.recv()
             return True, response
-        except websockets.ConnectionClosed as e:
+        except ConnectionClosed as e:
             raise SurrealDbConnectionError(e)
         except Exception as e:
             raise e

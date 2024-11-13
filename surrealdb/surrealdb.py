@@ -162,11 +162,11 @@ class SurrealDB:
 
     def set(self, name: str, value) -> None:
         loop_manager = AsyncioRuntime()
-        loop_manager.loop.run_until_complete(self.__connection.send('let', name, value))
+        loop_manager.loop.run_until_complete(self.__connection.set(name, value))
 
     def unset(self, name: str) -> None:
         loop_manager = AsyncioRuntime()
-        loop_manager.loop.run_until_complete(self.__connection.send('unset', name))
+        loop_manager.loop.run_until_complete(self.__connection.unset(name))
 
     def select(self, what: Union[str, Table, RecordID]) -> Union[List[dict], dict]:
         """

@@ -9,7 +9,6 @@ from surrealdb.errors import SurrealDbConnectionError
 class HTTPConnection(Connection):
 
     async def use(self, namespace: str, database: str) -> None:
-        print(namespace, database)
         self._namespace = namespace
         self._database = database
 

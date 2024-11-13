@@ -31,6 +31,12 @@ class Connection:
     async def _make_request(self, request_payload: bytes) -> Tuple[bool, bytes]:
         pass
 
+    async def set(self, key: str, value):
+        pass
+
+    async def unset(self, key: str):
+        pass
+
     async def send(self, method: str, *params):
         # print("Request: ", method, params)
         request_data = {
@@ -49,14 +55,12 @@ class Connection:
                     error_msg = response.get("error").get("message")
                 raise SurrealDbConnectionError(error_msg)
 
+            # print("Response: ", response)
             # print("Result: ", response_data.hex())
-            # print("Result: ", response.get("result"))
             # print("------------------------------------------------------------------------------------------------------------------------")
             return response.get("result")
         except Exception as e:
             raise e
-
-
 
     def set_token(self, token: Optional[str] = None) -> None:
         self._auth_token = token
