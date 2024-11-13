@@ -16,19 +16,14 @@ class TestCreate(TestCase):
 
         self.queries: List[str] = []
 
-        def login():
-            self.db.sign_in(
-                {
-                    "username": "root",
-                    "password": "root",
-                }
-            )
-
-        login()
+        self.db.connect()
+        self.db.use(self.params.namespace, self.params.database)
+        self.db.sign_in("root", "root")
 
     def tearDown(self):
         for query in self.queries:
             self.db.query(query)
+        self.db.close()
 
     def test_create_ql(self):
         self.queries = ["DELETE user;"]
@@ -40,7 +35,7 @@ class TestCreate(TestCase):
                 {"id": "user:jaime", "name": "Jaime"},
                 {"id": "user:tobie", "name": "Tobie"},
             ],
-            outcome,
+            outcome[0]["result"],
         )
 
     def test_delete_ql(self):
@@ -50,7 +45,7 @@ class TestCreate(TestCase):
         self.assertEqual([], outcome)
 
         outcome = self.db.query("SELECT * FROM user;")
-        self.assertEqual([], outcome)
+        self.assertEqual([], outcome[0]["result"])
 
     def test_create_person_with_tags_ql(self):
         self.queries = ["DELETE person;"]
@@ -75,7 +70,7 @@ class TestCreate(TestCase):
                     "user": "me",
                 }
             ],
-            outcome,
+            outcome[0]["result"],
         )
 
     def test_create_person_with_tags(self):

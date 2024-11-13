@@ -15,16 +15,15 @@ class TestMerge(TestCase):
         self.db = SurrealDB(self.params.url)
 
         self.queries: List[str] = []
-        self.db.sign_in(
-            {
-                "username": "root",
-                "password": "root",
-            }
-        )
+
+        self.db.connect()
+        self.db.use(self.params.namespace, self.params.database)
+        self.db.sign_in("root", "root")
 
     def tearDown(self):
         for query in self.queries:
             self.db.query(query)
+        self.db.close()
 
     def test_merge_person_with_tags(self):
         self.queries = ["DELETE user;"]
@@ -38,12 +37,14 @@ class TestMerge(TestCase):
                 "active": True,
             },
         )
+
+        outcome = self.db.query("SELECT * FROM user;")
         self.assertEqual(
             [
                 {"active": True, "id": "user:jaime", "name": "Jaime"},
                 {"active": True, "id": "user:tobie", "name": "Tobie"},
             ],
-            self.db.query("SELECT * FROM user;"),
+            outcome[0]["result"],
         )
 
 

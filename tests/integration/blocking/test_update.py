@@ -16,16 +16,14 @@ class TestAsyncHttpUpdate(TestCase):
 
         self.queries: List[str] = []
 
-        self.db.sign_in(
-            {
-                "username": "root",
-                "password": "root",
-            }
-        )
+        self.db.connect()
+        self.db.use(self.params.namespace, self.params.database)
+        self.db.sign_in("root", "root")
 
     def tearDown(self):
         for query in self.queries:
             self.db.query(query)
+        self.db.close()
 
     def test_update_ql(self):
         self.queries = ["DELETE user;"]
@@ -39,7 +37,7 @@ class TestAsyncHttpUpdate(TestCase):
                 {"id": "user:jaime", "lastname": "Morgan Hitchcock", "name": "Jaime"},
                 {"id": "user:tobie", "lastname": "Morgan Hitchcock", "name": "Tobie"},
             ],
-            outcome,
+            outcome[0]["result"],
         )
 
     def test_update_person_with_tags(self):

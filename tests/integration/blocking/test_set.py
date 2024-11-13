@@ -15,16 +15,15 @@ class TestSet(TestCase):
         self.db = SurrealDB(self.params.url)
 
         self.queries: List[str] = []
-        self.db.sign_in(
-            {
-                "username": "root",
-                "password": "root",
-            }
-        )
+
+        self.db.connect()
+        self.db.use(self.params.namespace, self.params.database)
+        self.db.sign_in("root", "root")
 
     def tearDown(self):
         for query in self.queries:
             self.db.query(query)
+        self.db.close()
 
     def test_set_ql(self):
         self.queries = ["DELETE person;"]
@@ -39,7 +38,7 @@ class TestSet(TestCase):
                     "skills": ["Rust", "Go", "JavaScript"],
                 }
             ],
-            outcome,
+            outcome[0]["result"],
         )
 
     def test_set(self):
@@ -62,7 +61,7 @@ class TestSet(TestCase):
                     "name": {"last": "Morgan Hitchcock", "name": "Tobie"},
                 }
             ],
-            outcome,
+            outcome[0]["result"],
         )
 
 
