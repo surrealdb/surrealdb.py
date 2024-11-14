@@ -5,7 +5,7 @@ Handles the integration tests for creating and deleting using the create functio
 from typing import List
 from unittest import IsolatedAsyncioTestCase, main
 
-from surrealdb import AsyncSurrealDB
+from surrealdb import AsyncSurrealDB, RecordID
 from tests.integration.connection_params import TestConnectionParams
 
 
@@ -35,8 +35,8 @@ class TestAsyncCreate(IsolatedAsyncioTestCase):
         outcome = await self.db.query("SELECT * FROM user;")
         self.assertEqual(
             [
-                {"id": "user:jaime", "name": "Jaime"},
-                {"id": "user:tobie", "name": "Tobie"},
+                {"id": RecordID('user', 'jaime'), "name": "Jaime"},
+                {"id": RecordID('user', 'tobie'), "name": "Tobie"},
             ],
             outcome[0]['result'],
         )
@@ -46,10 +46,10 @@ class TestAsyncCreate(IsolatedAsyncioTestCase):
         await self.test_create_ql()
 
         outcome = await self.db.query("DELETE user;")
-        self.assertEqual([], outcome)
+        self.assertEqual([], outcome[0]['result'])
 
         outcome = await self.db.query("SELECT * FROM user;")
-        self.assertEqual([], outcome)
+        self.assertEqual([], outcome[0]['result'])
 
     async def test_create_person_with_tags_ql(self):
         self.queries = ["DELETE person;"]
@@ -68,14 +68,14 @@ class TestAsyncCreate(IsolatedAsyncioTestCase):
         self.assertEqual(
             [
                 {
-                    "id": "person:⟨失败⟩",
+                    "id": RecordID.parse("person:⟨失败⟩"),
                     "pass": "*æ失败",
                     "really": True,
                     "tags": ["python", "documentation"],
                     "user": "me",
                 }
             ],
-            outcome,
+            outcome[0]['result'],
         )
 
     async def test_create_person_with_tags(self):
@@ -92,7 +92,7 @@ class TestAsyncCreate(IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             {
-                "id": "person:⟨失败⟩",
+                "id": RecordID.parse("person:⟨失败⟩"),
                 "pass": "*æ失败",
                 "really": False,
                 "tags": ["python", "test"],

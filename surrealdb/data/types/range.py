@@ -6,12 +6,14 @@ class Bound:
         pass
 
 
+@dataclass
 class BoundIncluded(Bound):
     def __init__(self, value):
         super().__init__()
         self.value = value
 
 
+@dataclass
 class BoundExcluded(Bound):
     def __init__(self, value):
         super().__init__()

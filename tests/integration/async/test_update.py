@@ -6,7 +6,7 @@ import asyncio
 from typing import List
 from unittest import IsolatedAsyncioTestCase, main
 
-from surrealdb import AsyncSurrealDB
+from surrealdb import AsyncSurrealDB, RecordID
 from tests.integration.connection_params import TestConnectionParams
 
 
@@ -37,12 +37,12 @@ class TestAsyncUpdate(IsolatedAsyncioTestCase):
         self.assertEqual(
             [
                 {
-                    "id": "user:jaime",
+                    "id": RecordID.parse("user:jaime"),
                     "lastname": "Morgan Hitchcock",
                     "name": "Jaime",
                 },
                 {
-                    "id": "user:tobie",
+                    "id": RecordID.parse("user:tobie"),
                     "lastname": "Morgan Hitchcock",
                     "name": "Tobie",
                 },
@@ -77,7 +77,7 @@ class TestAsyncUpdate(IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             {
-                "id": "person:⟨失败⟩",
+                "id": RecordID.parse("person:⟨失败⟩"),
                 "user": "still me",
                 "pass": "*æ失败",
                 "really": False,

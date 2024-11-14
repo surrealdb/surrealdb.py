@@ -5,7 +5,7 @@ Handles the integration tests for creating and deleting using the create functio
 from typing import List
 from unittest import TestCase, main
 
-from surrealdb import SurrealDB
+from surrealdb import SurrealDB, RecordID
 from tests.integration.connection_params import TestConnectionParams
 
 
@@ -32,8 +32,8 @@ class TestCreate(TestCase):
         outcome = self.db.query("SELECT * FROM user;")
         self.assertEqual(
             [
-                {"id": "user:jaime", "name": "Jaime"},
-                {"id": "user:tobie", "name": "Tobie"},
+                {"id": RecordID.parse("user:jaime"), "name": "Jaime"},
+                {"id": RecordID.parse("user:tobie"), "name": "Tobie"},
             ],
             outcome[0]["result"],
         )
@@ -86,7 +86,7 @@ class TestCreate(TestCase):
         )
         self.assertEqual(
             {
-                "id": "person:⟨失败⟩",
+                "id": RecordID.parse("person:⟨失败⟩"),
                 "pass": "*æ失败",
                 "really": False,
                 "tags": ["python", "test"],

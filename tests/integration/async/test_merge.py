@@ -5,7 +5,7 @@ Tests the Update operation of the AsyncSurrealDB class with query and merge func
 from typing import List
 from unittest import IsolatedAsyncioTestCase, main
 
-from surrealdb import AsyncSurrealDB
+from surrealdb import AsyncSurrealDB, RecordID
 from tests.integration.connection_params import TestConnectionParams
 
 
@@ -42,8 +42,8 @@ class TestAsyncHttpMerge(IsolatedAsyncioTestCase):
         outcome = await self.db.query("SELECT * FROM user;")
         self.assertEqual(
             [
-                {"active": True, "id": "user:jaime", "name": "Jaime"},
-                {"active": True, "id": "user:tobie", "name": "Tobie"},
+                {"active": True, "id": RecordID.parse("user:jaime"), "name": "Jaime"},
+                {"active": True, "id": RecordID.parse("user:tobie"), "name": "Tobie"},
             ],
             outcome[0]['result']
 

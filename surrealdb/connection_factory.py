@@ -1,3 +1,4 @@
+import logging
 from urllib.parse import urlparse
 
 from surrealdb.connection import Connection
@@ -8,14 +9,18 @@ from surrealdb.errors import SurrealDbConnectionError
 
 
 def create_connection_factory(url: str) -> Connection:
+    logger: logging.Logger = logging.getLogger(__name__)
+
     parsed_url = urlparse(url)
     if parsed_url.scheme not in ALLOWED_CONNECTION_SCHEMES:
         raise SurrealDbConnectionError("invalid scheme. allowed schemes are", "".join(ALLOWED_CONNECTION_SCHEMES))
 
     if parsed_url.scheme in WS_CONNECTION_SCHEMES:
-        return WebsocketConnection(url)
+        logger.debug("websocket url detected, creating a websocket connection")
+        return WebsocketConnection(url, logger)
 
     if parsed_url.scheme in HTTP_CONNECTION_SCHEMES:
-        return HTTPConnection(url)
+        logger.debug("http url detected, creating a http connection")
+        return HTTPConnection(url, logger)
 
     raise Exception('no connection type available')

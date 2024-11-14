@@ -233,4 +233,20 @@ class AsyncSurrealDB:
         """
         return await self.__connection.send('update', thing, data)
 
+    async def live(self, thing: Union[str, Table], diff: Optional[bool] = False) -> Union[List[dict], dict]:
+        """
+        Live initiates a live query for a specified table name.
 
+        :param thing: The Table tquery.
+        :param diff: If set to true, live notifications will contain an array of JSON Patches instead of the entire record
+        :return: the live query uuid
+        """
+        return await self.__connection.send('live', thing, diff)
+
+    async def kill(self, live_query_id: str) -> None:
+        """
+        This kills an active live query
+
+        :param live_query_id: The Table or Record ID to merge into.
+        """
+        return await self.__connection.send('kill', live_query_id)

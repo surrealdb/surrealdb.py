@@ -5,7 +5,7 @@ Tests the Set operation of the AsyncSurrealDB class.
 from typing import List
 from unittest import main, IsolatedAsyncioTestCase
 
-from surrealdb import AsyncSurrealDB
+from surrealdb import AsyncSurrealDB, RecordID
 from tests.integration.connection_params import TestConnectionParams
 
 
@@ -34,7 +34,7 @@ class TestAsyncSet(IsolatedAsyncioTestCase):
         self.assertEqual(
             [
                 {
-                    "id": "person:100",
+                    "id": RecordID.parse("person:100"),
                     "name": "Tobie",
                     "company": "SurrealDB",
                     "skills": ["Rust", "Go", "JavaScript"],
@@ -59,7 +59,7 @@ class TestAsyncSet(IsolatedAsyncioTestCase):
         self.assertEqual(
             [
                 {
-                    "id": "person:100",
+                    "id": RecordID.parse("person:100"),
                     "name": {"last": "Morgan Hitchcock", "name": "Tobie"},
                 }
             ],

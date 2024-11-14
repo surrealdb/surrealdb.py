@@ -10,11 +10,11 @@ class SurrealDbConnectionError(SurrealDbError):
 
 class SurrealDbDecodeError(SurrealDbError):
     """
-    Exceptions from connections
+    Exceptions from Decoding responses
     """
 
 
 class SurrealDbEncodeError(SurrealDbError):
     """
-    Exceptions from connections
+    Exceptions from encoding requests
     """

@@ -1,13 +1,15 @@
-from typing import Optional, Tuple
+import logging
+from typing import Tuple
 from websockets import Subprotocol, ConnectionClosed
+
 from surrealdb.connection import Connection
 from surrealdb.errors import SurrealDbConnectionError
 from websockets.asyncio.client import connect
 
 
 class WebsocketConnection(Connection):
-    def __init__(self, base_url: str, namespace: Optional[str] = None, database: Optional[str] = None):
-        super().__init__(base_url, namespace, database)
+    def __init__(self, base_url: str, logger: logging.Logger):
+        super().__init__(base_url, logger)
 
         self._ws = None
 

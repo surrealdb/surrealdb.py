@@ -272,3 +272,23 @@ class SurrealDB:
         """
         loop_manager = AsyncioRuntime()
         return loop_manager.loop.run_until_complete(self.__connection.send('update', thing, data))
+
+    def live(self, thing: Union[str, Table], diff: Optional[bool] = False) -> Union[List[dict], dict]:
+        """
+        Live initiates a live query for a specified table name.
+
+        :param thing: The Table tquery.
+        :param diff: If set to true, live notifications will contain an array of JSON Patches instead of the entire record
+        :return: the live query uuid
+        """
+        loop_manager = AsyncioRuntime()
+        return loop_manager.loop.run_until_complete(self.__connection.send('live', thing, diff))
+
+    def kill(self, live_query_id: str) -> None:
+        """
+        This kills an active live query
+
+        :param live_query_id: The Table or Record ID to merge into.
+        """
+        loop_manager = AsyncioRuntime()
+        return loop_manager.loop.run_until_complete(self.__connection.send('kill', live_query_id))

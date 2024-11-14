@@ -18,6 +18,7 @@ class HTTPConnection(Connection):
 
         response = requests.get(self._base_url + '/health')
         if response.status_code != 200:
+            self._logger.debug("HTTP health check successful")
             raise SurrealDbConnectionError('connection failed. check server is up and base url is correct')
 
     async def _make_request(self, request_payload: bytes) -> Tuple[bool, bytes]:

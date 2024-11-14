@@ -5,7 +5,7 @@ Tests the Update operation of the AsyncSurrealDB class with query and update fun
 from typing import List
 from unittest import TestCase, main
 
-from surrealdb import SurrealDB
+from surrealdb import SurrealDB, RecordID
 from tests.integration.connection_params import TestConnectionParams
 
 
@@ -34,8 +34,8 @@ class TestAsyncHttpUpdate(TestCase):
         )
         self.assertEqual(
             [
-                {"id": "user:jaime", "lastname": "Morgan Hitchcock", "name": "Jaime"},
-                {"id": "user:tobie", "lastname": "Morgan Hitchcock", "name": "Tobie"},
+                {"id": RecordID.parse("user:jaime"), "lastname": "Morgan Hitchcock", "name": "Jaime"},
+                {"id": RecordID.parse("user:tobie"), "lastname": "Morgan Hitchcock", "name": "Tobie"},
             ],
             outcome[0]["result"],
         )
@@ -65,7 +65,7 @@ class TestAsyncHttpUpdate(TestCase):
         )
         self.assertEqual(
             {
-                "id": "person:⟨失败⟩",
+                "id": RecordID.parse("person:⟨失败⟩"),
                 "user": "still me",
                 "pass": "*æ失败",
                 "really": False,
