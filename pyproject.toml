@@ -1,2 +1,9 @@
+[tool.poetry]
+name = "surrealdb"
+version = "0.1.0"
+description = ""
+authors = ["Maxwell Flitton <>", "Remi A <mail4remi@yahoo.com>"]
+readme = "README.md"
+
 [build-system]
 requires = ["setuptools", "wheel", "setuptools-rust"]

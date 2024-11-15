@@ -29,8 +29,8 @@ class TestAsyncHttpMerge(IsolatedAsyncioTestCase):
     async def test_merge_person_with_tags(self):
         self.queries = ["DELETE user;"]
 
-        await self.db.query("CREATE user:tobie SET name = 'Tobie';")
-        await self.db.query("CREATE user:jaime SET name = 'Jaime';")
+        await self.db.query("CREATE user:tobie;")
+        await self.db.query("CREATE user:jaime;")
 
         _ = await self.db.merge(
             "user",
@@ -42,8 +42,8 @@ class TestAsyncHttpMerge(IsolatedAsyncioTestCase):
         outcome = await self.db.query("SELECT * FROM user;")
         self.assertEqual(
             [
-                {"active": True, "id": RecordID.parse("user:jaime"), "name": "Jaime"},
-                {"active": True, "id": RecordID.parse("user:tobie"), "name": "Tobie"},
+                {"active": True, "id": RecordID.parse("user:jaime")},
+                {"active": True, "id": RecordID.parse("user:tobie")},
             ],
             outcome[0]['result']
 

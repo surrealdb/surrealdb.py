@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Union
 
-from surrealdb import Table, RecordID
+from surrealdb.data.types.table import Table
+from surrealdb.data.types.record_id import RecordID
 
 
 @dataclass
