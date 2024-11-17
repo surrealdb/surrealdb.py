@@ -82,3 +82,6 @@ Cargo.lock
 integration_tests/flask/app/surreal.py/
 integration_tests/package-lock.json
 integration_tests/node_modules/
+
+clog/
+manifest/
