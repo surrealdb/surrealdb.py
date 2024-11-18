@@ -227,7 +227,7 @@ class SurrealDB:
             diff = False
 
         loop_manager = AsyncioRuntime()
-        return loop_manager.loop.run_until_complete(self.__connection.send('insert', thing, patches, diff))
+        return loop_manager.loop.run_until_complete(self.__connection.send('patch', thing, patches, diff))
 
     def update(self, thing: Union[str, RecordID, Table], data: dict):
         """
@@ -271,7 +271,7 @@ class SurrealDB:
         :return: the updated resource such as an individual row or a list of rows
         """
         loop_manager = AsyncioRuntime()
-        return loop_manager.loop.run_until_complete(self.__connection.send('update', thing, data))
+        return loop_manager.loop.run_until_complete(self.__connection.send('merge', thing, data))
 
     def live(self, thing: Union[str, Table], diff: Optional[bool] = False) -> Union[List[dict], dict]:
         """
@@ -288,7 +288,7 @@ class SurrealDB:
         """
         This kills an active live query
 
-        :param live_query_id: The Table or Record ID to merge into.
+        :param live_query_id: The UUID of the live query to kill.
         """
         loop_manager = AsyncioRuntime()
         return loop_manager.loop.run_until_complete(self.__connection.send('kill', live_query_id))
