@@ -55,7 +55,7 @@ class TestAsyncHttpUpdate(TestCase):
         )
 
         outcome = self.db.update(
-            "person:`失败`",
+            RecordID.parse("person:失败"),
             {
                 "user": "still me",
                 "pass": "*æ失败",
@@ -63,9 +63,12 @@ class TestAsyncHttpUpdate(TestCase):
                 "tags": ["python", "test"],
             },
         )
+
+        print("outcome: ", outcome)
+
         self.assertEqual(
             {
-                "id": RecordID.parse("person:⟨失败⟩"),
+                "id": RecordID.parse("person:失败"),
                 "user": "still me",
                 "pass": "*æ失败",
                 "really": False,

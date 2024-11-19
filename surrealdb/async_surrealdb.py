@@ -191,7 +191,7 @@ class AsyncSurrealDB:
         """
         if diff is None:
             diff = False
-        return await self.__connection.send('insert', thing, patches, diff)
+        return await self.__connection.send('patch', thing, patches, diff)
 
     async def update(self, thing: Union[str, RecordID, Table], data: dict):
         """
@@ -231,7 +231,7 @@ class AsyncSurrealDB:
         :param data: The content for the record.
         :return: the updated resource such as an individual row or a list of rows
         """
-        return await self.__connection.send('update', thing, data)
+        return await self.__connection.send('merge', thing, data)
 
     async def live(self, thing: Union[str, Table], diff: Optional[bool] = False) -> Union[List[dict], dict]:
         """
@@ -247,6 +247,6 @@ class AsyncSurrealDB:
         """
         This kills an active live query
 
-        :param live_query_id: The Table or Record ID to merge into.
+        :param live_query_id: The UUID of the live query to kill.
         """
         return await self.__connection.send('kill', live_query_id)

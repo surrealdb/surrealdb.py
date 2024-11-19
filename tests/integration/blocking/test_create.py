@@ -42,7 +42,7 @@ class TestCreate(TestCase):
         self.queries = ["DELETE user;"]
         self.test_create_ql()
         outcome = self.db.query("DELETE user;")
-        self.assertEqual([], outcome)
+        self.assertEqual([], outcome[0]["result"])
 
         outcome = self.db.query("SELECT * FROM user;")
         self.assertEqual([], outcome[0]["result"])
@@ -63,7 +63,7 @@ class TestCreate(TestCase):
         self.assertEqual(
             [
                 {
-                    "id": "person:⟨失败⟩",
+                    "id": RecordID.parse("person:失败"),
                     "pass": "*æ失败",
                     "really": True,
                     "tags": ["python", "documentation"],
@@ -76,7 +76,7 @@ class TestCreate(TestCase):
     def test_create_person_with_tags(self):
         self.queries = ["DELETE person;"]
         outcome = self.db.create(
-            "person:`失败`",
+            RecordID.parse("person:失败"),
             {
                 "user": "still me",
                 "pass": "*æ失败",
@@ -86,7 +86,7 @@ class TestCreate(TestCase):
         )
         self.assertEqual(
             {
-                "id": RecordID.parse("person:⟨失败⟩"),
+                "id": RecordID.parse("person:失败"),
                 "pass": "*æ失败",
                 "really": False,
                 "tags": ["python", "test"],
