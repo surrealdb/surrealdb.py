@@ -67,7 +67,7 @@ class TestAsyncUpdate(IsolatedAsyncioTestCase):
 
         outcome = await self.db.update(
             # "person:`失败`",
-            "person:`失败`",
+            RecordID.parse("person:失败"),
             {
                 "user": "still me",
                 "pass": "*æ失败",
@@ -77,7 +77,7 @@ class TestAsyncUpdate(IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             {
-                "id": RecordID.parse("person:⟨失败⟩"),
+                "id": RecordID.parse("person:失败"),
                 "user": "still me",
                 "pass": "*æ失败",
                 "really": False,
