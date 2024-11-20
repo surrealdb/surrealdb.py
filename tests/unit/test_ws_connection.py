@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from unittest import IsolatedAsyncioTestCase
 
@@ -18,9 +19,12 @@ class TestWSConnection(IsolatedAsyncioTestCase):
         live_id = await self.ws_con.send("live", "users")
         print("Live id: ", live_id)
 
-        queue = await self.ws_con.live_notifications(live_id)
-        # while True:
-        #     data = await queue.get()
-        #     print(data)
+        live_queue = await self.ws_con.live_notifications(live_id)
+
+        await self.ws_con.send("query", "CREATE users;")
+
+        notification_data = await asyncio.wait_for(live_queue.get(), 10)  # Set timeout
+        self.assertEqual(notification_data.get("id"), live_id)
+        self.assertEqual(notification_data.get("action"), "CREATE")
 
 

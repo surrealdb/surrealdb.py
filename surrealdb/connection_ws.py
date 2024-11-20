@@ -76,4 +76,4 @@ class WebsocketConnection(Connection):
 
             live_id = response_data.get("result").get("id")
             queue = self.get_response_queue(ResponseType.NOTIFICATION, live_id)
-            await queue.put(response_data)
+            await queue.put(response_data.get("result"))
