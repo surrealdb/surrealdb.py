@@ -1,11 +1,18 @@
 import secrets
 import string
 import logging
+import threading
 
-from typing import Optional, Tuple
+from typing import Optional
 from surrealdb.constants import REQUEST_ID_LENGTH
 from surrealdb.data.cbor import encode, decode
-from surrealdb.errors import SurrealDbConnectionError
+from asyncio import Queue
+
+
+class ResponseType:
+    SEND = 1
+    NOTIFICATION = 2
+    ERROR = 3
 
 
 class Connection:
@@ -17,6 +24,16 @@ class Connection:
         self._auth_token = None
         self._namespace = None
         self._database = None
+        self._locks = {
+            ResponseType.SEND: threading.Lock(),
+            ResponseType.NOTIFICATION: threading.Lock(),
+            ResponseType.ERROR: threading.Lock(),
+        }
+        self._queues = {
+            ResponseType.SEND: dict(),
+            ResponseType.NOTIFICATION: dict(),
+            ResponseType.ERROR: dict(),
+        }
 
         self._base_url = base_url
         self._logger = logger
@@ -30,7 +47,7 @@ class Connection:
     async def close(self) -> None:
         pass
 
-    async def _make_request(self, request_payload: bytes) -> Tuple[bool, bytes]:
+    async def _make_request(self, request_data: dict, encoder, decoder):
         pass
 
     async def set(self, key: str, value):
@@ -39,37 +56,54 @@ class Connection:
     async def unset(self, key: str):
         pass
 
+    def set_token(self, token: Optional[str] = None) -> None:
+        self._auth_token = token
+
+    def create_response_queue(self, response_type: ResponseType, queue_id: str):
+        lock = self._locks[response_type]
+        with lock:
+            queues = self._queues.get(response_type)
+            queue = None
+            if len(queues) == 0 or queues.get(queue_id) is None:
+                queue = Queue(maxsize=0)
+                queues[queue_id] = queue
+                self._queues[response_type] = queues
+
+            return queue
+
+    def get_response_queue(self, response_type: ResponseType, queue_id: str):
+        lock = self._locks[response_type]
+        with lock:
+            return self._queues.get(response_type).get(queue_id)
+
+    def remove_response_queue(self, response_type: ResponseType, queue_id: str):
+        lock = self._locks[response_type]
+        with lock:
+            self._queues.get(response_type).pop(queue_id, None)
+
     async def send(self, method: str, *params):
-        req_id = request_id(REQUEST_ID_LENGTH)
         request_data = {
-            'id': req_id,
+            'id': request_id(REQUEST_ID_LENGTH),
             'method': method,
-            'params': params
+            'params': params,
         }
-        self._logger.debug(f"Request {req_id}:", request_data)
+        self._logger.debug(f"Request {request_data.get('id')}:", request_data)
 
         try:
-            successful, response_data = await self._make_request(encode(request_data))
-            response = decode(response_data)
+            result = await self._make_request(request_data, encoder=encode, decoder=decode)
 
-            if response.get("error") is not None or successful is not True:
-                error_msg = "request to rpc endpoint failed"
-                if response.get("error") is not None:
-                    error_msg = response.get("error").get("message")
-                raise SurrealDbConnectionError(error_msg)
-
-            self._logger.debug(f"Response {req_id}:", response_data.hex())
-            self._logger.debug(f"Decoded Result {req_id}:", response)
+            self._logger.debug(f"Result {request_data.get('id')}:", result)
             self._logger.debug("----------------------------------------------------------------------------------")
 
-            return response.get("result")
+            return result
         except Exception as e:
-            self._logger.debug(f"Error {req_id}:", e)
+            self._logger.debug(f"Error {request_data.get('id')}:", e)
             self._logger.debug("----------------------------------------------------------------------------------")
             raise e
 
-    def set_token(self, token: Optional[str] = None) -> None:
-        self._auth_token = token
+    async def live_notifications(self, live_query_id: str):
+        queue = self.create_response_queue(ResponseType.NOTIFICATION, live_query_id)
+        return queue
 
 
 def request_id(length: int) -> str:
