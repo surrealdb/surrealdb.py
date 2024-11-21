@@ -17,7 +17,7 @@ class TestConnectionParams:
 
     @property
     def protocol(self) -> str:
-        return os.environ.get("CONNECTION_PROTOCOL", "http")
+        return os.environ.get("CONNECTION_PROTOCOL", "ws")
 
     @property
     def port(self) -> int:
