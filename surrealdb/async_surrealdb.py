@@ -18,8 +18,10 @@ async with SurrealDB("ws://localhost:8080") as db:
     await db.use("ns", "db_name")
 ```
 """
+
 import asyncio
 import uuid
+
 from typing import Optional, TypeVar, Union, List
 
 from surrealdb.constants import DEFAULT_CONNECTION_URL

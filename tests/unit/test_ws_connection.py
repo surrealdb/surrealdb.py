@@ -1,5 +1,6 @@
 import asyncio
 import logging
+
 from unittest import IsolatedAsyncioTestCase
 
 from surrealdb.connection_ws import WebsocketConnection
@@ -26,5 +27,3 @@ class TestWSConnection(IsolatedAsyncioTestCase):
         notification_data = await asyncio.wait_for(live_queue.get(), 10)  # Set timeout
         self.assertEqual(notification_data.get("id"), live_id)
         self.assertEqual(notification_data.get("action"), "CREATE")
-
-
