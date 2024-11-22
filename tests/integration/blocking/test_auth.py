@@ -7,23 +7,22 @@ from unittest import TestCase, main
 
 from surrealdb import SurrealDB
 from surrealdb.errors import SurrealDbError
-from tests.integration.url import Url
+from tests.integration.connection_params import TestConnectionParams
 
 
 class TestAuth(TestCase):
     def setUp(self):
-        self.connection = SurrealDB(Url().url)
+        self.params = TestConnectionParams()
+        self.db = SurrealDB(self.params.url)
+
+        self.db.connect()
+        self.db.use(self.params.namespace, self.params.database)
 
     def tearDown(self):
-        pass
+        self.db.close()
 
     def login(self, username: str, password: str) -> None:
-        self.connection.signin(
-            {
-                "username": username,
-                "password": password,
-            }
-        )
+        self.db.sign_in(username, password)
 
     def test_login_success(self):
         self.login("root", "root")
@@ -32,23 +31,13 @@ class TestAuth(TestCase):
         with self.assertRaises(SurrealDbError) as context:
             self.login("root", "wrong")
 
-        if os.environ.get("CONNECTION_PROTOCOL", "http") == "http":
-            self.assertEqual(True, "(401 Unauthorized)" in str(context.exception))
-        else:
-            self.assertEqual(
-                '"There was a problem with authentication"', str(context.exception)
-            )
+        self.assertEqual(True, "There was a problem with authentication" in str(context.exception))
 
     def test_login_wrong_username(self):
         with self.assertRaises(SurrealDbError) as context:
             self.login("wrong", "root")
 
-        if os.environ.get("CONNECTION_PROTOCOL", "http") == "http":
-            self.assertEqual(True, "(401 Unauthorized)" in str(context.exception))
-        else:
-            self.assertEqual(
-                '"There was a problem with authentication"', str(context.exception)
-            )
+        self.assertEqual(True, "There was a problem with authentication" in str(context.exception))
 
 
 if __name__ == "__main__":

@@ -5,44 +5,44 @@ Tests the Update operation of the AsyncSurrealDB class with query and update fun
 from typing import List
 from unittest import TestCase, main
 
-from surrealdb import SurrealDB
-from tests.integration.url import Url
+from surrealdb import SurrealDB, RecordID
+from tests.integration.connection_params import TestConnectionParams
 
 
 class TestAsyncHttpUpdate(TestCase):
     def setUp(self):
-        self.connection = SurrealDB(Url().url)
+        self.params = TestConnectionParams()
+        self.db = SurrealDB(self.params.url)
+
         self.queries: List[str] = []
 
-        self.connection.signin(
-            {
-                "username": "root",
-                "password": "root",
-            }
-        )
+        self.db.connect()
+        self.db.use(self.params.namespace, self.params.database)
+        self.db.sign_in("root", "root")
 
     def tearDown(self):
         for query in self.queries:
-            self.connection.query(query)
+            self.db.query(query)
+        self.db.close()
 
     def test_update_ql(self):
         self.queries = ["DELETE user;"]
-        self.connection.query("CREATE user:tobie SET name = 'Tobie';")
-        self.connection.query("CREATE user:jaime SET name = 'Jaime';")
-        outcome = self.connection.query(
+        self.db.query("CREATE user:tobie SET name = 'Tobie';")
+        self.db.query("CREATE user:jaime SET name = 'Jaime';")
+        outcome = self.db.query(
             "UPDATE user SET lastname = 'Morgan Hitchcock';"
         )
         self.assertEqual(
             [
-                {"id": "user:jaime", "lastname": "Morgan Hitchcock", "name": "Jaime"},
-                {"id": "user:tobie", "lastname": "Morgan Hitchcock", "name": "Tobie"},
+                {"id": RecordID.parse("user:jaime"), "lastname": "Morgan Hitchcock", "name": "Jaime"},
+                {"id": RecordID.parse("user:tobie"), "lastname": "Morgan Hitchcock", "name": "Tobie"},
             ],
-            outcome,
+            outcome[0]["result"],
         )
 
     def test_update_person_with_tags(self):
         self.queries = ["DELETE person;"]
-        _ = self.connection.query(
+        _ = self.db.query(
             """
             CREATE person:`失败` CONTENT
             {
@@ -54,8 +54,8 @@ class TestAsyncHttpUpdate(TestCase):
             """
         )
 
-        outcome = self.connection.update(
-            "person:`失败`",
+        outcome = self.db.update(
+            RecordID.parse("person:失败"),
             {
                 "user": "still me",
                 "pass": "*æ失败",
@@ -63,9 +63,12 @@ class TestAsyncHttpUpdate(TestCase):
                 "tags": ["python", "test"],
             },
         )
+
+        print("outcome: ", outcome)
+
         self.assertEqual(
             {
-                "id": "person:⟨失败⟩",
+                "id": RecordID.parse("person:失败"),
                 "user": "still me",
                 "pass": "*æ失败",
                 "really": False,

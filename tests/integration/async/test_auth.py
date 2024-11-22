@@ -2,56 +2,38 @@
 Handles the integration tests for logging into the database.
 """
 
-import asyncio
-import os
-from unittest import TestCase, main
+from unittest import IsolatedAsyncioTestCase, main
 
-from surrealdb import AsyncSurrealDB
-from tests.integration.url import Url
+from surrealdb import AsyncSurrealDB, SurrealDbConnectionError
+from tests.integration.connection_params import TestConnectionParams
 
 
-class TestAsyncAuth(TestCase):
-    def setUp(self):
-        self.connection = AsyncSurrealDB(Url().url)
+class TestAsyncAuth(IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.params = TestConnectionParams()
+        self.db = AsyncSurrealDB(self.params.url)
 
-    def tearDown(self):
-        pass
+        await self.db.connect()
+        await self.db.use(self.params.namespace, self.params.database)
 
-    async def login(self, username: str, password: str):
-        await self.connection.connect()
-        outcome = await self.connection.signin(
-            {
-                "username": username,
-                "password": password,
-            }
-        )
-        return outcome
+    async def asyncTearDown(self):
+        await self.db.close()
 
-    def test_login_success(self):
-        outcome = asyncio.run(self.login("root", "root"))
-        self.assertEqual(None, outcome)
+    async def test_login_success(self):
+        outcome = await self.db.sign_in("root", "root")
+        self.assertNotEqual(None, outcome)
 
-    def test_login_wrong_password(self):
-        with self.assertRaises(RuntimeError) as context:
-            asyncio.run(self.login("root", "wrong"))
+    async def test_login_wrong_password(self):
+        with self.assertRaises(SurrealDbConnectionError) as context:
+            await self.db.sign_in("root", "wrong")
 
-        if os.environ.get("CONNECTION_PROTOCOL", "http") == "http":
-            self.assertEqual(True, "(401 Unauthorized)" in str(context.exception))
-        else:
-            self.assertEqual(
-                '"There was a problem with authentication"', str(context.exception)
-            )
+        self.assertEqual(True, "There was a problem with authentication" in str(context.exception))
 
-    def test_login_wrong_username(self):
-        with self.assertRaises(RuntimeError) as context:
-            asyncio.run(self.login("wrong", "root"))
+    async def test_login_wrong_username(self):
+        with self.assertRaises(SurrealDbConnectionError) as context:
+            await self.db.sign_in("wrong", "root")
 
-        if os.environ.get("CONNECTION_PROTOCOL", "http") == "http":
-            self.assertEqual(True, "(401 Unauthorized)" in str(context.exception))
-        else:
-            self.assertEqual(
-                '"There was a problem with authentication"', str(context.exception)
-            )
+        self.assertEqual(True, "There was a problem with authentication" in str(context.exception))
 
 
 if __name__ == "__main__":

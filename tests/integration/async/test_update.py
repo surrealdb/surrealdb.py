@@ -4,100 +4,87 @@ Tests the Update operation of the AsyncSurrealDB class with query and update fun
 
 import asyncio
 from typing import List
-from unittest import TestCase, main
+from unittest import IsolatedAsyncioTestCase, main
 
-from surrealdb import AsyncSurrealDB
-from tests.integration.url import Url
+from surrealdb import AsyncSurrealDB, RecordID
+from tests.integration.connection_params import TestConnectionParams
 
 
-class TestAsyncUpdate(TestCase):
-    def setUp(self):
-        self.connection = AsyncSurrealDB(Url().url)
+class TestAsyncUpdate(IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.params = TestConnectionParams()
+        self.db = AsyncSurrealDB(self.params.url)
+
         self.queries: List[str] = []
 
-        async def login():
-            await self.connection.connect()
-            await self.connection.signin(
-                {
-                    "username": "root",
-                    "password": "root",
-                }
-            )
+        await self.db.connect()
+        await self.db.use(self.params.namespace, self.params.database)
+        await self.db.sign_in("root", "root")
 
-        asyncio.run(login())
+    async def asyncTearDown(self):
+        for query in self.queries:
+            await self.db.query(query)
+        await self.db.close()
 
-    def tearDown(self):
-        async def teardown_queries():
-            for query in self.queries:
-                await self.connection.query(query)
-
-        asyncio.run(teardown_queries())
-
-    def test_update_ql(self):
+    async def test_update_ql(self):
         self.queries = ["DELETE user;"]
 
-        async def update():
-            await self.connection.query("CREATE user:tobie SET name = 'Tobie';")
-            await self.connection.query("CREATE user:jaime SET name = 'Jaime';")
-            outcome = await self.connection.query(
-                "UPDATE user SET lastname = 'Morgan Hitchcock';"
-            )
-            self.assertEqual(
-                [
-                    {
-                        "id": "user:jaime",
-                        "lastname": "Morgan Hitchcock",
-                        "name": "Jaime",
-                    },
-                    {
-                        "id": "user:tobie",
-                        "lastname": "Morgan Hitchcock",
-                        "name": "Tobie",
-                    },
-                ],
-                outcome,
-            )
+        await self.db.query("CREATE user:tobie SET name = 'Tobie';")
+        await self.db.query("CREATE user:jaime SET name = 'Jaime';")
+        outcome = await self.db.query(
+            "UPDATE user SET lastname = 'Morgan Hitchcock';"
+        )
+        self.assertEqual(
+            [
+                {
+                    "id": RecordID.parse("user:jaime"),
+                    "lastname": "Morgan Hitchcock",
+                    "name": "Jaime",
+                },
+                {
+                    "id": RecordID.parse("user:tobie"),
+                    "lastname": "Morgan Hitchcock",
+                    "name": "Tobie",
+                },
+            ],
+            outcome[0]['result'],
+        )
 
-        asyncio.run(update())
-
-    def test_update_person_with_tags(self):
+    async def test_update_person_with_tags(self):
         self.queries = ["DELETE person;"]
 
-        async def update_person_with_tags():
-            _ = await self.connection.query(
-                """
-                CREATE person:`失败` CONTENT
-                {
-                    "user": "me",
-                    "pass": "*æ失败",
-                    "really": True,
-                    "tags": ["python", "documentation"],
-                };
-                """
-            )
+        _ = await self.db.query(
+            """
+            CREATE person:`失败` CONTENT
+            {
+                "user": "me",
+                "pass": "*æ失败",
+                "really": True,
+                "tags": ["python", "documentation"],
+            };
+            """
+        )
 
-            outcome = await self.connection.update(
-                # "person:`失败`",
-                "person:`失败`",
-                {
-                    "user": "still me",
-                    "pass": "*æ失败",
-                    "really": False,
-                    "tags": ["python", "test"],
-                },
-            )
-            self.assertEqual(
-                {
-                    "id": "person:⟨失败⟩",
-                    "user": "still me",
-                    "pass": "*æ失败",
-                    "really": False,
-                    "tags": ["python", "test"],
-                },
-                outcome,
-            )
-
-        asyncio.run(update_person_with_tags())
+        outcome = await self.db.update(
+            # "person:`失败`",
+            RecordID.parse("person:失败"),
+            {
+                "user": "still me",
+                "pass": "*æ失败",
+                "really": False,
+                "tags": ["python", "test"],
+            },
+        )
+        self.assertEqual(
+            {
+                "id": RecordID.parse("person:失败"),
+                "user": "still me",
+                "pass": "*æ失败",
+                "really": False,
+                "tags": ["python", "test"],
+            },
+            outcome,
+        )
 
 
 if __name__ == "__main__":

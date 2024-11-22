@@ -2,123 +2,104 @@
 Handles the integration tests for creating and deleting using the create function and QL, and delete in QL.
 """
 
-import asyncio
 from typing import List
-from unittest import TestCase, main
+from unittest import IsolatedAsyncioTestCase, main
 
-from surrealdb import AsyncSurrealDB
-from tests.integration.url import Url
+from surrealdb import AsyncSurrealDB, RecordID
+from tests.integration.connection_params import TestConnectionParams
 
 
-class TestAsyncCreate(TestCase):
-    def setUp(self):
-        self.connection = AsyncSurrealDB(Url().url)
+class TestAsyncCreate(IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.params = TestConnectionParams()
+        self.db = AsyncSurrealDB(self.params.url)
+
         self.queries: List[str] = []
 
-        async def login():
-            await self.connection.connect()
-            await self.connection.signin(
-                {
-                    "username": "root",
-                    "password": "root",
-                }
-            )
+        await self.db.connect()
+        await self.db.use(self.params.namespace, self.params.database)
+        await self.db.sign_in("root", "root")
 
-        asyncio.run(login())
+    async def asyncTearDown(self):
+        for query in self.queries:
+            await self.db.query(query)
 
-    def tearDown(self):
-        async def teardown_queries():
-            for query in self.queries:
-                await self.connection.query(query)
+        await self.db.close()
 
-        asyncio.run(teardown_queries())
-
-    def test_create_ql(self):
+    async def test_create_ql(self):
         self.queries = ["DELETE user;"]
 
-        async def create():
-            await self.connection.query("CREATE user:tobie SET name = 'Tobie';")
-            await self.connection.query("CREATE user:jaime SET name = 'Jaime';")
+        await self.db.query("CREATE user:tobie SET name = 'Tobie';")
+        await self.db.query("CREATE user:jaime SET name = 'Jaime';")
 
-            outcome = await self.connection.query("SELECT * FROM user;")
-            self.assertEqual(
-                [
-                    {"id": "user:jaime", "name": "Jaime"},
-                    {"id": "user:tobie", "name": "Tobie"},
-                ],
-                outcome,
-            )
+        outcome = await self.db.query("SELECT * FROM user;")
+        self.assertEqual(
+            [
+                {"id": RecordID('user', 'jaime'), "name": "Jaime"},
+                {"id": RecordID('user', 'tobie'), "name": "Tobie"},
+            ],
+            outcome[0]['result'],
+        )
 
-        asyncio.run(create())
-
-    def test_delete_ql(self):
+    async def test_delete_ql(self):
         self.queries = ["DELETE user;"]
-        self.test_create_ql()
+        await self.test_create_ql()
 
-        async def delete():
-            outcome = await self.connection.query("DELETE user;")
-            self.assertEqual([], outcome)
+        outcome = await self.db.query("DELETE user;")
+        self.assertEqual([], outcome[0]['result'])
 
-            outcome = await self.connection.query("SELECT * FROM user;")
-            self.assertEqual([], outcome)
+        outcome = await self.db.query("SELECT * FROM user;")
+        self.assertEqual([], outcome[0]['result'])
 
-        asyncio.run(delete())
-
-    def test_create_person_with_tags_ql(self):
+    async def test_create_person_with_tags_ql(self):
         self.queries = ["DELETE person;"]
 
-        async def create_person_with_tags():
-            outcome = await self.connection.query(
-                """
-                CREATE person:`失败` CONTENT
+        outcome = await self.db.query(
+            """
+            CREATE person:`失败` CONTENT
+            {
+                "user": "me",
+                "pass": "*æ失败",
+                "really": True,
+                "tags": ["python", "documentation"],
+            };
+            """
+        )
+        self.assertEqual(
+            [
                 {
-                    "user": "me",
+                    "id": RecordID.parse("person:⟨失败⟩"),
                     "pass": "*æ失败",
                     "really": True,
                     "tags": ["python", "documentation"],
-                };
-                """
-            )
-            self.assertEqual(
-                [
-                    {
-                        "id": "person:⟨失败⟩",
-                        "pass": "*æ失败",
-                        "really": True,
-                        "tags": ["python", "documentation"],
-                        "user": "me",
-                    }
-                ],
-                outcome,
-            )
+                    "user": "me",
+                }
+            ],
+            outcome[0]['result'],
+        )
 
-        asyncio.run(create_person_with_tags())
-
-    def test_create_person_with_tags(self):
+    async def test_create_person_with_tags(self):
         self.queries = ["DELETE person;"]
 
-        async def create_person_with_tags():
-            outcome = await self.connection.create(
-                "person:`失败`",
-                {
-                    "user": "still me",
-                    "pass": "*æ失败",
-                    "really": False,
-                    "tags": ["python", "test"],
-                },
-            )
-            self.assertEqual(
-                {
-                    "id": "person:⟨失败⟩",
-                    "pass": "*æ失败",
-                    "really": False,
-                    "tags": ["python", "test"],
-                    "user": "still me",
-                },
-                outcome,
-            )
-
-        asyncio.run(create_person_with_tags())
+        outcome = await self.db.create(
+            "person:`失败`",
+            {
+                "user": "still me",
+                "pass": "*æ失败",
+                "really": False,
+                "tags": ["python", "test"],
+            },
+        )
+        self.assertEqual(
+            {
+                "id": RecordID.parse("person:⟨失败⟩"),
+                "pass": "*æ失败",
+                "really": False,
+                "tags": ["python", "test"],
+                "user": "still me",
+            },
+            outcome,
+        )
 
 
 if __name__ == "__main__":

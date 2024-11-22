@@ -85,6 +85,7 @@ def run_tests(port: int, protocol: str) -> None:
 if __name__ == "__main__":
     port = 8000
     for version in [
+        "v2.0.0",
         "v1.2.1",
         "v1.2.0",
         "v1.0.1",

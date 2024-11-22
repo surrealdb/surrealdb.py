@@ -59,7 +59,6 @@ egg_info_dir = os.path.join(main_directory, "surrealdb.egg-info")
 build_dir = os.path.join(main_directory, "build")
 
 surrealdb_dir = os.path.join(main_directory, "surrealdb")
-embedded_rust_lib_dir = os.path.join(main_directory, "surrealdb", "rust_surrealdb.so")
 test_venv_dir = os.path.join(tests_directory, "venv")
 source_venv = os.path.join(test_venv_dir, "bin", "activate")
 
@@ -70,22 +69,12 @@ def main():
     delete_directory(dir_path=build_dir)
     delete_directory(dir_path=egg_info_dir)
     delete_directory(dir_path=target_directory)
-    delete_file(file_path=embedded_rust_lib_dir)
     print("local build: old files cleaned up")
 
-    # setup venv and build the rust lib
-    print("local build: building rust lib")
+    # setup venv
+    print("local build: setting up venv")
     os.system(f"pip install --no-cache-dir {main_directory}")
-    print("local build: rust lib built")
-
-    # move the rust lib into the surrealdb directory
-    print("local build: moving rust lib into surrealdb directory")
-    find_and_move_rust_surrealdb_file(
-        start_path=build_dir,
-        destination_path=surrealdb_dir,
-        new_name="rust_surrealdb.so",
-    )
-    print("local build: rust lib moved into surrealdb directory")
+    print("local build: venv setup done")
 
     # cleanup
     delete_directory(dir_path=build_dir)
