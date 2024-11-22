@@ -19,6 +19,9 @@ with SurrealDB("ws://localhost:8080") as db:
 ```
 """
 
+import asyncio
+import uuid
+
 from typing import Optional, TypeVar, Union, List
 
 from surrealdb.asyncio_runtime import AsyncioRuntime
@@ -273,7 +276,7 @@ class SurrealDB:
         loop_manager = AsyncioRuntime()
         return loop_manager.loop.run_until_complete(self.__connection.send('merge', thing, data))
 
-    def live(self, thing: Union[str, Table], diff: Optional[bool] = False) -> Union[List[dict], dict]:
+    def live(self, thing: Union[str, Table], diff: Optional[bool] = False) -> uuid.UUID:
         """
         Live initiates a live query for a specified table name.
 
@@ -283,6 +286,16 @@ class SurrealDB:
         """
         loop_manager = AsyncioRuntime()
         return loop_manager.loop.run_until_complete(self.__connection.send('live', thing, diff))
+
+    def live_notifications(self, live_id: Union[uuid.UUID, str]) -> asyncio.Queue:
+        """
+        Live notification returns a queue that receives notification messages from the back end.
+
+        :param live_id: The live id for the live query
+        :return: the notification queue
+        """
+        loop_manager = AsyncioRuntime()
+        return loop_manager.loop.run_until_complete(self.__connection.live_notifications(live_id))
 
     def kill(self, live_query_id: str) -> None:
         """

@@ -1,4 +1,5 @@
 import logging
+
 from urllib.parse import urlparse
 
 from surrealdb.connection import Connection
