@@ -55,9 +55,9 @@ pip install surrealdb
 Import the SDK and create the database connection:
 
 ```python
-from surrealdb import SurrealDB
+from surrealdb import Surreal
 
-db = SurrealDB("ws://localhost:8000/database/namespace")
+db = Surreal("ws://localhost:8000/rpc")
 ```
 
 Here, we can see that we defined the connection protocol as WebSocket using `ws://`. We then defined the host as `localhost` and the port as `8000`.
@@ -69,10 +69,17 @@ Now that we have our connection we need to signin:
 
 ```python
 db.signin({
-    "username": "root",
-    "password": "root",
+    "user": "root",
+    "pass": "root",
 })
 ```
+
+Now that we have signed in, we must select our database and namespace:
+
+```python
+db.use("testNamespace"), "testDatabase")
+```
+
 We can now run our queries to create some users, select them and print the outcome.
 
 ```python
@@ -92,15 +99,16 @@ The async methods work in the same way, with two main differences:
 
 ```python
 import asyncio
-from surrealdb import AsyncSurrealDB
+from surrealdb import Surreal
 
 async def main():
-    db = AsyncSurrealDB("ws://localhost:8000/database/namespace")
+    db = Surreal("ws://localhost:8000/rpc")
     await db.connect()
     await db.signin({
-        "username": "root",
-        "password": "root",
+        "user": "root",
+        "pass": "root",
     })
+    await db.use("testNamespace", "testDatabase")
     await db.query("CREATE user:tobie SET name = 'Tobie';")
     await db.query("CREATE user:jaime SET name = 'Jaime';")
     outcome = await db.query("SELECT * FROM user;")
