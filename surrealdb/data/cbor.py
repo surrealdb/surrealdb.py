@@ -3,8 +3,15 @@ import cbor2
 from surrealdb.data.types import constants
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.future import Future
-from surrealdb.data.types.geometry import GeometryPoint, GeometryLine, GeometryPolygon, GeometryMultiLine, \
-    GeometryMultiPoint, GeometryMultiPolygon, GeometryCollection
+from surrealdb.data.types.geometry import (
+    GeometryPoint,
+    GeometryLine,
+    GeometryPolygon,
+    GeometryMultiLine,
+    GeometryMultiPoint,
+    GeometryMultiPolygon,
+    GeometryCollection,
+)
 from surrealdb.data.types.range import BoundIncluded, BoundExcluded, Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
@@ -26,10 +33,14 @@ def default_encoder(encoder, obj):
         tagged = cbor2.CBORTag(constants.TAG_GEOMETRY_MULTI_LINE, obj.get_coordinates())
 
     elif isinstance(obj, GeometryMultiPoint):
-        tagged = cbor2.CBORTag(constants.TAG_GEOMETRY_MULTI_POINT, obj.get_coordinates())
+        tagged = cbor2.CBORTag(
+            constants.TAG_GEOMETRY_MULTI_POINT, obj.get_coordinates()
+        )
 
     elif isinstance(obj, GeometryMultiPolygon):
-        tagged = cbor2.CBORTag(constants.TAG_GEOMETRY_MULTI_POLYGON, obj.get_coordinates())
+        tagged = cbor2.CBORTag(
+            constants.TAG_GEOMETRY_MULTI_POLYGON, obj.get_coordinates()
+        )
 
     elif isinstance(obj, GeometryCollection):
         tagged = cbor2.CBORTag(constants.TAG_GEOMETRY_COLLECTION, obj.geometries)
@@ -56,7 +67,7 @@ def default_encoder(encoder, obj):
         tagged = cbor2.CBORTag(constants.TAG_DURATION, obj.getSecondsAndNano())
 
     else:
-        raise SurrealDbEncodeError('no encoder for type ', type(obj))
+        raise SurrealDbEncodeError("no encoder for type ", type(obj))
 
     encoder.encode(tagged)
 
@@ -105,7 +116,7 @@ def tag_decoder(decoder, tag, shareable_index=None):
         return Duration.parse(tag.value[0], tag.value[1])
 
     else:
-        raise SurrealDbDecodeError('no decoder for tag', tag.tag)
+        raise SurrealDbDecodeError("no decoder for tag", tag.tag)
 
 
 def encode(obj):

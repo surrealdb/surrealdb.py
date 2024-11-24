@@ -18,10 +18,12 @@ class WebsocketConnection(Connection):
 
     async def connect(self):
         try:
-            self._ws = await connect(self._base_url + "/rpc", subprotocols=[Subprotocol('cbor')])
+            self._ws = await connect(
+                self._base_url + "/rpc", subprotocols=[Subprotocol("cbor")]
+            )
             self._receiver_task = asyncio.create_task(self.listen_to_ws(self._ws))
         except Exception as e:
-            raise SurrealDbConnectionError('cannot connect db server', e)
+            raise SurrealDbConnectionError("cannot connect db server", e)
 
     async def use(self, namespace: str, database: str) -> None:
         self._namespace = namespace
@@ -46,19 +48,27 @@ class WebsocketConnection(Connection):
         request_payload = encoder(request_data)
 
         try:
-            queue = self.create_response_queue(ResponseType.SEND, request_data.get("id"))
+            queue = self.create_response_queue(
+                ResponseType.SEND, request_data.get("id")
+            )
             await self._ws.send(request_payload)
 
-            response_data = await asyncio.wait_for(queue.get(), WS_REQUEST_TIMEOUT)  # Set timeout
+            response_data = await asyncio.wait_for(
+                queue.get(), WS_REQUEST_TIMEOUT
+            )  # Set timeout
 
             if response_data.get("error"):
-                raise SurrealDbConnectionError(response_data.get("error").get("message"))
+                raise SurrealDbConnectionError(
+                    response_data.get("error").get("message")
+                )
             return response_data.get("result")
 
         except ConnectionClosed as e:
             raise SurrealDbConnectionError(e)
         except asyncio.TimeoutError:
-            raise SurrealDbConnectionError(f"Request timed-out after {WS_REQUEST_TIMEOUT} seconds")
+            raise SurrealDbConnectionError(
+                f"Request timed-out after {WS_REQUEST_TIMEOUT} seconds"
+            )
         except Exception as e:
             raise e
         finally:

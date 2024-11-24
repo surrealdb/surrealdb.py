@@ -18,6 +18,7 @@ with SurrealDB("ws://localhost:8080") as db:
     db.use("ns", "db_name")
 ```
 """
+
 import asyncio
 import uuid
 from typing import Optional, TypeVar, Union, List
@@ -27,7 +28,7 @@ from surrealdb.constants import DEFAULT_CONNECTION_URL
 from surrealdb.connection_factory import create_connection_factory
 from surrealdb.data import RecordID, Table, Patch
 
-_Self = TypeVar('_Self', bound='SurrealDB')
+_Self = TypeVar("_Self", bound="SurrealDB")
 
 
 class SurrealDB:
@@ -73,7 +74,9 @@ class SurrealDB:
         :return: None
         """
         loop_manager = AsyncioRuntime()
-        loop_manager.loop.run_until_complete(self.__connection.use(namespace=namespace, database=database))
+        loop_manager.loop.run_until_complete(
+            self.__connection.use(namespace=namespace, database=database)
+        )
 
     def sign_in(self, username: str, password: str) -> str:
         """
@@ -86,7 +89,9 @@ class SurrealDB:
         """
 
         async def async_fn(_username: str, _password: str):
-            _token = await self.__connection.send('signin', {'user': _username, 'pass': _password})
+            _token = await self.__connection.send(
+                "signin", {"user": _username, "pass": _password}
+            )
             self.__connection.set_token(_token)
             return _token
 
@@ -104,7 +109,9 @@ class SurrealDB:
         """
 
         async def async_fn(_username: str, _password: str):
-            _token = await self.__connection.send('signup', {'user': _username, 'pass': _password})
+            _token = await self.__connection.send(
+                "signup", {"user": _username, "pass": _password}
+            )
             self.__connection.set_token(_token)
             return _token
 
@@ -120,12 +127,12 @@ class SurrealDB:
         """
 
         async def async_fn(_jwt: str):
-            _token = await self.__connection.send('authenticate', _jwt)
+            _token = await self.__connection.send("authenticate", _jwt)
             self.__connection.set_token(_token)
             return _token
 
         loop_manager = AsyncioRuntime()
-        return loop_manager.loop.run_until_complete(async_fn(token))
+        loop_manager.loop.run_until_complete(async_fn(token))
 
     def invalidate(self, token: str) -> None:
         """
@@ -136,7 +143,7 @@ class SurrealDB:
         """
 
         async def async_fn(_token: str):
-            await self.__connection.send('invalidate', _token)
+            await self.__connection.send("invalidate", _token)
             self.__connection.set_token()
             return _token
 
@@ -150,7 +157,7 @@ class SurrealDB:
         :return: dict
         """
         loop_manager = AsyncioRuntime()
-        return loop_manager.loop.run_until_complete(self.__connection.send('info'))
+        return loop_manager.loop.run_until_complete(self.__connection.send("info"))
 
     def version(self) -> str:
         """
@@ -159,7 +166,7 @@ class SurrealDB:
         :return: str
         """
         loop_manager = AsyncioRuntime()
-        return loop_manager.loop.run_until_complete(self.__connection.send('version'))
+        return loop_manager.loop.run_until_complete(self.__connection.send("version"))
 
     def set(self, name: str, value) -> None:
         loop_manager = AsyncioRuntime()
@@ -178,7 +185,9 @@ class SurrealDB:
         :return: the result of the select
         """
         loop_manager = AsyncioRuntime()
-        return loop_manager.loop.run_until_complete(self.__connection.send('select', what))
+        return loop_manager.loop.run_until_complete(
+            self.__connection.send("select", what)
+        )
 
     def query(self, query: str, variables: dict = {}) -> List[dict]:
         """
@@ -190,7 +199,9 @@ class SurrealDB:
         :return: An array of query results
         """
         loop_manager = AsyncioRuntime()
-        return loop_manager.loop.run_until_complete(self.__connection.send('query', query, variables))
+        return loop_manager.loop.run_until_complete(
+            self.__connection.send("query", query, variables)
+        )
 
     def create(self, thing: Union[str, RecordID, Table], data: Union[List[dict], dict]):
         """
@@ -202,7 +213,9 @@ class SurrealDB:
         :return: None
         """
         loop_manager = AsyncioRuntime()
-        return loop_manager.loop.run_until_complete(self.__connection.send('create', thing, data))
+        return loop_manager.loop.run_until_complete(
+            self.__connection.send("create", thing, data)
+        )
 
     def insert(self, thing: Union[str, Table], data: Union[List[dict], dict]):
         """
@@ -213,9 +226,16 @@ class SurrealDB:
         :return:
         """
         loop_manager = AsyncioRuntime()
-        return loop_manager.loop.run_until_complete(self.__connection.send('insert', thing, data))
+        return loop_manager.loop.run_until_complete(
+            self.__connection.send("insert", thing, data)
+        )
 
-    def patch(self, thing: Union[str, RecordID, Table], patches: List[Patch], diff: Optional[bool] = False):
+    def patch(
+        self,
+        thing: Union[str, RecordID, Table],
+        patches: List[Patch],
+        diff: Optional[bool] = False,
+    ):
         """
         Patches the given resource with the given data.
 
@@ -228,7 +248,9 @@ class SurrealDB:
             diff = False
 
         loop_manager = AsyncioRuntime()
-        return loop_manager.loop.run_until_complete(self.__connection.send('patch', thing, patches, diff))
+        return loop_manager.loop.run_until_complete(
+            self.__connection.send("patch", thing, patches, diff)
+        )
 
     def update(self, thing: Union[str, RecordID, Table], data: dict):
         """
@@ -239,7 +261,9 @@ class SurrealDB:
         :return: the updated resource such as an individual row or a list of rows
         """
         loop_manager = AsyncioRuntime()
-        return loop_manager.loop.run_until_complete(self.__connection.send('update', thing, data))
+        return loop_manager.loop.run_until_complete(
+            self.__connection.send("update", thing, data)
+        )
 
     def upsert(self, thing: Union[str, RecordID, Table], data: dict):
         """
@@ -250,7 +274,9 @@ class SurrealDB:
         :return: the upsert-ed records such as an individual row or a list of rows
         """
         loop_manager = AsyncioRuntime()
-        return loop_manager.loop.run_until_complete(self.__connection.send('upsert', thing, data))
+        return loop_manager.loop.run_until_complete(
+            self.__connection.send("upsert", thing, data)
+        )
 
     def delete(self, thing: Union[str, RecordID, Table]) -> Union[List[dict], dict]:
         """
@@ -261,9 +287,13 @@ class SurrealDB:
         :return: the record or records that were deleted
         """
         loop_manager = AsyncioRuntime()
-        return loop_manager.loop.run_until_complete(self.__connection.send('delete', thing))
+        return loop_manager.loop.run_until_complete(
+            self.__connection.send("delete", thing)
+        )
 
-    def merge(self, thing: Union[str, RecordID, Table], data: dict) -> Union[List[dict], dict]:
+    def merge(
+        self, thing: Union[str, RecordID, Table], data: dict
+    ) -> Union[List[dict], dict]:
         """
         Merge specified data into either all records in a table or a single record
 
@@ -272,7 +302,9 @@ class SurrealDB:
         :return: the updated resource such as an individual row or a list of rows
         """
         loop_manager = AsyncioRuntime()
-        return loop_manager.loop.run_until_complete(self.__connection.send('merge', thing, data))
+        return loop_manager.loop.run_until_complete(
+            self.__connection.send("merge", thing, data)
+        )
 
     def live(self, thing: Union[str, Table], diff: Optional[bool] = False) -> uuid.UUID:
         """
@@ -283,7 +315,9 @@ class SurrealDB:
         :return: the live query uuid
         """
         loop_manager = AsyncioRuntime()
-        return loop_manager.loop.run_until_complete(self.__connection.send('live', thing, diff))
+        return loop_manager.loop.run_until_complete(
+            self.__connection.send("live", thing, diff)
+        )
 
     def live_notifications(self, live_id: Union[uuid.UUID, str]) -> asyncio.Queue:
         """
@@ -293,7 +327,9 @@ class SurrealDB:
         :return: the notification queue
         """
         loop_manager = AsyncioRuntime()
-        return loop_manager.loop.run_until_complete(self.__connection.live_notifications(live_id))
+        return loop_manager.loop.run_until_complete(
+            self.__connection.live_notifications(live_id)
+        )
 
     def kill(self, live_query_id: str) -> None:
         """
@@ -302,4 +338,6 @@ class SurrealDB:
         :param live_query_id: The UUID of the live query to kill.
         """
         loop_manager = AsyncioRuntime()
-        return loop_manager.loop.run_until_complete(self.__connection.send('kill', live_query_id))
+        return loop_manager.loop.run_until_complete(
+            self.__connection.send("kill", live_query_id)
+        )

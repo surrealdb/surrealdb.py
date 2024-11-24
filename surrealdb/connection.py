@@ -17,9 +17,9 @@ class ResponseType:
 
 class Connection:
     def __init__(
-            self,
-            base_url: str,
-            logger: logging.Logger,
+        self,
+        base_url: str,
+        logger: logging.Logger,
     ):
         self._auth_token = None
         self._namespace = None
@@ -83,22 +83,28 @@ class Connection:
 
     async def send(self, method: str, *params):
         request_data = {
-            'id': request_id(REQUEST_ID_LENGTH),
-            'method': method,
-            'params': params,
+            "id": request_id(REQUEST_ID_LENGTH),
+            "method": method,
+            "params": params,
         }
         self._logger.debug(f"Request {request_data.get('id')}:", request_data)
 
         try:
-            result = await self._make_request(request_data, encoder=encode, decoder=decode)
+            result = await self._make_request(
+                request_data, encoder=encode, decoder=decode
+            )
 
             self._logger.debug(f"Result {request_data.get('id')}:", result)
-            self._logger.debug("----------------------------------------------------------------------------------")
+            self._logger.debug(
+                "----------------------------------------------------------------------------------"
+            )
 
             return result
         except Exception as e:
             self._logger.debug(f"Error {request_data.get('id')}:", e)
-            self._logger.debug("----------------------------------------------------------------------------------")
+            self._logger.debug(
+                "----------------------------------------------------------------------------------"
+            )
             raise e
 
     async def live_notifications(self, live_query_id: str):
@@ -107,4 +113,6 @@ class Connection:
 
 
 def request_id(length: int) -> str:
-    return ''.join(secrets.choice(string.ascii_letters + string.digits) for i in range(length))
+    return "".join(
+        secrets.choice(string.ascii_letters + string.digits) for i in range(length)
+    )

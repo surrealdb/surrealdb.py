@@ -28,33 +28,37 @@ class HTTPConnection(Connection):
 
     async def connect(self) -> None:
         if self._base_url is None:
-            raise SurrealDbConnectionError('base url not set for http connection')
+            raise SurrealDbConnectionError("base url not set for http connection")
 
-        response = requests.get(self._base_url + '/health')
+        response = requests.get(self._base_url + "/health")
         if response.status_code != 200:
             self._logger.debug("HTTP health check successful")
-            raise SurrealDbConnectionError('connection failed. check server is up and base url is correct')
+            raise SurrealDbConnectionError(
+                "connection failed. check server is up and base url is correct"
+            )
 
     async def _make_request(self, request_data: dict, encoder, decoder):
         if self._namespace is None:
-            raise SurrealDbConnectionError('namespace not set')
+            raise SurrealDbConnectionError("namespace not set")
 
         if self._database is None:
-            raise SurrealDbConnectionError('database not set')
+            raise SurrealDbConnectionError("database not set")
 
         headers = {
-            'Content-Type': "application/cbor",
-            'Accept': "application/cbor",
-            'Surreal-NS': self._namespace,
-            'Surreal-DB': self._database,
+            "Content-Type": "application/cbor",
+            "Accept": "application/cbor",
+            "Surreal-NS": self._namespace,
+            "Surreal-DB": self._database,
         }
 
         if self._auth_token is not None:
-            headers['Authorization'] = f"Bearer {self._auth_token}"
+            headers["Authorization"] = f"Bearer {self._auth_token}"
 
         request_payload = encoder(request_data)
 
-        response = requests.post(f"{self._base_url}/rpc", data=request_payload, headers=headers)
+        response = requests.post(
+            f"{self._base_url}/rpc", data=request_payload, headers=headers
+        )
         response_data = decoder(response.content)
 
         if 200 > response.status_code > 299 or response_data.get("error"):

@@ -17,7 +17,9 @@ class GeometryPoint(Geometry):
     latitude: float
 
     def __repr__(self):
-        return f'{self.__class__.__name__}(longitude={self.longitude}, latitude={self.latitude})'.format(self=self)
+        return f"{self.__class__.__name__}(longitude={self.longitude}, latitude={self.latitude})".format(
+            self=self
+        )
 
     def get_coordinates(self) -> Tuple[float, float]:
         return self.longitude, self.latitude
@@ -30,7 +32,9 @@ class GeometryPoint(Geometry):
 @dataclass
 class GeometryLine(Geometry):
 
-    def __init__(self, point1: GeometryPoint, point2: GeometryPoint, *other_points: GeometryPoint):
+    def __init__(
+        self, point1: GeometryPoint, point2: GeometryPoint, *other_points: GeometryPoint
+    ):
         self.geometry_points = [point1, point2] + list(other_points)
 
     def get_coordinates(self) -> List[Tuple[float, float]]:
@@ -41,7 +45,9 @@ class GeometryLine(Geometry):
 
     @staticmethod
     def parse_coordinates(coordinates):
-        return GeometryLine(*[GeometryPoint.parse_coordinates(point) for point in coordinates])
+        return GeometryLine(
+            *[GeometryPoint.parse_coordinates(point) for point in coordinates]
+        )
 
 
 @dataclass
@@ -57,7 +63,9 @@ class GeometryPolygon(Geometry):
 
     @staticmethod
     def parse_coordinates(coordinates):
-        return GeometryPolygon(*[GeometryLine.parse_coordinates(line) for line in coordinates])
+        return GeometryPolygon(
+            *[GeometryLine.parse_coordinates(line) for line in coordinates]
+        )
 
 
 @dataclass
@@ -73,7 +81,9 @@ class GeometryMultiPoint(Geometry):
 
     @staticmethod
     def parse_coordinates(coordinates):
-        return GeometryMultiPoint(*[GeometryPoint.parse_coordinates(point) for point in coordinates])
+        return GeometryMultiPoint(
+            *[GeometryPoint.parse_coordinates(point) for point in coordinates]
+        )
 
 
 @dataclass
@@ -89,7 +99,9 @@ class GeometryMultiLine(Geometry):
 
     @staticmethod
     def parse_coordinates(coordinates):
-        return GeometryMultiLine(*[GeometryLine.parse_coordinates(line) for line in coordinates])
+        return GeometryMultiLine(
+            *[GeometryLine.parse_coordinates(line) for line in coordinates]
+        )
 
 
 @dataclass
@@ -105,7 +117,9 @@ class GeometryMultiPolygon(Geometry):
 
     @staticmethod
     def parse_coordinates(coordinates):
-        return GeometryMultiPolygon(*[GeometryPolygon.parse_coordinates(polygon) for polygon in coordinates])
+        return GeometryMultiPolygon(
+            *[GeometryPolygon.parse_coordinates(polygon) for polygon in coordinates]
+        )
 
 
 @dataclass()

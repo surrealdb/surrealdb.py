@@ -18,6 +18,7 @@ async with SurrealDB("ws://localhost:8080") as db:
     await db.use("ns", "db_name")
 ```
 """
+
 import asyncio
 import uuid
 from typing import Optional, TypeVar, Union, List
@@ -26,7 +27,7 @@ from surrealdb.constants import DEFAULT_CONNECTION_URL
 from surrealdb.connection_factory import create_connection_factory
 from surrealdb.data import Table, RecordID, Patch, QueryResponse
 
-_Self = TypeVar('_Self', bound='AsyncSurrealDB')
+_Self = TypeVar("_Self", bound="AsyncSurrealDB")
 
 
 class AsyncSurrealDB:
@@ -78,7 +79,9 @@ class AsyncSurrealDB:
 
         :return: str
         """
-        token = await self.__connection.send('signin', {'user': username, 'pass': password})
+        token = await self.__connection.send(
+            "signin", {"user": username, "pass": password}
+        )
         self.__connection.set_token(token)
 
         return token
@@ -92,7 +95,9 @@ class AsyncSurrealDB:
 
         :return: str
         """
-        token = await self.__connection.send('signup', {'user': username, 'pass': password})
+        token = await self.__connection.send(
+            "signup", {"user": username, "pass": password}
+        )
         self.__connection.set_token(token)
 
         return token
@@ -104,7 +109,7 @@ class AsyncSurrealDB:
         :param token: the JWT to authenticate
         :return: None
         """
-        await self.__connection.send('authenticate', token)
+        await self.__connection.send("authenticate", token)
         self.__connection.set_token(token)
 
     async def invalidate(self, token: str) -> None:
@@ -114,7 +119,7 @@ class AsyncSurrealDB:
         :param token: the JWT to invalidate
         :return: None
         """
-        await self.__connection.send('invalidate', token)
+        await self.__connection.send("invalidate", token)
         self.__connection.set_token()
 
     async def info(self) -> dict:
@@ -123,7 +128,7 @@ class AsyncSurrealDB:
 
         :return: dict
         """
-        return await self.__connection.send('info')
+        return await self.__connection.send("info")
 
     async def version(self) -> str:
         """
@@ -131,7 +136,7 @@ class AsyncSurrealDB:
 
         :return: str
         """
-        return await self.__connection.send('version')
+        return await self.__connection.send("version")
 
     async def set(self, name: str, value) -> None:
         await self.__connection.set(name, value)
@@ -139,7 +144,9 @@ class AsyncSurrealDB:
     async def unset(self, name: str) -> None:
         await self.__connection.unset(name)
 
-    async def select(self, what: Union[str, Table, RecordID]) -> Union[List[dict], dict]:
+    async def select(
+        self, what: Union[str, Table, RecordID]
+    ) -> Union[List[dict], dict]:
         """
         Performs a select query on the database for a particular resource.
 
@@ -147,7 +154,7 @@ class AsyncSurrealDB:
 
         :return: the result of the select
         """
-        return await self.__connection.send('select', what)
+        return await self.__connection.send("select", what)
 
     async def query(self, query: str, variables: dict = {}) -> List[QueryResponse]:
         """
@@ -158,9 +165,11 @@ class AsyncSurrealDB:
 
         :return: An array of query results
         """
-        return await self.__connection.send('query', query, variables)
+        return await self.__connection.send("query", query, variables)
 
-    async def create(self, thing: Union[str, RecordID, Table], data: Union[List[dict], dict]):
+    async def create(
+        self, thing: Union[str, RecordID, Table], data: Union[List[dict], dict]
+    ):
         """
         Creates a record either with a random or specified ID
 
@@ -169,7 +178,7 @@ class AsyncSurrealDB:
 
         :return: None
         """
-        return await self.__connection.send('create', thing, data)
+        return await self.__connection.send("create", thing, data)
 
     async def insert(self, thing: Union[str, Table], data: Union[List[dict], dict]):
         """
@@ -179,9 +188,14 @@ class AsyncSurrealDB:
         :param data: One or multiple record(s)
         :return:
         """
-        return await self.__connection.send('insert', thing, data)
+        return await self.__connection.send("insert", thing, data)
 
-    async def patch(self, thing: Union[str, RecordID, Table], patches: List[Patch], diff: Optional[bool] = False):
+    async def patch(
+        self,
+        thing: Union[str, RecordID, Table],
+        patches: List[Patch],
+        diff: Optional[bool] = False,
+    ):
         """
         Patches the given resource with the given data.
 
@@ -192,7 +206,7 @@ class AsyncSurrealDB:
         """
         if diff is None:
             diff = False
-        return await self.__connection.send('patch', thing, patches, diff)
+        return await self.__connection.send("patch", thing, patches, diff)
 
     async def update(self, thing: Union[str, RecordID, Table], data: dict):
         """
@@ -202,7 +216,7 @@ class AsyncSurrealDB:
         :param data: The content for the record
         :return: the updated resource such as an individual row or a list of rows
         """
-        return await self.__connection.send('update', thing, data)
+        return await self.__connection.send("update", thing, data)
 
     async def upsert(self, thing: Union[str, RecordID, Table], data: dict):
         """
@@ -212,9 +226,11 @@ class AsyncSurrealDB:
         :param data: The content for the record
         :return: the upsert-ed records such as an individual row or a list of rows
         """
-        return await self.__connection.send('upsert', thing, data)
+        return await self.__connection.send("upsert", thing, data)
 
-    async def delete(self, thing: Union[str, RecordID, Table]) -> Union[List[dict], dict]:
+    async def delete(
+        self, thing: Union[str, RecordID, Table]
+    ) -> Union[List[dict], dict]:
         """
         Deletes either all records in a table or a single record.
 
@@ -222,9 +238,11 @@ class AsyncSurrealDB:
 
         :return: the record or records that were deleted
         """
-        return await self.__connection.send('delete', thing)
+        return await self.__connection.send("delete", thing)
 
-    async def merge(self, thing: Union[str, RecordID, Table], data: dict) -> Union[List[dict], dict]:
+    async def merge(
+        self, thing: Union[str, RecordID, Table], data: dict
+    ) -> Union[List[dict], dict]:
         """
         Merge specified data into either all records in a table or a single record
 
@@ -232,9 +250,11 @@ class AsyncSurrealDB:
         :param data: The content for the record.
         :return: the updated resource such as an individual row or a list of rows
         """
-        return await self.__connection.send('merge', thing, data)
+        return await self.__connection.send("merge", thing, data)
 
-    async def live(self, thing: Union[str, Table], diff: Optional[bool] = False) -> uuid.UUID:
+    async def live(
+        self, thing: Union[str, Table], diff: Optional[bool] = False
+    ) -> uuid.UUID:
         """
         Live initiates a live query for a specified table name.
 
@@ -242,7 +262,7 @@ class AsyncSurrealDB:
         :param diff: If set to true, live notifications will contain an array of JSON Patches instead of the entire record
         :return: the live query uuid
         """
-        return await self.__connection.send('live', thing, diff)
+        return await self.__connection.send("live", thing, diff)
 
     async def live_notifications(self, live_id: Union[uuid.UUID, str]) -> asyncio.Queue:
         """
@@ -259,4 +279,4 @@ class AsyncSurrealDB:
 
         :param live_query_id: The UUID of the live query to kill.
         """
-        return await self.__connection.send('kill', live_query_id)
+        return await self.__connection.send("kill", live_query_id)
