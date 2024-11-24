@@ -2,8 +2,22 @@
 name = "surrealdb"
 version = "0.1.0"
 description = ""
-authors = ["Maxwell Flitton <>", "Remi A <mail4remi@yahoo.com>"]
+authors = ["Maxwell Flitton <maxwellflitton@gmail.com>", "Remi A <mail4remi@yahoo.com>"]
 readme = "README.md"
 
 [build-system]
 requires = ["setuptools", "wheel", "setuptools-rust"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+requests = "^2.32.3"
+cbor2 = "^5.6.5"
+websockets = "^14.1"
+
+[tool.poetry.group.dev]
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.8.0"
+black = "^24.10.0"
+mypy = "^1.13.0"
+types-requests = "^2.32.0.20241016"
+

@@ -15,6 +15,7 @@ class Patch:
         path: The path for the JSON pointer.
         value: The value for the operation.
     """
+
     op: str
     path: str
     value: Any
@@ -51,9 +52,10 @@ class GraphQLOptions:
 
 
 def table_or_record_id(resource_str: str) -> Union[Table, RecordID]:
-    table, record_id = resource_str.split(":") if ":" in resource_str else (resource_str, None)
+    table, record_id = (
+        resource_str.split(":") if ":" in resource_str else (resource_str, None)
+    )
     if record_id is not None:
         return RecordID(table, record_id)
 
     return Table(table)
-

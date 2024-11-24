@@ -2,11 +2,10 @@ import logging
 import os
 import ctypes
 import platform
-from typing import Tuple
 
 from surrealdb.errors import SurrealDbConnectionError
-from surrealdb.connection import Connection
-from surrealdb.constants import CLIB_FOLDER_PATH, ROOT_DIR
+from surrealdb.connection import Connection, RequestData
+from surrealdb.constants import CLIB_FOLDER_PATH
 
 
 def get_lib_path() -> str:
@@ -31,9 +30,11 @@ class sr_string_t(ctypes.c_char_p):
 
 
 class sr_option_t(ctypes.Structure):
-    _fields_ = [("strict", ctypes.c_bool),
-                ("query_timeout", ctypes.c_uint8),
-                ("transaction_timeout", ctypes.c_uint8)]
+    _fields_ = [
+        ("strict", ctypes.c_bool),
+        ("query_timeout", ctypes.c_uint8),
+        ("transaction_timeout", ctypes.c_uint8),
+    ]
 
 
 class sr_surreal_rpc_t(ctypes.Structure):
@@ -64,17 +65,14 @@ class sr_value_t_Tag(ctypes.c_int):
 
 
 class sr_value_t(ctypes.Structure):
-    _fields_ = [
-        ("tag", sr_value_t_Tag),
-        ("sr_value_bool", ctypes.c_bool)
-    ]
+    _fields_ = [("tag", sr_value_t_Tag), ("sr_value_bool", ctypes.c_bool)]
 
 
 class sr_notification_t(ctypes.Structure):
     _fields_ = [
         ("query_id", sr_uuid_t),
         ("action", ctypes.c_int),  # sr_action
-        ("data", sr_value_t)
+        ("data", sr_value_t),
     ]
 
 
@@ -96,7 +94,9 @@ class CLibConnection(Connection):
         #   struct sr_option_t options);
         self._lib.sr_surreal_rpc_new.argtypes = [
             ctypes.POINTER(sr_string_t),  # sr_string_t *err_ptr
-            ctypes.POINTER(ctypes.POINTER(sr_surreal_rpc_t)),  # struct sr_surreal_rpc_t **surreal_ptr
+            ctypes.POINTER(
+                ctypes.POINTER(sr_surreal_rpc_t)
+            ),  # struct sr_surreal_rpc_t **surreal_ptr
             ctypes.c_char_p,  # const char *endpoint
             sr_option_t,  # struct sr_option_t options
         ]
@@ -109,7 +109,9 @@ class CLibConnection(Connection):
         self._lib.sr_surreal_rpc_notifications.argtypes = [
             ctypes.POINTER(sr_surreal_rpc_t),  # const sr_surreal_rpc_t *self
             ctypes.POINTER(sr_string_t),  # sr_string_t *err_ptr
-            ctypes.POINTER(ctypes.POINTER(sr_RpcStream))  # struct sr_RpcStream **stream_ptr
+            ctypes.POINTER(
+                ctypes.POINTER(sr_RpcStream)
+            ),  # struct sr_RpcStream **stream_ptr
         ]
         self._lib.sr_surreal_rpc_notifications.restype = ctypes.c_int
 
@@ -125,14 +127,14 @@ class CLibConnection(Connection):
             ctypes.POINTER(sr_string_t),  # sr_string_t *err_ptr
             ctypes.POINTER(ctypes.POINTER(ctypes.c_uint8)),  # uint8_t **res_ptr
             ctypes.POINTER(ctypes.c_uint8),  # const uint8_t *ptr
-            ctypes.c_int  # int len
+            ctypes.c_int,  # int len
         ]
         self._lib.sr_surreal_rpc_execute.restype = ctypes.c_int
 
         # sr_stream_next
         self._lib.sr_stream_next.argtypes = [
             ctypes.POINTER(sr_RpcStream),  # const sr_stream_t *self
-            ctypes.POINTER(sr_notification_t)  # sr_notification_t *notification_ptr
+            ctypes.POINTER(sr_notification_t),  # sr_notification_t *notification_ptr
         ]
         self._lib.sr_stream_next.restype = ctypes.c_int
 
@@ -145,7 +147,10 @@ class CLibConnection(Connection):
         self._lib.sr_free_string.restype = None
 
         # sr_free_byte_arr
-        self._lib.sr_free_byte_arr.argtypes = [ctypes.POINTER(ctypes.c_uint8), ctypes.c_int]
+        self._lib.sr_free_byte_arr.argtypes = [
+            ctypes.POINTER(ctypes.c_uint8),
+            ctypes.c_int,
+        ]
         self._lib.sr_free_byte_arr.restype = None
 
     async def connect(self):
@@ -155,17 +160,22 @@ class CLibConnection(Connection):
         c_options = sr_option_t(strict=True, query_timeout=10, transaction_timeout=20)
 
         try:
-            if self._lib.sr_surreal_rpc_new(
+            if (
+                self._lib.sr_surreal_rpc_new(
                     ctypes.byref(c_err),
                     ctypes.byref(c_rpc_connection),
                     c_endpoint,
-                    c_options
-            ) < 0:
-                raise SurrealDbConnectionError(f"Error connecting to RPC. {c_err.value.decode()}")
+                    c_options,
+                )
+                < 0
+            ):
+                raise SurrealDbConnectionError(
+                    f"Error connecting to RPC. {c_err.value.decode()}"
+                )
             self._c_surreal_rpc = c_rpc_connection
 
         except Exception as e:
-            raise SurrealDbConnectionError('cannot connect db server', e)
+            raise SurrealDbConnectionError("cannot connect db server", e)
         finally:
             self._lib.sr_free_string(c_err)
 
@@ -184,7 +194,15 @@ class CLibConnection(Connection):
     async def unset(self, key: str):
         await self.send("unset", key)
 
-    async def _make_request(self, request_payload: bytes) -> Tuple[bool, bytes]:
+    async def _make_request(self, request_data: RequestData, encoder, decoder):
+        request_payload = encoder(
+            {
+                "id": request_data.id,
+                "method": request_data.method,
+                "params": request_data.params,
+            }
+        )
+
         c_err = sr_string_t()
         c_res_ptr = ctypes.POINTER(ctypes.c_uint8)()
         payload_len = len(request_payload)
@@ -195,12 +213,13 @@ class CLibConnection(Connection):
             ctypes.byref(c_err),
             ctypes.byref(c_res_ptr),
             (ctypes.c_uint8 * payload_len)(*request_payload),
-            payload_len
+            payload_len,
         )
 
         if result < 0:
             raise SurrealDbConnectionError(
-                f"Error executing RPC: {c_err.value.decode() if c_err.value else 'Unknown error'}")
+                f"Error executing RPC: {c_err.value.decode() if c_err.value else 'Unknown error'}"
+            )
 
         # Convert the result pointer to a Python byte array
         response = ctypes.string_at(c_res_ptr, result)

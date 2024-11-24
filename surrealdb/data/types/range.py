@@ -24,4 +24,3 @@ class BoundExcluded(Bound):
 class Range:
     begin: Bound
     end: Bound
-
