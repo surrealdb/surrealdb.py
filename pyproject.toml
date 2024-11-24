@@ -11,6 +11,8 @@ requires = ["setuptools", "wheel", "setuptools-rust"]
 [tool.poetry.dependencies]
 python = "^3.10"
 requests = "^2.32.3"
+cbor2 = "^5.6.5"
+websockets = "^14.1"
 
 [tool.poetry.group.dev]
 [tool.poetry.group.dev.dependencies]
