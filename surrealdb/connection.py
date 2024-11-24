@@ -24,6 +24,7 @@ class Connection:
         self._auth_token = None
         self._namespace = None
         self._database = None
+
         self._locks = {
             ResponseType.SEND: threading.Lock(),
             ResponseType.NOTIFICATION: threading.Lock(),

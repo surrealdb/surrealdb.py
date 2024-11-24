@@ -1,4 +1,5 @@
 import logging
+
 from unittest import IsolatedAsyncioTestCase
 
 from surrealdb.connection_http import HTTPConnection

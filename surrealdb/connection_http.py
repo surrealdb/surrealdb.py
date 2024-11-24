@@ -8,6 +8,7 @@ from surrealdb.errors import SurrealDbConnectionError
 
 
 class HTTPConnection(Connection):
+
     def __init__(self, base_url: str, logger: logging.Logger):
         super().__init__(base_url, logger)
 

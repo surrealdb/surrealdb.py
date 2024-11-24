@@ -21,6 +21,7 @@ with SurrealDB("ws://localhost:8080") as db:
 
 import asyncio
 import uuid
+
 from typing import Optional, TypeVar, Union, List
 
 from surrealdb.asyncio_runtime import AsyncioRuntime
