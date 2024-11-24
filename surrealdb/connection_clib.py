@@ -2,7 +2,6 @@ import logging
 import os
 import ctypes
 import platform
-from typing import Tuple
 
 from surrealdb.errors import SurrealDbConnectionError
 from surrealdb.connection import Connection, RequestData
