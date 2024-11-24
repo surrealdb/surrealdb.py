@@ -36,10 +36,23 @@ class WebsocketConnection(Connection):
 
         await self.send("use", namespace, database)
 
-    async def set(self, key: str, value):
+    async def set(self, key: str, value) -> None:
+        """
+        Set a key-value pair in the database.
+
+        Args:
+            key (str): The key to set.
+            value: The value to set.
+        """
         await self.send("let", key, value)
 
     async def unset(self, key: str):
+        """
+        Unset a key-value pair in the database.
+
+        Args:
+            key (str): The key to unset.
+        """
         await self.send("unset", key)
 
     async def close(self):
