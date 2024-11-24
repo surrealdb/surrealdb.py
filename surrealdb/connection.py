@@ -1,17 +1,25 @@
+import logging
 import secrets
 import string
-import logging
 import threading
 import uuid
+from asyncio import Queue
 from dataclasses import dataclass
-
 from typing import Dict, Tuple
+
 from surrealdb.constants import REQUEST_ID_LENGTH
 from surrealdb.data.cbor import encode, decode
-from asyncio import Queue
 
 
 class ResponseType:
+    """
+    Enum-like class representing response types for the connection.
+
+    Attributes:
+        SEND (int): Response type for standard requests.
+        NOTIFICATION (int): Response type for notifications.
+        ERROR (int): Response type for errors.
+    """
     SEND = 1
     NOTIFICATION = 2
     ERROR = 3
@@ -19,12 +27,32 @@ class ResponseType:
 
 @dataclass
 class RequestData:
+    """
+    Represents the data for a request sent over the connection.
+
+    Attributes:
+        id (str): Unique identifier for the request.
+        method (str): The method name to invoke.
+        params (Tuple): Parameters for the method.
+    """
     id: str
     method: str
     params: Tuple
 
 
 class Connection:
+    """
+    Base class for managing a connection to the database.
+
+    Manages request/response lifecycle, including the use of queues for
+    handling asynchronous communication.
+
+    Attributes:
+        _queues (Dict[int, dict]): Mapping of response types to their queues.
+        _namespace (str | None): Current namespace in use.
+        _database (str | None): Current database in use.
+        _auth_token (str | None): Authentication token.
+    """
     _queues: Dict[int, dict]
     _namespace: str | None
     _database: str | None
@@ -35,6 +63,13 @@ class Connection:
         base_url: str,
         logger: logging.Logger,
     ):
+        """
+        Initialize the Connection instance.
+
+        Args:
+            base_url (str): The base URL of the server.
+            logger (logging.Logger): Logger for debugging and tracking activities.
+        """
         self._locks = {
             ResponseType.SEND: threading.Lock(),
             ResponseType.NOTIFICATION: threading.Lock(),
@@ -50,27 +85,79 @@ class Connection:
         self._logger = logger
 
     async def use(self, namespace: str, database: str) -> None:
-        pass
+        """
+        Set the namespace and database for subsequent operations.
+
+        Args:
+            namespace (str): The namespace to use.
+            database (str): The database to use.
+        """
+        raise NotImplementedError("use method must be implemented")
 
     async def connect(self) -> None:
-        pass
+        """
+        Establish a connection to the server.
+        """
+        raise NotImplementedError("connect method must be implemented")
 
     async def close(self) -> None:
-        pass
+        """
+        Close the connection to the server.
+        """
+        raise NotImplementedError("close method must be implemented")
 
-    async def _make_request(self, request_data: RequestData, encoder, decoder):
-        pass
+    async def _make_request(self, request_data: RequestData, encoder, decoder) -> dict:
+        """
+        Internal method to send a request and handle the response.
 
-    async def set(self, key: str, value):
-        pass
+        Args:
+            request_data (RequestData): The data to send.
+            encoder (function): Function to encode the request.
+            decoder (function): Function to decode the response.
+        return:
+            dict: The response data from the request.
+        """
+        raise NotImplementedError("_make_request method must be implemented")
 
-    async def unset(self, key: str):
-        pass
+    async def set(self, key: str, value) -> None:
+        """
+        Set a key-value pair in the database.
+
+        Args:
+            key (str): The key to set.
+            value: The value to set.
+        """
+        raise NotImplementedError("set method must be implemented")
+
+    async def unset(self, key: str) -> None:
+        """
+        Unset a key-value pair in the database.
+
+        Args:
+            key (str): The key to unset.
+        """
+        raise NotImplementedError("unset method must be implemented")
 
     def set_token(self, token: str | None = None) -> None:
+        """
+        Set the authentication token for the connection.
+
+        Args:
+            token (str): The authentication token to be set
+        """
         self._auth_token = token
 
-    def create_response_queue(self, response_type: int, queue_id: str):
+    def create_response_queue(self, response_type: int, queue_id: str) -> Queue:
+        """
+        Create a response queue for a given response type.
+
+        Args:
+            response_type (int): The response type for the queue (1: SEND, 2: NOTIFICATION, 3: ERROR).
+            queue_id (str): The unique identifier for the queue.
+        Returns:
+            Queue: The response queue for the given response type and queue ID
+            (existing queues will be overwritten if same ID is used, cannot get existing queue).
+        """
         lock = self._locks[response_type]
         with lock:
             response_type_queues = self._queues.get(response_type)
@@ -83,7 +170,18 @@ class Connection:
                 self._queues[response_type] = response_type_queues
                 return queue
 
-    def get_response_queue(self, response_type: int, queue_id: str):
+    def get_response_queue(self, response_type: int, queue_id: str) -> Queue | None:
+        """
+        Get a response queue for a given response type.
+
+        Args:
+            response_type (int): The response type for the queue (1: SEND, 2: NOTIFICATION, 3: ERROR).
+            queue_id (str): The unique identifier for the queue.
+
+        Returns:
+            Queue: The response queue for the given response type and queue ID
+            (existing queues will be overwritten if same ID is used).
+        """
         lock = self._locks[response_type]
         with lock:
             response_type_queues = self._queues.get(response_type)
