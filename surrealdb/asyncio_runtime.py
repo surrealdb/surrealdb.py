@@ -1,8 +1,9 @@
 import asyncio
+from typing import Any
 
 
 class AsyncController(type):
-    _instances = {}
+    _instances: dict[Any, Any] = {}
 
     def __call__(cls, *args, **kwargs):  # noqa: D102
         if cls not in cls._instances:

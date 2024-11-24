@@ -36,4 +36,4 @@ def create_connection_factory(url: str) -> Connection:
         logger.debug("embedded url detected, creating a clib connection")
         return CLibConnection(url, logger)
 
-    raise Exception('no connection type available')
+    raise Exception("no connection type available")

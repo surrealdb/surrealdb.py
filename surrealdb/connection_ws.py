@@ -1,20 +1,25 @@
 import asyncio
 import logging
+from asyncio import Task
 
 from websockets import Subprotocol, ConnectionClosed, connect
+from websockets.asyncio.client import ClientConnection
 
-from surrealdb.connection import Connection, ResponseType
+from surrealdb.connection import Connection, ResponseType, RequestData
 from surrealdb.constants import WS_REQUEST_TIMEOUT
 from surrealdb.data.cbor import decode
 from surrealdb.errors import SurrealDbConnectionError
 
 
 class WebsocketConnection(Connection):
+    _ws: ClientConnection
+    _receiver_task: Task
+
     def __init__(self, base_url: str, logger: logging.Logger):
         super().__init__(base_url, logger)
 
-        self._ws = None
-        self._receiver_task = None
+        # self._ws = None
+        # self._receiver_task = None
 
     async def connect(self):
         try:
@@ -44,13 +49,17 @@ class WebsocketConnection(Connection):
         if self._ws:
             await self._ws.close()
 
-    async def _make_request(self, request_data: dict, encoder, decoder):
-        request_payload = encoder(request_data)
+    async def _make_request(self, request_data: RequestData, encoder, decoder):
+        request_payload = encoder(
+            {
+                "id": request_data.id,
+                "method": request_data.method,
+                "params": request_data.params,
+            }
+        )
 
         try:
-            queue = self.create_response_queue(
-                ResponseType.SEND, request_data.get("id")
-            )
+            queue = self.create_response_queue(ResponseType.SEND, request_data.id)
             await self._ws.send(request_payload)
 
             response_data = await asyncio.wait_for(
@@ -72,7 +81,7 @@ class WebsocketConnection(Connection):
         except Exception as e:
             raise e
         finally:
-            self.remove_response_queue(ResponseType.SEND, request_data.get("id"))
+            self.remove_response_queue(ResponseType.SEND, request_data.id)
 
     async def listen_to_ws(self, ws):
         async for message in ws:

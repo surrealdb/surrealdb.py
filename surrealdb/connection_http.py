@@ -1,19 +1,16 @@
 import logging
 import threading
+from typing import Any
 
 import requests
 
-from surrealdb.connection import Connection
+from surrealdb.connection import Connection, RequestData
 from surrealdb.errors import SurrealDbConnectionError
 
 
 class HTTPConnection(Connection):
-
-    def __init__(self, base_url: str, logger: logging.Logger):
-        super().__init__(base_url, logger)
-
-        self._request_variables = dict()
-        self._request_variables_lock = threading.Lock()
+    _request_variables: dict[str, Any]
+    _request_variables_lock = threading.Lock()
 
     async def use(self, namespace: str, database: str) -> None:
         self._namespace = namespace
@@ -38,7 +35,7 @@ class HTTPConnection(Connection):
                 "connection failed. check server is up and base url is correct"
             )
 
-    async def _make_request(self, request_data: dict, encoder, decoder):
+    async def _make_request(self, request_data: RequestData, encoder, decoder):
         if self._namespace is None:
             raise SurrealDbConnectionError("namespace not set")
 
@@ -55,7 +52,13 @@ class HTTPConnection(Connection):
         if self._auth_token is not None:
             headers["Authorization"] = f"Bearer {self._auth_token}"
 
-        request_payload = encoder(request_data)
+        request_payload = encoder(
+            {
+                "id": request_data.id,
+                "method": request_data.method,
+                "params": request_data.params,
+            }
+        )
 
         response = requests.post(
             f"{self._base_url}/rpc", data=request_payload, headers=headers

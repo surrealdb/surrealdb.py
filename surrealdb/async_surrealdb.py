@@ -21,20 +21,18 @@ async with SurrealDB("ws://localhost:8080") as db:
 
 import asyncio
 import uuid
-
-from typing import Optional, TypeVar, Union, List
+from typing import Union, List
+from typing_extensions import Self
 
 from surrealdb.constants import DEFAULT_CONNECTION_URL
 from surrealdb.connection_factory import create_connection_factory
 from surrealdb.data import Table, RecordID, Patch, QueryResponse
 
-_Self = TypeVar("_Self", bound="AsyncSurrealDB")
-
 
 class AsyncSurrealDB:
     """This class is responsible for managing the connection to SurrealDB and managing operations on the connection."""
 
-    def __init__(self, url: Optional[str] = None) -> None:
+    def __init__(self, url: str | None = None) -> None:
         """
         The constructor for the SurrealDB class.
 
@@ -52,7 +50,7 @@ class AsyncSurrealDB:
     async def __aexit__(self, *args):
         await self.close()
 
-    async def connect(self) -> _Self:
+    async def connect(self) -> Self:
         """Connect to SurrealDB."""
         await self.__connection.connect()
         return self
@@ -195,7 +193,7 @@ class AsyncSurrealDB:
         self,
         thing: Union[str, RecordID, Table],
         patches: List[Patch],
-        diff: Optional[bool] = False,
+        diff: bool = False,
     ):
         """
         Patches the given resource with the given data.
@@ -253,9 +251,7 @@ class AsyncSurrealDB:
         """
         return await self.__connection.send("merge", thing, data)
 
-    async def live(
-        self, thing: Union[str, Table], diff: Optional[bool] = False
-    ) -> uuid.UUID:
+    async def live(self, thing: Union[str, Table], diff: bool = False) -> uuid.UUID:
         """
         Live initiates a live query for a specified table name.
 
@@ -265,7 +261,7 @@ class AsyncSurrealDB:
         """
         return await self.__connection.send("live", thing, diff)
 
-    async def live_notifications(self, live_id: Union[uuid.UUID, str]) -> asyncio.Queue:
+    async def live_notifications(self, live_id: uuid.UUID) -> asyncio.Queue:
         """
         Live notification returns a queue that receives notification messages from the back end.
 
@@ -274,7 +270,7 @@ class AsyncSurrealDB:
         """
         return await self.__connection.live_notifications(live_id)
 
-    async def kill(self, live_query_id: str) -> None:
+    async def kill(self, live_query_id: uuid.UUID) -> None:
         """
         This kills an active live query
 
