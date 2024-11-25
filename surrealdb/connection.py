@@ -7,7 +7,6 @@ from dataclasses import dataclass
 
 from typing import Dict, Tuple
 from surrealdb.constants import REQUEST_ID_LENGTH
-from surrealdb.data.cbor import encode, decode
 from asyncio import Queue
 
 
