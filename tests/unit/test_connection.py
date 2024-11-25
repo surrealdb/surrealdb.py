@@ -1,11 +1,13 @@
-import asyncio
+"""
+Defines the unit tests for the Connection class.
+"""
 import logging
-
-from unittest import IsolatedAsyncioTestCase, main
-from unittest.mock import patch
 import threading
+from unittest import IsolatedAsyncioTestCase, main
+from unittest.mock import patch, AsyncMock, MagicMock
 
 from surrealdb.connection import Connection, ResponseType, RequestData
+from surrealdb.data.cbor import encode, decode
 
 
 class TestConnection(IsolatedAsyncioTestCase):
@@ -86,6 +88,36 @@ class TestConnection(IsolatedAsyncioTestCase):
         self.assertEqual(self.con._queues[1]["test_two"], outcome_three)
         self.assertEqual(id(outcome_three), id(self.con._queues[1]["test_two"]))
 
+    async def test_remove_response_queue(self):
+        self.con.create_response_queue(response_type=ResponseType.SEND, queue_id="test")
+        self.con.create_response_queue(response_type=ResponseType.SEND, queue_id="test_two")
+        self.assertEqual(len(self.con._queues[1].keys()), 2)
+
+        self.con.remove_response_queue(response_type=ResponseType.SEND, queue_id="test")
+        self.assertEqual(len(self.con._queues[1].keys()), 1)
+
+        self.con.remove_response_queue(response_type=ResponseType.SEND, queue_id="test")
+        self.assertEqual(len(self.con._queues[1].keys()), 1)
+
+    @patch("surrealdb.connection.request_id")
+    @patch("surrealdb.connection.Connection._make_request", new_callable=AsyncMock)
+    async def test_send(self, mock__make_request, mock_request_id):
+        mock_logger = MagicMock()
+        response_data = {"result": "test"}
+        self.con._logger = mock_logger
+        mock__make_request.return_value = response_data
+        mock_request_id.return_value = "1"
+
+        request_data = RequestData(id="1", method="test", params=("test",))
+        result = await self.con.send("test", "test")
+
+        self.assertEqual(response_data, result)
+        mock__make_request.assert_called_once_with(
+            request_data,
+            encoder=encode,
+            decoder=decode
+        )
+        self.assertEqual(3, mock_logger.debug.call_count)
 
 
 if __name__ == '__main__':

@@ -1,3 +1,6 @@
+"""
+Defines the base Connection class for sending and receiving requests.
+"""
 import logging
 import secrets
 import string
@@ -188,14 +191,34 @@ class Connection:
             if response_type_queues:
                 return response_type_queues.get(queue_id)
 
-    def remove_response_queue(self, response_type: int, queue_id: str):
+    def remove_response_queue(self, response_type: int, queue_id: str) -> None:
+        """
+        Remove a response queue for a given response type.
+
+        Notes:
+            Does not alert if the key is missing
+
+        Args:
+            response_type (int): The response type for the queue (1: SEND, 2: NOTIFICATION, 3: ERROR).
+            queue_id (str): The unique identifier for the queue.
+        """
         lock = self._locks[response_type]
         with lock:
             response_type_queues = self._queues.get(response_type)
             if response_type_queues:
                 response_type_queues.pop(queue_id, None)
 
-    async def send(self, method: str, *params):
+    async def send(self, method: str, *params) -> dict:
+        """
+        Sends a request to the server with a unique ID and returns the response.
+
+        Args:
+            method (str): The method of the request.
+            params: Parameters for the request.
+
+        Returns:
+            dict: The response data from the request.
+        """
         request_data = RequestData(
             id=request_id(REQUEST_ID_LENGTH), method=method, params=params
         )
@@ -219,7 +242,16 @@ class Connection:
             )
             raise e
 
-    async def live_notifications(self, live_query_id: uuid.UUID):
+    async def live_notifications(self, live_query_id: uuid.UUID) -> Queue:
+        """
+        Create a response queue for live notifications by essentially creating a NOTIFICATION response queue.
+
+        Args:
+            live_query_id (uuid.UUID): The unique identifier for the live query.
+
+        Returns:
+            Queue: The response queue for the live notifications.
+        """
         queue = self.create_response_queue(
             ResponseType.NOTIFICATION, str(live_query_id)
         )
