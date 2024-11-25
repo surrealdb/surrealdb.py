@@ -7,7 +7,6 @@ from dataclasses import dataclass
 
 from typing import Dict, Tuple
 from surrealdb.constants import REQUEST_ID_LENGTH
-from surrealdb.data.cbor import encode, decode
 from asyncio import Queue
 
 
@@ -34,7 +33,12 @@ class Connection:
         self,
         base_url: str,
         logger: logging.Logger,
+        encoder,
+        decoder,
     ):
+        self._encoder = encoder
+        self._decoder = decoder
+
         self._locks = {
             ResponseType.SEND: threading.Lock(),
             ResponseType.NOTIFICATION: threading.Lock(),
@@ -58,7 +62,7 @@ class Connection:
     async def close(self) -> None:
         pass
 
-    async def _make_request(self, request_data: RequestData, encoder, decoder):
+    async def _make_request(self, request_data: RequestData):
         pass
 
     async def set(self, key: str, value):
@@ -104,9 +108,7 @@ class Connection:
         self._logger.debug(f"Request {request_data.id}:", request_data)
 
         try:
-            result = await self._make_request(
-                request_data, encoder=encode, decoder=decode
-            )
+            result = await self._make_request(request_data)
 
             self._logger.debug(f"Result {request_data.id}:", result)
             self._logger.debug(

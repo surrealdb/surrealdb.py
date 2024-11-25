@@ -34,7 +34,7 @@ class HTTPConnection(Connection):
                 "connection failed. check server is up and base url is correct"
             )
 
-    async def _make_request(self, request_data: RequestData, encoder, decoder):
+    async def _make_request(self, request_data: RequestData):
         if self._namespace is None:
             raise SurrealDbConnectionError("namespace not set")
 
@@ -51,7 +51,7 @@ class HTTPConnection(Connection):
         if self._auth_token is not None:
             headers["Authorization"] = f"Bearer {self._auth_token}"
 
-        request_payload = encoder(
+        request_payload = self._encoder(
             {
                 "id": request_data.id,
                 "method": request_data.method,
@@ -62,7 +62,7 @@ class HTTPConnection(Connection):
         response = requests.post(
             f"{self._base_url}/rpc", data=request_payload, headers=headers
         )
-        response_data = decoder(response.content)
+        response_data = self._decoder(response.content)
 
         if 200 > response.status_code > 299 or response_data.get("error"):
             raise SurrealDbConnectionError(response_data.get("error").get("message"))

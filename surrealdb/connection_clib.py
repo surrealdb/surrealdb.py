@@ -77,8 +77,8 @@ class sr_notification_t(ctypes.Structure):
 
 
 class CLibConnection(Connection):
-    def __init__(self, base_url: str, logger: logging.Logger):
-        super().__init__(base_url, logger)
+    def __init__(self, base_url: str, logger: logging.Logger, encoder, decoder):
+        super().__init__(base_url, logger, encoder, decoder)
 
         lib_path = get_lib_path()
         self._lib = ctypes.CDLL(lib_path)
@@ -194,8 +194,8 @@ class CLibConnection(Connection):
     async def unset(self, key: str):
         await self.send("unset", key)
 
-    async def _make_request(self, request_data: RequestData, encoder, decoder):
-        request_payload = encoder(
+    async def _make_request(self, request_data: RequestData):
+        request_payload = self._encoder(
             {
                 "id": request_data.id,
                 "method": request_data.method,
@@ -226,4 +226,6 @@ class CLibConnection(Connection):
 
         # Free the allocated byte array returned by the C library
         self._lib.sr_free_byte_arr(c_res_ptr, result)
-        return True, response
+        response_data = self._decoder(response)
+
+        return response_data
