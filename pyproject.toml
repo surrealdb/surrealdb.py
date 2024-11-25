@@ -1,9 +1,23 @@
 [tool.poetry]
 name = "surrealdb"
-version = "0.1.0"
-description = ""
-authors = ["Maxwell Flitton <maxwellflitton@gmail.com>", "Remi A <mail4remi@yahoo.com>"]
+version = "0.4.0"
+description = "The official SurrealDB library for Python."
 readme = "README.md"
+authors = ["SurrealDB"]
+license = "Apache-2.0"
+repository = "https://github.com/surrealdb/surrealdb.py"
+documentation = "https://surrealdb.com/docs/sdk/python"
+keywords = ["SurrealDB", "Database"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Topic :: Database",
+    "Topic :: Database :: Front-Ends",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 
 [build-system]
 requires = ["setuptools", "wheel", "setuptools-rust"]
