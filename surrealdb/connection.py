@@ -178,7 +178,8 @@ class Connection:
                 queue: Queue = Queue(maxsize=0)
                 response_type_queues[queue_id] = queue
                 self._queues[response_type] = response_type_queues
-                return queue
+
+            return queue
 
     def get_response_queue(self, response_type: int, queue_id: str) -> Queue | None:
         """
@@ -195,8 +196,9 @@ class Connection:
         lock = self._locks[response_type]
         with lock:
             response_type_queues = self._queues.get(response_type)
-            if response_type_queues:
-                return response_type_queues.get(queue_id)
+            if not response_type_queues:
+                return None
+            return response_type_queues.get(queue_id)
 
     def remove_response_queue(self, response_type: int, queue_id: str) -> None:
         """
@@ -215,7 +217,7 @@ class Connection:
             if response_type_queues:
                 response_type_queues.pop(queue_id, None)
 
-    async def send(self, method: str, *params) -> dict:
+    async def send(self, method: str, *params):
         """
         Sends a request to the server with a unique ID and returns the response.
 
