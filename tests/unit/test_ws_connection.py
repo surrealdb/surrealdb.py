@@ -5,12 +5,13 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
 from surrealdb.connection_ws import WebsocketConnection
+from surrealdb.data.cbor import encode, decode
 
 
 class TestWSConnection(IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         logger = logging.getLogger(__name__)
-        self.ws_con = WebsocketConnection(base_url='ws://localhost:8000', logger=logger)
+        self.ws_con = WebsocketConnection(base_url='ws://localhost:8000', logger=logger, encoder=encode, decoder=decode)
         await self.ws_con.connect()
 
     async def test_one(self):

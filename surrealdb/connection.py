@@ -1,6 +1,7 @@
 """
 Defines the base Connection class for sending and receiving requests.
 """
+
 import logging
 import secrets
 import string
@@ -11,7 +12,6 @@ from dataclasses import dataclass
 from typing import Dict, Tuple
 
 from surrealdb.constants import REQUEST_ID_LENGTH
-from surrealdb.data.cbor import encode, decode
 
 
 class ResponseType:
@@ -23,6 +23,7 @@ class ResponseType:
         NOTIFICATION (int): Response type for notifications.
         ERROR (int): Response type for errors.
     """
+
     SEND = 1
     NOTIFICATION = 2
     ERROR = 3
@@ -38,6 +39,7 @@ class RequestData:
         method (str): The method name to invoke.
         params (Tuple): Parameters for the method.
     """
+
     id: str
     method: str
     params: Tuple
@@ -56,6 +58,7 @@ class Connection:
         _database (str | None): Current database in use.
         _auth_token (str | None): Authentication token.
     """
+
     _queues: Dict[int, dict]
     _namespace: str | None
     _database: str | None
@@ -65,6 +68,8 @@ class Connection:
         self,
         base_url: str,
         logger: logging.Logger,
+        encoder,
+        decoder,
     ):
         """
         Initialize the Connection instance.
@@ -72,7 +77,12 @@ class Connection:
         Args:
             base_url (str): The base URL of the server.
             logger (logging.Logger): Logger for debugging and tracking activities.
+            encoder (function): Function to encode the request.
+            decoder (function): Function to decode the response.
         """
+        self._encoder = encoder
+        self._decoder = decoder
+
         self._locks = {
             ResponseType.SEND: threading.Lock(),
             ResponseType.NOTIFICATION: threading.Lock(),
@@ -109,14 +119,11 @@ class Connection:
         """
         raise NotImplementedError("close method must be implemented")
 
-    async def _make_request(self, request_data: RequestData, encoder, decoder) -> dict:
+    async def _make_request(self, request_data: RequestData) -> dict:
         """
         Internal method to send a request and handle the response.
-
         Args:
             request_data (RequestData): The data to send.
-            encoder (function): Function to encode the request.
-            decoder (function): Function to decode the response.
         return:
             dict: The response data from the request.
         """
@@ -225,9 +232,7 @@ class Connection:
         self._logger.debug(f"Request {request_data.id}:", request_data)
 
         try:
-            result = await self._make_request(
-                request_data, encoder=encode, decoder=decode
-            )
+            result = await self._make_request(request_data)
 
             self._logger.debug(f"Result {request_data.id}:", result)
             self._logger.debug(
