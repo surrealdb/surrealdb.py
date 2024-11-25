@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from asyncio import Task
 
 from websockets import Subprotocol, ConnectionClosed, connect
@@ -7,19 +6,12 @@ from websockets.asyncio.client import ClientConnection
 
 from surrealdb.connection import Connection, ResponseType, RequestData
 from surrealdb.constants import WS_REQUEST_TIMEOUT
-from surrealdb.data.cbor import decode
 from surrealdb.errors import SurrealDbConnectionError
 
 
 class WebsocketConnection(Connection):
     _ws: ClientConnection
     _receiver_task: Task
-
-    def __init__(self, base_url: str, logger: logging.Logger):
-        super().__init__(base_url, logger)
-
-        # self._ws = None
-        # self._receiver_task = None
 
     async def connect(self):
         try:
@@ -49,8 +41,8 @@ class WebsocketConnection(Connection):
         if self._ws:
             await self._ws.close()
 
-    async def _make_request(self, request_data: RequestData, encoder, decoder):
-        request_payload = encoder(
+    async def _make_request(self, request_data: RequestData):
+        request_payload = self._encoder(
             {
                 "id": request_data.id,
                 "method": request_data.method,
@@ -85,7 +77,7 @@ class WebsocketConnection(Connection):
 
     async def listen_to_ws(self, ws):
         async for message in ws:
-            response_data = decode(message)
+            response_data = self._decoder(message)
 
             response_id = response_data.get("id")
             if response_id:
@@ -93,6 +85,10 @@ class WebsocketConnection(Connection):
                 await queue.put(response_data)
                 continue
 
-            live_id = response_data.get("result").get("id")
-            queue = self.get_response_queue(ResponseType.NOTIFICATION, live_id)
+            live_id = response_data.get("result").get("id")  # returned as uuid
+            queue = self.get_response_queue(ResponseType.NOTIFICATION, str(live_id))
+            if queue is None:
+                self._logger.error(f"No notification queue set for {live_id}")
+                continue
+
             await queue.put(response_data.get("result"))
