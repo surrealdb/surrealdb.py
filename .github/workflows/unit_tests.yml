@@ -1,8 +1,10 @@
 name: unit-tests
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
-  # push:
     branches:
       - "*"
 
@@ -11,23 +13,47 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [ "3.7", "3.8", "3.9", "3.10" ]
-
+#        python-version: [ "3.9", "3.10", "3.11", "3.12", "3.13" ]
+#        surrealdb-version: [ "v2.0.0", "v1.2.1", "v1.2.0", "v1.0.1", "v1.1.1", "v1.1.0", "v1.0.1", "1.0.0"]
+        python-version: [ "3.9"]
+        surrealdb-version: [ "v2.0.0"]
+    services:
+      surrealdb:
+        image: surrealdb/surrealdb:${{ matrix.surrealdb-version }}
+        ports:
+          - 8000:8000
+        options: >-
+          --health-cmd="curl --fail http://localhost:8000 || exit 1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: Build for tests
-        run: |
-          python tests/scripts/local_build_ci.py
-          pip install docker
-          pip install requests
-#          docker-compose build
-#          docker-compose up -d
-#          sleep 2
+          python-version: '3.9'
 
-      - name: Run Tests
-        run: sh scripts/run_tests.sh
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run unit tests
+        env:
+          SURREALDB_URL: "http://localhost:8000"
+        run: python -m unittest discover -s tests
+
+#      - uses: actions/checkout@v3
+#      - name: Set up Python ${{ matrix.python-version }}
+#        uses: actions/setup-python@v4
+#        with:
+#          python-version: ${{ matrix.python-version }}
+#      - name: Build for tests
+#        run: |
+#          python tests/scripts/local_build_ci.py
+#          pip install docker
+#          pip install requests
+#      - name: Run Tests
+#        run: sh scripts/run_tests.sh
 
