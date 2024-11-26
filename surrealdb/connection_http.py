@@ -21,7 +21,8 @@ class HTTPConnection(Connection):
 
     async def unset(self, key: str):
         with self._request_variables_lock:
-            del self._request_variables[key]
+            if self._request_variables.get(key) is not None:
+                del self._request_variables[key]
 
     async def connect(self) -> None:
         if self._base_url is None:
@@ -36,7 +37,11 @@ class HTTPConnection(Connection):
 
     def _prepare_query_method_params(self, params: Tuple) -> Tuple:
         query, variables = params
-        variables = {**variables, **self._request_variables} if variables else self._request_variables.copy()
+        variables = (
+            {**variables, **self._request_variables}
+            if variables
+            else self._request_variables.copy()
+        )
         return query, variables
 
     async def _make_request(self, request_data: RequestData):
