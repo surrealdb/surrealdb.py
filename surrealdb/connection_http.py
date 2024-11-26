@@ -1,5 +1,5 @@
 import threading
-from typing import Any
+from typing import Any, Tuple
 
 import requests
 
@@ -8,7 +8,7 @@ from surrealdb.errors import SurrealDbConnectionError
 
 
 class HTTPConnection(Connection):
-    _request_variables: dict[str, Any]
+    _request_variables: dict[str, Any] = {}
     _request_variables_lock = threading.Lock()
 
     async def use(self, namespace: str, database: str) -> None:
@@ -34,6 +34,11 @@ class HTTPConnection(Connection):
                 "connection failed. check server is up and base url is correct"
             )
 
+    def _prepare_query_method_params(self, params: Tuple) -> Tuple:
+        query, variables = params
+        variables = {**variables, **self._request_variables} if variables else self._request_variables.copy()
+        return query, variables
+
     async def _make_request(self, request_data: RequestData):
         if self._namespace is None:
             raise SurrealDbConnectionError("namespace not set")
@@ -50,6 +55,9 @@ class HTTPConnection(Connection):
 
         if self._auth_token is not None:
             headers["Authorization"] = f"Bearer {self._auth_token}"
+
+        if request_data.method.lower() == "query":
+            request_data.params = self._prepare_query_method_params(request_data.params)
 
         request_payload = self._encoder(
             {

@@ -25,9 +25,9 @@ class RequestData:
 
 class Connection:
     _queues: Dict[int, dict]
-    _namespace: str | None
-    _database: str | None
-    _auth_token: str | None
+    _namespace: str | None = None
+    _database: str | None = None
+    _auth_token: str | None = None
 
     def __init__(
         self,
