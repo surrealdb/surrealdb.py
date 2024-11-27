@@ -47,6 +47,4 @@ class TestCBOR(TestCase):
         uid = uuid.uuid4()
         encoded = encode(uid)
         decoded = decode(encoded)
-        print(encoded.hex())
-        print(uid)
-        print(decoded)
+

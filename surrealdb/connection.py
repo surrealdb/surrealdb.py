@@ -25,6 +25,7 @@ class RequestData:
 
 class Connection:
     _queues: Dict[int, dict]
+    _locks: Dict[int, threading.Lock]
     _namespace: str | None = None
     _database: str | None = None
     _auth_token: str | None = None

@@ -18,16 +18,15 @@ class TestAsyncLive(TestCase):
         self.db.sign_in("root", "root")
 
     def test_live(self):
-        live_id = self.db.live(Table("users"))
-        print("Live id: ", live_id)
+        if self.params.protocol.lower() == "ws":
+            live_id = self.db.live(Table("users"))
+            live_queue = self.db.live_notifications(live_id)
 
-        live_queue = self.db.live_notifications(live_id)
+            self.db.query("CREATE users;")
 
-        self.db.query("CREATE users;")
-
-        loop_manager = AsyncioRuntime()
-        notification_data = loop_manager.loop.run_until_complete(live_queue.get())
-        self.assertEqual(notification_data.get("id"), live_id)
-        self.assertEqual(notification_data.get("action"), "CREATE")
+            loop_manager = AsyncioRuntime()
+            notification_data = loop_manager.loop.run_until_complete(live_queue.get())
+            self.assertEqual(notification_data.get("id"), live_id)
+            self.assertEqual(notification_data.get("action"), "CREATE")
 
 

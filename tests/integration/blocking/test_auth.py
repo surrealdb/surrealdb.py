@@ -2,7 +2,6 @@
 Handles the integration tests for logging into the database using blocking operations.
 """
 
-import os
 from unittest import TestCase, main
 
 from surrealdb import SurrealDB

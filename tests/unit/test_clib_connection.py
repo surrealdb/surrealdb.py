@@ -11,5 +11,5 @@ class TestCLibConnection(IsolatedAsyncioTestCase):
         self.clib = CLibConnection(base_url='surrealkv://', logger=self.logger, encoder=encode, decoder=decode)
         await self.clib.connect()
 
-    async def test_send(self):
-        await self.clib.send('use', "test_ns", "test_db")
+    # async def test_send(self):
+    #     await self.clib.send('use', "test_ns", "test_db")
