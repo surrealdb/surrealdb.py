@@ -17,24 +17,26 @@ jobs:
 #        surrealdb-version: [ "v2.0.0", "v1.2.1", "v1.2.0", "v1.0.1", "v1.1.1", "v1.1.0", "v1.0.1", "1.0.0"]
         python-version: [ "3.9"]
         surrealdb-version: [ "v2.0.0"]
-    services:
-      surrealdb:
-        image: surrealdb/surrealdb:${{ matrix.surrealdb-version }}
-        ports:
-          - 8000:8000
-        options: >-
-          --health-cmd="curl --fail http://localhost:8000 || exit 1"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=3
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: addnab/docker-run-action@v3
         with:
-          python-version: '3.9'
+          image: surrealdb/surrealdb:${{ matrix.surrealdb-version }}
+          shell: bash
+          options: >-
+            --health-cmd is-ready
+            --health-interval 10s
+            --health-timeout 5s
+            --health-retries 3
+            -p 8000:8000
+          run: ./surreal start memory -u root -p root --log trac
+#      - name: Download and install surrealdb
+#        run: curl -sSf https://install.surrealdb.com | sh
+#
+#      - name: Start surrealdb
+#        run: surreal start memory -u root -p root --log trace
 
       - name: Install dependencies
         run: pip install -r requirements.txt
@@ -44,16 +46,5 @@ jobs:
           SURREALDB_URL: "http://localhost:8000"
         run: python -m unittest discover -s tests
 
-#      - uses: actions/checkout@v3
-#      - name: Set up Python ${{ matrix.python-version }}
-#        uses: actions/setup-python@v4
-#        with:
-#          python-version: ${{ matrix.python-version }}
-#      - name: Build for tests
-#        run: |
-#          python tests/scripts/local_build_ci.py
-#          pip install docker
-#          pip install requests
-#      - name: Run Tests
-#        run: sh scripts/run_tests.sh
+
 
