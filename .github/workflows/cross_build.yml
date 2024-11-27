@@ -1,10 +1,13 @@
 name: cross-build
 
 on:
-  pull_request:
-    types: [closed]
+  push:
     branches:
-      - main
+      - improve-and-fix-workflow
+#  pull_request:
+#    types: [closed]
+#    branches:
+#      - main
 
 jobs:
   wait-for-other-workflow:
