@@ -34,7 +34,7 @@ jobs:
       - name: Checkout Surreal C lib
         uses: actions/checkout@v3
         with:
-          repository: https://github.com/surrealdb/surrealdb.c
+          repository: surrealdb/surrealdb.c
 
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
