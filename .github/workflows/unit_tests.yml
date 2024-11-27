@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-#        python-version: [ "3.9", "3.10", "3.11", "3.12", "3.13" ]
+        python-version: [ "3.9", "3.10", "3.11", "3.12", "3.13" ]
 #        surrealdb-version: [ "v2.0.0", "v1.2.1", "v1.2.0", "v1.0.1", "v1.1.1", "v1.1.0", "v1.0.1", "1.0.0"]
-        python-version: [ "3.9"]
         surrealdb-version: [ "v2.0.0"]
+    name: Run unit test SurrealDB ${{ matrix.surrealdb-version }} - Python Version ${{ matrix.python-version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
