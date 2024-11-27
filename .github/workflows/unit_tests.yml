@@ -21,22 +21,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - uses: addnab/docker-run-action@v3
-        with:
-          image: surrealdb/surrealdb:${{ matrix.surrealdb-version }}
-          shell: bash
-          options: >-
-            --health-cmd is-ready
-            --health-interval 10s
-            --health-timeout 5s
-            --health-retries 3
-            -p 8000:8000
-          run: ./surreal start memory -u root -p root --log trac & sleep 5 &
-#      - name: Download and install surrealdb
-#        run: curl -sSf https://install.surrealdb.com | sh
-#
-#      - name: Start surrealdb
-#        run: surreal start memory -u root -p root --log trace
+      - name: Download and install surrealdb
+        run: curl -sSf https://install.surrealdb.com | sh
+
+      - name: Start surrealdb
+        run: surreal start memory -u root -p root --log trace & sleep 5 &
 
       - name: Install dependencies
         run: pip install -r requirements.txt
