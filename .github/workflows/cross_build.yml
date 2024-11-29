@@ -55,16 +55,3 @@ jobs:
         with:
           name: ${{ matrix.os.name }}-build
           path: dist/${{ matrix.os.name }}
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: ubuntu-latest-build
-          path: dist/linux
