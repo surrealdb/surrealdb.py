@@ -36,19 +36,19 @@
 
 The official SurrealDB SDK for Python.
 
-# Documentation
+## Documentation
 
 View the SDK documentation [here](https://surrealdb.com/docs/integration/libraries/python).
 
-# How to install
+## How to install
 
 ```sh
 pip install surrealdb
 ```
 
-# Basic Usage
+## Basic Usage
 > All examples assume SurrealDB is [installed](https://surrealdb.com/install) and running on port 8000.
-## Initialization
+### Initialization
 To start using the database, create an instance of SurrealDB, connect to your SurrealDB server, and specify the
 namespace and database you wish to work with.
 ```
@@ -60,7 +60,7 @@ db.connect()
 db.use("namespace", "database_name")
 ```
 
-## Using context manager
+### Using context manager
 The library supports Python’s context manager to manage connections automatically. 
 This ensures that connections are properly closed when the block of code finishes executing.
 ```
@@ -69,81 +69,82 @@ from surrealdb.surrealdb import SurrealDB
 with SurrealDB(url="ws://localhost:8080") as db:
     db.use("namespace", "database_name")
 ```
-# Meta Information
-## info() -> dict
+## API reference
+### Metadata
+#### info() -> dict
 Retrieve information about the current authenticated user.
 
-## version() -> str
+#### version() -> str
 Retrieve the server version.
 
-# Connection Management
-## connect()
+### Connection Management
+#### connect()
 Establishes a connection to the SurrealDB server. This method should be called before performing 
 any database operations. It is automatically called when using a context manager. An exception is raised if 
 connection fails
 
-## close()
+#### close()
 Close the active database connection. If using a context manager, this will be handled automatically.
 
-## use(namespace: str, database: str)
+#### use(namespace: str, database: str)
 Specify the namespace and database to use for subsequent operations. Both parameters are required.
 
-## Authentication
-### sign_in(username: str, password: str) -> str
+### Authentication
+#### sign_in(username: str, password: str) -> str
 Log in to the database with a username and password. Returns a JWT token upon successful authentication. The token
 is stored as part of the initialized db instance
 
-### sign_up(username: str, password: str) -> str
+#### sign_up(username: str, password: str) -> str
 Register a new user with the given username and password. Returns a JWT token for the newly created user. The token
 is stored as part of the initialized db instance
 
-### authenticate(token: str)
+#### authenticate(token: str)
 Authenticates a JWT token. Raises an exception otherwise. If valid, the token is stored as part of the initialized db instance
 
-### invalidate(token: str)
+#### invalidate(token: str)
 Invalidate a previously issued JWT token to terminate a session.
 
 
-## Data Manipulation
-### create(thing, data)
+### Data Manipulation
+#### create(thing, data)
 Create a new record in a table or with a specified ID. `thing` is a table or record id
 If only a table is provided, a random ID will be generated. 
 
-### select(thing)
+#### select(thing)
 Retrieve data from a table or record. `thing` is a table or record id
 
-### update(thing, data)
+#### update(thing, data)
 Replace an entire record or all records in a table with new data. `thing` is a table or record id
 
-### delete(thing)
+#### delete(thing)
 Remove a specific record or all records from a table. `thing` is a table or record id
 
-### merge(thing, data)
+#### merge(thing, data)
 Merge new data into an existing record or records. `thing` is a table or record id
 
-### upsert(thing, data)
+#### upsert(thing, data)
 Insert a new record or update an existing one, ensuring no duplicate entries. `thing` is a table or record id
 
-## Query Execution
-### set(name, value)
+### Query Execution
+#### set(name, value)
 
-### unset(name)
+#### unset(name)
 
-### query(query: str, variables: dict = {}) -> List[dict]
+#### query(query: str, variables: dict = {}) -> List[dict]
 Execute a custom SurrealQL query with optional variables for dynamic content. Variable set via the `set` method are available to be the query sql.
 The results are returned as a list of dictionaries.
 
-## Live Queries
+### Live Queries
 Live queries enable monitoring of real-time changes in the database. This is particularly useful for applications requiring immediate 
 updates when data changes.
 
-### live(thing, diff: bool = False) -> uuid.UUID
+#### live(thing, diff: bool = False) -> uuid.UUID
 Initiate a live query on a table. If diff is set to True, the live notifications will contain JSON Patches instead of full record data.
 
-### kill(live_query_id: uuid.UUID)
+#### kill(live_query_id: uuid.UUID)
 Terminate an active live query.
 
-### live_notifications(live_id: uuid.UUID) -> asyncio.Queue
+#### live_notifications(live_id: uuid.UUID) -> asyncio.Queue
 Receive notifications for live query changes.
 
 
