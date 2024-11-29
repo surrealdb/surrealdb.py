@@ -18,7 +18,7 @@ jobs:
         run: "echo 'Waiting for other workflow to complete...'"
 
   build:
-#    if: github.event.pull_request.merged == true
+    if: github.event.pull_request.merged == true
     name: Build C release for ${{ matrix.os.name }}
     strategy:
       matrix:
