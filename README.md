@@ -71,37 +71,37 @@ with SurrealDB(url="ws://localhost:8080") as db:
 ```
 ## API reference
 ### Metadata
-#### info() -> dict
+#### `info() -> dict`
 Retrieve information about the current authenticated user.
 
-#### version() -> str
+#### `version() -> str`
 Retrieve the server version.
 
 ### Connection Management
-#### connect()
+#### `connect()`
 Establishes a connection to the SurrealDB server. This method should be called before performing 
 any database operations. It is automatically called when using a context manager. An exception is raised if 
 connection fails
 
-#### close()
+#### `close()`
 Close the active database connection. If using a context manager, this will be handled automatically.
 
-#### use(namespace: str, database: str)
+#### `use(namespace: str, database: str)`
 Specify the namespace and database to use for subsequent operations. Both parameters are required.
 
 ### Authentication
-#### sign_in(username: str, password: str) -> str
+#### `sign_in(username: str, password: str) -> str`
 Log in to the database with a username and password. Returns a JWT token upon successful authentication. The token
 is stored as part of the initialized db instance
 
-#### sign_up(username: str, password: str) -> str
+#### `sign_up(username: str, password: str) -> str`
 Register a new user with the given username and password. Returns a JWT token for the newly created user. The token
 is stored as part of the initialized db instance
 
-#### authenticate(token: str)
+#### `authenticate(token: str)`
 Authenticates a JWT token. Raises an exception otherwise. If valid, the token is stored as part of the initialized db instance
 
-#### invalidate(token: str)
+#### `invalidate(token: str)`
 Invalidate a previously issued JWT token to terminate a session.
 
 
