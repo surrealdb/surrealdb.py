@@ -46,71 +46,170 @@ View the SDK documentation [here](https://surrealdb.com/docs/integration/librari
 pip install surrealdb
 ```
 
-## Getting started
+## Basic Usage
+> All examples assume SurrealDB is [installed](https://surrealdb.com/install) and running on port 8000.
+### Initialization
+To start using the database, create an instance of SurrealDB, connect to your SurrealDB server, and specify the
+namespace and database you wish to work with.
+```
+from surrealdb.surrealdb import SurrealDB
 
-### Running within synchronous code
-
-> This example requires SurrealDB to be [installed](https://surrealdb.com/install) and running on port 8000.
-
-Import the SDK and create the database connection:
-
-```python
-from surrealdb import SurrealDB
-
-db = SurrealDB("ws://localhost:8000/database/namespace")
+# Connect to the database
+db = SurrealDB(url="ws://localhost:8080")
+db.connect()
+db.use("namespace", "database_name")
 ```
 
-Here, we can see that we defined the connection protocol as WebSocket using `ws://`. We then defined the host as `localhost` and the port as `8000`.
-
-Finally, we defined the database and namespace as `database` and `namespace`.
-We need a database and namespace to connect to SurrealDB. 
-
-Now that we have our connection we need to signin:
-
-```python
-db.signin({
-    "username": "root",
-    "password": "root",
-})
+### Using context manager
+The library supports Python’s context manager to manage connections automatically. 
+This ensures that connections are properly closed when the block of code finishes executing.
 ```
-We can now run our queries to create some users, select them and print the outcome.
+from surrealdb.surrealdb import SurrealDB
 
+with SurrealDB(url="ws://localhost:8080") as db:
+    db.use("namespace", "database_name")
+```
+## Meta Information
+### info() -> dict
+Retrieve information about the current authenticated user.
+
+### version() -> str
+Retrieve the server version.
+
+## Connection Management
+### connect()
+Establishes a connection to the SurrealDB server. This method should be called before performing 
+any database operations. It is automatically called when using a context manager. An exception is raised if 
+connection fails
+
+### close()
+Close the active database connection. If using a context manager, this will be handled automatically.
+
+### use(namespace: str, database: str)
+Specify the namespace and database to use for subsequent operations. Both parameters are required.
+
+## Authentication
+### sign_in(username: str, password: str) -> str
+Log in to the database with a username and password. Returns a JWT token upon successful authentication. The token
+is stored as part of the initialized db instance
+
+### sign_up(username: str, password: str) -> str
+Register a new user with the given username and password. Returns a JWT token for the newly created user. The token
+is stored as part of the initialized db instance
+
+### authenticate(token: str)
+Authenticates a JWT token. Raises an exception otherwise. If valid, the token is stored as part of the initialized db instance
+
+### invalidate(token: str)
+Invalidate a previously issued JWT token to terminate a session.
+
+
+## Data Manipulation
+### create(thing, data)
+Create a new record in a table or with a specified ID. `thing` is a table or record id
+If only a table is provided, a random ID will be generated. 
+
+### select(thing)
+Retrieve data from a table or record. `thing` is a table or record id
+
+### update(thing, data)
+Replace an entire record or all records in a table with new data. `thing` is a table or record id
+
+### delete(thing)
+Remove a specific record or all records from a table. `thing` is a table or record id
+
+### merge(thing, data)
+Merge new data into an existing record or records. `thing` is a table or record id
+
+### upsert(thing, data)
+Insert a new record or update an existing one, ensuring no duplicate entries. `thing` is a table or record id
+
+## Query Execution
+### query(query: str, variables: dict = {}) -> List[dict]
+Execute a custom SurrealQL query with optional variables for dynamic content. The results are returned as a list of dictionaries.
+
+## Live Queries
+Live queries enable monitoring of real-time changes in the database. This is particularly useful for applications requiring immediate 
+updates when data changes.
+
+### live(thing, diff: bool = False) -> uuid.UUID
+Initiate a live query on a table. If diff is set to True, the live notifications will contain JSON Patches instead of full record data.
+
+### kill(live_query_id: uuid.UUID)
+Terminate an active live query.
+
+### live_notifications(live_id: uuid.UUID) -> asyncio.Queue
+Receive notifications for live query changes.
+
+
+## Usage Examples
+### Insert and Retrieve Data
 ```python
-db.query("CREATE user:tobie SET name = 'Tobie';")
-db.query("CREATE user:jaime SET name = 'Jaime';")
-outcome = db.query("SELECT * FROM user;")
-print(outcome)
+db = SurrealDB("ws://localhost:8080")
+db.connect()
+db.use("example_ns", "example_db")
+
+# Insert a record
+new_user = {"name": "Alice", "age": 30}
+inserted_record = db.insert("users", new_user)
+print(f"Inserted Record: {inserted_record}")
+
+# Retrieve the record
+retrieved_users = db.select("users")
+print(f"Retrieved Users: {retrieved_users}")
 ```
 
-### Running within asynchronous code
+### Perform a Custom Query
+```python
+query = "SELECT * FROM users WHERE age > $min_age"
+variables = {"min_age": 25}
 
-> This example requires SurrealDB to be [installed](https://surrealdb.com/install) and running on port 8000.
+results = db.query(query, variables)
+print(f"Query Results: {results}")
+```
 
-The async methods work in the same way, with two main differences:
-- Inclusion of `async def / await`.
-- You need to call the connect method before signing in.
+### Manage Authentication
+```python
+# Sign up a new user
+token = db.sign_up(username="new_user", password="secure_password")
+print(f"New User Token: {token}")
 
+# Sign in as an existing user
+token = db.sign_in(username="existing_user", password="secure_password")
+print(f"Signed In Token: {token}")
+
+# Authenticate using a token
+db.authenticate(token=token)
+print("Authentication successful!")
+```
+
+### Live Query Notifications
 ```python
 import asyncio
-from surrealdb import AsyncSurrealDB
+from surrealdb.surrealdb import SurrealDB
 
-async def main():
-    db = AsyncSurrealDB("ws://localhost:8000/database/namespace")
-    await db.connect()
-    await db.signin({
-        "username": "root",
-        "password": "root",
-    })
-    await db.query("CREATE user:tobie SET name = 'Tobie';")
-    await db.query("CREATE user:jaime SET name = 'Jaime';")
-    outcome = await db.query("SELECT * FROM user;")
-    print(outcome)
+db = SurrealDB("ws://localhost:8080")
+db.connect()
+db.use("example_ns", "example_db")
 
+# Start a live query
+live_id = db.live("users")
 
-# Run the main function
-asyncio.run(main())
+# Process live notifications
+notifications = db.live_notifications(live_id)
+
+async def handle_notifications():
+    while True:
+        notification = await notifications.get()
+        print(f"Live Notification: {notification}")
+
+# Run the notification handler
+asyncio.run(handle_notifications())
 ```
 
-### Using Jupyter Notebooks
-
-The Python SDK currently only supports the `AsyncSurrealDB` methods.
+### Upserting Records
+``` python
+upsert_data = {"id": "user:123", "name": "Charlie", "age": 35}
+result = db.upsert("users", upsert_data)
+print(f"Upsert Result: {result}")
+```
