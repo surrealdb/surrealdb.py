@@ -64,8 +64,6 @@ class TestAsyncHttpUpdate(TestCase):
             },
         )
 
-        print("outcome: ", outcome)
-
         self.assertEqual(
             {
                 "id": RecordID.parse("person:失败"),

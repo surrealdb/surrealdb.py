@@ -2,7 +2,6 @@
 Tests the Update operation of the AsyncSurrealDB class with query and update function.
 """
 
-import asyncio
 from typing import List
 from unittest import IsolatedAsyncioTestCase, main
 

@@ -30,8 +30,6 @@ class TestWSConnection(IsolatedAsyncioTestCase):
         self.ws_con.set_token(token)
 
         live_id = await self.ws_con.send("live", "users")
-        print("Live id: ", live_id)
-
         live_queue = await self.ws_con.live_notifications(live_id)
 
         await self.ws_con.send("query", "CREATE users;")
