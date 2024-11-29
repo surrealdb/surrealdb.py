@@ -90,17 +90,18 @@ await db.use("namespace", "database_name")
 ```
 
 ## Connection Engines
-There are 3 available connection engines you can use to connect to SurrealDb backend. It be via Websocket, HTTP or
+There are 3 available connection engines you can use to connect to SurrealDb backend. It can be via Websocket, HTTP or
 through embedded database connections. The connection types are simply determined by the url scheme provided in 
-the connection url
+the connection url.
 
 ### Via Websocket
 Websocket url can be `ws` or `wss` for secure connection. For example `ws://localhost:8000` and `wss://localhost:8000`.
-All functionalities are available via websockets
+All functionalities are available via websockets.
 
 ### Via HTTP
-HTTP url can be `ws` or `httpd` for secure connection. For example `http://localhost:8000` and `https://localhost:8000`.
-There are some functions that are not available on RPC when using HTTP but are on Websocket. These includes all live query/notification.
+HTTP url can be `http` or `https` for secure connection. For example `http://localhost:8000` and `https://localhost:8000`.
+There are some functions that are not available on RPC when using HTTP but are on Websocket. This includes all 
+live query/notification methods.
 
 
 ### Using SurrealKV and Memory
