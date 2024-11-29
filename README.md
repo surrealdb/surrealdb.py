@@ -36,19 +36,19 @@
 
 The official SurrealDB SDK for Python.
 
-## Documentation
+# Documentation
 
 View the SDK documentation [here](https://surrealdb.com/docs/integration/libraries/python).
 
-## How to install
+# How to install
 
 ```sh
 pip install surrealdb
 ```
 
-## Basic Usage
+# Basic Usage
 > All examples assume SurrealDB is [installed](https://surrealdb.com/install) and running on port 8000.
-### Initialization
+## Initialization
 To start using the database, create an instance of SurrealDB, connect to your SurrealDB server, and specify the
 namespace and database you wish to work with.
 ```
@@ -60,7 +60,7 @@ db.connect()
 db.use("namespace", "database_name")
 ```
 
-### Using context manager
+## Using context manager
 The library supports Python’s context manager to manage connections automatically. 
 This ensures that connections are properly closed when the block of code finishes executing.
 ```
@@ -69,23 +69,23 @@ from surrealdb.surrealdb import SurrealDB
 with SurrealDB(url="ws://localhost:8080") as db:
     db.use("namespace", "database_name")
 ```
-## Meta Information
-### info() -> dict
+# Meta Information
+## info() -> dict
 Retrieve information about the current authenticated user.
 
-### version() -> str
+## version() -> str
 Retrieve the server version.
 
-## Connection Management
-### connect()
+# Connection Management
+## connect()
 Establishes a connection to the SurrealDB server. This method should be called before performing 
 any database operations. It is automatically called when using a context manager. An exception is raised if 
 connection fails
 
-### close()
+## close()
 Close the active database connection. If using a context manager, this will be handled automatically.
 
-### use(namespace: str, database: str)
+## use(namespace: str, database: str)
 Specify the namespace and database to use for subsequent operations. Both parameters are required.
 
 ## Authentication
@@ -125,8 +125,13 @@ Merge new data into an existing record or records. `thing` is a table or record 
 Insert a new record or update an existing one, ensuring no duplicate entries. `thing` is a table or record id
 
 ## Query Execution
+### set(name, value)
+
+### unset(name)
+
 ### query(query: str, variables: dict = {}) -> List[dict]
-Execute a custom SurrealQL query with optional variables for dynamic content. The results are returned as a list of dictionaries.
+Execute a custom SurrealQL query with optional variables for dynamic content. Variable set via the `set` method are available to be the query sql.
+The results are returned as a list of dictionaries.
 
 ## Live Queries
 Live queries enable monitoring of real-time changes in the database. This is particularly useful for applications requiring immediate 
@@ -213,3 +218,8 @@ upsert_data = {"id": "user:123", "name": "Charlie", "age": 35}
 result = db.upsert("users", upsert_data)
 print(f"Upsert Result: {result}")
 ```
+
+## Contributing
+Contributions to this library are welcome! If you encounter issues, have feature requests, or 
+want to make improvements, feel free to open issues or submit pull requests.
+
