@@ -15,7 +15,7 @@ class TestConnection(IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.logger = logging.getLogger(__name__)
         self.url: str = 'http://localhost:8000'
-        self.con = Connection(base_url=self.url, logger=self.logger)
+        self.con = Connection(base_url=self.url, logger=self.logger, encoder=encode, decoder=decode)
 
     async def test___init__(self):
         self.assertEqual(self.url, self.con._base_url)
@@ -52,7 +52,7 @@ class TestConnection(IsolatedAsyncioTestCase):
     async def test__make_request(self):
         request_data = RequestData(id="1", method="test", params=())
         with self.assertRaises(NotImplementedError) as context:
-            await self.con._make_request(request_data, encoder=lambda x: x, decoder=lambda x: x)
+            await self.con._make_request(request_data)
         message = str(context.exception)
         self.assertEqual("_make_request method must be implemented", message)
 
@@ -112,11 +112,7 @@ class TestConnection(IsolatedAsyncioTestCase):
         result = await self.con.send("test", "test")
 
         self.assertEqual(response_data, result)
-        mock__make_request.assert_called_once_with(
-            request_data,
-            encoder=encode,
-            decoder=decode
-        )
+        mock__make_request.assert_called_once_with(request_data)
         self.assertEqual(3, mock_logger.debug.call_count)
 
 
