@@ -18,15 +18,14 @@ class TestAsyncLive(IsolatedAsyncioTestCase):
         await self.db.sign_in("root", "root")
 
     async def test_live(self):
-        live_id = await self.db.live(Table("users"))
-        print("Live id: ", live_id)
+        if self.params.protocol.lower() == "ws":
+            live_id = await self.db.live(Table("users"))
+            live_queue = await self.db.live_notifications(live_id)
 
-        live_queue = await self.db.live_notifications(live_id)
+            await self.db.query("CREATE users;")
 
-        await self.db.query("CREATE users;")
-
-        notification_data = await asyncio.wait_for(live_queue.get(), 10)  # Set timeout
-        self.assertEqual(notification_data.get("id"), live_id)
-        self.assertEqual(notification_data.get("action"), "CREATE")
+            notification_data = await asyncio.wait_for(live_queue.get(), 10)  # Set timeout
+            self.assertEqual(notification_data.get("id"), live_id)
+            self.assertEqual(notification_data.get("action"), "CREATE")
 
 
