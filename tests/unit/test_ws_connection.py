@@ -13,6 +13,10 @@ class TestWSConnection(IsolatedAsyncioTestCase):
         self.ws_con = WebsocketConnection(base_url='ws://localhost:8000', logger=logger, encoder=encode, decoder=decode)
         await self.ws_con.connect()
 
+    async def asyncTearDown(self):
+        await self.ws_con.send("query", "DELETE users;")
+        await self.ws_con.close()
+
     async def test_send(self):
         await self.ws_con.use("test", "test")
         token = await self.ws_con.send('signin', {'user': 'root', 'pass': 'root'})

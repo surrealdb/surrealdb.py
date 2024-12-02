@@ -6,8 +6,20 @@ import uuid
 from dataclasses import dataclass
 
 from typing import Dict, Tuple
-from surrealdb.constants import REQUEST_ID_LENGTH
+from surrealdb.constants import (
+    REQUEST_ID_LENGTH,
+    METHOD_SELECT,
+    METHOD_CREATE,
+    METHOD_INSERT,
+    METHOD_PATCH,
+    METHOD_UPDATE,
+    METHOD_UPSERT,
+    METHOD_DELETE,
+    METHOD_MERGE,
+    METHOD_LIVE,
+)
 from asyncio import Queue
+from surrealdb.data.models import table_or_record_id
 
 
 class ResponseType:
@@ -102,9 +114,29 @@ class Connection:
             if response_type_queues:
                 response_type_queues.pop(queue_id, None)
 
+    @staticmethod
+    def _prepare_method_params(method: str, params) -> Tuple:
+        prepared_params = params
+        if method in [
+            METHOD_SELECT,
+            METHOD_CREATE,
+            METHOD_INSERT,
+            METHOD_PATCH,
+            METHOD_UPDATE,
+            METHOD_UPSERT,
+            METHOD_DELETE,
+            METHOD_MERGE,
+            METHOD_LIVE,
+        ]:  # The first parameters for these methods are expected to be record id or table
+            if len(prepared_params) > 0 and isinstance(prepared_params[0], str):
+                thing = table_or_record_id(prepared_params[0])
+                prepared_params = prepared_params[:0] + (thing,) + prepared_params[1:]
+        return prepared_params
+
     async def send(self, method: str, *params):
+        prepared_params = self._prepare_method_params(method, params)
         request_data = RequestData(
-            id=request_id(REQUEST_ID_LENGTH), method=method, params=params
+            id=request_id(REQUEST_ID_LENGTH), method=method, params=prepared_params
         )
         self._logger.debug(f"Request {request_data.id}:", request_data)
 
