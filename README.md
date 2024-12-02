@@ -89,6 +89,49 @@ await db.connect()
 await db.use("namespace", "database_name")
 ```
 
+### Example Usage
+```python
+from surrealdb import SurrealDB, GeometryPoint, Table
+
+with SurrealDB(url="ws://localhost:8000") as db:
+    db.use("test_ns", "test_db")
+    auth_token = db.sign_in(username="root", password="root")
+
+    # Check token validity. This is not necessary if you called `sign_in` before. This authenticates the
+    # `db` instance too if `sign_in` was not previously called
+    db.authenticate(auth_token)
+
+    # Create an entry
+    person = db.create(Table("persons"), {
+        "Name": "John",
+        "Surname": "Doe",
+        "Location": GeometryPoint(-0.11, 22.00),
+    })
+
+    print("Created person with a map:", person)
+
+    # Get entry by Record ID
+    person = db.select(person.get("id"))
+    print("Selected a person by record id: ", person)
+
+    # Or retrieve the entire table
+    persons = db.select(Table("persons"))
+    print("Selected all in persons table: ", persons)
+
+    # Delete an entry by ID
+    _ = db.delete(persons[0].get("id"))
+
+    # Delete all entries
+    _ = db.delete(Table("persons"))
+
+    # Confirm empty table
+    persons = db.select(Table("persons"))
+    print("No Selected person: ", persons)
+
+    # And later, we can invalidate the token
+    db.invalidate(auth_token)
+```
+
 ## Connection Engines
 There are 3 available connection engines you can use to connect to SurrealDb backend. It can be via Websocket, HTTP or
 through embedded database connections. The connection types are simply determined by the url scheme provided in 
@@ -122,14 +165,15 @@ db = SurrealDB("mem://")
 db = SurrealDB("memory://")
 ```
 
-## Usage Examples
+## Additional Examples
 ### Insert and Retrieve Data
 ```python
 from surrealdb import SurrealDB
 
-db = SurrealDB("ws://localhost:8080")
+db = SurrealDB("ws://localhost:8000")
 db.connect()
 db.use("example_ns", "example_db")
+db.sign_in("root", "root")
 
 # Insert a record
 new_user = {"name": "Alice", "age": 30}
@@ -147,12 +191,18 @@ db.close()
 ```python
 from surrealdb import AsyncSurrealDB
 
-async with AsyncSurrealDB(url="ws://localhost:8080") as db:
-    query = "SELECT * FROM users WHERE age > $min_age"
-    variables = {"min_age": 25}
+async def main():
+    async with AsyncSurrealDB(url="ws://localhost:8000") as db:
+        await db.sign_in("root", "root")
+        await db.use("test", "test")
 
-    results = await db.query(query, variables)
-    print(f"Query Results: {results}")
+        query = "SELECT * FROM users WHERE age > min_age;"
+        variables = {"min_age": 25}
+
+        results = await db.query(query, variables)
+        print(f"Query Results: {results}")
+
+asyncio.run(main())
 ```
 
 ### Manage Authentication
@@ -201,15 +251,13 @@ asyncio.run(handle_notifications())
 ```python
 from surrealdb.surrealdb import SurrealDB
 
-db = SurrealDB("ws://localhost:8080")
-db.connect()
-db.use("example_ns", "example_db")
+with SurrealDB("ws://localhost:8000") as db:
+    db.sign_in("root", "root")
+    db.use("example_ns", "example_db")
 
-upsert_data = {"id": "user:123", "name": "Charlie", "age": 35}
-result = db.upsert("users", upsert_data)
-print(f"Upsert Result: {result}")
-
-db.close()
+    upsert_data = { "name": "Charlie", "age": 35}
+    result = db.upsert("users", upsert_data)
+    print(f"Upsert Result: {result}")
 ```
 
 ## Contributing

@@ -5,7 +5,7 @@ import platform
 
 from surrealdb.errors import SurrealDbConnectionError
 from surrealdb.connection import Connection, RequestData
-from surrealdb.constants import CLIB_FOLDER_PATH
+from surrealdb.constants import CLIB_FOLDER_PATH, METHOD_USE, METHOD_SET, METHOD_UNSET
 
 
 def get_lib_path() -> str:
@@ -186,13 +186,13 @@ class CLibConnection(Connection):
         self._namespace = namespace
         self._database = database
 
-        await self.send("use", namespace, database)
+        await self.send(METHOD_USE, namespace, database)
 
     async def set(self, key: str, value):
-        await self.send("let", key, value)
+        await self.send(METHOD_SET, key, value)
 
     async def unset(self, key: str):
-        await self.send("unset", key)
+        await self.send(METHOD_UNSET, key)
 
     async def _make_request(self, request_data: RequestData):
         request_payload = self._encoder(

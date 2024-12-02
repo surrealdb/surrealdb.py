@@ -17,8 +17,15 @@ class TestAsyncLive(IsolatedAsyncioTestCase):
         await self.db.use(self.params.namespace, self.params.database)
         await self.db.sign_in("root", "root")
 
+    async def asyncTearDown(self):
+        for query in self.queries:
+            await self.db.query(query)
+        await self.db.close()
+
     async def test_live(self):
         if self.params.protocol.lower() == "ws":
+            self.queries = ["DELETE users;"]
+
             live_id = await self.db.live(Table("users"))
             live_queue = await self.db.live_notifications(live_id)
 
