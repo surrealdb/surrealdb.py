@@ -189,7 +189,6 @@ db.close()
 
 ### Perform a Custom Query
 ```python
-import asyncio
 from surrealdb import AsyncSurrealDB
 
 async def main():
@@ -259,7 +258,6 @@ with SurrealDB("ws://localhost:8000") as db:
     upsert_data = { "name": "Charlie", "age": 35}
     result = db.upsert("users", upsert_data)
     print(f"Upsert Result: {result}")
-
 ```
 
 ## Contributing
