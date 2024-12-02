@@ -180,7 +180,7 @@ class CLibConnection(Connection):
             self._lib.sr_free_string(c_err)
 
     async def close(self):
-        pass
+        self._lib.sr_surreal_rpc_free(self._c_surreal_rpc)
 
     async def use(self, namespace: str, database: str) -> None:
         self._namespace = namespace

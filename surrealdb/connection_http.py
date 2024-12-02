@@ -10,6 +10,7 @@ from surrealdb.errors import SurrealDbConnectionError
 class HTTPConnection(Connection):
     _request_variables: dict[str, Any] = {}
     _request_variables_lock = threading.Lock()
+    _is_ready: bool = False
 
     async def use(self, namespace: str, database: str) -> None:
         self._namespace = namespace
@@ -34,6 +35,10 @@ class HTTPConnection(Connection):
             raise SurrealDbConnectionError(
                 "connection failed. check server is up and base url is correct"
             )
+        self._is_ready = True
+
+    async def close(self):
+        self._is_ready = False
 
     def _prepare_query_method_params(self, params: Tuple) -> Tuple:
         query, variables = params
@@ -45,6 +50,9 @@ class HTTPConnection(Connection):
         return query, variables
 
     async def _make_request(self, request_data: RequestData):
+        if not self._is_ready:
+            raise SurrealDbConnectionError("connection not ready. Call the connect() method first")
+
         if self._namespace is None:
             raise SurrealDbConnectionError("namespace not set")
 
