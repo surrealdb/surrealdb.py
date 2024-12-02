@@ -17,8 +17,15 @@ class TestAsyncLive(TestCase):
         self.db.use(self.params.namespace, self.params.database)
         self.db.sign_in("root", "root")
 
+    def tearDown(self):
+        for query in self.queries:
+            self.db.query(query)
+        self.db.close()
+
     def test_live(self):
         if self.params.protocol.lower() == "ws":
+            self.queries = ["DELETE users;"]
+
             live_id = self.db.live(Table("users"))
             live_queue = self.db.live_notifications(live_id)
 

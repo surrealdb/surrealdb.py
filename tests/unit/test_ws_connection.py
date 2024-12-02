@@ -14,12 +14,15 @@ class TestWSConnection(IsolatedAsyncioTestCase):
         self.ws_con = WebsocketConnection(base_url='ws://localhost:8000', logger=logger, encoder=encode, decoder=decode)
         await self.ws_con.connect()
 
+    async def asyncTearDown(self):
+        await self.ws_con.send("query", "DELETE users;")
+        await self.ws_con.close()
+
     async def test_one(self):
         await self.ws_con.use("test", "test")
         token = await self.ws_con.send('signin', {'user': 'root', 'pass': 'root'})
         await self.ws_con.unset("root")
         print("Test set")
-
 
     async def test_create_response_queue(self):
         self.ws_con[1] = {}

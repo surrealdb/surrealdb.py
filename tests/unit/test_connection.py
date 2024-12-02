@@ -75,8 +75,8 @@ class TestConnection(IsolatedAsyncioTestCase):
     async def test_create_response_queue(self):
         # get a queue when there are now queues in the dictionary
         outcome = self.con.create_response_queue(response_type=ResponseType.SEND, queue_id="test")
-        self.assertEqual(self.con._queues[1]["test"], outcome)
-        self.assertEqual(id(outcome), id(self.con._queues[1]["test"]))
+        self.assertEqual(self.con._queues[ResponseType.SEND]["test"], outcome)
+        self.assertEqual(id(outcome), id(self.con._queues[ResponseType.SEND]["test"]))
 
         # get a queue when there are queues in the dictionary with the same queue_id
         outcome_two = self.con.create_response_queue(response_type=ResponseType.SEND, queue_id="test")

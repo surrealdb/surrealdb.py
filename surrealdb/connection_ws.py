@@ -5,7 +5,7 @@ from websockets import Subprotocol, ConnectionClosed, connect
 from websockets.asyncio.client import ClientConnection
 
 from surrealdb.connection import Connection, ResponseType, RequestData
-from surrealdb.constants import WS_REQUEST_TIMEOUT
+from surrealdb.constants import WS_REQUEST_TIMEOUT, METHOD_USE, METHOD_SET, METHOD_UNSET
 from surrealdb.errors import SurrealDbConnectionError
 
 
@@ -26,7 +26,7 @@ class WebsocketConnection(Connection):
         self._namespace = namespace
         self._database = database
 
-        await self.send("use", namespace, database)
+        await self.send(METHOD_USE, namespace, database)
 
     async def set(self, key: str, value) -> None:
         """
@@ -36,7 +36,7 @@ class WebsocketConnection(Connection):
             key (str): The key to set.
             value: The value to set.
         """
-        await self.send("let", key, value)
+        await self.send(METHOD_SET, key, value)
 
     async def unset(self, key: str):
         """
@@ -45,7 +45,7 @@ class WebsocketConnection(Connection):
         Args:
             key (str): The key to unset.
         """
-        await self.send("unset", key)
+        await self.send(METHOD_UNSET, key)
 
     async def close(self):
         if self._receiver_task:
@@ -90,18 +90,25 @@ class WebsocketConnection(Connection):
 
     async def listen_to_ws(self, ws):
         async for message in ws:
-            response_data = self._decoder(message)
+            try:
+                response_data = self._decoder(message)
 
-            response_id = response_data.get("id")
-            if response_id:
-                queue = self.get_response_queue(ResponseType.SEND, response_id)
-                await queue.put(response_data)
-                continue
+                response_id = response_data.get("id")
+                if response_id:
+                    queue = self.get_response_queue(ResponseType.SEND, response_id)
+                    await queue.put(response_data)
+                    continue
 
-            live_id = response_data.get("result").get("id")  # returned as uuid
-            queue = self.get_response_queue(ResponseType.NOTIFICATION, str(live_id))
-            if queue is None:
-                self._logger.error(f"No notification queue set for {live_id}")
-                continue
-
-            await queue.put(response_data.get("result"))
+                live_id = response_data.get("result").get("id")  # returned as uuid
+                queue = self.get_response_queue(ResponseType.NOTIFICATION, str(live_id))
+                if queue is None:
+                    self._logger.error(f"No notification queue set for {live_id}")
+                    continue
+                await queue.put(response_data.get("result"))
+            except asyncio.CancelledError:
+                print("Got CancelledError")
+                break
+            except Exception as e:
+                print(e)
+                break
+        asyncio.get_event_loop().stop()

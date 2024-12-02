@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Union
 
+from surrealdb.errors import SurrealDbError
 from surrealdb.data.types.table import Table
 from surrealdb.data.types.record_id import RecordID
 
@@ -52,10 +53,10 @@ class GraphQLOptions:
 
 
 def table_or_record_id(resource_str: str) -> Union[Table, RecordID]:
-    table, record_id = (
-        resource_str.split(":") if ":" in resource_str else (resource_str, None)
-    )
-    if record_id is not None:
+    if ":" in resource_str:
+        table, record_id = resource_str.split(":")
+        if len(table) == 0 or len(record_id) == 0:
+            raise SurrealDbError("invalid table or record id string")
         return RecordID(table, record_id)
 
-    return Table(table)
+    return Table(resource_str)
