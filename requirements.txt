@@ -1,6 +1,6 @@
 cbor2==5.6.5
 docker==7.1.0
 Requests==2.32.3
-setuptools==65.5.1
+setuptools>=70.0.0
 setuptools_rust==1.6.0
 websockets==14.1
