@@ -295,4 +295,5 @@ class AsyncSurrealDB:
 
         :param live_query_id: The UUID of the live query to kill.
         """
+
         return await self.__connection.send(METHOD_KILL, live_query_id)

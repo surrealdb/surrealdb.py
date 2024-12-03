@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 from unittest import IsolatedAsyncioTestCase
+from unittest.mock import patch
 
 from surrealdb.connection_ws import WebsocketConnection
 from surrealdb.data.cbor import encode, decode
@@ -16,6 +17,12 @@ class TestWSConnection(IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         await self.ws_con.send("query", "DELETE users;")
         await self.ws_con.close()
+
+    async def test_one(self):
+        await self.ws_con.use("test", "test")
+        token = await self.ws_con.send('signin', {'user': 'root', 'pass': 'root'})
+        await self.ws_con.unset("root")
+        print("Test set")
 
     async def test_send(self):
         await self.ws_con.use("test", "test")
