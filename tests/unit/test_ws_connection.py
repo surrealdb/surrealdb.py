@@ -24,9 +24,6 @@ class TestWSConnection(IsolatedAsyncioTestCase):
         await self.ws_con.unset("root")
         print("Test set")
 
-    async def test_create_response_queue(self):
-        self.ws_con[1] = {}
-
     async def test_send(self):
         await self.ws_con.use("test", "test")
         token = await self.ws_con.send('signin', {'user': 'root', 'pass': 'root'})

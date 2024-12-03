@@ -51,7 +51,9 @@ class HTTPConnection(Connection):
 
     async def _make_request(self, request_data: RequestData):
         if not self._is_ready:
-            raise SurrealDbConnectionError("connection not ready. Call the connect() method first")
+            raise SurrealDbConnectionError(
+                "connection not ready. Call the connect() method first"
+            )
 
         if self._namespace is None:
             raise SurrealDbConnectionError("namespace not set")

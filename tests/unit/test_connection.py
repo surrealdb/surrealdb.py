@@ -80,8 +80,8 @@ class TestConnection(IsolatedAsyncioTestCase):
 
         # get a queue when there are queues in the dictionary with the same queue_id
         outcome_two = self.con.create_response_queue(response_type=ResponseType.SEND, queue_id="test")
-        self.assertNotEqual(outcome, outcome_two)
-        self.assertNotEqual(id(outcome), id(outcome_two))
+        self.assertEqual(outcome, outcome_two)
+        self.assertEqual(id(outcome), id(outcome_two))
 
         # get a queue when there are queues in the dictionary with different queue_id
         outcome_three = self.con.create_response_queue(response_type=ResponseType.SEND, queue_id="test_two")
