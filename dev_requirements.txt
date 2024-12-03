@@ -3,7 +3,6 @@ certifi>=2024.07.04
 exceptiongroup==1.1.1
 h11==0.14.0
 httpcore==0.17.2
-httpx==0.24.1
 idna>=3.7
 pydantic>=1.10.13
 semantic-version==2.10.0
