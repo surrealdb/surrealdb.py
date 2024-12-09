@@ -36,8 +36,8 @@ def create_connection_factory(url: str) -> Connection:
     if parsed_url.scheme in CLIB_CONNECTION_SCHEMES:
         logger.debug("embedded url detected, creating a clib connection")
         clib_url = url
-        if parsed_url.scheme is "mem":
-            clib_url = urlparse(url, "memory")
+        if parsed_url.scheme == "mem":
+            clib_url = urlparse(url, "memory").geturl()
 
         return CLibConnection(clib_url, logger, encoder=encode, decoder=decode)
 
