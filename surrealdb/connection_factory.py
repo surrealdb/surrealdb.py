@@ -35,6 +35,10 @@ def create_connection_factory(url: str) -> Connection:
 
     if parsed_url.scheme in CLIB_CONNECTION_SCHEMES:
         logger.debug("embedded url detected, creating a clib connection")
-        return CLibConnection(url, logger, encoder=encode, decoder=decode)
+        clib_url = url
+        if parsed_url.scheme is "mem":
+            clib_url = urlparse(url, "memory")
+
+        return CLibConnection(clib_url, logger, encoder=encode, decoder=decode)
 
     raise Exception("no connection type available")
