@@ -25,7 +25,7 @@ class HTTPConnection(Connection):
             if self._request_variables.get(key) is not None:
                 del self._request_variables[key]
 
-    async def connect(self) -> None:
+    async def connect(self, _max_size: int = 1024) -> None:
         if self._base_url is None:
             raise SurrealDbConnectionError("base url not set for http connection")
 
