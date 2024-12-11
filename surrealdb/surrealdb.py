@@ -73,7 +73,9 @@ class SurrealDB:
     def connect(self, max_size: int = 1024) -> Self:
         """Connect to SurrealDB."""
         loop_manager = AsyncioRuntime()
-        loop_manager.loop.run_until_complete(self.__connection.connect(max_size=max_size))
+        loop_manager.loop.run_until_complete(
+            self.__connection.connect(max_size=max_size)
+        )
 
         return self
 

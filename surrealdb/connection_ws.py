@@ -18,7 +18,7 @@ class WebsocketConnection(Connection):
             self._ws = await connect(
                 self._base_url + "/rpc",
                 subprotocols=[Subprotocol("cbor")],
-                max_size=max_size
+                max_size=max_size,
             )
             self._receiver_task = asyncio.create_task(self.listen_to_ws(self._ws))
         except Exception as e:
