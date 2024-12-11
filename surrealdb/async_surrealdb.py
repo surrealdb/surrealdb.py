@@ -69,9 +69,9 @@ class AsyncSurrealDB:
     async def __aexit__(self, *args):
         await self.close()
 
-    async def connect(self) -> Self:
+    async def connect(self, max_size: int = 1024) -> Self:
         """Connect to SurrealDB."""
-        await self.__connection.connect()
+        await self.__connection.connect(max_size=max_size)
         return self
 
     async def close(self):

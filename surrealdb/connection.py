@@ -120,7 +120,7 @@ class Connection:
         """
         raise NotImplementedError("use method must be implemented")
 
-    async def connect(self) -> None:
+    async def connect(self, max_size: int) -> None:
         """
         Establish a connection to the server.
         """
