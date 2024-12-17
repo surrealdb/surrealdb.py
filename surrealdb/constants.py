@@ -43,4 +43,4 @@ ROOT_DIR = os.path.abspath(
 )
 CLIB_FOLDER_PATH = os.path.join(ROOT_DIR, "libsrc")
 
-WS_REQUEST_TIMEOUT = 10  # seconds
+DEFAULT_REQUEST_TIMEOUT = 10  # seconds

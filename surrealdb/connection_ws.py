@@ -5,7 +5,7 @@ from websockets import Subprotocol, ConnectionClosed, connect
 from websockets.asyncio.client import ClientConnection
 
 from surrealdb.connection import Connection, ResponseType, RequestData
-from surrealdb.constants import WS_REQUEST_TIMEOUT, METHOD_USE, METHOD_SET, METHOD_UNSET
+from surrealdb.constants import METHOD_USE, METHOD_SET, METHOD_UNSET
 from surrealdb.errors import SurrealDbConnectionError
 
 
@@ -68,7 +68,7 @@ class WebsocketConnection(Connection):
             await self._ws.send(request_payload)
 
             response_data = await asyncio.wait_for(
-                queue.get(), WS_REQUEST_TIMEOUT
+                queue.get(), self._timeout
             )  # Set timeout
 
             if response_data.get("error"):
@@ -81,7 +81,7 @@ class WebsocketConnection(Connection):
             raise SurrealDbConnectionError(e)
         except asyncio.TimeoutError:
             raise SurrealDbConnectionError(
-                f"Request timed-out after {WS_REQUEST_TIMEOUT} seconds"
+                f"Request timed-out after {self._timeout} seconds"
             )
         except Exception as e:
             raise e
