@@ -107,6 +107,6 @@ class WebsocketConnection(Connection):
                 await queue.put(response_data.get("result"))
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except Exception:
                 break
         asyncio.get_event_loop().stop()

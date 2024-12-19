@@ -135,7 +135,7 @@ class Connection:
         """
         raise NotImplementedError("close method must be implemented")
 
-    async def _make_request(self, request_data: RequestData) -> dict:
+    async def _make_request(self, request_data: RequestData):
         """
         Internal method to send a request and handle the response.
         Args:
