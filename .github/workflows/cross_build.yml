@@ -3,7 +3,7 @@ name: cross-build
 on:
   push:
     branches:
-      - improve-and-fix-workflow
+      - embedded-lib-cross-build
 #  pull_request:
 #    types: [closed]
 #    branches:
