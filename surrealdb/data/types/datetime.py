@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from math import floor
 from typing import Tuple
+import pytz
 
 
 @dataclass
@@ -19,4 +20,4 @@ class DateTimeCompact:
         return sec, nsec
 
     def get_date_time(self, fmt: str = "%Y-%m-%dT%H:%M:%S.%fZ"):
-        return datetime.fromtimestamp(self.timestamp / pow(10, 9)).strftime(fmt)
+        return datetime.fromtimestamp(self.timestamp / pow(10, 9), pytz.UTC).strftime(fmt)

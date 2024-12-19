@@ -18,6 +18,6 @@ class TestCBOR(TestCase):
         encoded = encode(compact_date_time)
         decoded = decode(encoded)
 
-        self.assertEqual(decoded.get_date_time(), '2024-12-12T10:00:58.083988Z')
+        self.assertEqual(decoded.get_date_time(), '2024-12-12T09:00:58.083988Z')
 
 
