@@ -15,7 +15,7 @@ class TestConnection(IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.logger = logging.getLogger(__name__)
         self.url: str = 'http://localhost:8000'
-        self.con = Connection(base_url=self.url, logger=self.logger, encoder=encode, decoder=decode)
+        self.con = Connection(base_url=self.url, logger=self.logger, encoder=encode, decoder=decode, timeout=10)
 
     async def test___init__(self):
         self.assertEqual(self.url, self.con._base_url)

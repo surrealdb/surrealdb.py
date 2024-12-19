@@ -85,3 +85,5 @@ integration_tests/node_modules/
 
 clog/
 manifest/
+.mypy_cache/
+.ruff_cache/

@@ -77,8 +77,10 @@ class sr_notification_t(ctypes.Structure):
 
 
 class CLibConnection(Connection):
-    def __init__(self, base_url: str, logger: logging.Logger, encoder, decoder):
-        super().__init__(base_url, logger, encoder, decoder)
+    def __init__(
+        self, base_url: str, logger: logging.Logger, encoder, decoder, timeout: int
+    ):
+        super().__init__(base_url, logger, encoder, decoder, timeout)
 
         lib_path = get_lib_path()
         self._lib = ctypes.CDLL(lib_path)

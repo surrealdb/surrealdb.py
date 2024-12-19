@@ -27,7 +27,7 @@ METHOD_KILL = "kill"
 # Connection
 HTTP_CONNECTION_SCHEMES = ["http", "https"]
 WS_CONNECTION_SCHEMES = ["ws", "wss"]
-CLIB_CONNECTION_SCHEMES = ["memory", "surrealkv"]
+CLIB_CONNECTION_SCHEMES = ["memory", "surrealkv", "mem"]
 ALLOWED_CONNECTION_SCHEMES = (
     HTTP_CONNECTION_SCHEMES + WS_CONNECTION_SCHEMES + CLIB_CONNECTION_SCHEMES
 )
@@ -43,4 +43,4 @@ ROOT_DIR = os.path.abspath(
 )
 CLIB_FOLDER_PATH = os.path.join(ROOT_DIR, "libsrc")
 
-WS_REQUEST_TIMEOUT = 10  # seconds
+DEFAULT_REQUEST_TIMEOUT = 10  # seconds
