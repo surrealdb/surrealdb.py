@@ -20,4 +20,6 @@ class DateTimeCompact:
         return sec, nsec
 
     def get_date_time(self, fmt: str = "%Y-%m-%dT%H:%M:%S.%fZ"):
-        return datetime.fromtimestamp(self.timestamp / pow(10, 9), pytz.UTC).strftime(fmt)
+        return datetime.fromtimestamp(self.timestamp / pow(10, 9), pytz.UTC).strftime(
+            fmt
+        )
