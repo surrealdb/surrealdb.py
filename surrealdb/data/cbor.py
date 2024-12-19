@@ -1,6 +1,7 @@
 import cbor2
 
 from surrealdb.data.types import constants
+from surrealdb.data.types.datetime import DateTimeCompact
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.future import Future
 from surrealdb.data.types.geometry import (
@@ -64,7 +65,12 @@ def default_encoder(encoder, obj):
         tagged = cbor2.CBORTag(constants.TAG_BOUND_EXCLUDED, obj.value)
 
     elif isinstance(obj, Duration):
-        tagged = cbor2.CBORTag(constants.TAG_DURATION, obj.getSecondsAndNano())
+        tagged = cbor2.CBORTag(constants.TAG_DURATION, obj.get_seconds_and_nano())
+
+    elif isinstance(obj, DateTimeCompact):
+        tagged = cbor2.CBORTag(
+            constants.TAG_DATETIME_COMPACT, obj.get_seconds_and_nano()
+        )
 
     else:
         raise SurrealDbEncodeError("no encoder for type ", type(obj))
@@ -114,6 +120,9 @@ def tag_decoder(decoder, tag, shareable_index=None):
 
     elif tag.tag == constants.TAG_DURATION:
         return Duration.parse(tag.value[0], tag.value[1])
+
+    elif tag.tag == constants.TAG_DATETIME_COMPACT:
+        return DateTimeCompact.parse(tag.value[0], tag.value[1])
 
     else:
         raise SurrealDbDecodeError("no decoder for tag", tag.tag)
