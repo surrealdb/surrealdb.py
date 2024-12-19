@@ -1,7 +1,6 @@
-cbor2==5.6.5
-docker==7.1.0
-Requests==2.32.3
-setuptools>=70.0.0
-setuptools_rust==1.6.0
-websockets==14.1
+docker_py==1.10.6
 pytz==2024.2
+setuptools==63.2.0
+setuptools==75.6.0
+setuptools_rust==1.6.0
+typing_extensions==4.12.2
