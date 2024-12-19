@@ -29,6 +29,9 @@ def create_connection_factory(
     if connection_url is None:
         connection_url = DEFAULT_CONNECTION_URL
 
+    if timeout <= 0:
+        timeout = DEFAULT_REQUEST_TIMEOUT
+
     parsed_url = urlparse(connection_url)
     if parsed_url.scheme not in ALLOWED_CONNECTION_SCHEMES:
         raise SurrealDbConnectionError(
