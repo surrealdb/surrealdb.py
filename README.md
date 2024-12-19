@@ -50,14 +50,16 @@ pip install surrealdb
 > All examples assume SurrealDB is [installed](https://surrealdb.com/install) and running on port 8000.
 ### Initialization
 To start using the database, create an instance of SurrealDB, connect to your SurrealDB server, and specify the
-namespace and database you wish to work with.
+namespace and database you wish to work with. Always remember to close the db connection after use.
 ```python
 from surrealdb import SurrealDB
 
 # Connect to the database
-db = SurrealDB(url="ws://localhost:8080")
+db = SurrealDB(url="ws://localhost:8000")
 db.connect()
 db.use("namespace", "database_name")
+# Your DML code...
+db.close()
 ```
 
 ### Using context manager
@@ -66,8 +68,9 @@ This ensures that connections are properly closed when the block of code finishe
 ```python
 from surrealdb import SurrealDB
 
-with SurrealDB(url="ws://localhost:8080") as db:
+with SurrealDB(url="ws://localhost:8000") as db:
     db.use("namespace", "database_name")
+    # Your DML code...
 ```
 
 ### Using Async
@@ -76,17 +79,20 @@ ensuring flexibility for any range of use cases. The APIs do not differ
 ```python
 from surrealdb import AsyncSurrealDB
 
-async with AsyncSurrealDB(url="ws://localhost:8080") as db:
+async with AsyncSurrealDB(url="ws://localhost:8000") as db:
     await db.use("namespace", "database_name")
+    # Your DML code...
 ```
 Without context manager:
 ```python
 from surrealdb import AsyncSurrealDB
 
 # Connect to the database
-db = AsyncSurrealDB(url="ws://localhost:8080")
+db = AsyncSurrealDB(url="ws://localhost:8000")
 await db.connect()
 await db.use("namespace", "database_name")
+# Your DML code...
+await db.close()
 ```
 
 ### Example Usage
@@ -190,6 +196,8 @@ db.close()
 ### Perform a Custom Query
 ```python
 from surrealdb import AsyncSurrealDB
+import asyncio
+
 
 async def main():
     async with AsyncSurrealDB(url="ws://localhost:8000") as db:
@@ -209,7 +217,7 @@ asyncio.run(main())
 ```python
 from surrealdb import SurrealDB
 
-with SurrealDB(url="ws://localhost:8080") as db:
+with SurrealDB(url="ws://localhost:8000") as db:
     # Sign up a new user
     token = db.sign_up(username="new_user", password="secure_password")
     print(f"New User Token: {token}")
@@ -228,7 +236,7 @@ with SurrealDB(url="ws://localhost:8080") as db:
 import asyncio
 from surrealdb.surrealdb import SurrealDB
 
-db = SurrealDB("ws://localhost:8080")
+db = SurrealDB("ws://localhost:8000")
 db.connect()
 db.use("example_ns", "example_db")
 

@@ -10,7 +10,7 @@ class TestHTTPConnection(IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         logger = logging.getLogger(__name__)
 
-        self.http_con = HTTPConnection(base_url='http://localhost:8000', logger=logger, encoder=encode, decoder=decode)
+        self.http_con = HTTPConnection(base_url='http://localhost:8000', logger=logger, encoder=encode, decoder=decode, timeout=10)
         await self.http_con.connect()
 
     async def asyncTearDown(self):

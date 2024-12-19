@@ -83,6 +83,7 @@ class Connection:
         logger: logging.Logger,
         encoder,
         decoder,
+        timeout: int,
     ):
         """
         Initialize the Connection instance.
@@ -92,6 +93,7 @@ class Connection:
             logger (logging.Logger): Logger for debugging and tracking activities.
             encoder (function): Function to encode the request.
             decoder (function): Function to decode the response.
+            timeout (int): Request timeout in seconds
         """
         self._encoder = encoder
         self._decoder = decoder
@@ -109,6 +111,7 @@ class Connection:
 
         self._base_url = base_url
         self._logger = logger
+        self._timeout = timeout
 
     async def use(self, namespace: str, database: str) -> None:
         """
@@ -132,7 +135,7 @@ class Connection:
         """
         raise NotImplementedError("close method must be implemented")
 
-    async def _make_request(self, request_data: RequestData) -> dict:
+    async def _make_request(self, request_data: RequestData):
         """
         Internal method to send a request and handle the response.
         Args:

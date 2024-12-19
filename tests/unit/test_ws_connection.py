@@ -11,7 +11,7 @@ from surrealdb.data.cbor import encode, decode
 class TestWSConnection(IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         logger = logging.getLogger(__name__)
-        self.ws_con = WebsocketConnection(base_url='ws://localhost:8000', logger=logger, encoder=encode, decoder=decode)
+        self.ws_con = WebsocketConnection(base_url='ws://localhost:8000', logger=logger, encoder=encode, decoder=decode, timeout=10)
         await self.ws_con.connect()
 
     async def asyncTearDown(self):
@@ -22,7 +22,6 @@ class TestWSConnection(IsolatedAsyncioTestCase):
         await self.ws_con.use("test", "test")
         token = await self.ws_con.send('signin', {'user': 'root', 'pass': 'root'})
         await self.ws_con.unset("root")
-        print("Test set")
 
     async def test_send(self):
         await self.ws_con.use("test", "test")

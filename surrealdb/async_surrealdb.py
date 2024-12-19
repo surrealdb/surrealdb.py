@@ -20,12 +20,12 @@ async with SurrealDB("ws://localhost:8080") as db:
 """
 
 import asyncio
+import logging
 import uuid
 from typing import Union, List
 from typing_extensions import Self
 
 from surrealdb.constants import (
-    DEFAULT_CONNECTION_URL,
     METHOD_KILL,
     METHOD_LIVE,
     METHOD_MERGE,
@@ -51,16 +51,16 @@ from surrealdb.data import Table, RecordID, Patch, QueryResponse
 class AsyncSurrealDB:
     """This class is responsible for managing the connection to SurrealDB and managing operations on the connection."""
 
-    def __init__(self, url: str | None = None) -> None:
+    def __init__(self, url: str | None = None, timeout: int = 0) -> None:
         """
         The constructor for the SurrealDB class.
 
         :param url: the url to connect to SurrealDB with
         """
-        if url is None:
-            url = DEFAULT_CONNECTION_URL
-
-        self.__connection = create_connection_factory(url)
+        logger = logging.getLogger(__name__)
+        self.__connection = create_connection_factory(
+            connection_url=url, timeout=timeout, logger=logger
+        )
 
     async def __aenter__(self):
         await self.connect()
