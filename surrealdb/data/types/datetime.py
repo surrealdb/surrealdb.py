@@ -1,4 +1,4 @@
-import pytz
+import pytz  # type: ignore
 
 from dataclasses import dataclass
 from datetime import datetime
