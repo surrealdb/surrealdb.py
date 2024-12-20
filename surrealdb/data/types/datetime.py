@@ -1,5 +1,5 @@
 import pytz
-import typing_pytz
+
 from dataclasses import dataclass
 from datetime import datetime
 from math import floor
