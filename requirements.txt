@@ -4,6 +4,6 @@ pytz==2024.2
 Requests==2.32.3
 setuptools>=70.0.0
 setuptools_rust==1.6.0
-types-pytz==2024.2.0.20241003
+types_pytz==2024.2.0.20241003
 typing_extensions==4.12.2
 websockets==14.1
