@@ -2,7 +2,6 @@
 import pathlib
 
 from setuptools import setup
-from setuptools_rust import Binding, RustExtension
 
 
 with open("README.md", "r") as fh:
@@ -14,18 +13,18 @@ with open(str(pathlib.Path(__file__).parent.absolute()) + "/surrealdb/VERSION.tx
 
 
 setup(
-    name="surrealdb-beta",
-    author="Maxwell Flitton",
+    name="surrealdb",
+    author="SurrealDB",
     author_email="maxwell@gmail.com",
     description="SurrealDB python client.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     version=version,
-    rust_extensions=[RustExtension("surrealdb.rust_surrealdb", binding=Binding.PyO3)],
+    # package_dir={"surrealdb": "surrealdb"},
     packages=[
         "surrealdb",
-        "surrealdb.execution_mixins",
-        "surrealdb.async_execution_mixins"
+        "surrealdb.data",
+        "surrealdb.data.types",
     ],
     package_data={
         "surrealdb": ["binaries/*"],
