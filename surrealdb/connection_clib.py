@@ -10,15 +10,15 @@ from surrealdb.constants import CLIB_FOLDER_PATH, METHOD_USE, METHOD_SET, METHOD
 
 def get_lib_path() -> str:
     if platform.system() == "Linux":
-        lib_extension = ".so"
+        lib_file = "libsurrealdb_c.so"
     elif platform.system() == "Darwin":
-        lib_extension = ".dylib"
+        lib_file = "libsurrealdb_c.dylib"
     elif platform.system() == "Windows":
-        lib_extension = ".dll"
+        lib_file = "surrealdb_c.dll"
     else:
         raise SurrealDbConnectionError("Unsupported operating system")
 
-    lib_path = os.path.join(CLIB_FOLDER_PATH, f"libsurrealdb_c{lib_extension}")
+    lib_path = os.path.join(CLIB_FOLDER_PATH, f"{lib_file}")
     if os.path.isfile(lib_path) is not True:
         raise Exception(f"{lib_path} is missing")
 
