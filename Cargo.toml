@@ -1,0 +1,16 @@
+[package]
+name = "rust_surrealdb"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "rust_surrealdb"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = "0.23.1"
+surrealdb = { version = "2.1.4",  features = ["kv-surrealkv", "kv-mem", "http"] }
+thiserror = "2.0.9"
+tokio = "1.42.0"
+uuid = { version = "1.11.0", features = ["v4"] }
