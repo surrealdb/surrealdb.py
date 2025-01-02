@@ -9,6 +9,7 @@ name = "rust_surrealdb"
 crate-type = ["cdylib"]
 
 [dependencies]
+hex = "0.4.3"
 pyo3 = "0.23.1"
 surrealdb = { version = "2.1.4",  features = ["kv-surrealkv", "kv-mem", "http"] }
 thiserror = "2.0.9"

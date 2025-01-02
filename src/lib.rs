@@ -1,6 +1,5 @@
 use pyo3::prelude::*;
 use pyo3::pymodule;
-use crate::connection::Adapter;
 
 mod connection;
 mod python;
@@ -10,6 +9,7 @@ mod python;
 fn rust_surrealdb(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(python::sum_as_string, m)?)?;
     m.add_wrapped(wrap_pyfunction!(python::rust_connect)).expect("TODO: panic message");
+    m.add_wrapped(wrap_pyfunction!(python::rust_execute)).expect("TODO: panic message");
     Ok(())
 }
 

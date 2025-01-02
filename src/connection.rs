@@ -1,14 +1,14 @@
+use pyo3::pyclass;
 use std::collections::BTreeMap;
 use std::error;
 use std::sync::RwLock;
 use std::time::Duration;
-use pyo3::pyclass;
 use surrealdb;
 use surrealdb::dbs::Session;
 use surrealdb::kvs::Datastore;
-use surrealdb::rpc::{Data, RpcContext};
 use surrealdb::rpc::format::cbor;
 use surrealdb::rpc::method::Method;
+use surrealdb::rpc::{Data, RpcContext};
 use surrealdb::sql;
 
 #[derive(Debug)]
@@ -33,7 +33,6 @@ pub struct AdapterConfig {
     pub query_timeout: Option<Duration>,
     pub transaction_timeout: Option<Duration>,
 }
-
 
 impl RpcContext for SurrealRpc {
     fn kvs(&self) -> &Datastore {
@@ -66,14 +65,17 @@ impl RpcContext for SurrealRpc {
     async fn handle_kill(&self, _lqid: &uuid::Uuid) {}
 }
 
-pub async fn make_connection(address: &str, adapter_config: AdapterConfig) -> Result<Adapter, Box<dyn error::Error>> {
+pub async fn make_connection(
+    address: &str,
+    adapter_config: AdapterConfig,
+) -> Result<Adapter, Box<dyn error::Error>> {
     let kvs = match Datastore::new(address).await {
         Ok(kvs) => {
             if let Err(error) = kvs.check_version().await {
-                return Err(error.into())
+                return Err(error.into());
             };
             if let Err(error) = kvs.bootstrap().await {
-                return Err(error.into())
+                return Err(error.into());
             }
             kvs
         }
@@ -94,24 +96,33 @@ pub async fn make_connection(address: &str, adapter_config: AdapterConfig) -> Re
         vars: BTreeMap::default(),
     };
 
-    Ok(Adapter { rpc: RwLock::new(rpc) })
+    Ok(Adapter {
+        rpc: RwLock::new(rpc),
+    })
 }
 
-pub async fn execute(adapter: &Adapter, request_data: Vec<u8>) -> Result<Vec<u8>, Box<dyn error::Error>> {
+pub async fn execute(
+    adapter: &Adapter,
+    request_data: Vec<u8>,
+) -> Result<Vec<u8>, Box<dyn error::Error>> {
     let in_data = cbor::req(request_data)?;
 
     let method = Method::parse(in_data.method);
     let res = match method.needs_mutability() {
         true => {
-            adapter.rpc
-                .read().unwrap()
-                .execute_immutable(method, in_data.params)
+            adapter
+                .rpc
+                .write()
+                .unwrap()
+                .execute_mutable(method, in_data.params)
                 .await
         }
         false => {
-            adapter.rpc
-                .write().unwrap()
-                .execute_mutable(method, in_data.params)
+            adapter
+                .rpc
+                .read()
+                .unwrap()
+                .execute_immutable(method, in_data.params)
                 .await
         }
     }?;
@@ -120,18 +131,35 @@ pub async fn execute(adapter: &Adapter, request_data: Vec<u8>) -> Result<Vec<u8>
     Ok(out)
 }
 
-
 #[cfg(test)]
 mod tests {
+    use crate::connection::{execute, make_connection, AdapterConfig};
+    use hex;
     use std::time::Duration;
-    use crate::connection::{make_connection, AdapterConfig};
 
     #[test]
     fn test_get_connection() {
-        let con = make_connection("memory", AdapterConfig{
-            strict: true,
-            query_timeout: Option::from(Duration::new(10, 0)),
-            transaction_timeout: Option::from(Duration::new(10, 0))
-        }).unwrap();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let con = make_connection(
+                "memory",
+                AdapterConfig {
+                    strict: true,
+                    query_timeout: Option::from(Duration::new(10, 0)),
+                    transaction_timeout: Option::from(Duration::new(10, 0)),
+                },
+            )
+            .await
+            .unwrap();
+
+           let setup_ns_and_db_req =
+                hex::decode("a36269646a78744533413077566571666d6574686f646375736566706172616d738267746573745f6e7367746573745f6462")
+                .unwrap();
+
+            let res = execute(&con, setup_ns_and_db_req).await.unwrap();
+
+            // let request_data = cbor::res(request).unwrap();
+            println!("{:?}", hex::encode(&res));
+        })
     }
 }
