@@ -1,4 +1,2 @@
 recursive-include surrealdb *.so
-recursive-include surrealdb *.dll
-recursive-include surrealdb *.dylib
 recursive-include surrealdb *.txt

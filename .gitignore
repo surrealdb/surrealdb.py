@@ -74,7 +74,7 @@ Cargo.lock
 *.egg-info/
 *.egg
 .eggs/
-#*.so
+*.so
 /build/
 # -----------------------------------
 # server tests
