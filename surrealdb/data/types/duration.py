@@ -1,6 +1,7 @@
 from dataclasses import dataclass
-from math import floor
 from typing import Tuple
+
+from math import floor
 
 
 @dataclass
