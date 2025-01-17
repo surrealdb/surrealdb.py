@@ -20,7 +20,7 @@ classifiers = [
 ]
 
 [build-system]
-requires = ["setuptools", "wheel", "setuptools-rust"]
+requires = ["setuptools", "wheel"]
 
 [tool.poetry.dependencies]
 python = "^3.10"
