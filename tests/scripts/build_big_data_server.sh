@@ -12,6 +12,6 @@ if [ -d "./db_snapshots/big_data_snapshot" ]; then
 fi
 
 dockpack pull -i maxwellflitton/surrealdb-data -d ./db_snapshots/big_data_snapshot
-rm ./db_snapshots/big_data_snapshot/package/LOCK
+#rm ./db_snapshots/big_data_snapshot/package/LOCK
 
 docker build -f ./builds/big_data_dockerfile -t surrealdb-big-data .
