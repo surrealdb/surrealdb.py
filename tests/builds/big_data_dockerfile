@@ -7,8 +7,8 @@ RUN apt-get install tree -y
 RUN apt-get install -y --no-install-recommends unzip bash
 RUN curl -sSL https://raw.githubusercontent.com/maxwellflitton/surrealdb-backup-cli/main/scripts/install.sh | bash
 
-COPY ./db_snapshots/big_data_snapshot/package/ ./big_data_snapshot/
-RUN ./surrealdb_backup unpack -d ./unpacked_data/  -t ./big_data_snapshot/
+COPY ./db_snapshots/big_data_snapshot/million_rows.sst ./million_rows.sst
+RUN ./surrealdb_backup unpack -d ./unpacked_data/  -t ./million_rows.sst
 RUN rm ./unpacked_data/LOCK
 RUN curl -sSf https://install.surrealdb.com | sh
 
