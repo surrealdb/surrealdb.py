@@ -1,4 +1,4 @@
-from unittest import TestCase
+from unittest import TestCase, main
 
 from surrealdb.data.types.datetime import DateTimeCompact
 from surrealdb.data.cbor import encode, decode
@@ -21,3 +21,5 @@ class TestCBOR(TestCase):
         self.assertEqual(decoded.get_date_time(), '2024-12-12T09:00:58.083988Z')
 
 
+if __name__ == '__main__':
+    main()

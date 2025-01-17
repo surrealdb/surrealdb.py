@@ -1,9 +1,9 @@
-import pytz  # type: ignore
-
 from dataclasses import dataclass
 from datetime import datetime
-from math import floor
 from typing import Tuple
+
+import pytz  # type: ignore
+from math import floor
 
 
 @dataclass
@@ -11,7 +11,7 @@ class DateTimeCompact:
     timestamp: int = 0  # nanoseconds
 
     @staticmethod
-    def parse(seconds: int, nanoseconds: int):
+    def parse(seconds: int, nanoseconds: int) -> "DateTimeCompact":
         return DateTimeCompact(nanoseconds + (seconds * pow(10, 9)))
 
     def get_seconds_and_nano(self) -> Tuple[int, int]:
