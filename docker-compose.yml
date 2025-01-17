@@ -8,7 +8,16 @@ services:
       - SURREAL_PASS=root
       - SURREAL_LOG=trace
     ports:
-      - 8000:8000
+      - 8300:8000
+
+  surrealdb_big_data:
+    image: surrealdb-big-data
+#    environment:
+#      - SURREAL_USER=root
+#      - SURREAL_PASS=root
+#      - SURREAL_LOG=trace
+    ports:
+      - 9000:8000
 
   surrealdb_big_data:
     image: surrealdb/surrealdb:v2.0.0
