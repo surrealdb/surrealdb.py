@@ -16,7 +16,7 @@ class WebsocketConnection(Connection):
     async def connect(self):
         try:
             self._ws = await connect(
-                self._base_url + "/rpc", subprotocols=[Subprotocol("cbor")]
+                self._base_url + "/rpc", subprotocols=[Subprotocol("cbor")], max_size=1048576
             )
             self._receiver_task = asyncio.create_task(self._listen_to_ws(self._ws))
         except Exception as e:
@@ -108,5 +108,6 @@ class WebsocketConnection(Connection):
             except asyncio.CancelledError:
                 self._logger.info(f"Stopped listening for RPC responses")
                 break
-            except Exception:
+            except Exception as e:
+                self._logger.error(e)
                 continue
