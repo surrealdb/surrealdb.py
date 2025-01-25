@@ -16,9 +16,11 @@ class WebsocketConnection(Connection):
     async def connect(self):
         try:
             self._ws = await connect(
-                self._base_url + "/rpc", subprotocols=[Subprotocol("cbor")]
+                self._base_url + "/rpc",
+                subprotocols=[Subprotocol("cbor")],
+                max_size=1048576,
             )
-            self._receiver_task = asyncio.create_task(self.listen_to_ws(self._ws))
+            self._receiver_task = asyncio.create_task(self._listen_to_ws(self._ws))
         except Exception as e:
             raise SurrealDbConnectionError("cannot connect db server", e)
 
@@ -48,7 +50,7 @@ class WebsocketConnection(Connection):
         await self.send(METHOD_UNSET, key)
 
     async def close(self):
-        if self._receiver_task:
+        if self._receiver_task and not self._receiver_task.cancelled():
             self._receiver_task.cancel()
 
         if self._ws:
@@ -88,7 +90,7 @@ class WebsocketConnection(Connection):
         finally:
             self.remove_response_queue(ResponseType.SEND, request_data.id)
 
-    async def listen_to_ws(self, ws):
+    async def _listen_to_ws(self, ws):
         async for message in ws:
             try:
                 response_data = self._decoder(message)
@@ -106,7 +108,8 @@ class WebsocketConnection(Connection):
                     continue
                 await queue.put(response_data.get("result"))
             except asyncio.CancelledError:
+                self._logger.info("Task cancelled. Stopped listening for RPC responses")
                 break
-            except Exception:
-                break
-        asyncio.get_event_loop().stop()
+            except Exception as e:
+                self._logger.error(e)
+                continue
