@@ -50,7 +50,7 @@ class WebsocketConnection(Connection):
         await self.send(METHOD_UNSET, key)
 
     async def close(self):
-        if self._receiver_task:
+        if self._receiver_task and not self._receiver_task.cancelled():
             self._receiver_task.cancel()
 
         if self._ws:
@@ -108,7 +108,7 @@ class WebsocketConnection(Connection):
                     continue
                 await queue.put(response_data.get("result"))
             except asyncio.CancelledError:
-                self._logger.info("Stopped listening for RPC responses")
+                self._logger.info("Task cancelled. Stopped listening for RPC responses")
                 break
             except Exception as e:
                 self._logger.error(e)
