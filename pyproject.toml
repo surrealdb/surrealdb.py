@@ -4,7 +4,6 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "surrealdb"
-version = "0.5.0"
 description = "SurrealDB python client"
 authors = [
     { name = "Maxwell Flitton", email = "maxwellflitton@gmail.com" }
@@ -41,13 +40,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/maxwellflitton/surreal-lite-py"
-
-#[tool.setuptools]
-#packages = ["sdblpy"]
+Homepage = "https://github.com/surrealdb/surrealdb.py"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[project.scripts]
-sdblpy = "sblpy.cli.entrypoint:main"
+# [project.scripts]
+# sdblpy = "sblpy.cli.entrypoint:main"
