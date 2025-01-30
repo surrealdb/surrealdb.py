@@ -204,7 +204,7 @@ async def main():
         await db.sign_in("root", "root")
         await db.use("test", "test")
 
-        query = "SELECT * FROM users WHERE age > min_age;"
+        query = "SELECT * FROM users WHERE age > $min_age;"
         variables = {"min_age": 25}
 
         results = await db.query(query, variables)
