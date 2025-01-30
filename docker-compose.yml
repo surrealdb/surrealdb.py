@@ -6,40 +6,10 @@ services:
     environment:
       - SURREAL_USER=root
       - SURREAL_PASS=root
-      - SURREAL_LOG=trace
+      - SURREAL_INSECURE_FORWARD_ACCESS_ERRORS=true
+      - SURREAL_LOG=debug
     ports:
-      - 8300:8000
-
-  surrealdb_big_data:
-    image: surrealdb-big-data
-#    environment:
-#      - SURREAL_USER=root
-#      - SURREAL_PASS=root
-#      - SURREAL_LOG=trace
-    ports:
-      - 9000:8000
-
-  surrealdb_big_data:
-    image: surrealdb/surrealdb:v2.0.0
-    command: "start"
-    environment:
-      - SURREAL_USER=root
-      - SURREAL_PASS=root
-      - SURREAL_LOG=trace
-    ports:
-      - 8300:8000
-    volumes:
-      - ./tests/db_snapshots/data/:/data/
-
-  surrealdb_200:
-    image: surrealdb/surrealdb:v2.0.0
-    command: "start"
-    environment:
-      - SURREAL_USER=root
-      - SURREAL_PASS=root
-      - SURREAL_LOG=trace
-    ports:
-      - 8200:8000
+      - 8000:8000
 
   surrealdb_121:
     image: surrealdb/surrealdb:v1.2.1
