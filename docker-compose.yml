@@ -6,8 +6,10 @@ services:
     environment:
       - SURREAL_USER=root
       - SURREAL_PASS=root
-      - SURREAL_LOG=trace
+      - SURREAL_INSECURE_FORWARD_ACCESS_ERRORS=true
+      - SURREAL_LOG=debug
     ports:
+<<<<<<< HEAD
       - 8300:8000
 
   surrealdb_big_data:
@@ -40,6 +42,9 @@ services:
       - SURREAL_LOG=trace
     ports:
       - 8200:8000
+=======
+      - 8000:8000
+>>>>>>> 0c8a24aca5689176fb3ee89398c08b2cd8ced4a1
 
   surrealdb_121:
     image: surrealdb/surrealdb:v1.2.1
