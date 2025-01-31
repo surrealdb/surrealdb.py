@@ -88,3 +88,4 @@ manifest/
 .mypy_cache/
 .ruff_cache/
 tests/db_snapshots/
+tests/assets/

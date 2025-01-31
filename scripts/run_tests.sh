@@ -5,8 +5,7 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 cd $SCRIPTPATH
 
 cd ..
-
-#CONNECTION_PORT
-
-export PYTHONPATH="."
-python tests/scripts/runner.py
+cd src
+export PYTHONPATH=$(pwd)
+cd ..
+python -m unittest discover
