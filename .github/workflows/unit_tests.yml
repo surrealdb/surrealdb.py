@@ -33,7 +33,7 @@ jobs:
       - name: Run unit tests
         env:
           SURREALDB_URL: "http://localhost:8000"
-        run: export PYTHONPATH="./src" && python -m unittest discover -s tests
+        run: export DOCKER_RUN="TRUE" && export PYTHONPATH="./src" && python -m unittest discover -s tests
 
 
 
