@@ -93,9 +93,11 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             query=query,
             params=params,
         )
-        response = self._send(message, "query")
-        self.check_response_for_result(response, "query")
-        return response["result"][0]["result"]
+        response = self._send(query)
+        if "result" in response and response["result"]:
+            return response["result"][0].get("result", None)
+        # Handle case where "result" is missing or empty
+        return None
 
     def query_raw(self, query: str, params: Optional[dict] = None) -> dict:
         if params is None:
@@ -349,7 +351,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             if hasattr(self, 'socket') and self.socket:
                 self.socket.close()
                 self.socket = None  # Clear the reference
-                
+
             if hasattr(self, 'pinger') and self.pinger:
                 self.pinger.stop()  
                 self.pinger = None 
@@ -380,4 +382,3 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         """
         if self.socket is not None:
             self.socket.close()
-
