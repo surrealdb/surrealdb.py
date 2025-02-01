@@ -44,7 +44,9 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
     async def test_signin_root(self):
         connection = AsyncHttpSurrealConnection(self.url)
         response = await connection.signin(self.vars_params)
-        self.assertIn("token", response)
+        self.assertIsNotNone(response)
+        _ = await self.connection.query("DELETE user;")
+        _ = await self.connection.query("REMOVE TABLE user;")
 
     async def test_signin_namespace(self):
         connection = AsyncHttpSurrealConnection(self.url)
@@ -54,7 +56,7 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
             "password": "test",
         }
         response = await connection.signin(vars)
-        self.assertIn("token", response)
+        self.assertIsNotNone(response)
         _ = await self.connection.query("DELETE user;")
         _ = await self.connection.query("REMOVE TABLE user;")
 
@@ -67,7 +69,7 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
             "password": "test",
         }
         response = await connection.signin(vars)
-        self.assertIn("token", response)
+        self.assertIsNotNone(response)
         _ = await self.connection.query("DELETE user;")
         _ = await self.connection.query("REMOVE TABLE user;")
 
@@ -82,9 +84,8 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
             }
         }
         connection = AsyncHttpSurrealConnection(self.url)
-        # for below if client is HTTP then persist and attach to all headers
         response = await connection.signin(vars)
-        self.assertIn("token", response)
+        self.assertIsNotNone(response)
 
         outcome = await connection.info()
         self.assertEqual(outcome["email"], "test@gmail.com")

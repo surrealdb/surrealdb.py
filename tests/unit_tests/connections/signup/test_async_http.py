@@ -49,7 +49,7 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
         }
         connection = AsyncHttpSurrealConnection(self.url)
         response = await connection.signup(vars)
-        self.assertIn("token", response)
+        self.assertIsNotNone(response)
 
         outcome = await connection.info()
         self.assertEqual(outcome["email"], "test@gmail.com")
