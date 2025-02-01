@@ -43,7 +43,8 @@ class TestAsyncHttpSurrealConnection(TestCase):
 
     def test_signin_root(self):
         connection = BlockingWsSurrealConnection(self.url)
-        _ = connection.signin(self.vars_params)
+        response = connection.signin(self.vars_params)
+        self.assertIsNotNone(response)
         self.connection.socket.close()
         connection.close()
 
@@ -54,7 +55,8 @@ class TestAsyncHttpSurrealConnection(TestCase):
             "username": "test",
             "password": "test",
         }
-        _ = connection.signin(vars)
+        response = connection.signin(vars)
+        self.assertIsNotNone(response)
         _ = self.connection.query("DELETE user;")
         _ = self.connection.query("REMOVE TABLE user;")
         self.connection.socket.close()
@@ -68,7 +70,8 @@ class TestAsyncHttpSurrealConnection(TestCase):
             "username": "test",
             "password": "test",
         }
-        _ = connection.signin(vars)
+        response = connection.signin(vars)
+        self.assertIsNotNone(response)
         _ = self.connection.query("DELETE user;")
         _ = self.connection.query("REMOVE TABLE user;")
         self.connection.socket.close()
@@ -85,8 +88,8 @@ class TestAsyncHttpSurrealConnection(TestCase):
             }
         }
         connection = BlockingWsSurrealConnection(self.url)
-        # for below if client is HTTP then persist and attach to all headers
-        _ = connection.signin(vars)
+        response = connection.signin(vars)
+        self.assertIsNotNone(response)
 
         outcome = connection.info()
         self.assertEqual(outcome["email"], "test@gmail.com")
