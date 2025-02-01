@@ -343,7 +343,22 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         return response["result"]
 
     def close(self):
-        self.socket.close()
+        """Safely close the WebSocket connection and cleanup resources."""
+        try:
+            if hasattr(self, 'socket') and self.socket:
+                self.socket.close()
+                self.socket = None  # Clear the reference
+                
+            if hasattr(self, 'pinger') and self.pinger:
+                self.pinger.stop()  
+                self.pinger = None 
+        except Exception as e:
+            pass
+            # Optionally log the error, but don't raise it
+        finally:
+            # Clear any remaining state
+            self.ready = None
+            self.token = None
 
     def __enter__(self) -> "BlockingWsSurrealConnection":
         """

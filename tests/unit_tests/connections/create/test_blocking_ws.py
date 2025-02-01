@@ -23,12 +23,20 @@ class TestBlockingWsSurrealConnection(TestCase):
         self.connection = BlockingWsSurrealConnection(self.url)
         self.connection.signin(self.vars_params)
         self.connection.use(namespace=self.namespace, database=self.database_name)
-        self.connection.query("DELETE user;")
+        try:
+            self.connection.query("DELETE user;")
+        except:
+            # Ignore if there's nothing to delete
+            pass
 
     def tearDown(self):
-        self.connection.query("DELETE user;")
-        if self.connection.socket:
-            self.connection.socket.close()
+        try:
+            self.connection.query("DELETE user;")
+        except:
+            pass  # Ignore if delete fails
+        finally:
+            if self.connection.socket:
+                self.connection.socket.close()
 
     def test_create_string(self):
         outcome = self.connection.create("user")
