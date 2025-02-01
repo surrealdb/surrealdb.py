@@ -82,6 +82,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         if response.get("id") is None:
             raise Exception(f"No ID signing in: {response}")
         self.id = response["id"]
+        return self.token
 
     def query(self, query: str, params: Optional[dict] = None) -> dict:
         if params is None:
