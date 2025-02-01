@@ -351,8 +351,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "upsert")
         return response["result"]
 
-    def close(self):
-        self.socket.close()
+    async def close(self):
+        await self.socket.close()
 
     async def __aenter__(self) -> "AsyncWsSurrealConnection":
         """
