@@ -37,7 +37,7 @@ jobs:
         run: surreal start --allow-all -u root -p root --log trace &
 
       - name: Wait for startup
-        run: sleep 10
+        run: sleep 5
 
       - name: Install dependencies
         run: pip install -r requirements.txt

@@ -38,7 +38,7 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         outcome = await self.main_connection.query("SELECT * FROM user;")
         self.assertEqual(1, len(outcome))
 
-       '''
+        '''
         # Exceptions are raised only when SurrealDB doesn't allow guest mode
         with self.assertRaises(Exception) as context:
             _ = await self.connection.query("CREATE user:jaime SET name = 'Jaime';")
