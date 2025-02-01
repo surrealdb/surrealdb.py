@@ -99,6 +99,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         if response.get("id") is None:
             raise Exception(f"no id signing in: {response}")
         self.id = response["id"]
+        return self.token
+        
 
     async def query(self, query: str, params: Optional[dict] = None) -> dict:
         if params is None:
