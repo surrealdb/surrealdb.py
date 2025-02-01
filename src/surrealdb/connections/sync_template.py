@@ -57,7 +57,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"authenticate not implemented for: {self}")
 
-   def invalidate(self) -> None:
+    def invalidate(self) -> None:
         """Invalidate the authentication for the current connection.
 
         Example:

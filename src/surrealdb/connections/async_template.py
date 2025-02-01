@@ -51,7 +51,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"authenticate not implemented for: {self}")
 
-   async def invalidate(self) -> None:
+    async def invalidate(self) -> None:
         """Invalidate the authentication for the current connection.
 
         Example:
