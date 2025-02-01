@@ -48,8 +48,8 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
             }
         }
         connection = AsyncHttpSurrealConnection(self.url)
-        # for below if client is HTTP then persist and attach to all headers
-        _ = await connection.signup(vars)
+        response = await connection.signup(vars)
+        self.assertIn("token", response)
 
         outcome = await connection.info()
         self.assertEqual(outcome["email"], "test@gmail.com")

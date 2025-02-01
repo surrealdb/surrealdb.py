@@ -40,6 +40,25 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"query not implemented for: {self}")
 
+    async def authenticate(self, token: str) -> None:
+        """Authenticate the current connection with a JWT token.
+
+        Args:
+            token: The JWT authentication token.
+
+        Example:
+            await db.authenticate('insert token here')
+        """
+        raise NotImplementedError(f"authenticate not implemented for: {self}")
+
+   async def invalidate(self) -> None:
+        """Invalidate the authentication for the current connection.
+
+        Example:
+            await db.invalidate()
+        """
+        raise NotImplementedError(f"invalidate not implemented for: {self}")
+
     async def signup(self, vars: Dict) -> str:
         """Sign this connection up to a specific authentication scope.
         [See the docs](https://surrealdb.com/docs/sdk/python/methods/signup)
@@ -76,25 +95,6 @@ class AsyncTemplate:
             })
         """
         raise NotImplementedError(f"query not implemented for: {self}")
-
-    async def invalidate(self) -> None:
-        """Invalidate the authentication for the current connection.
-
-        Example:
-            await db.invalidate()
-        """
-        raise NotImplementedError(f"invalidate not implemented for: {self}")
-
-    async def authenticate(self, token: str) -> None:
-        """Authenticate the current connection with a JWT token.
-
-        Args:
-            token: The JWT authentication token.
-
-        Example:
-            await db.authenticate('insert token here')
-        """
-        raise NotImplementedError(f"authenticate not implemented for: {self}")
 
     async def let(self, key: str, value: Any) -> None:
         """Assign a value as a variable for this connection.

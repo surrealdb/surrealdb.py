@@ -80,7 +80,28 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
                 subprotocols=[websockets.Subprotocol("cbor")]
             )
 
-    # async def signup(self, vars: Dict[str, Any]) -> str:
+    async def authenticate(self, token: str) -> dict:
+        message = RequestMessage(
+            self.id,
+            RequestMethod.AUTHENTICATE,
+            token=token
+        )
+        return await self._send(message, "authenticating")
+
+    async def invalidate(self) -> None:
+        message = RequestMessage(self.id, RequestMethod.INVALIDATE)
+        await self._send(message, "invalidating")
+        self.token = None
+
+    async def signup(self, vars: Dict) -> str:
+        message = RequestMessage(
+            self.id,
+            RequestMethod.SIGN_UP,
+            data=vars
+        )
+        response = await self._send(message, "signup")
+        self.check_response_for_result(response, "signup")
+        return response["result"]
 
     async def signin(self, vars: Dict[str, Any]) -> str:
         message = RequestMessage(
@@ -96,9 +117,25 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         response = await self._send(message, "signing in")
         self.check_response_for_result(response, "signing in")
         self.token = response["result"]
-        if response.get("id") is None:
-            raise Exception(f"no id signing in: {response}")
-        self.id = response["id"]
+        return response["result"]
+
+    async def info(self) -> Optional[dict]:
+        message = RequestMessage(
+            self.id,
+            RequestMethod.INFO
+        )
+        outcome = await self._send(message, "getting database information")
+        self.check_response_for_result(outcome, "getting database information")
+        return outcome["result"]
+
+    async def use(self, namespace: str, database: str) -> None:
+        message = RequestMessage(
+            self.id,
+            RequestMethod.USE,
+            namespace=namespace,
+            database=database,
+        )
+        await self._send(message, "use")
 
     async def query(self, query: str, params: Optional[dict] = None) -> dict:
         if params is None:
@@ -125,24 +162,6 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         response = await self._send(message, "query", bypass=True)
         return response
 
-    async def use(self, namespace: str, database: str) -> None:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.USE,
-            namespace=namespace,
-            database=database,
-        )
-        await self._send(message, "use")
-
-    async def info(self) -> Optional[dict]:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.INFO
-        )
-        outcome = await self._send(message, "getting database information")
-        self.check_response_for_result(outcome, "getting database information")
-        return outcome["result"]
-
     async def version(self) -> str:
         message = RequestMessage(
             self.id,
@@ -151,18 +170,6 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         response = await self._send(message, "getting database version")
         self.check_response_for_result(response, "getting database version")
         return response["result"]
-
-    async def authenticate(self, token: str) -> dict:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.AUTHENTICATE,
-            token=token
-        )
-        return await self._send(message, "authenticating")
-
-    async def invalidate(self) -> None:
-        message = RequestMessage(self.id, RequestMethod.INVALIDATE)
-        await self._send(message, "invalidating")
 
     async def let(self, key: str, value: Any) -> None:
         message = RequestMessage(
@@ -330,16 +337,6 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             uuid=query_uuid
         )
         await self._send(message, "kill")
-
-    async def signup(self, vars: Dict) -> str:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.SIGN_UP,
-            data=vars
-        )
-        response = await self._send(message, "signup")
-        self.check_response_for_result(response, "signup")
-        return response["result"]
 
     async def upsert(
             self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
