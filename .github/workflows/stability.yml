@@ -1,4 +1,4 @@
-name: Code Stability
+name: Code stability
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main
   pull_request:
     branches:
-      - main
+      - "*"
 
 concurrency:
   group: stability-${{ github.head_ref || github.ref }}
@@ -14,25 +14,26 @@ concurrency:
 
 jobs:
   stability:
-    name: Code Stability
+    name: Code stability
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
-      - name: Build Python
-        uses: ./.github/actions
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.13
 
       - name: Install tools
-        run: poetry install --only dev
+        run: pip install black ruff
 
-      - id: ruff
-        if: always()
-        run: poetry run ruff check surrealdb/
+      - name: Run ruff checks
+        run: ruff check src/
 
-      - id: Black
-        if: always()
-        run: poetry run black surrealdb/ --check --verbose --diff --color
+      - name: Run black checks
+        run: black --check --verbose --diff --color src/
 
-      - id: mypy
-        if: always()
-        run: poetry run mypy surrealdb/
+      - name: Run mypy checks
+        run: mypy src/
