@@ -70,7 +70,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
             RequestMethod.SIGN_UP,
             data=vars
         )
-        response = await self._send(message, "signup")
+        response = self._send(message, "signup")
         self.check_response_for_result(response, "signup")
         return response["result"]
 
