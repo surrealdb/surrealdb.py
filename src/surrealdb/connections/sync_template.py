@@ -46,6 +46,25 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"use not implemented for: {self}")
 
+    def authenticate(self, token: str) -> None:
+        """Authenticate the current connection with a JWT token.
+
+        Args:
+            token: The JWT authentication token.
+
+        Example:
+            db.authenticate('insert token here')
+        """
+        raise NotImplementedError(f"authenticate not implemented for: {self}")
+
+    def invalidate(self) -> None:
+        """Invalidate the authentication for the current connection.
+
+        Example:
+            db.invalidate()
+        """
+        raise NotImplementedError(f"invalidate not implemented for: {self}")
+
     def signup(self, vars: Dict) -> str:
         """Sign this connection up to a specific authentication scope.
         [See the docs](https://surrealdb.com/docs/sdk/python/methods/signup)
@@ -82,25 +101,6 @@ class SyncTemplate:
             })
         """
         raise NotImplementedError(f"signin not implemented for: {self}")
-
-    def invalidate(self) -> None:
-        """Invalidate the authentication for the current connection.
-
-        Example:
-            db.invalidate()
-        """
-        raise NotImplementedError(f"invalidate not implemented for: {self}")
-
-    def authenticate(self, token: str) -> None:
-        """Authenticate the current connection with a JWT token.
-
-        Args:
-            token: The JWT authentication token.
-
-        Example:
-            db.authenticate('insert token here')
-        """
-        raise NotImplementedError(f"authenticate not implemented for: {self}")
 
     def let(self, key: str, value: Any) -> None:
         """Assign a value as a variable for this connection.

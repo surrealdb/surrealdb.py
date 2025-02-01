@@ -48,8 +48,8 @@ class TestAsyncWsSurrealConnection(TestCase):
             }
         }
         connection = BlockingWsSurrealConnection(self.url)
-        # for below if client is HTTP then persist and attach to all headers
-        _ = connection.signup(vars)
+        response = connection.signup(vars)
+        self.assertIsNotNone(response)
 
         outcome = connection.info()
         self.assertEqual(outcome["email"], "test@gmail.com")

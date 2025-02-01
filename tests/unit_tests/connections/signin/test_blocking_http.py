@@ -43,8 +43,10 @@ class TestAsyncHttpSurrealConnection(TestCase):
 
     def test_signin_root(self):
         connection = BlockingHttpSurrealConnection(self.url)
-        outcome = connection.signin(self.vars_params)
-        self.assertIn("token", outcome)  # Check that the response contains a token
+        response = connection.signin(self.vars_params)
+        self.assertIsNotNone(response)
+        _ = self.connection.query("DELETE user;")
+        _ = self.connection.query("REMOVE TABLE user;")
 
     def test_signin_namespace(self):
         connection = BlockingHttpSurrealConnection(self.url)
@@ -53,7 +55,8 @@ class TestAsyncHttpSurrealConnection(TestCase):
             "username": "test",
             "password": "test",
         }
-        _ = connection.signin(vars)
+        response = connection.signin(vars)
+        self.assertIsNotNone(response)
         _ = self.connection.query("DELETE user;")
         _ = self.connection.query("REMOVE TABLE user;")
 
@@ -65,7 +68,8 @@ class TestAsyncHttpSurrealConnection(TestCase):
             "username": "test",
             "password": "test",
         }
-        _ = connection.signin(vars)
+        response = connection.signin(vars)
+        self.assertIsNotNone(response)
         _ = self.connection.query("DELETE user;")
         _ = self.connection.query("REMOVE TABLE user;")
 
@@ -80,8 +84,8 @@ class TestAsyncHttpSurrealConnection(TestCase):
             }
         }
         connection = BlockingHttpSurrealConnection(self.url)
-        # for below if client is HTTP then persist and attach to all headers
-        _ = connection.signin(vars)
+        response = connection.signin(vars)
+        self.assertIsNotNone(response)
 
         outcome = connection.info()
         self.assertEqual(outcome["email"], "test@gmail.com")

@@ -65,6 +65,29 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             self.check_response_for_error(response, process)
         return response
 
+    def authenticate(self, token: str) -> dict:
+        message = RequestMessage(
+            self.id,
+            RequestMethod.AUTHENTICATE,
+            token=token
+        )
+        return self._send(message, "authenticating")
+
+    def invalidate(self) -> None:
+        message = RequestMessage(self.id, RequestMethod.INVALIDATE)
+        self._send(message, "invalidating")
+        self.token = None
+
+    def signup(self, vars: Dict) -> str:
+        message = RequestMessage(
+            self.id,
+            RequestMethod.SIGN_UP,
+            data=vars
+        )
+        response = self._send(message, "signup")
+        self.check_response_for_result(response, "signup")
+        return response["result"]
+
     def signin(self, vars: Dict[str, Any]) -> str:
         message = RequestMessage(
             self.id,
@@ -79,9 +102,25 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         response = self._send(message, "signing in")
         self.check_response_for_result(response, "signing in")
         self.token = response["result"]
-        if response.get("id") is None:
-            raise Exception(f"No ID signing in: {response}")
-        self.id = response["id"]
+        return response["result"]
+
+    def info(self) -> dict:
+        message = RequestMessage(
+            self.id,
+            RequestMethod.INFO
+        )
+        response = self._send(message, "getting database information")
+        self.check_response_for_result(response, "getting database information")
+        return response["result"]
+
+    def use(self, namespace: str, database: str) -> None:
+        message = RequestMessage(
+            self.id,
+            RequestMethod.USE,
+            namespace=namespace,
+            database=database,
+        )
+        self._send(message, "use")
 
     def query(self, query: str, params: Optional[dict] = None) -> dict:
         if params is None:
@@ -108,24 +147,6 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         response = self._send(message, "query", bypass=True)
         return response
 
-    def use(self, namespace: str, database: str) -> None:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.USE,
-            namespace=namespace,
-            database=database,
-        )
-        self._send(message, "use")
-
-    def info(self) -> dict:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.INFO
-        )
-        response = self._send(message, "getting database information")
-        self.check_response_for_result(response, "getting database information")
-        return response["result"]
-
     def version(self) -> str:
         message = RequestMessage(
             self.id,
@@ -134,18 +155,6 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         response = self._send(message, "getting database version")
         self.check_response_for_result(response, "getting database version")
         return response["result"]
-
-    def authenticate(self, token: str) -> dict:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.AUTHENTICATE,
-            token=token
-        )
-        return self._send(message, "authenticating")
-
-    def invalidate(self) -> None:
-        message = RequestMessage(self.id, RequestMethod.INVALIDATE)
-        self._send(message, "invalidating")
 
     def let(self, key: str, value: Any) -> None:
         message = RequestMessage(
