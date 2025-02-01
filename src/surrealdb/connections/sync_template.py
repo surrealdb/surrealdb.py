@@ -46,7 +46,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"use not implemented for: {self}")
 
-   def authenticate(self, token: str) -> None:
+    def authenticate(self, token: str) -> None:
         """Authenticate the current connection with a JWT token.
 
         Args:
