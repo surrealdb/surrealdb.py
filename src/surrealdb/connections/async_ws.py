@@ -67,7 +67,6 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             self.socket = await websockets.connect(
                 self.raw_url,
                 max_size=None,
-                write_limit=None,
                 subprotocols=[websockets.Subprotocol("cbor")]
             )
 
@@ -353,7 +352,6 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.socket = await websockets.connect(
             self.raw_url,
             max_size=None,
-            write_limit=None,
             subprotocols=[websockets.Subprotocol("cbor")]
         )
         return self

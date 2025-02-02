@@ -50,7 +50,6 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             self.socket = ws_sync.connect(
                 self.raw_url,
                 max_size=None,
-                write_limit=None,
                 subprotocols=[websockets.Subprotocol("cbor")],
             )
         self.socket.send(message.WS_CBOR_DESCRIPTOR)
@@ -356,7 +355,6 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.socket = ws_sync.connect(
             self.raw_url,
             max_size=None,
-            write_limit=None,
             subprotocols=[websockets.Subprotocol("cbor")]
         )
         return self
