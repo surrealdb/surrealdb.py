@@ -22,7 +22,6 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     Attributes:
         url: The URL of the database to process queries for.
-        max_size: The maximum size of the connection payload.
         id: The ID of the connection.
     """
 

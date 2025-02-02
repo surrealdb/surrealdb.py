@@ -23,35 +23,27 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     """
     A single async connection to a SurrealDB instance. To be used once and discarded.
 
-    # Notes
-    A new connection is created for each query. This is because the async websocket connection is
-    dropped
-
     Attributes:
         url: The URL of the database to process queries for.
         user: The username to login on.
         password: The password to login on.
         namespace: The namespace that the connection will stick to.
         database: The database that the connection will stick to.
-        max_size: The maximum size of the connection.
         id: The ID of the connection.
     """
     def __init__(
             self,
             url: str,
-            max_size: int = 2 ** 20,
     ) -> None:
         """
         The constructor for the AsyncSurrealConnection class.
 
         :param url: The URL of the database to process queries for.
-        :param max_size: The maximum size of the connection.
         """
         self.url: Url = Url(url)
         self.raw_url: str = f"{self.url.raw_url}/rpc"
         self.host: str = self.url.hostname
         self.port: int = self.url.port
-        self.max_size: int = max_size
         self.id: str = str(uuid.uuid4())
         self.token: Optional[str] = None
         self.socket = None
@@ -64,19 +56,18 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             self.check_response_for_error(response, process)
         return response
 
-    async def connect(self, url: Optional[str] = None, max_size: Optional[int] = None) -> None:
+    async def connect(self, url: Optional[str] = None) -> None:
         # overwrite params if passed in
         if url is not None:
             self.url = Url(url)
             self.raw_url: str = f"{self.url.raw_url}/rpc"
             self.host: str = self.url.hostname
             self.port: int = self.url.port
-        if max_size is not None:
-            self.max_size = max_size
         if self.socket is None:
             self.socket = await websockets.connect(
                 self.raw_url,
-                max_size=self.max_size,
+                max_size=None,
+                write_limit=None,
                 subprotocols=[websockets.Subprotocol("cbor")]
             )
 
@@ -361,7 +352,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         """
         self.socket = await websockets.connect(
             self.raw_url,
-            max_size=self.max_size,
+            max_size=None,
+            write_limit=None,
             subprotocols=[websockets.Subprotocol("cbor")]
         )
         return self
