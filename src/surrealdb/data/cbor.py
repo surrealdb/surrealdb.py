@@ -121,6 +121,9 @@ def tag_decoder(decoder, tag, shareable_index=None):
     elif tag.tag == constants.TAG_DURATION:
         return Duration.parse(tag.value[0], tag.value[1])
 
+    elif tag.tag == constants.TAG_DURATION_COMPACT:
+        return Duration.parse(tag.value[0])
+
     elif tag.tag == constants.TAG_DATETIME_COMPACT:
         return DateTimeCompact.parse(tag.value[0], tag.value[1])
 
