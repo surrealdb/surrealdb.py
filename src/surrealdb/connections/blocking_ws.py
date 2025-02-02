@@ -22,32 +22,25 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     """
     A single blocking connection to a SurrealDB instance. To be used once and discarded.
 
-    # Notes
-    A new connection is created for each query. This is because the WebSocket connection is
-    dropped after the query is completed.
-
     Attributes:
         url: The URL of the database to process queries for.
         user: The username to login on.
         password: The password to login on.
         namespace: The namespace that the connection will stick to.
         database: The database that the connection will stick to.
-        max_size: The maximum size of the connection.
         id: The ID of the connection.
     """
 
-    def __init__(self, url: str, max_size: int = 2 ** 20) -> None:
+    def __init__(self, url: str) -> None:
         """
         The constructor for the BlockingWsSurrealConnection class.
 
         :param url: (str) the URL of the database to process queries for.
-        :param max_size: (int) The maximum size of the connection.
         """
         self.url: Url = Url(url)
         self.raw_url: str = f"{self.url.raw_url}/rpc"
         self.host: str = self.url.hostname
         self.port: int = self.url.port
-        self.max_size: int = max_size
         self.id: str = str(uuid.uuid4())
         self.token: Optional[str] = None
         self.socket = None
@@ -56,7 +49,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         if self.socket is None:
             self.socket = ws_sync.connect(
                 self.raw_url,
-                max_size=self.max_size,
+                max_size=None,
                 subprotocols=[websockets.Subprotocol("cbor")],
             )
         self.socket.send(message.WS_CBOR_DESCRIPTOR)
@@ -361,7 +354,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         """
         self.socket = ws_sync.connect(
             self.raw_url,
-            max_size=self.max_size,
+            max_size=None,
             subprotocols=[websockets.Subprotocol("cbor")]
         )
         return self
