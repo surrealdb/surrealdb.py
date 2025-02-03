@@ -1,7 +1,6 @@
 import cbor2
 
 from surrealdb.data.types import constants
-from surrealdb.data.types.datetime import DateTimeCompact
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.future import Future
 from surrealdb.data.types.geometry import (
@@ -16,11 +15,13 @@ from surrealdb.data.types.geometry import (
 from surrealdb.data.types.range import BoundIncluded, BoundExcluded, Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
+from surrealdb.data.types.datetime import DatetimeWrapper, IsoDateTimeWrapper
+from datetime import datetime, timedelta, timezone
+import pytz
 
 
 @cbor2.shareable_encoder
 def default_encoder(encoder, obj):
-
     if isinstance(obj, GeometryPoint):
         tagged = cbor2.CBORTag(constants.TAG_GEOMETRY_POINT, obj.get_coordinates())
 
@@ -67,16 +68,20 @@ def default_encoder(encoder, obj):
     elif isinstance(obj, Duration):
         tagged = cbor2.CBORTag(constants.TAG_DURATION, obj.get_seconds_and_nano())
 
-    elif isinstance(obj, DateTimeCompact):
-        tagged = cbor2.CBORTag(
-            constants.TAG_DATETIME_COMPACT, obj.get_seconds_and_nano()
-        )
+    elif isinstance(obj, DatetimeWrapper):
+        if obj.dt.tzinfo is None:  # Make sure it's timezone-aware
+            obj.dt = obj.dt.replace(tzinfo=timezone.utc)
 
+        tagged = cbor2.CBORTag(
+            constants.TAG_DATETIME_COMPACT,
+            [int(obj.dt.timestamp()), obj.dt.microsecond * 1000]
+        )
+    elif isinstance(obj, IsoDateTimeWrapper):
+        tagged = cbor2.CBORTag(constants.TAG_DATETIME, obj.dt)
     else:
         raise BufferError("no encoder for type ", type(obj))
 
     encoder.encode(tagged)
-
 
 def tag_decoder(decoder, tag, shareable_index=None):
     if tag.tag == constants.TAG_GEOMETRY_POINT:
@@ -118,14 +123,28 @@ def tag_decoder(decoder, tag, shareable_index=None):
     elif tag.tag == constants.TAG_RANGE:
         return Range(tag.value[0], tag.value[1])
 
+    elif tag.tag == constants.TAG_DURATION_COMPACT:
+        return Duration.parse(tag.value[0], tag.value[1])  # Two numbers (s, ns)
+
     elif tag.tag == constants.TAG_DURATION:
-        return Duration.parse(tag.value[0], tag.value[1])
+        return Duration.parse(tag.value)  # String (e.g., "1d3m5ms")
 
     elif tag.tag == constants.TAG_DATETIME_COMPACT:
-        return DateTimeCompact.parse(tag.value[0], tag.value[1])
+        # TODO => convert [seconds, nanoseconds] => return datetime
+        seconds = tag.value[0]
+        nanoseconds = tag.value[1]
+        microseconds = nanoseconds // 1000  # Convert nanoseconds to microseconds
+        return DatetimeWrapper(
+            datetime.fromtimestamp(seconds) + timedelta(microseconds=microseconds)
+        )
+
+    elif tag.tag == constants.TAG_DATETIME:
+        dt_obj = datetime.fromisoformat(tag.value)
+        return DatetimeWrapper(dt_obj)# String (ISO 8601 datetime)
 
     else:
         raise BufferError("no decoder for tag", tag.tag)
+
 
 
 def encode(obj):
