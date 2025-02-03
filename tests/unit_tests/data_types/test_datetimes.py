@@ -36,11 +36,15 @@ class TestAsyncWsSurrealConnectionDatetime(IsolatedAsyncioTestCase):
             type(compact_test_outcome[0]["datetime"]),
             DatetimeWrapper
         )
+
+        # assert that the datetime returned from the DB is the same as the one serialized
+        outcome = compact_test_outcome[0]["datetime"]
+        self.assertEqual(now.dt.isoformat(), outcome.dt.isoformat() + "+00:00")
+
         await self.connection.query("DELETE datetime_tests;")
         await self.connection.close()
 
     async def test_datetime_formats(self):
-        # Define datetime values
         iso_datetime = "2025-02-03T12:30:45.123456Z"  # ISO 8601 datetime
         date = IsoDateTimeWrapper(iso_datetime)
 
@@ -54,6 +58,10 @@ class TestAsyncWsSurrealConnectionDatetime(IsolatedAsyncioTestCase):
             type(compact_test_outcome[0]["datetime"]),
             DatetimeWrapper
         )
+
+        # assert that the datetime returned from the DB is the same as the one serialized
+        date = compact_test_outcome[0]["datetime"].dt.isoformat()
+        self.assertEqual(date + "Z", iso_datetime)
 
         # Cleanup
         await self.connection.query("DELETE datetime_tests;")
