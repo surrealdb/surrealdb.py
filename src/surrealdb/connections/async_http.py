@@ -22,7 +22,6 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     Attributes:
         url: The URL of the database to process queries for.
-        max_size: The maximum size of the connection payload.
         id: The ID of the connection.
     """
 
@@ -98,6 +97,30 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         """
         self.token = token
 
+    async def authenticate(self) -> None:
+        message = RequestMessage(
+            self.id,
+            RequestMethod.AUTHENTICATE,
+            token=token
+        )
+        return await self._send(message, "authenticating")
+
+    async def invalidate(self) -> None:
+        message = RequestMessage(self.id, RequestMethod.INVALIDATE)
+        await self._send(message, "invalidating")
+        self.token = None
+
+    async def signup(self, vars: Dict) -> str:
+        message = RequestMessage(
+            self.id,
+            RequestMethod.SIGN_UP,
+            data=vars
+        )
+        response = await self._send(message, "signup")
+        self.check_response_for_result(response, "signup")
+        self.token = response["result"]
+        return response["result"]
+
     async def signin(self, vars: dict) -> dict:
         message = RequestMessage(
             self.id,
@@ -112,9 +135,16 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         response = await self._send(message, "signing in")
         self.check_response_for_result(response, "signing in")
         self.token = response["result"]
-        package = dict()
-        package["token"] = self.token
-        return package
+        return response["result"]
+
+    async def info(self) -> dict:
+        message = RequestMessage(
+            self.id,
+            RequestMethod.INFO
+        )
+        response = await self._send(message, "getting database information")
+        self.check_response_for_result(response, "getting database information")
+        return response["result"]
 
     async def use(self, namespace: str, database: str) -> None:
         message = RequestMessage(
@@ -187,15 +217,6 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "delete")
         return response["result"]
 
-    async def info(self) -> dict:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.INFO
-        )
-        response = await self._send(message, "getting database information")
-        self.check_response_for_result(response, "getting database information")
-        return response["result"]
-
     async def insert(
             self, table: Union[str, Table], data: Union[List[dict], dict]
     ) -> Union[List[dict], dict]:
@@ -221,11 +242,6 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         response = await self._send(message, "insert_relation")
         self.check_response_for_result(response, "insert_relation")
         return response["result"]
-
-    async def invalidate(self) -> None:
-        message = RequestMessage(self.id, RequestMethod.INVALIDATE)
-        await self._send(message, "invalidating")
-        self.token = None
 
     async def let(self, key: str, value: Any) -> None:
         self.vars[key] = value
@@ -304,17 +320,6 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         )
         response = await self._send(message, "upsert")
         self.check_response_for_result(response, "upsert")
-        return response["result"]
-
-    async def signup(self, vars: Dict) -> str:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.SIGN_UP,
-            data=vars
-        )
-        response = await self._send(message, "signup")
-        self.check_response_for_result(response, "signup")
-        self.token = response["result"]
         return response["result"]
 
     async def __aenter__(self) -> "AsyncHttpSurrealConnection":

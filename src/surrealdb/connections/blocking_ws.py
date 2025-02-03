@@ -22,32 +22,25 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     """
     A single blocking connection to a SurrealDB instance. To be used once and discarded.
 
-    # Notes
-    A new connection is created for each query. This is because the WebSocket connection is
-    dropped after the query is completed.
-
     Attributes:
         url: The URL of the database to process queries for.
         user: The username to login on.
         password: The password to login on.
         namespace: The namespace that the connection will stick to.
         database: The database that the connection will stick to.
-        max_size: The maximum size of the connection.
         id: The ID of the connection.
     """
 
-    def __init__(self, url: str, max_size: int = 2 ** 20) -> None:
+    def __init__(self, url: str) -> None:
         """
         The constructor for the BlockingWsSurrealConnection class.
 
         :param url: (str) the URL of the database to process queries for.
-        :param max_size: (int) The maximum size of the connection.
         """
         self.url: Url = Url(url)
         self.raw_url: str = f"{self.url.raw_url}/rpc"
         self.host: str = self.url.hostname
         self.port: int = self.url.port
-        self.max_size: int = max_size
         self.id: str = str(uuid.uuid4())
         self.token: Optional[str] = None
         self.socket = None
@@ -56,7 +49,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         if self.socket is None:
             self.socket = ws_sync.connect(
                 self.raw_url,
-                max_size=self.max_size,
+                max_size=None,
                 subprotocols=[websockets.Subprotocol("cbor")],
             )
         self.socket.send(message.WS_CBOR_DESCRIPTOR)
@@ -64,6 +57,29 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         if bypass is False:
             self.check_response_for_error(response, process)
         return response
+
+    def authenticate(self, token: str) -> dict:
+        message = RequestMessage(
+            self.id,
+            RequestMethod.AUTHENTICATE,
+            token=token
+        )
+        return self._send(message, "authenticating")
+
+    def invalidate(self) -> None:
+        message = RequestMessage(self.id, RequestMethod.INVALIDATE)
+        self._send(message, "invalidating")
+        self.token = None
+
+    def signup(self, vars: Dict) -> str:
+        message = RequestMessage(
+            self.id,
+            RequestMethod.SIGN_UP,
+            data=vars
+        )
+        response = self._send(message, "signup")
+        self.check_response_for_result(response, "signup")
+        return response["result"]
 
     def signin(self, vars: Dict[str, Any]) -> str:
         message = RequestMessage(
@@ -79,9 +95,25 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         response = self._send(message, "signing in")
         self.check_response_for_result(response, "signing in")
         self.token = response["result"]
-        if response.get("id") is None:
-            raise Exception(f"No ID signing in: {response}")
-        self.id = response["id"]
+        return response["result"]
+
+    def info(self) -> dict:
+        message = RequestMessage(
+            self.id,
+            RequestMethod.INFO
+        )
+        response = self._send(message, "getting database information")
+        self.check_response_for_result(response, "getting database information")
+        return response["result"]
+
+    def use(self, namespace: str, database: str) -> None:
+        message = RequestMessage(
+            self.id,
+            RequestMethod.USE,
+            namespace=namespace,
+            database=database,
+        )
+        self._send(message, "use")
 
     def query(self, query: str, params: Optional[dict] = None) -> dict:
         if params is None:
@@ -108,24 +140,6 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         response = self._send(message, "query", bypass=True)
         return response
 
-    def use(self, namespace: str, database: str) -> None:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.USE,
-            namespace=namespace,
-            database=database,
-        )
-        self._send(message, "use")
-
-    def info(self) -> dict:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.INFO
-        )
-        response = self._send(message, "getting database information")
-        self.check_response_for_result(response, "getting database information")
-        return response["result"]
-
     def version(self) -> str:
         message = RequestMessage(
             self.id,
@@ -134,18 +148,6 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         response = self._send(message, "getting database version")
         self.check_response_for_result(response, "getting database version")
         return response["result"]
-
-    def authenticate(self, token: str) -> dict:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.AUTHENTICATE,
-            token=token
-        )
-        return self._send(message, "authenticating")
-
-    def invalidate(self) -> None:
-        message = RequestMessage(self.id, RequestMethod.INVALIDATE)
-        self._send(message, "invalidating")
 
     def let(self, key: str, value: Any) -> None:
         message = RequestMessage(
@@ -352,7 +354,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         """
         self.socket = ws_sync.connect(
             self.raw_url,
-            max_size=self.max_size,
+            max_size=None,
             subprotocols=[websockets.Subprotocol("cbor")]
         )
         return self

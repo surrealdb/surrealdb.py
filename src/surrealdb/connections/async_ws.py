@@ -23,35 +23,27 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     """
     A single async connection to a SurrealDB instance. To be used once and discarded.
 
-    # Notes
-    A new connection is created for each query. This is because the async websocket connection is
-    dropped
-
     Attributes:
         url: The URL of the database to process queries for.
         user: The username to login on.
         password: The password to login on.
         namespace: The namespace that the connection will stick to.
         database: The database that the connection will stick to.
-        max_size: The maximum size of the connection.
         id: The ID of the connection.
     """
     def __init__(
             self,
             url: str,
-            max_size: int = 2 ** 20,
     ) -> None:
         """
         The constructor for the AsyncSurrealConnection class.
 
         :param url: The URL of the database to process queries for.
-        :param max_size: The maximum size of the connection.
         """
         self.url: Url = Url(url)
         self.raw_url: str = f"{self.url.raw_url}/rpc"
         self.host: str = self.url.hostname
         self.port: int = self.url.port
-        self.max_size: int = max_size
         self.id: str = str(uuid.uuid4())
         self.token: Optional[str] = None
         self.socket = None
@@ -64,23 +56,42 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             self.check_response_for_error(response, process)
         return response
 
-    async def connect(self, url: Optional[str] = None, max_size: Optional[int] = None) -> None:
+    async def connect(self, url: Optional[str] = None) -> None:
         # overwrite params if passed in
         if url is not None:
             self.url = Url(url)
             self.raw_url: str = f"{self.url.raw_url}/rpc"
             self.host: str = self.url.hostname
             self.port: int = self.url.port
-        if max_size is not None:
-            self.max_size = max_size
         if self.socket is None:
             self.socket = await websockets.connect(
                 self.raw_url,
-                max_size=self.max_size,
+                max_size=None,
                 subprotocols=[websockets.Subprotocol("cbor")]
             )
 
-    # async def signup(self, vars: Dict[str, Any]) -> str:
+    async def authenticate(self, token: str) -> dict:
+        message = RequestMessage(
+            self.id,
+            RequestMethod.AUTHENTICATE,
+            token=token
+        )
+        return await self._send(message, "authenticating")
+
+    async def invalidate(self) -> None:
+        message = RequestMessage(self.id, RequestMethod.INVALIDATE)
+        await self._send(message, "invalidating")
+        self.token = None
+
+    async def signup(self, vars: Dict) -> str:
+        message = RequestMessage(
+            self.id,
+            RequestMethod.SIGN_UP,
+            data=vars
+        )
+        response = await self._send(message, "signup")
+        self.check_response_for_result(response, "signup")
+        return response["result"]
 
     async def signin(self, vars: Dict[str, Any]) -> str:
         message = RequestMessage(
@@ -96,9 +107,25 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         response = await self._send(message, "signing in")
         self.check_response_for_result(response, "signing in")
         self.token = response["result"]
-        if response.get("id") is None:
-            raise Exception(f"no id signing in: {response}")
-        self.id = response["id"]
+        return response["result"]
+
+    async def info(self) -> Optional[dict]:
+        message = RequestMessage(
+            self.id,
+            RequestMethod.INFO
+        )
+        outcome = await self._send(message, "getting database information")
+        self.check_response_for_result(outcome, "getting database information")
+        return outcome["result"]
+
+    async def use(self, namespace: str, database: str) -> None:
+        message = RequestMessage(
+            self.id,
+            RequestMethod.USE,
+            namespace=namespace,
+            database=database,
+        )
+        await self._send(message, "use")
 
     async def query(self, query: str, params: Optional[dict] = None) -> dict:
         if params is None:
@@ -125,24 +152,6 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         response = await self._send(message, "query", bypass=True)
         return response
 
-    async def use(self, namespace: str, database: str) -> None:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.USE,
-            namespace=namespace,
-            database=database,
-        )
-        await self._send(message, "use")
-
-    async def info(self) -> Optional[dict]:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.INFO
-        )
-        outcome = await self._send(message, "getting database information")
-        self.check_response_for_result(outcome, "getting database information")
-        return outcome["result"]
-
     async def version(self) -> str:
         message = RequestMessage(
             self.id,
@@ -151,18 +160,6 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         response = await self._send(message, "getting database version")
         self.check_response_for_result(response, "getting database version")
         return response["result"]
-
-    async def authenticate(self, token: str) -> dict:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.AUTHENTICATE,
-            token=token
-        )
-        return await self._send(message, "authenticating")
-
-    async def invalidate(self) -> None:
-        message = RequestMessage(self.id, RequestMethod.INVALIDATE)
-        await self._send(message, "invalidating")
 
     async def let(self, key: str, value: Any) -> None:
         message = RequestMessage(
@@ -331,16 +328,6 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         )
         await self._send(message, "kill")
 
-    async def signup(self, vars: Dict) -> str:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.SIGN_UP,
-            data=vars
-        )
-        response = await self._send(message, "signup")
-        self.check_response_for_result(response, "signup")
-        return response["result"]
-
     async def upsert(
             self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
     ) -> Union[List[dict], dict]:
@@ -354,8 +341,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "upsert")
         return response["result"]
 
-    def close(self):
-        self.socket.close()
+    async def close(self):
+        await self.socket.close()
 
     async def __aenter__(self) -> "AsyncWsSurrealConnection":
         """
@@ -364,7 +351,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         """
         self.socket = await websockets.connect(
             self.raw_url,
-            max_size=self.max_size,
+            max_size=None,
             subprotocols=[websockets.Subprotocol("cbor")]
         )
         return self
