@@ -1,6 +1,7 @@
 """
 Utils for handling processes around data
 """
+
 from typing import Union
 
 from surrealdb.data.types.record_id import RecordID

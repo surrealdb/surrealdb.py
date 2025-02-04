@@ -1,5 +1,6 @@
-from unittest import main, TestCase
 import os
+from unittest import main, TestCase
+
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 
@@ -25,7 +26,33 @@ class TestAsyncWsSurrealConnection(TestCase):
         _ = self.connection.signin(self.vars_params)
         _ = self.connection.use(namespace=self.namespace, database=self.database_name)
 
-    def test_invalidate(self):
+    def test_run_test(self):
+        if os.environ.get("NO_GUEST_MODE") == "True":
+            self.invalidate_test_for_no_guest_mode()
+        else:
+            self.invalidate_with_guest_mode_on()
+
+    def invalidate_test_for_no_guest_mode(self):
+        outcome = self.connection.query("SELECT * FROM user;")
+        self.assertEqual(1, len(outcome))
+        outcome = self.main_connection.query("SELECT * FROM user;")
+        self.assertEqual(1, len(outcome))
+
+        _ = self.connection.invalidate()
+
+        with self.assertRaises(Exception) as context:
+            _ = self.connection.query("SELECT * FROM user;")
+
+        self.assertEqual(
+            "IAM error: Not enough permissions" in str(context.exception),
+            True
+        )
+        outcome = self.main_connection.query("SELECT * FROM user;")
+        self.assertEqual(1, len(outcome))
+
+        self.main_connection.query("DELETE user;")
+
+    def invalidate_with_guest_mode_on(self):
         outcome = self.connection.query("SELECT * FROM user;")
         self.assertEqual(1, len(outcome))
         outcome = self.main_connection.query("SELECT * FROM user;")
@@ -37,16 +64,6 @@ class TestAsyncWsSurrealConnection(TestCase):
         self.assertEqual(0, len(outcome))
         outcome = self.main_connection.query("SELECT * FROM user;")
         self.assertEqual(1, len(outcome))
-
-        '''
-        # Exceptions are raised only when SurrealDB doesn't allow guest mode
-        with self.assertRaises(Exception) as context:
-            _ = self.connection.query("CREATE user:jaime SET name = 'Jaime';")
-        self.assertEqual(
-            "IAM error: Not enough permissions" in str(context.exception),
-            True
-        )
-        '''
 
         self.main_connection.query("DELETE user;")
         self.main_connection.close()

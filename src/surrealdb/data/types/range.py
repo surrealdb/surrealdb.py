@@ -3,6 +3,7 @@ Defines classes for representing bounded ranges, including inclusive and exclusi
 """
 
 from dataclasses import dataclass
+from typing import Any
 
 
 class Bound:
@@ -39,7 +40,7 @@ class BoundIncluded(Bound):
         value: The value of the inclusive bound.
     """
 
-    value: any
+    value: Any
 
     def __init__(self, value):
         """
@@ -75,7 +76,7 @@ class BoundExcluded(Bound):
         value: The value of the exclusive bound.
     """
 
-    value: any
+    value: Any
 
     def __init__(self, value):
         """

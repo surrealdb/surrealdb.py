@@ -35,6 +35,7 @@ class GeometryPoint(Geometry):
         longitude: The longitude of the point.
         latitude: The latitude of the point.
     """
+
     longitude: float
     latitude: float
 
@@ -77,9 +78,12 @@ class GeometryLine(Geometry):
     Attributes:
         geometry_points: A list of GeometryPoint objects defining the line.
     """
+
     geometry_points: List[GeometryPoint]
 
-    def __init__(self, point1: GeometryPoint, point2: GeometryPoint, *other_points: GeometryPoint) -> None:
+    def __init__(
+        self, point1: GeometryPoint, point2: GeometryPoint, *other_points: GeometryPoint
+    ) -> None:
         """
         The constructor for the GeometryLine class.
         """
@@ -108,7 +112,9 @@ class GeometryLine(Geometry):
         Returns:
             A GeometryLine object.
         """
-        return GeometryLine(*[GeometryPoint.parse_coordinates(point) for point in coordinates])
+        return GeometryLine(
+            *[GeometryPoint.parse_coordinates(point) for point in coordinates]
+        )
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, GeometryLine):
@@ -124,9 +130,12 @@ class GeometryPolygon(Geometry):
     Attributes:
         geometry_lines: A list of GeometryLine objects defining the polygon.
     """
+
     geometry_lines: List[GeometryLine]
 
-    def __init__(self, line1: GeometryLine, line2: GeometryLine, *other_lines: GeometryLine):
+    def __init__(
+        self, line1: GeometryLine, line2: GeometryLine, *other_lines: GeometryLine
+    ):
         self.geometry_lines = [line1, line2] + list(other_lines)
 
     def get_coordinates(self) -> List[List[Tuple[float, float]]]:
@@ -142,7 +151,9 @@ class GeometryPolygon(Geometry):
         return f'{self.__class__.__name__}({", ".join(repr(geo) for geo in self.geometry_lines)})'
 
     @staticmethod
-    def parse_coordinates(coordinates: List[List[Tuple[float, float]]]) -> "GeometryPolygon":
+    def parse_coordinates(
+        coordinates: List[List[Tuple[float, float]]],
+    ) -> "GeometryPolygon":
         """
         Parses a list of lines, each defined by a list of coordinate tuples, into a GeometryPolygon.
 
@@ -152,7 +163,9 @@ class GeometryPolygon(Geometry):
         Returns:
             A GeometryPolygon object.
         """
-        return GeometryPolygon(*[GeometryLine.parse_coordinates(line) for line in coordinates])
+        return GeometryPolygon(
+            *[GeometryLine.parse_coordinates(line) for line in coordinates]
+        )
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, GeometryPolygon):
@@ -168,6 +181,7 @@ class GeometryMultiPoint(Geometry):
     Attributes:
         geometry_points: A list of GeometryPoint objects.
     """
+
     geometry_points: List[GeometryPoint]
 
     def __init__(self, *geometry_points: GeometryPoint):
@@ -186,7 +200,9 @@ class GeometryMultiPoint(Geometry):
         return f'{self.__class__.__name__}({", ".join(repr(geo) for geo in self.geometry_points)})'
 
     @staticmethod
-    def parse_coordinates(coordinates: List[Tuple[float, float]]) -> "GeometryMultiPoint":
+    def parse_coordinates(
+        coordinates: List[Tuple[float, float]],
+    ) -> "GeometryMultiPoint":
         """
         Parses a list of coordinate tuples into a GeometryMultiPoint.
 
@@ -196,7 +212,9 @@ class GeometryMultiPoint(Geometry):
         Returns:
             A GeometryMultiPoint object.
         """
-        return GeometryMultiPoint(*[GeometryPoint.parse_coordinates(point) for point in coordinates])
+        return GeometryMultiPoint(
+            *[GeometryPoint.parse_coordinates(point) for point in coordinates]
+        )
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, GeometryMultiPoint):
@@ -212,6 +230,7 @@ class GeometryMultiLine(Geometry):
     Attributes:
         geometry_lines: A list of GeometryLine objects.
     """
+
     geometry_lines: List[GeometryLine]
 
     def __init__(self, *geometry_lines: GeometryLine):
@@ -230,7 +249,9 @@ class GeometryMultiLine(Geometry):
         return f'{self.__class__.__name__}({", ".join(repr(geo) for geo in self.geometry_lines)})'
 
     @staticmethod
-    def parse_coordinates(coordinates: List[List[Tuple[float, float]]]) -> "GeometryMultiLine":
+    def parse_coordinates(
+        coordinates: List[List[Tuple[float, float]]],
+    ) -> "GeometryMultiLine":
         """
         Parses a list of lines, each defined by a list of coordinate tuples, into a GeometryMultiLine.
 
@@ -240,7 +261,9 @@ class GeometryMultiLine(Geometry):
         Returns:
             A GeometryMultiLine object.
         """
-        return GeometryMultiLine(*[GeometryLine.parse_coordinates(line) for line in coordinates])
+        return GeometryMultiLine(
+            *[GeometryLine.parse_coordinates(line) for line in coordinates]
+        )
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, GeometryMultiLine):
@@ -256,6 +279,7 @@ class GeometryMultiPolygon(Geometry):
     Attributes:
         geometry_polygons: A list of GeometryPolygon objects.
     """
+
     geometry_polygons: List[GeometryPolygon]
 
     def __init__(self, *geometry_polygons: GeometryPolygon):
@@ -274,7 +298,9 @@ class GeometryMultiPolygon(Geometry):
         return f'{self.__class__.__name__}({", ".join(repr(geo) for geo in self.geometry_polygons)})'
 
     @staticmethod
-    def parse_coordinates(coordinates: List[List[List[Tuple[float, float]]]]) -> "GeometryMultiPolygon":
+    def parse_coordinates(
+        coordinates: List[List[List[Tuple[float, float]]]],
+    ) -> "GeometryMultiPolygon":
         """
         Parses a list of polygons, each defined by a list of lines, into a GeometryMultiPolygon.
 
@@ -284,7 +310,9 @@ class GeometryMultiPolygon(Geometry):
         Returns:
             A GeometryMultiPolygon object.
         """
-        return GeometryMultiPolygon(*[GeometryPolygon.parse_coordinates(polygon) for polygon in coordinates])
+        return GeometryMultiPolygon(
+            *[GeometryPolygon.parse_coordinates(polygon) for polygon in coordinates]
+        )
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, GeometryMultiPolygon):
@@ -300,6 +328,7 @@ class GeometryCollection:
     Attributes:
         geometries: A list of Geometry objects.
     """
+
     geometries: List[Geometry]
 
     def __init__(self, *geometries: Geometry):

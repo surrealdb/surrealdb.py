@@ -54,10 +54,12 @@ class WsCborDescriptor:
 
         raise ValueError(f"Invalid method for Cbor WS encoding: {obj.method}")
 
-    def _raise_invalid_schema(self, data:dict, schema: dict, method: str) -> None:
+    def _raise_invalid_schema(self, data: dict, schema: dict, method: str) -> None:
         v = Validator(schema)
         if not v.validate(data):
-            raise ValueError(f"Invalid schema for Cbor WS encoding for {method}: {v.errors}")
+            raise ValueError(
+                f"Invalid schema for Cbor WS encoding for {method}: {v.errors}"
+            )
 
     def prep_use(self, obj) -> bytes:
         data = {
@@ -71,17 +73,14 @@ class WsCborDescriptor:
             "params": {
                 "type": "list",  # "params" must be a list
                 "schema": {"type": "string"},  # Elements of "params" must be strings
-                "required": True
+                "required": True,
             },
         }
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
     def prep_info(self, obj) -> bytes:
-        data = {
-            "id": obj.id,
-            "method": obj.method.value
-        }
+        data = {"id": obj.id, "method": obj.method.value}
         schema = {
             "id": {"required": True},
             "method": {"type": "string", "required": True},  # "method" must be a string
@@ -90,10 +89,7 @@ class WsCborDescriptor:
         return encode(data)
 
     def prep_version(self, obj) -> bytes:
-        data = {
-            "id": obj.id,
-            "method": obj.method.value
-        }
+        data = {"id": obj.id, "method": obj.method.value}
         schema = {
             "id": {"required": True},
             "method": {"type": "string", "required": True},  # "method" must be a string
@@ -116,24 +112,25 @@ class WsCborDescriptor:
         }
         for key, value in passed_params["variables"].items():
             data["params"][0][key] = value
-        schema = {
-            "id": {"required": True},
-            "method": {"type": "string", "required": True},  # "method" must be a string
-            "params": {
-                "type": "list",  # "params" must be a list
-                "schema": {
-                    "type": "dict",  # Each element of the "params" list must be a dictionary
-                    "schema": {
-                        "NS": {"type": "string", "required": True},  # "NS" must be a string
-                        "DB": {"type": "string", "required": True},  # "DB" must be a string
-                        "AC": {"type": "string", "required": True},  # "AC" must be a string
-                        "username": {"type": "string", "required": True},  # "username" must be a string
-                        "password": {"type": "string", "required": True},  # "password" must be a string
-                    },
-                },
-                "required": True,
-            },
-        }
+        # Sign-up schema is currently deactivated due to the different types of params passed in
+        # schema = {
+        #     "id": {"required": True},
+        #     "method": {"type": "string", "required": True},  # "method" must be a string
+        #     "params": {
+        #         "type": "list",  # "params" must be a list
+        #         "schema": {
+        #             "type": "dict",  # Each element of the "params" list must be a dictionary
+        #             "schema": {
+        #                 "NS": {"type": "string", "required": True},  # "NS" must be a string
+        #                 "DB": {"type": "string", "required": True},  # "DB" must be a string
+        #                 "AC": {"type": "string", "required": True},  # "AC" must be a string
+        #                 "username": {"type": "string", "required": True},  # "username" must be a string
+        #                 "password": {"type": "string", "required": True},  # "password" must be a string
+        #             },
+        #         },
+        #         "required": True,
+        #     },
+        # }
         # self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
@@ -155,11 +152,13 @@ class WsCborDescriptor:
                 "params": [
                     {
                         "user": obj.kwargs.get("username"),
-                        "pass": obj.kwargs.get("password")
+                        "pass": obj.kwargs.get("password"),
                     }
-                ]
+                ],
             }
-        elif obj.kwargs.get("namespace") is None and obj.kwargs.get("access") is not None:
+        elif (
+            obj.kwargs.get("namespace") is None and obj.kwargs.get("access") is not None
+        ):
             data = {
                 "id": obj.id,
                 "method": obj.method.value,
@@ -167,9 +166,9 @@ class WsCborDescriptor:
                     {
                         "ac": obj.kwargs.get("access"),
                         "user": obj.kwargs.get("username"),
-                        "pass": obj.kwargs.get("password")
+                        "pass": obj.kwargs.get("password"),
                     }
-                ]
+                ],
             }
         elif obj.kwargs.get("database") is None and obj.kwargs.get("access") is None:
             # namespace signin
@@ -180,11 +179,13 @@ class WsCborDescriptor:
                     {
                         "ns": obj.kwargs.get("namespace"),
                         "user": obj.kwargs.get("username"),
-                        "pass": obj.kwargs.get("password")
+                        "pass": obj.kwargs.get("password"),
                     }
-                ]
+                ],
             }
-        elif obj.kwargs.get("database") is None and obj.kwargs.get("access") is not None:
+        elif (
+            obj.kwargs.get("database") is None and obj.kwargs.get("access") is not None
+        ):
             # access signin
             data = {
                 "id": obj.id,
@@ -194,11 +195,16 @@ class WsCborDescriptor:
                         "ns": obj.kwargs.get("namespace"),
                         "ac": obj.kwargs.get("access"),
                         "user": obj.kwargs.get("username"),
-                        "pass": obj.kwargs.get("password")
+                        "pass": obj.kwargs.get("password"),
                     }
-                ]
+                ],
             }
-        elif obj.kwargs.get("database") is not None and obj.kwargs.get("namespace") is not None and obj.kwargs.get("access") is not None and obj.kwargs.get("variables") is None:
+        elif (
+            obj.kwargs.get("database") is not None
+            and obj.kwargs.get("namespace") is not None
+            and obj.kwargs.get("access") is not None
+            and obj.kwargs.get("variables") is None
+        ):
             data = {
                 "id": obj.id,
                 "method": obj.method.value,
@@ -208,9 +214,9 @@ class WsCborDescriptor:
                         "db": obj.kwargs.get("database"),
                         "ac": obj.kwargs.get("access"),
                         "user": obj.kwargs.get("username"),
-                        "pass": obj.kwargs.get("password")
+                        "pass": obj.kwargs.get("password"),
                     }
-                ]
+                ],
             }
 
         elif obj.kwargs.get("username") is None and obj.kwargs.get("password") is None:
@@ -224,12 +230,16 @@ class WsCborDescriptor:
                         "ac": obj.kwargs.get("access"),
                         # "variables": obj.kwargs.get("variables")
                     }
-                ]
+                ],
             }
             for key, value in obj.kwargs.get("variables", {}).items():
                 data["params"][0][key] = value
 
-        elif obj.kwargs.get("database") is not None and obj.kwargs.get("namespace") is not None and obj.kwargs.get("access") is None:
+        elif (
+            obj.kwargs.get("database") is not None
+            and obj.kwargs.get("namespace") is not None
+            and obj.kwargs.get("access") is None
+        ):
             data = {
                 "id": obj.id,
                 "method": obj.method.value,
@@ -238,9 +248,9 @@ class WsCborDescriptor:
                         "ns": obj.kwargs.get("namespace"),
                         "db": obj.kwargs.get("database"),
                         "user": obj.kwargs.get("username"),
-                        "pass": obj.kwargs.get("password")
+                        "pass": obj.kwargs.get("password"),
                     }
-                ]
+                ],
             }
 
         else:
@@ -251,9 +261,7 @@ class WsCborDescriptor:
         data = {
             "id": obj.id,
             "method": obj.method.value,
-            "params": [
-                obj.kwargs.get("token")
-            ]
+            "params": [obj.kwargs.get("token")],
         }
         schema = {
             "id": {"required": True},
@@ -273,13 +281,10 @@ class WsCborDescriptor:
         return encode(data)
 
     def prep_invalidate(self, obj) -> bytes:
-        data = {
-            "id": obj.id,
-            "method": obj.method.value
-        }
+        data = {"id": obj.id, "method": obj.method.value}
         schema = {
             "id": {"required": True},
-            "method": {"type": "string", "required": True}
+            "method": {"type": "string", "required": True},
         }
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
@@ -288,16 +293,12 @@ class WsCborDescriptor:
         data = {
             "id": obj.id,
             "method": obj.method.value,
-            "params": [obj.kwargs.get("key"), obj.kwargs.get("value")]
+            "params": [obj.kwargs.get("key"), obj.kwargs.get("value")],
         }
         schema = {
             "id": {"required": True},
             "method": {"type": "string", "required": True, "allowed": ["let"]},
-            "params": {
-                "type": "list",
-                "minlength": 2,
-                "required": True
-            },
+            "params": {"type": "list", "minlength": 2, "required": True},
         }
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
@@ -306,15 +307,12 @@ class WsCborDescriptor:
         data = {
             "id": obj.id,
             "method": obj.method.value,
-            "params": obj.kwargs.get("params")
+            "params": obj.kwargs.get("params"),
         }
         schema = {
             "id": {"required": True},
             "method": {"type": "string", "required": True, "allowed": ["unset"]},
-            "params": {
-                "type": "list",
-                "required": True
-            },
+            "params": {"type": "list", "required": True},
         }
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
@@ -323,18 +321,11 @@ class WsCborDescriptor:
         table = obj.kwargs.get("table")
         if isinstance(table, str):
             table = Table(table)
-        data = {
-            "id": obj.id,
-            "method": obj.method.value,
-            "params": [table]
-        }
+        data = {"id": obj.id, "method": obj.method.value, "params": [table]}
         schema = {
             "id": {"required": True},
             "method": {"type": "string", "required": True, "allowed": ["live"]},
-            "params": {
-                "type": "list",
-                "required": True
-            },
+            "params": {"type": "list", "required": True},
         }
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
@@ -343,15 +334,12 @@ class WsCborDescriptor:
         data = {
             "id": obj.id,
             "method": obj.method.value,
-            "params": [obj.kwargs.get("uuid")]
+            "params": [obj.kwargs.get("uuid")],
         }
         schema = {
             "id": {"required": True},
             "method": {"type": "string", "required": True, "allowed": ["kill"]},
-            "params": {
-                "type": "list",
-                "required": True
-            },
+            "params": {"type": "list", "required": True},
         }
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
@@ -360,10 +348,7 @@ class WsCborDescriptor:
         data = {
             "id": obj.id,
             "method": obj.method.value,
-            "params": [
-                obj.kwargs.get("query"),
-                obj.kwargs.get("params", dict())
-            ]
+            "params": [obj.kwargs.get("query"), obj.kwargs.get("params", dict())],
         }
         schema = {
             "id": {"required": True},
@@ -372,7 +357,7 @@ class WsCborDescriptor:
                 "type": "list",
                 "minlength": 2,  # Ensures there are at least two elements
                 "maxlength": 2,  # Ensures exactly two elements
-                "required": True
+                "required": True,
             },
         }
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
@@ -384,8 +369,8 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [
                 process_thing(obj.kwargs.get("collection")),
-                obj.kwargs.get("params")
-            ]
+                obj.kwargs.get("params"),
+            ],
         }
         schema = {
             "id": {"required": True},
@@ -394,8 +379,8 @@ class WsCborDescriptor:
                 "type": "list",
                 "minlength": 2,  # Ensure there are at least two elements
                 "maxlength": 2,  # Ensure exactly two elements
-                "required": True
-            }
+                "required": True,
+            },
         }
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
@@ -406,8 +391,8 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [
                 process_thing(obj.kwargs.get("collection")),
-                obj.kwargs.get("params")
-            ]
+                obj.kwargs.get("params"),
+            ],
         }
         if obj.kwargs.get("params") is None:
             raise ValidationError("parameters cannot be None for a patch method")
@@ -419,7 +404,7 @@ class WsCborDescriptor:
                 "minlength": 2,  # Ensure there are at least two elements
                 "maxlength": 2,  # Ensure exactly two elements
                 "required": True,
-            }
+            },
         }
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
@@ -428,15 +413,12 @@ class WsCborDescriptor:
         data = {
             "id": obj.id,
             "method": obj.method.value,
-            "params": obj.kwargs.get("params")
+            "params": obj.kwargs.get("params"),
         }
         schema = {
             "id": {"required": True},
             "method": {"type": "string", "required": True, "allowed": ["select"]},
-            "params": {
-                "type": "list",
-                "required": True
-            }
+            "params": {"type": "list", "required": True},
         }
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
@@ -445,7 +427,7 @@ class WsCborDescriptor:
         data = {
             "id": obj.id,
             "method": obj.method.value,
-            "params": [process_thing(obj.kwargs.get("collection"))]
+            "params": [process_thing(obj.kwargs.get("collection"))],
         }
         if obj.kwargs.get("data"):
             data["params"].append(obj.kwargs.get("data"))
@@ -457,8 +439,8 @@ class WsCborDescriptor:
                 "type": "list",
                 "minlength": 1,
                 "maxlength": 2,
-                "required": True
-            }
+                "required": True,
+            },
         }
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
@@ -469,8 +451,8 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [
                 process_thing(obj.kwargs.get("record_id")),
-                obj.kwargs.get("data", dict())
-            ]
+                obj.kwargs.get("data", dict()),
+            ],
         }
         schema = {
             "id": {"required": True},
@@ -479,8 +461,8 @@ class WsCborDescriptor:
                 "type": "list",
                 "minlength": 1,
                 "maxlength": 2,
-                "required": True
-            }
+                "required": True,
+            },
         }
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
@@ -491,8 +473,8 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [
                 process_thing(obj.kwargs.get("record_id")),
-                obj.kwargs.get("data", dict())
-            ]
+                obj.kwargs.get("data", dict()),
+            ],
         }
         schema = {
             "id": {"required": True},
@@ -501,8 +483,8 @@ class WsCborDescriptor:
                 "type": "list",
                 "minlength": 1,
                 "maxlength": 2,
-                "required": True
-            }
+                "required": True,
+            },
         }
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
@@ -511,7 +493,7 @@ class WsCborDescriptor:
         data = {
             "id": obj.id,
             "method": obj.method.value,
-            "params": [process_thing(obj.kwargs.get("record_id"))]
+            "params": [process_thing(obj.kwargs.get("record_id"))],
         }
         schema = {
             "id": {"required": True},
@@ -520,8 +502,8 @@ class WsCborDescriptor:
                 "type": "list",
                 "minlength": 1,
                 "maxlength": 1,
-                "required": True
-            }
+                "required": True,
+            },
         }
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
@@ -532,7 +514,7 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [
                 Table(obj.kwargs.get("table")),
-            ]
+            ],
         }
         params = obj.kwargs.get("params", [])
         # for i in params:
@@ -540,13 +522,17 @@ class WsCborDescriptor:
 
         schema = {
             "id": {"required": True},
-            "method": {"type": "string", "required": True, "allowed": ["insert_relation"]},
+            "method": {
+                "type": "string",
+                "required": True,
+                "allowed": ["insert_relation"],
+            },
             "params": {
                 "type": "list",
                 "minlength": 2,
                 "maxlength": 2,
-                "required": True
-            }
+                "required": True,
+            },
         }
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
@@ -557,8 +543,8 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [
                 process_thing(obj.kwargs.get("record_id")),
-                obj.kwargs.get("data", dict())
-            ]
+                obj.kwargs.get("data", dict()),
+            ],
         }
         schema = {
             "id": {"required": True},
@@ -567,8 +553,8 @@ class WsCborDescriptor:
                 "type": "list",
                 "minlength": 1,
                 "maxlength": 2,
-                "required": True
-            }
+                "required": True,
+            },
         }
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
