@@ -68,7 +68,11 @@ class TestAsyncWsSurrealConnectionDatetime(IsolatedAsyncioTestCase):
 
         # assert that the datetime returned from the DB is the same as the one serialized
         date = compact_test_outcome[0]["datetime"].isoformat()
-        self.assertEqual(date + "Z", iso_datetime)
+        date_to_compare = date + "Z"
+        if sys.version_info < (3, 11):
+            date_to_compare = date_to_compare.replace("Z", "+00:00")
+
+        self.assertEqual(date_to_compare, iso_datetime)
 
         # Cleanup
         await self.connection.query("DELETE datetime_tests;")
