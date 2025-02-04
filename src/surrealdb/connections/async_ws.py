@@ -162,7 +162,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         message = RequestMessage(self.id, RequestMethod.UNSET, params=[key])
         await self._send(message, "unsetting")
 
-    async def select(self, thing: Union[str, RecordID, Table]) -> Union[List[dict], dict]:
+    async def select(
+        self, thing: Union[str, RecordID, Table]
+    ) -> Union[List[dict], dict]:
         message = RequestMessage(self.id, RequestMethod.SELECT, params=[thing])
         response = await self._send(message, "select")
         self.check_response_for_result(response, "select")
