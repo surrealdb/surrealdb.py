@@ -12,7 +12,6 @@ from surrealdb.data.types.future import Future
 from surrealdb.data.types.geometry import Geometry
 from surrealdb.data.types.range import Range
 from surrealdb.data.types.record_id import RecordID
-from surrealdb.data.types.datetime import DatetimeWrapper
 from surrealdb.data.types.datetime import IsoDateTimeWrapper
 
 class AsyncSurrealDBMeta(type):

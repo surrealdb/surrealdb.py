@@ -101,7 +101,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         message = RequestMessage(
             self.id,
             RequestMethod.AUTHENTICATE,
-            token=token
+            token=self.token
         )
         return await self._send(message, "authenticating")
 

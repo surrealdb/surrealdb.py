@@ -1,7 +1,8 @@
+import datetime
 from unittest import main, IsolatedAsyncioTestCase
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
-from surrealdb.data.types.datetime import DatetimeWrapper, IsoDateTimeWrapper
+from surrealdb.data.types.datetime import IsoDateTimeWrapper
 
 
 class TestAsyncWsSurrealConnectionDatetime(IsolatedAsyncioTestCase):
@@ -26,20 +27,20 @@ class TestAsyncWsSurrealConnectionDatetime(IsolatedAsyncioTestCase):
         await self.connection.query("DELETE datetime_tests;")
 
     async def test_datetime_wrapper(self):
-        now = DatetimeWrapper.now()
+        now = datetime.datetime.now()
         await self.connection.query(
             "CREATE datetime_tests:compact_test SET datetime = $compact_datetime;",
             params={"compact_datetime": now}
         )
         compact_test_outcome = await self.connection.query("SELECT * FROM datetime_tests;")
         self.assertEqual(
-            type(compact_test_outcome[0]["datetime"]),
-            DatetimeWrapper
+            compact_test_outcome[0]["datetime"],
+            now
         )
 
         # assert that the datetime returned from the DB is the same as the one serialized
         outcome = compact_test_outcome[0]["datetime"]
-        self.assertEqual(now.dt.isoformat(), outcome.dt.isoformat() + "+00:00")
+        self.assertEqual(now.isoformat(), outcome.isoformat())
 
         await self.connection.query("DELETE datetime_tests;")
         await self.connection.close()
@@ -47,6 +48,7 @@ class TestAsyncWsSurrealConnectionDatetime(IsolatedAsyncioTestCase):
     async def test_datetime_formats(self):
         iso_datetime = "2025-02-03T12:30:45.123456Z"  # ISO 8601 datetime
         date = IsoDateTimeWrapper(iso_datetime)
+        iso_datetime_obj = datetime.datetime.fromisoformat(iso_datetime)
 
         # Insert records with different datetime formats
         await self.connection.query(
@@ -55,12 +57,12 @@ class TestAsyncWsSurrealConnectionDatetime(IsolatedAsyncioTestCase):
         )
         compact_test_outcome = await self.connection.query("SELECT * FROM datetime_tests;")
         self.assertEqual(
-            type(compact_test_outcome[0]["datetime"]),
-            DatetimeWrapper
+            str(compact_test_outcome[0]["datetime"]) + "+00:00",
+            str(iso_datetime_obj)
         )
 
         # assert that the datetime returned from the DB is the same as the one serialized
-        date = compact_test_outcome[0]["datetime"].dt.isoformat()
+        date = compact_test_outcome[0]["datetime"].isoformat()
         self.assertEqual(date + "Z", iso_datetime)
 
         # Cleanup
