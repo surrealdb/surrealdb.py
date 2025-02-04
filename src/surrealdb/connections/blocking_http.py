@@ -202,7 +202,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "patch")
         return response["result"]
 
-    def select(self, thing: str | RecordID | Table) -> Union[List[dict], dict]:
+    def select(self, thing: Union[str, RecordID, Table]) -> Union[List[dict], dict]:
         message = RequestMessage(self.id, RequestMethod.SELECT, params=[thing])
         response = self._send(message, "select")
         self.check_response_for_result(response, "select")

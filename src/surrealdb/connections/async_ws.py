@@ -44,8 +44,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         """
         self.url: Url = Url(url)
         self.raw_url: str = f"{self.url.raw_url}/rpc"
-        self.host: str | None = self.url.hostname
-        self.port: int | None = self.url.port
+        self.host: Optional[str] = self.url.hostname
+        self.port: Optional[int] = self.url.port
         self.id: str = str(uuid.uuid4())
         self.token: Optional[str] = None
         self.socket = None
@@ -162,7 +162,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         message = RequestMessage(self.id, RequestMethod.UNSET, params=[key])
         await self._send(message, "unsetting")
 
-    async def select(self, thing: str | RecordID | Table) -> Union[List[dict], dict]:
+    async def select(self, thing: Union[str, RecordID, Table]) -> Union[List[dict], dict]:
         message = RequestMessage(self.id, RequestMethod.SELECT, params=[thing])
         response = await self._send(message, "select")
         self.check_response_for_result(response, "select")
