@@ -49,7 +49,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         message: RequestMessage,
         operation: str,
         bypass: bool = False,
-    ) -> Dict[str, Any]:  # type: ignore
+    ) -> Dict[str, Any]:
         """
         Sends an HTTP request to the SurrealDB server.
 
@@ -89,7 +89,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
                     self.check_response_for_error(data, operation)
                 return data
 
-    def set_token(self, token: str) -> None:  # type: ignore
+    def set_token(self, token: str) -> None:
         """
         Sets the token for authentication.
 
@@ -97,23 +97,23 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         """
         self.token = token
 
-    async def authenticate(self) -> None:  # type: ignore
+    async def authenticate(self) -> None:
         message = RequestMessage(self.id, RequestMethod.AUTHENTICATE, token=self.token)
         return await self._send(message, "authenticating")
 
-    async def invalidate(self) -> None:  # type: ignore
+    async def invalidate(self) -> None:
         message = RequestMessage(self.id, RequestMethod.INVALIDATE)
         await self._send(message, "invalidating")
         self.token = None
 
-    async def signup(self, vars: Dict) -> str:  # type: ignore
+    async def signup(self, vars: Dict) -> str:
         message = RequestMessage(self.id, RequestMethod.SIGN_UP, data=vars)
         response = await self._send(message, "signup")
         self.check_response_for_result(response, "signup")
         self.token = response["result"]
         return response["result"]
 
-    async def signin(self, vars: dict) -> dict:  # type: ignore
+    async def signin(self, vars: dict) -> dict:
         message = RequestMessage(
             self.id,
             RequestMethod.SIGN_IN,
@@ -129,13 +129,13 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.token = response["result"]
         return response["result"]
 
-    async def info(self) -> dict:  # type: ignore
+    async def info(self) -> dict:
         message = RequestMessage(self.id, RequestMethod.INFO)
         response = await self._send(message, "getting database information")
         self.check_response_for_result(response, "getting database information")
         return response["result"]
 
-    async def use(self, namespace: str, database: str) -> None:  # type: ignore
+    async def use(self, namespace: str, database: str) -> None:
         message = RequestMessage(
             self.token,
             RequestMethod.USE,
@@ -146,7 +146,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.namespace = namespace
         self.database = database
 
-    async def query(self, query: str, params: Optional[dict] = None) -> dict:  # type: ignore
+    async def query(self, query: str, params: Optional[dict] = None) -> dict:
         if params is None:
             params = {}
         for key, value in self.vars.items():
@@ -161,7 +161,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "query")
         return response["result"][0]["result"]
 
-    async def query_raw(self, query: str, params: Optional[dict] = None) -> dict:  # type: ignore
+    async def query_raw(self, query: str, params: Optional[dict] = None) -> dict:
         if params is None:
             params = {}
         for key, value in self.vars.items():
@@ -179,7 +179,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self,
         thing: Union[str, RecordID, Table],
         data: Optional[Union[Union[List[dict], dict], dict]] = None,
-    ) -> Union[List[dict], dict]:  # type: ignore
+    ) -> Union[List[dict], dict]:
         if isinstance(thing, str):
             if ":" in thing:
                 buffer = thing.split(":")
@@ -193,7 +193,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def delete(
         self, thing: Union[str, RecordID, Table]
-    ) -> Union[List[dict], dict]:  # type: ignore
+    ) -> Union[List[dict], dict]:
         message = RequestMessage(self.id, RequestMethod.DELETE, record_id=thing)
         response = await self._send(message, "delete")
         self.check_response_for_result(response, "delete")
@@ -201,7 +201,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def insert(
         self, table: Union[str, Table], data: Union[List[dict], dict]
-    ) -> Union[List[dict], dict]:  # type: ignore
+    ) -> Union[List[dict], dict]:
         message = RequestMessage(
             self.id, RequestMethod.INSERT, collection=table, params=data
         )
@@ -211,7 +211,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def insert_relation(
         self, table: Union[str, Table], data: Union[List[dict], dict]
-    ) -> Union[List[dict], dict]:  # type: ignore
+    ) -> Union[List[dict], dict]:
         message = RequestMessage(
             self.id, RequestMethod.INSERT_RELATION, table=table, params=data
         )
@@ -219,15 +219,15 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "insert_relation")
         return response["result"]
 
-    async def let(self, key: str, value: Any) -> None:  # type: ignore
+    async def let(self, key: str, value: Any) -> None:
         self.vars[key] = value
 
-    async def unset(self, key: str) -> None:  # type: ignore
+    async def unset(self, key: str) -> None:
         self.vars.pop(key)
 
     async def merge(
         self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
-    ) -> Union[List[dict], dict]:  # type: ignore
+    ) -> Union[List[dict], dict]:
         message = RequestMessage(
             self.id, RequestMethod.MERGE, record_id=thing, data=data
         )
@@ -237,7 +237,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def patch(
         self, thing: Union[str, RecordID, Table], data: Optional[List[dict]] = None
-    ) -> Union[List[dict], dict]:  # type: ignore
+    ) -> Union[List[dict], dict]:
         message = RequestMessage(
             self.id, RequestMethod.PATCH, collection=thing, params=data
         )
@@ -245,7 +245,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "patch")
         return response["result"]
 
-    async def select(self, thing: str) -> Union[List[dict], dict]:  # type: ignore
+    async def select(self, thing: str) -> Union[List[dict], dict]:
         message = RequestMessage(self.id, RequestMethod.SELECT, params=[thing])
         response = await self._send(message, "select")
         self.check_response_for_result(response, "select")
@@ -253,7 +253,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def update(
         self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
-    ) -> Union[List[dict], dict]:  # type: ignore
+    ) -> Union[List[dict], dict]:
         message = RequestMessage(
             self.id, RequestMethod.UPDATE, record_id=thing, data=data
         )
@@ -261,7 +261,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "update")
         return response["result"]
 
-    async def version(self) -> str:  # type: ignore
+    async def version(self) -> str:
         message = RequestMessage(self.id, RequestMethod.VERSION)
         response = await self._send(message, "getting database version")
         self.check_response_for_result(response, "getting database version")
@@ -269,7 +269,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def upsert(
         self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
-    ) -> Union[List[dict], dict]:  # type: ignore
+    ) -> Union[List[dict], dict]:
         message = RequestMessage(
             self.id, RequestMethod.UPSERT, record_id=thing, data=data
         )
@@ -277,7 +277,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "upsert")
         return response["result"]
 
-    async def __aenter__(self) -> "AsyncHttpSurrealConnection":  # type: ignore
+    async def __aenter__(self) -> "AsyncHttpSurrealConnection":
         """
         Asynchronous context manager entry.
         Initializes an aiohttp session and returns the connection instance.
@@ -285,7 +285,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self._session = aiohttp.ClientSession()
         return self
 
-    async def __aexit__(self, exc_type, exc_value, traceback) -> None:  # type: ignore
+    async def __aexit__(self, exc_type, exc_value, traceback) -> None:
         """
         Asynchronous context manager exit.
         Closes the aiohttp session upon exiting the context.

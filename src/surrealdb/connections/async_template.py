@@ -7,7 +7,7 @@ from surrealdb.data.types.table import Table
 
 class AsyncTemplate:
 
-    async def connect(self, url: str) -> Coroutine[Any, Any, None]:  # type: ignore
+    async def connect(self, url: str) -> Coroutine[Any, Any, None]:
         """Connects to a local or remote database endpoint.
 
         Args:
@@ -20,7 +20,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"query not implemented for: {self}")
 
-    async def close(self) -> Coroutine[Any, Any, None]:  # type: ignore
+    async def close(self) -> Coroutine[Any, Any, None]:
         """Closes the persistent connection to the database.
 
         Example:
@@ -28,7 +28,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"query not implemented for: {self}")
 
-    async def use(self, namespace: str, database: str) -> Coroutine[Any, Any, None]:  # type: ignore
+    async def use(self, namespace: str, database: str) -> Coroutine[Any, Any, None]:
         """Switch to a specific namespace and database.
 
         Args:
@@ -40,7 +40,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"query not implemented for: {self}")
 
-    async def authenticate(self, token: str) -> Coroutine[Any, Any, None]:  # type: ignore
+    async def authenticate(self, token: str) -> Coroutine[Any, Any, None]:
         """Authenticate the current connection with a JWT token.
 
         Args:
@@ -51,7 +51,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"authenticate not implemented for: {self}")
 
-    async def invalidate(self) -> Coroutine[Any, Any, None]:  # type: ignore
+    async def invalidate(self) -> Coroutine[Any, Any, None]:
         """Invalidate the authentication for the current connection.
 
         Example:
@@ -59,7 +59,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"invalidate not implemented for: {self}")
 
-    async def signup(self, vars: Dict) -> Coroutine[Any, Any, str]:  # type: ignore
+    async def signup(self, vars: Dict) -> Coroutine[Any, Any, str]:
         """Sign this connection up to a specific authentication scope.
         [See the docs](https://surrealdb.com/docs/sdk/python/methods/signup)
 
@@ -81,7 +81,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"signup not implemented for: {self}")
 
-    async def signin(self, vars: Dict) -> Coroutine[Any, Any, str]:  # type: ignore
+    async def signin(self, vars: Dict) -> Coroutine[Any, Any, str]:
         """Sign this connection in to a specific authentication scope.
         [See the docs](https://surrealdb.com/docs/sdk/python/methods/signin)
 
@@ -96,7 +96,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"query not implemented for: {self}")
 
-    async def let(self, key: str, value: Any) -> Coroutine[Any, Any, None]:  # type: ignore
+    async def let(self, key: str, value: Any) -> Coroutine[Any, Any, None]:
         """Assign a value as a variable for this connection.
 
         Args:
@@ -115,7 +115,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"let not implemented for: {self}")
 
-    async def unset(self, key: str) -> Coroutine[Any, Any, None]:  # type: ignore
+    async def unset(self, key: str) -> Coroutine[Any, Any, None]:
         """Removes a variable for this connection.
 
         Args:
@@ -128,7 +128,7 @@ class AsyncTemplate:
 
     async def query(
         self, query: str, vars: Optional[Dict] = None
-    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:  # type: ignore
+    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:
         """Run a unset of SurrealQL statements against the database.
 
         Args:
@@ -145,7 +145,7 @@ class AsyncTemplate:
 
     async def select(
         self, thing: Union[str, RecordID, Table]
-    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:  # type: ignore
+    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:
         """Select all records in a table (or other entity),
         or a specific record, in the database.
 
@@ -164,7 +164,7 @@ class AsyncTemplate:
         self,
         thing: Union[str, RecordID, Table],
         data: Optional[Union[List[dict], dict]] = None,
-    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:  # type: ignore
+    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:
         """Create a record in the database.
 
         This function will run the following query in the database:
@@ -181,7 +181,7 @@ class AsyncTemplate:
 
     async def update(
         self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
-    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:  # type: ignore
+    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:
         """Update all records in a table, or a specific record, in the database.
 
         This function replaces the current document / record data with the
@@ -211,7 +211,7 @@ class AsyncTemplate:
 
     async def upsert(
         self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
-    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:  # type: ignore
+    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:
         """Insert records into the database, or to update them if they exist.
 
 
@@ -239,7 +239,7 @@ class AsyncTemplate:
 
     async def merge(
         self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
-    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:  # type: ignore
+    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:
         """Modify by deep merging all records in a table, or a specific record, in the database.
 
         This function merges the current document / record data with the
@@ -271,7 +271,7 @@ class AsyncTemplate:
 
     async def patch(
         self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
-    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:  # type: ignore
+    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:
         """Apply JSON Patch changes to all records, or a specific record, in the database.
 
         This function patches the current document / record data with
@@ -300,7 +300,7 @@ class AsyncTemplate:
 
     async def delete(
         self, thing: Union[str, RecordID, Table]
-    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:  # type: ignore
+    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:
         """Delete all records in a table, or a specific record, from the database.
 
         This function will run the following query in the database:
@@ -318,7 +318,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"delete not implemented for: {self}")
 
-    async def info(self) -> Coroutine[Any, Any, dict]:  # type: ignore
+    async def info(self) -> Coroutine[Any, Any, dict]:
         """This returns the record of an authenticated record user.
 
         Example:
@@ -328,7 +328,7 @@ class AsyncTemplate:
 
     async def insert(
         self, table: Union[str, Table], data: Union[List[dict], dict]
-    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:  # type: ignore
+    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:
         """
         Inserts one or multiple records in the database.
 
@@ -347,7 +347,7 @@ class AsyncTemplate:
 
     async def insert_relation(
         self, table: Union[str, Table], data: Union[List[dict], dict]
-    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:  # type: ignore
+    ) -> Coroutine[Any, Any, Union[List[dict], dict]]:
         """
         Inserts one or multiple relations in the database.
 
@@ -366,7 +366,7 @@ class AsyncTemplate:
 
     async def live(
         self, table: Union[str, Table], diff: bool = False
-    ) -> Coroutine[Any, Any, UUID]:  # type: ignore
+    ) -> Coroutine[Any, Any, UUID]:
         """Initiates a live query for a specified table name.
 
         Args:
@@ -385,7 +385,7 @@ class AsyncTemplate:
 
     async def subscribe_live(
         self, query_uuid: Union[str, UUID]
-    ) -> Coroutine[Any, Any, Queue]:  # type: ignore
+    ) -> Coroutine[Any, Any, Queue]:
         """Returns a queue that receives notification messages from a running live query.
 
         Args:
@@ -399,7 +399,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"query not implemented for: {self}")
 
-    async def kill(self, query_uuid: Union[str, UUID]) -> Coroutine[Any, Any, None]:  # type: ignore
+    async def kill(self, query_uuid: Union[str, UUID]) -> Coroutine[Any, Any, None]:
         """Kills a running live query by it's UUID.
 
         Args:
