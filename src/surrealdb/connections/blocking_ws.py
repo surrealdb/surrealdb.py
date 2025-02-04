@@ -1,6 +1,7 @@
 """
 A basic blocking connection to a SurrealDB instance.
 """
+
 import uuid
 from typing import Optional, Any, Dict, Union, List, Generator
 from uuid import UUID
@@ -45,7 +46,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.token: Optional[str] = None
         self.socket = None
 
-    def _send(self, message: RequestMessage, process: str, bypass: bool = False) -> dict:
+    def _send(
+        self, message: RequestMessage, process: str, bypass: bool = False
+    ) -> dict:
         if self.socket is None:
             self.socket = ws_sync.connect(
                 self.raw_url,
@@ -59,11 +62,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         return response
 
     def authenticate(self, token: str) -> dict:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.AUTHENTICATE,
-            token=token
-        )
+        message = RequestMessage(self.id, RequestMethod.AUTHENTICATE, token=token)
         return self._send(message, "authenticating")
 
     def invalidate(self) -> None:
@@ -72,11 +71,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.token = None
 
     def signup(self, vars: Dict) -> str:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.SIGN_UP,
-            data=vars
-        )
+        message = RequestMessage(self.id, RequestMethod.SIGN_UP, data=vars)
         response = self._send(message, "signup")
         self.check_response_for_result(response, "signup")
         return response["result"]
@@ -98,10 +93,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         return response["result"]
 
     def info(self) -> dict:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.INFO
-        )
+        message = RequestMessage(self.id, RequestMethod.INFO)
         response = self._send(message, "getting database information")
         self.check_response_for_result(response, "getting database information")
         return response["result"]
@@ -141,55 +133,36 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         return response
 
     def version(self) -> str:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.VERSION
-        )
+        message = RequestMessage(self.id, RequestMethod.VERSION)
         response = self._send(message, "getting database version")
         self.check_response_for_result(response, "getting database version")
         return response["result"]
 
     def let(self, key: str, value: Any) -> None:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.LET,
-            key=key,
-            value=value
-        )
+        message = RequestMessage(self.id, RequestMethod.LET, key=key, value=value)
         self._send(message, "letting")
 
     def unset(self, key: str) -> None:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.UNSET,
-            params=[key]
-        )
+        message = RequestMessage(self.id, RequestMethod.UNSET, params=[key])
         self._send(message, "unsetting")
 
-    def select(self, thing: str) -> Union[List[dict], dict]:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.SELECT,
-            params=[thing]
-        )
+    def select(self, thing: str | RecordID | Table) -> Union[List[dict], dict]:
+        message = RequestMessage(self.id, RequestMethod.SELECT, params=[thing])
         response = self._send(message, "select")
         self.check_response_for_result(response, "select")
         return response["result"]
 
     def create(
-            self,
-            thing: Union[str, RecordID, Table],
-            data: Optional[Union[Union[List[dict], dict], dict]] = None,
+        self,
+        thing: Union[str, RecordID, Table],
+        data: Optional[Union[Union[List[dict], dict], dict]] = None,
     ) -> Union[List[dict], dict]:
         if isinstance(thing, str):
             if ":" in thing:
                 buffer = thing.split(":")
                 thing = RecordID(table_name=buffer[0], identifier=buffer[1])
         message = RequestMessage(
-            self.id,
-            RequestMethod.CREATE,
-            collection=thing,
-            data=data
+            self.id, RequestMethod.CREATE, collection=thing, data=data
         )
         response = self._send(message, "create")
         self.check_response_for_result(response, "create")
@@ -206,78 +179,58 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         return response["result"]
 
     def kill(self, query_uuid: Union[str, UUID]) -> None:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.KILL,
-            uuid=query_uuid
-        )
+        message = RequestMessage(self.id, RequestMethod.KILL, uuid=query_uuid)
         self._send(message, "kill")
 
-    def delete(
-            self, thing: Union[str, RecordID, Table]
-    ) -> Union[List[dict], dict]:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.DELETE,
-            record_id=thing
-        )
+    def delete(self, thing: Union[str, RecordID, Table]) -> Union[List[dict], dict]:
+        message = RequestMessage(self.id, RequestMethod.DELETE, record_id=thing)
         response = self._send(message, "delete")
         self.check_response_for_result(response, "delete")
         return response["result"]
 
     def insert(
-            self, table: Union[str, Table], data: Union[List[dict], dict]
+        self, table: Union[str, Table], data: Union[List[dict], dict]
     ) -> Union[List[dict], dict]:
         message = RequestMessage(
-            self.id,
-            RequestMethod.INSERT,
-            collection=table,
-            params=data
+            self.id, RequestMethod.INSERT, collection=table, params=data
         )
         response = self._send(message, "insert")
         self.check_response_for_result(response, "insert")
         return response["result"]
 
     def insert_relation(
-            self, table: Union[str, Table], data: Union[List[dict], dict]
+        self, table: Union[str, Table], data: Union[List[dict], dict]
     ) -> Union[List[dict], dict]:
         message = RequestMessage(
-            self.id,
-            RequestMethod.INSERT_RELATION,
-            table=table,
-            params=data
+            self.id, RequestMethod.INSERT_RELATION, table=table, params=data
         )
         response = self._send(message, "insert_relation")
         self.check_response_for_result(response, "insert_relation")
         return response["result"]
 
     def merge(
-            self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
+        self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
     ) -> Union[List[dict], dict]:
         message = RequestMessage(
-            self.id,
-            RequestMethod.MERGE,
-            record_id=thing,
-            data=data
+            self.id, RequestMethod.MERGE, record_id=thing, data=data
         )
         response = self._send(message, "merge")
         self.check_response_for_result(response, "merge")
         return response["result"]
 
     def patch(
-            self, thing: Union[str, RecordID, Table], data: Optional[List[dict]] = None
+        self, thing: Union[str, RecordID, Table], data: Optional[List[dict]] = None
     ) -> Union[List[dict], dict]:
         message = RequestMessage(
-            self.id,
-            RequestMethod.PATCH,
-            collection=thing,
-            params=data
+            self.id, RequestMethod.PATCH, collection=thing, params=data
         )
         response = self._send(message, "patch")
         self.check_response_for_result(response, "patch")
         return response["result"]
 
-    def subscribe_live(self, query_uuid: Union[str, UUID]) -> Generator[dict, None, None]:
+    def subscribe_live(
+        self, query_uuid: Union[str, UUID]
+    ) -> Generator[dict, None, None]:
         """
         Subscribe to live updates for a given query UUID.
 
@@ -305,43 +258,23 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             pass
 
     def update(
-            self,
-            thing: Union[str, RecordID, Table],
-            data: Optional[Dict] = None
+        self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
     ) -> Union[List[dict], dict]:
         message = RequestMessage(
-            self.id,
-            RequestMethod.UPDATE,
-            record_id=thing,
-            data=data
+            self.id, RequestMethod.UPDATE, record_id=thing, data=data
         )
         response = self._send(message, "update")
         self.check_response_for_result(response, "update")
         return response["result"]
 
     def upsert(
-            self,
-            thing: Union[str, RecordID, Table],
-            data: Optional[Dict] = None
+        self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
     ) -> Union[List[dict], dict]:
         message = RequestMessage(
-            self.id,
-            RequestMethod.UPSERT,
-            record_id=thing,
-            data=data
+            self.id, RequestMethod.UPSERT, record_id=thing, data=data
         )
         response = self._send(message, "upsert")
         self.check_response_for_result(response, "upsert")
-        return response["result"]
-
-    def signup(self, vars: Dict) -> str:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.SIGN_UP,
-            data=vars
-        )
-        response = self._send(message, "signup")
-        self.check_response_for_result(response, "signup")
         return response["result"]
 
     def close(self):
@@ -353,9 +286,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         Initializes a websocket connection and returns the connection instance.
         """
         self.socket = ws_sync.connect(
-            self.raw_url,
-            max_size=None,
-            subprotocols=[websockets.Subprotocol("cbor")]
+            self.raw_url, max_size=None, subprotocols=[websockets.Subprotocol("cbor")]
         )
         return self
 
@@ -366,4 +297,3 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         """
         if self.socket is not None:
             self.socket.close()
-

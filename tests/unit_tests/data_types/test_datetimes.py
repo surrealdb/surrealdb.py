@@ -3,6 +3,7 @@ from unittest import main, IsolatedAsyncioTestCase
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data.types.datetime import IsoDateTimeWrapper
+import sys
 
 
 class TestAsyncWsSurrealConnectionDatetime(IsolatedAsyncioTestCase):
@@ -26,7 +27,7 @@ class TestAsyncWsSurrealConnectionDatetime(IsolatedAsyncioTestCase):
         # Cleanup
         await self.connection.query("DELETE datetime_tests;")
 
-    async def test_datetime_wrapper(self):
+    async def test_native_datetime(self):
         now = datetime.datetime.now()
         await self.connection.query(
             "CREATE datetime_tests:compact_test SET datetime = $compact_datetime;",
@@ -45,9 +46,13 @@ class TestAsyncWsSurrealConnectionDatetime(IsolatedAsyncioTestCase):
         await self.connection.query("DELETE datetime_tests;")
         await self.connection.close()
 
-    async def test_datetime_formats(self):
+    async def test_datetime_iso_format(self):
         iso_datetime = "2025-02-03T12:30:45.123456Z"  # ISO 8601 datetime
+        if sys.version_info < (3, 11):
+            iso_datetime = iso_datetime.replace("Z", "+00:00")
+
         date = IsoDateTimeWrapper(iso_datetime)
+
         iso_datetime_obj = datetime.datetime.fromisoformat(iso_datetime)
 
         # Insert records with different datetime formats

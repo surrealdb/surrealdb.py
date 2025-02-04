@@ -14,6 +14,7 @@ class Future:
     Attributes:
         value: The value held by the Future object. This can be of any type.
     """
+
     value: Any
 
     def __eq__(self, other: object) -> bool:

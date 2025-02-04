@@ -75,6 +75,7 @@ def default_encoder(encoder, obj):
 
     encoder.encode(tagged)
 
+
 def tag_decoder(decoder, tag, shareable_index=None):
     if tag.tag == constants.TAG_GEOMETRY_POINT:
         return GeometryPoint.parse_coordinates(tag.value)
@@ -130,7 +131,6 @@ def tag_decoder(decoder, tag, shareable_index=None):
 
     else:
         raise BufferError("no decoder for tag", tag.tag)
-
 
 
 def encode(obj):

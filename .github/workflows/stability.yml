@@ -36,4 +36,4 @@ jobs:
         run: black --check --verbose --diff --color src/
 
       - name: Run mypy checks
-        run: mypy src/
+        run: mypy --explicit-package-bases src/

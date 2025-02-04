@@ -14,6 +14,7 @@ from surrealdb.data.types.range import Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.datetime import IsoDateTimeWrapper
 
+
 class AsyncSurrealDBMeta(type):
 
     def __call__(cls, *args, **kwargs):
@@ -28,12 +29,20 @@ class AsyncSurrealDBMeta(type):
 
         constructed_url = Url(url)
 
-        if constructed_url.scheme == UrlScheme.HTTP or constructed_url.scheme == UrlScheme.HTTPS:
+        if (
+            constructed_url.scheme == UrlScheme.HTTP
+            or constructed_url.scheme == UrlScheme.HTTPS
+        ):
             return AsyncHttpSurrealConnection(url=url)
-        elif constructed_url.scheme == UrlScheme.WS or constructed_url.scheme == UrlScheme.WSS:
+        elif (
+            constructed_url.scheme == UrlScheme.WS
+            or constructed_url.scheme == UrlScheme.WSS
+        ):
             return AsyncWsSurrealConnection(url=url)
         else:
-            raise ValueError(f"Unsupported protocol in URL: {url}. Use 'ws://' or 'http://'.")
+            raise ValueError(
+                f"Unsupported protocol in URL: {url}. Use 'ws://' or 'http://'."
+            )
 
 
 class BlockingSurrealDBMeta(type):
@@ -50,28 +59,57 @@ class BlockingSurrealDBMeta(type):
 
         constructed_url = Url(url)
 
-        if constructed_url.scheme == UrlScheme.HTTP or constructed_url.scheme == UrlScheme.HTTPS:
+        if (
+            constructed_url.scheme == UrlScheme.HTTP
+            or constructed_url.scheme == UrlScheme.HTTPS
+        ):
             return BlockingHttpSurrealConnection(url=url)
-        elif constructed_url.scheme == UrlScheme.WS or constructed_url.scheme == UrlScheme.WSS:
+        elif (
+            constructed_url.scheme == UrlScheme.WS
+            or constructed_url.scheme == UrlScheme.WSS
+        ):
             return BlockingWsSurrealConnection(url=url)
         else:
-            raise ValueError(f"Unsupported protocol in URL: {url}. Use 'ws://' or 'http://'.")
+            raise ValueError(
+                f"Unsupported protocol in URL: {url}. Use 'ws://' or 'http://'."
+            )
 
-def Surreal(url: Optional[str] = None) -> Union[BlockingWsSurrealConnection, BlockingHttpSurrealConnection]:
+
+def Surreal(
+    url: Optional[str] = None,
+) -> Union[BlockingWsSurrealConnection, BlockingHttpSurrealConnection]:
     constructed_url = Url(url)
-    if constructed_url.scheme == UrlScheme.HTTP or constructed_url.scheme == UrlScheme.HTTPS:
+    if (
+        constructed_url.scheme == UrlScheme.HTTP
+        or constructed_url.scheme == UrlScheme.HTTPS
+    ):
         return BlockingHttpSurrealConnection(url=url)
-    elif constructed_url.scheme == UrlScheme.WS or constructed_url.scheme == UrlScheme.WSS:
+    elif (
+        constructed_url.scheme == UrlScheme.WS
+        or constructed_url.scheme == UrlScheme.WSS
+    ):
         return BlockingWsSurrealConnection(url=url)
     else:
-        raise ValueError(f"Unsupported protocol in URL: {url}. Use 'ws://' or 'http://'.")
+        raise ValueError(
+            f"Unsupported protocol in URL: {url}. Use 'ws://' or 'http://'."
+        )
 
 
-def AsyncSurreal(url: Optional[str] = None) -> Union[AsyncWsSurrealConnection, AsyncHttpSurrealConnection]:
+def AsyncSurreal(
+    url: Optional[str] = None,
+) -> Union[AsyncWsSurrealConnection, AsyncHttpSurrealConnection]:
     constructed_url = Url(url)
-    if constructed_url.scheme == UrlScheme.HTTP or constructed_url.scheme == UrlScheme.HTTPS:
+    if (
+        constructed_url.scheme == UrlScheme.HTTP
+        or constructed_url.scheme == UrlScheme.HTTPS
+    ):
         return AsyncHttpSurrealConnection(url=url)
-    elif constructed_url.scheme == UrlScheme.WS or constructed_url.scheme == UrlScheme.WSS:
+    elif (
+        constructed_url.scheme == UrlScheme.WS
+        or constructed_url.scheme == UrlScheme.WSS
+    ):
         return AsyncWsSurrealConnection(url=url)
     else:
-        raise ValueError(f"Unsupported protocol in URL: {url}. Use 'ws://' or 'http://'.")
+        raise ValueError(
+            f"Unsupported protocol in URL: {url}. Use 'ws://' or 'http://'."
+        )

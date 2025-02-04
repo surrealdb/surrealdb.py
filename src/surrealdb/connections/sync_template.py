@@ -1,6 +1,7 @@
+from asyncio import Queue
 from typing import Optional, List, Dict, Any, Union
 from uuid import UUID
-from asyncio import Queue
+
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
@@ -77,7 +78,7 @@ class SyncTemplate:
                 namespace: 'surrealdb',
                 database: 'docs',
                 access: 'user',
-            
+
                 # Also pass any properties required by the scope definition
                 variables: {
                     email: 'info@surrealdb.com',
@@ -132,9 +133,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"let not implemented for: {self}")
 
-    def query(
-        self, query: str, vars: Optional[Dict] = None
-    ) -> Union[List[dict], dict]:
+    def query(self, query: str, vars: Optional[Dict] = None) -> Union[List[dict], dict]:
         """Run a set of SurrealQL statements against the database.
 
         Args:
@@ -212,7 +211,7 @@ class SyncTemplate:
                 })
         """
         raise NotImplementedError(f"update not implemented for: {self}")
-    
+
     def upsert(
         self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
     ) -> Union[List[dict], dict]:
@@ -302,9 +301,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"patch not implemented for: {self}")
 
-    def delete(
-        self, thing: Union[str, RecordID, Table]
-    ) -> Union[List[dict], dict]:
+    def delete(self, thing: Union[str, RecordID, Table]) -> Union[List[dict], dict]:
         """Delete all records in a table, or a specific record, from the database.
 
         This function will run the following query in the database:
@@ -410,19 +407,3 @@ class SyncTemplate:
 
         """
         raise NotImplementedError(f"kill not implemented for: {self}")
-
-
-    def signin(self, vars: Dict) -> str:
-        """Sign this connection in to a specific authentication scope.
-        [See the docs](https://surrealdb.com/docs/sdk/python/methods/signin)
-
-        Args:
-            vars: Variables used in a signin query.
-
-        Example:
-            db.signin({
-                username: 'root',
-                password: 'surrealdb',
-            })
-        """
-        raise NotImplementedError(f"signin not implemented for: {self}")
