@@ -53,7 +53,7 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
         with self.assertRaises(Exception) as context:
             _ = await self.connection.insert(record_id, self.insert_data)
         self.assertEqual(
-            "There was a problem with the database: Can not execute INSERT statement using value 'user:tobie'" in str(context.exception),
+            "There was a problem with the database: Can not execute INSERT statement using value: user:tobie" in str(context.exception),
             True
         )
         await self.connection.query("DELETE user;")

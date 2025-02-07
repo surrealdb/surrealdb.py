@@ -58,7 +58,7 @@ class TestHttpSurrealConnection(TestCase):
         with self.assertRaises(Exception) as context:
             _ = self.connection.insert(record_id, self.insert_data)
         self.assertTrue(
-            "There was a problem with the database: Can not execute INSERT statement using value 'user:tobie'" in str(context.exception)
+            "There was a problem with the database: Can not execute INSERT statement using value: user:tobie" in str(context.exception)
         )
         self.connection.query("DELETE user;")
 
