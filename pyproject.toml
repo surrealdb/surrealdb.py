@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "surrealdb"
-version = "1.0.2"
+version = "1.0.3"
 description = "SurrealDB python client"
 readme = "README.md"
 authors = [{ name = "SurrealDB" }]
@@ -58,6 +58,18 @@ Homepage = "https://github.com/surrealdb/surrealdb.py"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.ruff]
+exclude = ["src/surrealdb/__init__.py"]
+
+[tool.mypy]
+mypy_path = "src"
+explicit_package_bases = true
+disable_error_code = ["return-value", "return-type"]
+
+[[tool.mypy.overrides]]
+module = "cerberus.*"
+ignore_missing_imports = true
 
 # [project.scripts]
 # sdblpy = "sblpy.cli.entrypoint:main"

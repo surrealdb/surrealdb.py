@@ -74,7 +74,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
             headers["Surreal-DB"] = self.database
 
         async with aiohttp.ClientSession() as session:
-             async with session.request(
+            async with session.request(
                 method="POST",
                 url=url,
                 headers=headers,
@@ -98,11 +98,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.token = token
 
     async def authenticate(self) -> None:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.AUTHENTICATE,
-            token=token
-        )
+        message = RequestMessage(self.id, RequestMethod.AUTHENTICATE, token=self.token)
         return await self._send(message, "authenticating")
 
     async def invalidate(self) -> None:
@@ -111,11 +107,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.token = None
 
     async def signup(self, vars: Dict) -> str:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.SIGN_UP,
-            data=vars
-        )
+        message = RequestMessage(self.id, RequestMethod.SIGN_UP, data=vars)
         response = await self._send(message, "signup")
         self.check_response_for_result(response, "signup")
         self.token = response["result"]
@@ -138,10 +130,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         return response["result"]
 
     async def info(self) -> dict:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.INFO
-        )
+        message = RequestMessage(self.id, RequestMethod.INFO)
         response = await self._send(message, "getting database information")
         self.check_response_for_result(response, "getting database information")
         return response["result"]
@@ -153,7 +142,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
             namespace=namespace,
             database=database,
         )
-        data = await self._send(message, "use")
+        _ = await self._send(message, "use")
         self.namespace = namespace
         self.database = database
 
@@ -187,57 +176,44 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         return response
 
     async def create(
-            self,
-            thing: Union[str, RecordID, Table],
-            data: Optional[Union[Union[List[dict], dict], dict]] = None,
+        self,
+        thing: Union[str, RecordID, Table],
+        data: Optional[Union[Union[List[dict], dict], dict]] = None,
     ) -> Union[List[dict], dict]:
         if isinstance(thing, str):
             if ":" in thing:
                 buffer = thing.split(":")
                 thing = RecordID(table_name=buffer[0], identifier=buffer[1])
         message = RequestMessage(
-            self.id,
-            RequestMethod.CREATE,
-            collection=thing,
-            data=data
+            self.id, RequestMethod.CREATE, collection=thing, data=data
         )
         response = await self._send(message, "create")
         self.check_response_for_result(response, "create")
         return response["result"]
 
     async def delete(
-            self, thing: Union[str, RecordID, Table]
+        self, thing: Union[str, RecordID, Table]
     ) -> Union[List[dict], dict]:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.DELETE,
-            record_id=thing
-        )
+        message = RequestMessage(self.id, RequestMethod.DELETE, record_id=thing)
         response = await self._send(message, "delete")
         self.check_response_for_result(response, "delete")
         return response["result"]
 
     async def insert(
-            self, table: Union[str, Table], data: Union[List[dict], dict]
+        self, table: Union[str, Table], data: Union[List[dict], dict]
     ) -> Union[List[dict], dict]:
         message = RequestMessage(
-            self.id,
-            RequestMethod.INSERT,
-            collection=table,
-            params=data
+            self.id, RequestMethod.INSERT, collection=table, params=data
         )
         response = await self._send(message, "insert")
         self.check_response_for_result(response, "insert")
         return response["result"]
 
     async def insert_relation(
-            self, table: Union[str, Table], data: Union[List[dict], dict]
+        self, table: Union[str, Table], data: Union[List[dict], dict]
     ) -> Union[List[dict], dict]:
         message = RequestMessage(
-            self.id,
-            RequestMethod.INSERT_RELATION,
-            table=table,
-            params=data
+            self.id, RequestMethod.INSERT_RELATION, table=table, params=data
         )
         response = await self._send(message, "insert_relation")
         self.check_response_for_result(response, "insert_relation")
@@ -250,73 +226,52 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.vars.pop(key)
 
     async def merge(
-            self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
+        self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
     ) -> Union[List[dict], dict]:
         message = RequestMessage(
-            self.id,
-            RequestMethod.MERGE,
-            record_id=thing,
-            data=data
+            self.id, RequestMethod.MERGE, record_id=thing, data=data
         )
         response = await self._send(message, "merge")
         self.check_response_for_result(response, "merge")
         return response["result"]
 
     async def patch(
-            self, thing: Union[str, RecordID, Table], data: Optional[List[dict]] = None
+        self, thing: Union[str, RecordID, Table], data: Optional[List[dict]] = None
     ) -> Union[List[dict], dict]:
         message = RequestMessage(
-            self.id,
-            RequestMethod.PATCH,
-            collection=thing,
-            params=data
+            self.id, RequestMethod.PATCH, collection=thing, params=data
         )
         response = await self._send(message, "patch")
         self.check_response_for_result(response, "patch")
         return response["result"]
 
     async def select(self, thing: str) -> Union[List[dict], dict]:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.SELECT,
-            params=[thing]
-        )
+        message = RequestMessage(self.id, RequestMethod.SELECT, params=[thing])
         response = await self._send(message, "select")
         self.check_response_for_result(response, "select")
         return response["result"]
 
     async def update(
-            self,
-            thing: Union[str, RecordID, Table],
-            data: Optional[Dict] = None
+        self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
     ) -> Union[List[dict], dict]:
         message = RequestMessage(
-            self.id,
-            RequestMethod.UPDATE,
-            record_id=thing,
-            data=data
+            self.id, RequestMethod.UPDATE, record_id=thing, data=data
         )
         response = await self._send(message, "update")
         self.check_response_for_result(response, "update")
         return response["result"]
 
     async def version(self) -> str:
-        message = RequestMessage(
-            self.id,
-            RequestMethod.VERSION
-        )
+        message = RequestMessage(self.id, RequestMethod.VERSION)
         response = await self._send(message, "getting database version")
         self.check_response_for_result(response, "getting database version")
         return response["result"]
 
     async def upsert(
-            self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
+        self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
     ) -> Union[List[dict], dict]:
         message = RequestMessage(
-            self.id,
-            RequestMethod.UPSERT,
-            record_id=thing,
-            data=data
+            self.id, RequestMethod.UPSERT, record_id=thing, data=data
         )
         response = await self._send(message, "upsert")
         self.check_response_for_result(response, "upsert")

@@ -1,7 +1,6 @@
 """
 Defines the data type for the record ID.
 """
-from dataclasses import dataclass
 
 
 class RecordID:
@@ -12,6 +11,7 @@ class RecordID:
         table_name: The table name associated with the record ID
         identifier: The ID of the row
     """
+
     def __init__(self, table_name: str, identifier) -> None:
         """
         The constructor for the RecordID class.
@@ -33,10 +33,7 @@ class RecordID:
 
     def __eq__(self, other):
         if isinstance(other, RecordID):
-            return (
-                    self.table_name == other.table_name and
-                    self.id == other.id
-            )
+            return self.table_name == other.table_name and self.id == other.id
 
     @staticmethod
     def parse(record_str: str) -> "RecordID":

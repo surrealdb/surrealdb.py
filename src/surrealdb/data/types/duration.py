@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Tuple, Union
-from math import floor, pow
+from math import floor
 
 UNITS = {
     "ns": 1,
@@ -12,6 +12,7 @@ UNITS = {
     "d": int(86400 * 1e9),
     "w": int(604800 * 1e9),
 }
+
 
 @dataclass
 class Duration:

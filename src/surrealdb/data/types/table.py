@@ -2,6 +2,7 @@
 Defines a Table class to represent a database table by its name.
 """
 
+
 class Table:
     """
     Represents a database table by its name.

@@ -8,6 +8,7 @@ services:
       - SURREAL_PASS=root
       - SURREAL_INSECURE_FORWARD_ACCESS_ERRORS=true
       - SURREAL_LOG=debug
+      - SURREAL_CAPS_ALLOW_GUESTS=true
     ports:
 <<<<<<< HEAD
       - 8300:8000
@@ -53,6 +54,7 @@ services:
       - SURREAL_USER=root
       - SURREAL_PASS=root
       - SURREAL_LOG=trace
+      - SURREAL_CAPS_ALLOW_GUESTS=true
     ports:
       - 8121:8000
 
@@ -63,6 +65,7 @@ services:
       - SURREAL_USER=root
       - SURREAL_PASS=root
       - SURREAL_LOG=trace
+      - SURREAL_CAPS_ALLOW_GUESTS=true
     ports:
       - 8120:8000
 
@@ -73,6 +76,7 @@ services:
       - SURREAL_USER=root
       - SURREAL_PASS=root
       - SURREAL_LOG=trace
+      - SURREAL_CAPS_ALLOW_GUESTS=true
     ports:
       - 8101:8000
 
@@ -83,5 +87,6 @@ services:
       - SURREAL_USER=root
       - SURREAL_PASS=root
       - SURREAL_LOG=trace
+      - SURREAL_CAPS_ALLOW_GUESTS=true
     ports:
       - 8111:8000

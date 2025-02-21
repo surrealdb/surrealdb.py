@@ -1,6 +1,7 @@
 """
 Defines a class that adapts SQL commands from various sources into a single string.
 """
+
 from typing import List
 
 
@@ -8,6 +9,7 @@ class SqlAdapter:
     """
     Adapts SQL commands from various sources into a single string.
     """
+
     @staticmethod
     def from_list(commands: List[str]) -> str:
         """
