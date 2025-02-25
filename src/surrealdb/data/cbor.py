@@ -18,16 +18,16 @@ from surrealdb.data.types.geometry import (
 from surrealdb.data.types.range import BoundIncluded, BoundExcluded, Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
+from surrealdb.data.types.none import NoneType, replace_none
+import os
 
 
 @cbor2.shareable_encoder
 def default_encoder(encoder, obj):
     if isinstance(obj, GeometryPoint):
         tagged = cbor2.CBORTag(constants.TAG_GEOMETRY_POINT, obj.get_coordinates())
-
     elif isinstance(obj, GeometryLine):
         tagged = cbor2.CBORTag(constants.TAG_GEOMETRY_LINE, obj.get_coordinates())
-
     elif isinstance(obj, GeometryPolygon):
         tagged = cbor2.CBORTag(constants.TAG_GEOMETRY_POLYGON, obj.get_coordinates())
 
@@ -49,6 +49,9 @@ def default_encoder(encoder, obj):
 
     elif isinstance(obj, RecordID):
         tagged = cbor2.CBORTag(constants.TAG_RECORD_ID, [obj.table_name, obj.id])
+
+    elif isinstance(obj, NoneType):
+        tagged = cbor2.CBORTag(constants.TAG_NONE, None)
 
     elif isinstance(obj, Table):
         tagged = cbor2.CBORTag(constants.TAG_TABLE_NAME, obj.table_name)
@@ -134,6 +137,10 @@ def tag_decoder(decoder, tag, shareable_index=None):
 
 
 def encode(obj):
+    none_check_flag = os.environ.get("SURREALDB_BYPASS_CHECKS")
+    if none_check_flag is not None and none_check_flag.upper() == "TRUE":
+        return cbor2.dumps(obj, default=default_encoder, timezone=timezone.utc)
+    obj = replace_none(obj)
     return cbor2.dumps(obj, default=default_encoder, timezone=timezone.utc)
 
 
