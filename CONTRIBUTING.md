@@ -11,7 +11,7 @@ If you are worried or don’t know where to start, check out our next section ex
 Please help us keep SurrealDB open and inclusive. Kindly read and follow our [Code of Conduct](/CODE_OF_CONDUCT.md).
 
 <!--
---------------------------------------------------
+---**----**-------------------------------------------
 ONLY RELEVANT FOR CLIENT SDK REPOSITORIES
 --------------------------------------------------
 -->

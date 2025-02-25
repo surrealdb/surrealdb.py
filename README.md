@@ -129,7 +129,58 @@ with Surreal("ws://localhost:8000/rpc") as db:
 ## Next steps
 
 Now that you have learned the basics of the SurrealDB SDK for Python, you can learn more about the SDK and its methods [in the methods section](https://surrealdb.com/docs/sdk/python/methods) and [data types section](https://surrealdb.com/docs/sdk/python/data-types).
+
 ## Contributing
+
 Contributions to this library are welcome! If you encounter issues, have feature requests, or 
 want to make improvements, feel free to open issues or submit pull requests.
 
+If you want to contribute to the Github repo please read the general contributing guidelines on concepts such as how to create a pull requests [here](https://github.com/surrealdb/surrealdb.py/blob/main/CONTRIBUTING.md).
+
+## Getting the repo up and running
+
+To contribute, it's a good idea to get the repo up and running first. We can do this by running the tests. If the tests pass, your `PYTHONPATH` works and the client is making successful calls to the database. To do this we must run the database with the following command:
+
+```bash
+# if the docker-compose binary is installed
+docker-compose up -d
+
+# if you are running docker compose directly through docker
+docker compose up -d
+```
+
+Now that the database is running, we can enter a terminal session with all the requirements installed and `PYTHONPATH` configured with the command below:
+
+```bash
+bash scripts/term.sh
+```
+
+You will now be running an interactive terminal through a python virtual environment with all the dependencies installed. We can now run the tests with the following command:
+
+```bash
+python -m unittest discover
+```
+
+The number of tests might increase but at the time of writing this you should get a printout like the one below:
+
+```bash
+.........................................................................................................................................Error in live subscription: sent 1000 (OK); no close frame received
+..........................................................................................
+----------------------------------------------------------------------
+Ran 227 tests in 6.313s
+
+OK
+```
+Finally, we clean up the database with the command below:
+```bash
+# if the docker-compose binary is installed
+docker-compose down
+
+# if you are running docker compose directly through docker
+docker compose down
+```
+To exit the terminal session merely execute the following command:
+```bash
+exit
+```
+ And there we have it, our tests are passing.
