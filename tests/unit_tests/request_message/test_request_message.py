@@ -9,7 +9,7 @@ class TestRequestMessage(TestCase):
         self.method = RequestMethod.USE
 
     def test_init(self):
-        request_message = RequestMessage(1, self.method, one="two", three="four")
+        request_message = RequestMessage(self.method, one="two", three="four")
 
         self.assertEqual(request_message.method, self.method)
         self.assertEqual(request_message.kwargs, {"one": "two", "three": "four"})
