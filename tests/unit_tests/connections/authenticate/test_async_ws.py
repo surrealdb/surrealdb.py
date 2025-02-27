@@ -21,7 +21,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
 
     async def test_authenticate(self):
         outcome = await self.connection.authenticate(token=self.connection.token)
-        await self.connection.socket.close()
 
 
 

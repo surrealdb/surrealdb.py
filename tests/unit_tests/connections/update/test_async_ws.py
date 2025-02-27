@@ -51,7 +51,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         outcome = await self.connection.query("SELECT * FROM user;")
         self.check_no_change(outcome[0])
         await self.connection.query("DELETE user;")
-        await self.connection.socket.close()
 
     async def test_update_string_with_data(self):
         first_outcome = await self.connection.update("user:tobie", self.data)
@@ -59,7 +58,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         outcome = await self.connection.query("SELECT * FROM user;")
         self.check_change(outcome[0])
         await self.connection.query("DELETE user;")
-        await self.connection.socket.close()
 
     async def test_update_record_id(self):
         first_outcome = await self.connection.update(self.record_id)
@@ -67,7 +65,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         outcome = await self.connection.query("SELECT * FROM user;")
         self.check_no_change(outcome[0])
         await self.connection.query("DELETE user;")
-        await self.connection.socket.close()
 
     async def test_update_record_id_with_data(self):
         outcome = await self.connection.update(self.record_id, self.data)
@@ -77,7 +74,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
             outcome[0]
         )
         await self.connection.query("DELETE user;")
-        await self.connection.socket.close()
 
     async def test_update_table(self):
         table = Table("user")
@@ -87,7 +83,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         self.check_no_change(outcome[0])
 
         await self.connection.query("DELETE user;")
-        await self.connection.socket.close()
 
     async def test_update_table_with_data(self):
         table = Table("user")
@@ -96,7 +91,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         outcome = await self.connection.query("SELECT * FROM user;")
         self.check_change(outcome[0])
         await self.connection.query("DELETE user;")
-        await self.connection.socket.close()
 
 
 if __name__ == "__main__":

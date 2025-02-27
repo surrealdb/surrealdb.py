@@ -21,7 +21,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
 
     async def test_info(self):
         outcome = await self.connection.info()
-        await self.connection.socket.close()
         #  TODO => confirm that the info is what we expect
 
 
