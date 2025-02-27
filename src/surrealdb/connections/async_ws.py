@@ -1,7 +1,6 @@
 """
 A basic async connection to a SurrealDB instance.
 """
-
 import asyncio
 import uuid
 from asyncio import Queue
@@ -49,7 +48,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.id: str = str(uuid.uuid4())
         self.token: Optional[str] = None
         self.socket = None
-        self.recv_lock = asyncio.Lock()
+        self.lock = asyncio.Lock()
+        self.ref = dict()
 
     async def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
@@ -58,9 +58,22 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         assert (
             self.socket is not None
         )  # will always not be None as the self.connect ensures there's a connection
+
+        query_id = message.id
         await self.socket.send(message.WS_CBOR_DESCRIPTOR)
-        async with self.recv_lock:
+
+        async with self.lock:
             response = decode(await self.socket.recv())
+        self.ref[response["id"]] = response
+
+        # wait for ID to be returned
+        while self.ref.get(query_id) is None:
+            await asyncio.sleep(0)  # The await simply yields to the executor to avoid deadlocks
+
+        # set the response and clean up
+        response = self.ref[query_id]
+        del self.ref[query_id]
+
         if bypass is False:
             self.check_response_for_error(response, process)
         return response
