@@ -26,9 +26,9 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
 
     async def test_batch(self):
         async with asyncio.TaskGroup() as tg:
-            tasks = [tg.create_task(self.connection.query("select $p**2 as ret from {}", dict(p=num))) for num in range(5)]
+            tasks = [tg.create_task(self.connection.query("RETURN sleep(duration::from::millis($d)) or $p**2", dict(d=10 if num%2 else 0, p=num))) for num in range(5)]
 
-        outcome = [t.result()[0]["ret"] for t in tasks]
+        outcome = [t.result() for t in tasks]
         self.assertEqual([0, 1, 4, 9, 16], outcome)
         await self.connection.socket.close()
 
