@@ -314,16 +314,15 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         return response["result"]
 
     async def close(self):
-        await self.socket.close()
+        if self.socket is not None:
+            await self.socket.close()
 
     async def __aenter__(self) -> "AsyncWsSurrealConnection":
         """
         Asynchronous context manager entry.
         Initializes a websocket connection and returns the connection instance.
         """
-        self.socket = await websockets.connect(
-            self.raw_url, max_size=None, subprotocols=[websockets.Subprotocol("cbor")]
-        )
+        await self.connect()
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback) -> None:
@@ -331,5 +330,4 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         Asynchronous context manager exit.
         Closes the websocket connection upon exiting the context.
         """
-        if self.socket is not None:
-            await self.socket.close()
+        await self.close()
