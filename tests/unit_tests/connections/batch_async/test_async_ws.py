@@ -35,7 +35,7 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
 
             outcome = [t.result() for t in tasks]
             self.assertEqual([0, 1, 4, 9, 16], outcome)
-
+        await self.connection.close()
 
 
 if __name__ == "__main__":
