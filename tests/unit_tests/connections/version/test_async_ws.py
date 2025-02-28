@@ -21,7 +21,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
 
     async def test_version(self):
         self.assertEqual(str, type(await self.connection.version()))
-        await self.connection.socket.close()
 
 
 if __name__ == "__main__":

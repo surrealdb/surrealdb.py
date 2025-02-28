@@ -26,7 +26,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         outcome = await self.connection.live("user")
         self.assertEqual(UUID, type(outcome))
         await self.connection.query("DELETE user;")
-        await self.connection.socket.close()
 
 
 if __name__ == "__main__":

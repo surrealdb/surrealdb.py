@@ -38,7 +38,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         self.assertEqual([], outcome)
 
         await self.connection.query("DELETE person;")
-        await self.connection.socket.close()
 
 
 if __name__ == "__main__":
