@@ -364,9 +364,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"insert_relation not implemented for: {self}")
 
-    async def live(
-        self, table: Union[str, Table], diff: bool = False
-    ) -> UUID:
+    async def live(self, table: Union[str, Table], diff: bool = False) -> UUID:
         """Initiates a live query for a specified table name.
 
         Args:
@@ -383,9 +381,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"live not implemented for: {self}")
 
-    async def subscribe_live(
-        self, query_uuid: Union[str, UUID]
-    ) -> Queue:
+    async def subscribe_live(self, query_uuid: Union[str, UUID]) -> Queue:
         """Returns a queue that receives notification messages from a running live query.
 
         Args:
