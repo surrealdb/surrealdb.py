@@ -20,7 +20,7 @@ jobs:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
         # surrealdb-version: ["v2.1.0", "v2.1.1", "v2.1.2", "v2.1.3", "v2.1.4"] # v2.0.0 has different UPSERT behaviour
-        surrealdb-version: ["v2.1.1", "v2.1.2", "v2.1.3", "v2.1.4"] # v2.0.0 has different UPSERT behaviour
+        surrealdb-version: ["v2.1.1", "v2.1.2", "v2.1.3", "v2.1.4"] # v2.0.0 has different UPSERT behaviour and v2.1.0 does not support async batching
     name: Python ${{ matrix.python-version }} - SurrealDB ${{ matrix.surrealdb-version }}
     steps:
       - name: Checkout repository
