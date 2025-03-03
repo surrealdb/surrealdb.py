@@ -46,7 +46,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
             2
         )
         await self.connection.query("DELETE user;")
-        await self.connection.socket.close()
 
     async def test_insert_record_id_result_error(self):
         record_id = RecordID("user","tobie")
@@ -59,7 +58,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
             True
         )
         await self.connection.query("DELETE user;")
-        await self.connection.socket.close()
 
 
 if __name__ == "__main__":

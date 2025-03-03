@@ -35,7 +35,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
             1
         )
         await self.connection.query("DELETE user;")
-        await self.connection.socket.close()
 
     async def test_create_string_with_data(self):
         outcome = await self.connection.create("user", self.data)
@@ -53,7 +52,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         self.assertEqual(self.username, outcome[0]["username"])
 
         await self.connection.query("DELETE user;")
-        await self.connection.socket.close()
 
     async def test_create_string_with_data_and_id(self):
         first_outcome = await self.connection.create("user:tobie", self.data)
@@ -73,7 +71,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         self.assertEqual(self.username, outcome[0]["username"])
 
         await self.connection.query("DELETE user;")
-        await self.connection.socket.close()
 
     async def test_create_record_id(self):
         record_id = RecordID("user",1)
@@ -87,7 +84,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         )
 
         await self.connection.query("DELETE user;")
-        await self.connection.socket.close()
 
     async def test_create_record_id_with_data(self):
         record_id = RecordID("user", 1)
@@ -107,7 +103,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         self.assertEqual(self.username, outcome[0]["username"])
 
         await self.connection.query("DELETE user;")
-        await self.connection.socket.close()
 
     async def test_create_table(self):
         table = Table("user")
@@ -120,7 +115,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         )
 
         await self.connection.query("DELETE user;")
-        await self.connection.socket.close()
 
     async def test_create_table_with_data(self):
         table = Table("user")
@@ -139,7 +133,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         self.assertEqual(self.username, outcome[0]["username"])
 
         await self.connection.query("DELETE user;")
-        await self.connection.socket.close()
 
 
 

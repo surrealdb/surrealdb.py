@@ -76,7 +76,6 @@ class TestAsyncWsSurrealConnectionDatetime(IsolatedAsyncioTestCase):
 
         # Cleanup
         await self.connection.query("DELETE datetime_tests;")
-        await self.connection.socket.close()
 
 
 if __name__ == "__main__":

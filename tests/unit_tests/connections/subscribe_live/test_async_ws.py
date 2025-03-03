@@ -50,8 +50,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
 
         # Cleanup the subscription
         await self.pub_connection.query("DELETE user;")
-        await self.pub_connection.socket.close()
-        await self.connection.socket.close()
 
 
 if __name__ == "__main__":

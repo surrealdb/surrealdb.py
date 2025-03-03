@@ -43,14 +43,12 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         self.check_no_change(outcome)
         outcome = await self.connection.query("SELECT * FROM user;")
         self.assertEqual(outcome, [])
-        await self.connection.socket.close()
 
     async def test_delete_record_id(self):
         first_outcome = await self.connection.delete(self.record_id)
         self.check_no_change(first_outcome)
         outcome = await self.connection.query("SELECT * FROM user;")
         self.assertEqual(outcome, [])
-        await self.connection.socket.close()
 
     async def test_delete_table(self):
         await self.connection.query("CREATE user:jaime SET name = 'Jaime';")
@@ -59,7 +57,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         self.assertEqual(2, len(first_outcome))
         outcome = await self.connection.query("SELECT * FROM user;")
         self.assertEqual(outcome, [])
-        await self.connection.socket.close()
 
 
 if __name__ == "__main__":

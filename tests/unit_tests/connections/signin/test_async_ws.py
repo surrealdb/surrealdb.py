@@ -47,8 +47,6 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
         self.assertIsNotNone(response)
         _ = await self.connection.query("DELETE user;")
         _ = await self.connection.query("REMOVE TABLE user;")
-        await self.connection.socket.close()
-        await connection.socket.close()
 
     async def test_signin_namespace(self):
         connection = AsyncWsSurrealConnection(self.url)
@@ -61,8 +59,6 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
         self.assertIsNotNone(response)
         _ = await self.connection.query("DELETE user;")
         _ = await self.connection.query("REMOVE TABLE user;")
-        await self.connection.socket.close()
-        await connection.socket.close()
 
     async def test_signin_database(self):
         connection = AsyncWsSurrealConnection(self.url)
@@ -76,8 +72,6 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
         self.assertIsNotNone(response)
         _ = await self.connection.query("DELETE user;")
         _ = await self.connection.query("REMOVE TABLE user;")
-        await self.connection.socket.close()
-        await connection.socket.close()
 
     async def test_signin_record(self):
         vars = {
@@ -99,8 +93,6 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
 
         await self.connection.query("DELETE user;")
         await self.connection.query("REMOVE TABLE user;")
-        await self.connection.socket.close()
-        await connection.socket.close()
 
 
 if __name__ == "__main__":
