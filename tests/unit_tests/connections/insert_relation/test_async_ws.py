@@ -76,7 +76,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         )
         await self.connection.query("DELETE user;")
         await self.connection.query("DELETE likes;")
-        await self.connection.socket.close()
 
     async def test_insert_relation_record_id(self):
         data = {
@@ -94,7 +93,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         )
         await self.connection.query("DELETE user;")
         await self.connection.query("DELETE likes;")
-        await self.connection.socket.close()
 
 
 if __name__ == "__main__":

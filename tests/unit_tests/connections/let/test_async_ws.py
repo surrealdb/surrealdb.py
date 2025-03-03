@@ -30,7 +30,6 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         outcome = await self.connection.query('SELECT * FROM person WHERE name.first = $name.first')
         self.assertEqual({'first': 'Tobie', 'last': 'Morgan Hitchcock'}, outcome[0]["name"])
         await self.connection.query("DELETE person;")
-        await self.connection.socket.close()
 
 
 if __name__ == "__main__":

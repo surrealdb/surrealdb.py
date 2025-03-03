@@ -1,8 +1,9 @@
 import asyncio
+import os
+import sys
 from unittest import main, IsolatedAsyncioTestCase
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
-import os
 
 
 class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
@@ -26,16 +27,19 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         _ = await self.connection.use(namespace=self.namespace, database=self.database_name)
 
     async def test_batch(self):
+        python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
         # async batching doesn't work for surrealDB v2.1.0" or lower
         if os.environ.get("SURREALDB_VERSION") == "v2.1.0":
             pass
+        elif python_version == "3.9" or python_version == "3.10":
+            print("async batching is being bypassed due to python versions 3.9 and 3.10 not supporting async task group")
         else:
             async with asyncio.TaskGroup() as tg:
                 tasks = [tg.create_task(self.connection.query("RETURN sleep(duration::from::millis($d)) or $p**2", dict(d=10 if num%2 else 0, p=num))) for num in range(5)]
 
             outcome = [t.result() for t in tasks]
             self.assertEqual([0, 1, 4, 9, 16], outcome)
-            await self.connection.socket.close()
+        await self.connection.close()
 
 
 if __name__ == "__main__":
