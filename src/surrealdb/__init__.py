@@ -13,6 +13,7 @@ from surrealdb.data.types.geometry import Geometry
 from surrealdb.data.types.range import Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.datetime import IsoDateTimeWrapper
+from surrealdb.data.types.none import NoneType
 
 
 class AsyncSurrealDBMeta(type):

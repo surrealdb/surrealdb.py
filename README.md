@@ -34,7 +34,7 @@
 
 # surrealdb.py
 
-The official SurrealDB SDK for Python.
+The official SurrealDB SDK for Python. If you find that the python SDK is not behaving exactly how you expect, please check the gottas section at the bottom of this README to see if your problem can be quickly solved. 
 
 ## Documentation
 
@@ -184,3 +184,87 @@ To exit the terminal session merely execute the following command:
 exit
 ```
  And there we have it, our tests are passing.
+
+## Gottas
+
+Due to quirks either unearthed by python or how the `cbor` serialization library handles data, there are some slight quirks that you might not expect. This section clarifies these quirks, why they exist, and how to handle them.
+
+### None types
+
+Python's `cbor` library serializes `None` types automatically before they have a chance of reaching our encoder. While we are looking into ways to override default serialization methods, we have our own data type that denotes a `None` type which can be shown below:
+
+```python
+from surrealdb import AsyncSurreal, NoneType, RecordID
+
+vars = {
+    "username": "root",
+    "password": "root"
+}
+
+schema = """
+    DEFINE TABLE person SCHEMAFULL TYPE NORMAL;
+    DEFINE FIELD name ON person TYPE string;
+    DEFINE FIELD age ON person TYPE option<int>;
+"""
+connection = AsyncSurreal("ws://localhost:8000/rpc")
+await connection.query(schema)
+
+outcome = await connection.create(
+    "person:john",
+    {"name": "John", "age": None}
+)
+record_check = RecordID(table_name="person", identifier="john")
+self.assertEqual(record_check, outcome["id"])
+self.assertEqual("John", outcome["name"])
+# below we need a .get because fields with None are currently not serialized
+# a .get gives the same result
+self.assertEqual(None, outcome.get("age"))
+```
+
+It must be noted that the field that had a `None` is not returned as a field at all. Using a `.get()` function will give the same effect as if the field is there but it is a `None`. Using a `outcome["age"]` will throw an error. We can also see how it works when the field is not None with the following code:
+
+```python
+outcome = await connection.create(
+    "person:dave",
+    {"name": "Dave", "age": 34}
+)
+record_check = RecordID(table_name="person", identifier="dave")
+self.assertEqual(record_check, outcome["id"])
+self.assertEqual("Dave", outcome["name"])
+self.assertEqual(34, outcome["age"])
+```
+Here we can see that the age is returned because it is not `None`. There is a slight performance cost for this `None` safety as the client needs to recursively go through the data passed into the client replacing `None` with `NoneType`. If you do not want this performance cost, you can disable the check but you have to ensure that all `None` types you pass into the client are replaced yourself. You can us a `NoneType` via the following code:
+
+```python
+from surrealdb import AsyncSurreal, NoneType, RecordID
+import os
+
+vars = {
+    "username": "root",
+    "password": "root"
+}
+
+schema = """
+    DEFINE TABLE person SCHEMAFULL TYPE NORMAL;
+    DEFINE FIELD name ON person TYPE string;
+    DEFINE FIELD age ON person TYPE option<int>;
+"""
+connection = AsyncSurreal("ws://localhost:8000/rpc")
+await connection.query(schema)
+
+# bypass the recursive check to replace None with NoneType
+os.environ["SURREALDB_BYPASS_CHECKS"] = "true"
+
+outcome = await connection.create(
+    "person:john",
+    {"name": "John", "age": None}
+)
+record_check = RecordID(table_name="person", identifier="john")
+self.assertEqual(record_check, outcome["id"])
+self.assertEqual("John", outcome["name"])
+# below we need a .get because fields with None are currently not serialized
+# a .get gives the same result
+self.assertEqual(None, outcome.get("age"))
+```
+
+Here we set the environment variable `SURREALDB_BYPASS_CHECKS` to `"true"`. 
