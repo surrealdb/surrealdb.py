@@ -767,6 +767,7 @@ semantic_decoders: dict[int, Callable[[CBORDecoder], Any]] = {
     3: CBORDecoder.decode_negative_bignum,
     4: CBORDecoder.decode_fraction,
     5: CBORDecoder.decode_bigfloat,
+    6: lambda self: None,
     25: CBORDecoder.decode_stringref,
     28: CBORDecoder.decode_shareable,
     29: CBORDecoder.decode_sharedref,

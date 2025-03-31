@@ -641,7 +641,9 @@ class CBOREncoder:
 
     def encode_none(self, value: None) -> None:
         print("encoding None")
-        self._fp_write(b"\xf6")
+        # tag(6, None)
+        self._fp_write(b"\xd9\x00\x06\xf6")
+        # self._fp_write(b"\xf6")
 
     def encode_undefined(self, value: UndefinedType) -> None:
         self._fp_write(b"\xf7")

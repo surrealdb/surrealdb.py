@@ -25,6 +25,9 @@ def default_encoder(encoder, obj):
     if isinstance(obj, GeometryPoint):
         tagged = CBORTag(constants.TAG_GEOMETRY_POINT, obj.get_coordinates())
 
+    if obj is None:
+        tagged = CBORTag(constants.TAG_NONE, None)
+
     elif isinstance(obj, GeometryLine):
         tagged = CBORTag(constants.TAG_GEOMETRY_LINE, obj.get_coordinates())
 
