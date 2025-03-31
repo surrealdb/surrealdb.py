@@ -12,4 +12,6 @@ from surrealdb.cbor2._types import CBORTag as CBORTag
 from surrealdb.cbor2._types import FrozenDict as FrozenDict
 from surrealdb.cbor2._types import undefined as undefined
 
-warn("The cbor2.types module has been deprecated. Instead import everything directly from cbor2.")
+warn(
+    "The cbor2.types module has been deprecated. Instead import everything directly from cbor2."
+)

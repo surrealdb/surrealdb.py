@@ -23,7 +23,9 @@ if TYPE_CHECKING:
     from typing import Literal, TypeAlias
 
 T = TypeVar("T")
-JSONValue: TypeAlias = "str | float | bool | None | list[JSONValue] | dict[str, JSONValue]"
+JSONValue: TypeAlias = (
+    "str | float | bool | None | list[JSONValue] | dict[str, JSONValue]"
+)
 
 default_encoders: dict[type, Callable[[Any], Any]] = {
     bytes: lambda x: x.decode(encoding="utf-8", errors="backslashreplace"),
@@ -44,7 +46,9 @@ default_encoders: dict[type, Callable[[Any], Any]] = {
 }
 
 
-def tag_hook(decoder: CBORDecoder, tag: CBORTag, ignore_tags: Collection[int] = ()) -> object:
+def tag_hook(
+    decoder: CBORDecoder, tag: CBORTag, ignore_tags: Collection[int] = ()
+) -> object:
     if tag.tag in ignore_tags:
         return tag.value
 
@@ -72,7 +76,9 @@ def iterdecode(
     object_hook: Callable[[CBORDecoder, dict[Any, Any]], Any] | None = None,
     str_errors: Literal["strict", "error", "replace"] = "strict",
 ) -> Iterator[Any]:
-    decoder = CBORDecoder(f, tag_hook=tag_hook, object_hook=object_hook, str_errors=str_errors)
+    decoder = CBORDecoder(
+        f, tag_hook=tag_hook, object_hook=object_hook, str_errors=str_errors
+    )
     while True:
         try:
             yield decoder.decode()
@@ -80,7 +86,9 @@ def iterdecode(
             return
 
 
-def key_to_str(d: T, dict_ids: set[int] | None = None) -> str | list[Any] | dict[str, Any] | T:
+def key_to_str(
+    d: T, dict_ids: set[int] | None = None
+) -> str | list[Any] | dict[str, Any] | T:
     dict_ids = set(dict_ids or [])
     rval: dict[str, Any] = {}
     if not isinstance(d, dict):

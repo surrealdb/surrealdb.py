@@ -30,7 +30,8 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 timestamp_re = re.compile(
-    r"^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)" r"(?:\.(\d{1,6})\d*)?(?:Z|([+-])(\d\d):(\d\d))$"
+    r"^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)"
+    r"(?:\.(\d{1,6})\d*)?(?:Z|([+-])(\d\d):(\d\d))$"
 )
 incremental_utf8_decoder = getincrementaldecoder("utf-8")
 
@@ -141,7 +142,9 @@ class CBORDecoder:
         return self._object_hook
 
     @object_hook.setter
-    def object_hook(self, value: Callable[[CBORDecoder, Mapping[Any, Any]], Any] | None) -> None:
+    def object_hook(
+        self, value: Callable[[CBORDecoder, Mapping[Any, Any]], Any] | None
+    ) -> None:
         if value is None or callable(value):
             self._object_hook = value
         else:
@@ -253,9 +256,13 @@ class CBORDecoder:
     def _decode_length(self, subtype: int) -> int: ...
 
     @overload
-    def _decode_length(self, subtype: int, allow_indefinite: Literal[True]) -> int | None: ...
+    def _decode_length(
+        self, subtype: int, allow_indefinite: Literal[True]
+    ) -> int | None: ...
 
-    def _decode_length(self, subtype: int, allow_indefinite: bool = False) -> int | None:
+    def _decode_length(
+        self, subtype: int, allow_indefinite: bool = False
+    ) -> int | None:
         if subtype < 24:
             return subtype
         elif subtype == 24:
@@ -269,7 +276,9 @@ class CBORDecoder:
         elif subtype == 31 and allow_indefinite:
             return None
         else:
-            raise CBORDecodeValueError(f"unknown unsigned integer subtype 0x{subtype:x}")
+            raise CBORDecodeValueError(
+                f"unknown unsigned integer subtype 0x{subtype:x}"
+            )
 
     def decode_uint(self, subtype: int) -> int:
         # Major tag 0
@@ -304,7 +313,9 @@ class CBORDecoder:
                     )
         else:
             if length > sys.maxsize:
-                raise CBORDecodeValueError(f"invalid length for bytestring 0x{length:x}")
+                raise CBORDecodeValueError(
+                    f"invalid length for bytestring 0x{length:x}"
+                )
             elif length <= 65536:
                 result = self.read(length)
             else:
@@ -356,11 +367,15 @@ class CBORDecoder:
                     try:
                         value = self.read(length).decode("utf-8", self._str_errors)
                     except UnicodeDecodeError as exc:
-                        raise CBORDecodeValueError("error decoding unicode string") from exc
+                        raise CBORDecodeValueError(
+                            "error decoding unicode string"
+                        ) from exc
 
                     buf.append(value)
                 else:
-                    raise CBORDecodeValueError("non-string found in indefinite length string")
+                    raise CBORDecodeValueError(
+                        "non-string found in indefinite length string"
+                    )
         else:
             if length > sys.maxsize:
                 raise CBORDecodeValueError(f"invalid length for string 0x{length:x}")
@@ -381,7 +396,9 @@ class CBORDecoder:
                     try:
                         result += codec.decode(self.read(chunk_size), final)
                     except UnicodeDecodeError as exc:
-                        raise CBORDecodeValueError("error decoding unicode string") from exc
+                        raise CBORDecodeValueError(
+                            "error decoding unicode string"
+                        ) from exc
 
                     left -= chunk_size
 
@@ -619,7 +636,9 @@ class CBORDecoder:
             raise CBORDecodeValueError("shared reference %d not found" % value)
 
         if shared is None:
-            raise CBORDecodeValueError("shared value %d has not been initialized" % value)
+            raise CBORDecodeValueError(
+                "shared value %d has not been initialized" % value
+            )
         else:
             return shared
 

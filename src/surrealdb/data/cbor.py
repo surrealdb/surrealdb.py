@@ -38,14 +38,10 @@ def default_encoder(encoder, obj):
         tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_LINE, obj.get_coordinates())
 
     elif isinstance(obj, GeometryMultiPoint):
-        tagged = CBORTag(
-            constants.TAG_GEOMETRY_MULTI_POINT, obj.get_coordinates()
-        )
+        tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_POINT, obj.get_coordinates())
 
     elif isinstance(obj, GeometryMultiPolygon):
-        tagged = CBORTag(
-            constants.TAG_GEOMETRY_MULTI_POLYGON, obj.get_coordinates()
-        )
+        tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_POLYGON, obj.get_coordinates())
 
     elif isinstance(obj, GeometryCollection):
         tagged = CBORTag(constants.TAG_GEOMETRY_COLLECTION, obj.geometries)
