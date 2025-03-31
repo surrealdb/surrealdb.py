@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-import cbor2
+from surrealdb.cbor2 import shareable_encoder, CBORTag, dumps, loads
 
 from surrealdb.data.types import constants
 from surrealdb.data.types.datetime import IsoDateTimeWrapper
@@ -20,56 +20,56 @@ from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
 
-@cbor2.shareable_encoder
+@shareable_encoder
 def default_encoder(encoder, obj):
     if isinstance(obj, GeometryPoint):
-        tagged = cbor2.CBORTag(constants.TAG_GEOMETRY_POINT, obj.get_coordinates())
+        tagged = CBORTag(constants.TAG_GEOMETRY_POINT, obj.get_coordinates())
 
     elif isinstance(obj, GeometryLine):
-        tagged = cbor2.CBORTag(constants.TAG_GEOMETRY_LINE, obj.get_coordinates())
+        tagged = CBORTag(constants.TAG_GEOMETRY_LINE, obj.get_coordinates())
 
     elif isinstance(obj, GeometryPolygon):
-        tagged = cbor2.CBORTag(constants.TAG_GEOMETRY_POLYGON, obj.get_coordinates())
+        tagged = CBORTag(constants.TAG_GEOMETRY_POLYGON, obj.get_coordinates())
 
     elif isinstance(obj, GeometryMultiLine):
-        tagged = cbor2.CBORTag(constants.TAG_GEOMETRY_MULTI_LINE, obj.get_coordinates())
+        tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_LINE, obj.get_coordinates())
 
     elif isinstance(obj, GeometryMultiPoint):
-        tagged = cbor2.CBORTag(
+        tagged = CBORTag(
             constants.TAG_GEOMETRY_MULTI_POINT, obj.get_coordinates()
         )
 
     elif isinstance(obj, GeometryMultiPolygon):
-        tagged = cbor2.CBORTag(
+        tagged = CBORTag(
             constants.TAG_GEOMETRY_MULTI_POLYGON, obj.get_coordinates()
         )
 
     elif isinstance(obj, GeometryCollection):
-        tagged = cbor2.CBORTag(constants.TAG_GEOMETRY_COLLECTION, obj.geometries)
+        tagged = CBORTag(constants.TAG_GEOMETRY_COLLECTION, obj.geometries)
 
     elif isinstance(obj, RecordID):
-        tagged = cbor2.CBORTag(constants.TAG_RECORD_ID, [obj.table_name, obj.id])
+        tagged = CBORTag(constants.TAG_RECORD_ID, [obj.table_name, obj.id])
 
     elif isinstance(obj, Table):
-        tagged = cbor2.CBORTag(constants.TAG_TABLE_NAME, obj.table_name)
+        tagged = CBORTag(constants.TAG_TABLE_NAME, obj.table_name)
 
     elif isinstance(obj, BoundIncluded):
-        tagged = cbor2.CBORTag(constants.TAG_BOUND_INCLUDED, obj.value)
+        tagged = CBORTag(constants.TAG_BOUND_INCLUDED, obj.value)
 
     elif isinstance(obj, BoundExcluded):
-        tagged = cbor2.CBORTag(constants.TAG_BOUND_EXCLUDED, obj.value)
+        tagged = CBORTag(constants.TAG_BOUND_EXCLUDED, obj.value)
 
     elif isinstance(obj, Range):
-        tagged = cbor2.CBORTag(constants.TAG_BOUND_EXCLUDED, [obj.begin, obj.end])
+        tagged = CBORTag(constants.TAG_BOUND_EXCLUDED, [obj.begin, obj.end])
 
     elif isinstance(obj, Future):
-        tagged = cbor2.CBORTag(constants.TAG_BOUND_EXCLUDED, obj.value)
+        tagged = CBORTag(constants.TAG_BOUND_EXCLUDED, obj.value)
 
     elif isinstance(obj, Duration):
-        tagged = cbor2.CBORTag(constants.TAG_DURATION, obj.get_seconds_and_nano())
+        tagged = CBORTag(constants.TAG_DURATION, obj.get_seconds_and_nano())
 
     elif isinstance(obj, IsoDateTimeWrapper):
-        tagged = cbor2.CBORTag(constants.TAG_DATETIME, obj.dt)
+        tagged = CBORTag(constants.TAG_DATETIME, obj.dt)
     else:
         raise BufferError("no encoder for type ", type(obj))
 
@@ -134,8 +134,8 @@ def tag_decoder(decoder, tag, shareable_index=None):
 
 
 def encode(obj):
-    return cbor2.dumps(obj, default=default_encoder, timezone=timezone.utc)
+    return dumps(obj, default=default_encoder, timezone=timezone.utc)
 
 
 def decode(data):
-    return cbor2.loads(data, tag_hook=tag_decoder)
+    return loads(data, tag_hook=tag_decoder)
