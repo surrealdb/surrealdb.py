@@ -58,8 +58,7 @@ class TestDurationClass(unittest.TestCase):
 
     def test_to_string(self):
         d = Duration.parse("90m")  # 90 minutes = 1 hour 30 min
-        # The largest integer-based unit is 1 hour so the method returns "1h"
-        self.assertEqual(d.to_string(), "1h")
+        self.assertEqual("90m", d.to_string())
 
     def test_to_compact(self):
         d = Duration.parse(60)  # 60 seconds
