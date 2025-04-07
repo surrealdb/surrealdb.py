@@ -25,9 +25,6 @@ def default_encoder(encoder, obj):
     if isinstance(obj, GeometryPoint):
         tagged = CBORTag(constants.TAG_GEOMETRY_POINT, obj.get_coordinates())
 
-    if obj is None:
-        tagged = CBORTag(constants.TAG_NONE, None)
-
     elif isinstance(obj, GeometryLine):
         tagged = CBORTag(constants.TAG_GEOMETRY_LINE, obj.get_coordinates())
 
@@ -38,10 +35,14 @@ def default_encoder(encoder, obj):
         tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_LINE, obj.get_coordinates())
 
     elif isinstance(obj, GeometryMultiPoint):
-        tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_POINT, obj.get_coordinates())
+        tagged = CBORTag(
+            constants.TAG_GEOMETRY_MULTI_POINT, obj.get_coordinates()
+        )
 
     elif isinstance(obj, GeometryMultiPolygon):
-        tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_POLYGON, obj.get_coordinates())
+        tagged = CBORTag(
+            constants.TAG_GEOMETRY_MULTI_POLYGON, obj.get_coordinates()
+        )
 
     elif isinstance(obj, GeometryCollection):
         tagged = CBORTag(constants.TAG_GEOMETRY_COLLECTION, obj.geometries)
@@ -65,7 +66,7 @@ def default_encoder(encoder, obj):
         tagged = CBORTag(constants.TAG_BOUND_EXCLUDED, obj.value)
 
     elif isinstance(obj, Duration):
-        tagged = CBORTag(constants.TAG_DURATION, obj.get_seconds_and_nano())
+        tagged = CBORTag(constants.TAG_DURATION, obj.to_string())
 
     elif isinstance(obj, IsoDateTimeWrapper):
         tagged = CBORTag(constants.TAG_DATETIME, obj.dt)
@@ -116,6 +117,8 @@ def tag_decoder(decoder, tag, shareable_index=None):
         return Range(tag.value[0], tag.value[1])
 
     elif tag.tag == constants.TAG_DURATION_COMPACT:
+        if len(tag.value) == 1:
+            return Duration.parse(tag.value[0])
         return Duration.parse(tag.value[0], tag.value[1])  # Two numbers (s, ns)
 
     elif tag.tag == constants.TAG_DURATION:
