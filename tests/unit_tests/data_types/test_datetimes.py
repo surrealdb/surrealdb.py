@@ -28,7 +28,7 @@ class TestAsyncWsSurrealConnectionDatetime(IsolatedAsyncioTestCase):
         await self.connection.query("DELETE datetime_tests;")
 
     async def test_native_datetime(self):
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(datetime.timezone.utc)
         await self.connection.query(
             "CREATE datetime_tests:compact_test SET datetime = $compact_datetime;",
             params={"compact_datetime": now}
@@ -48,8 +48,6 @@ class TestAsyncWsSurrealConnectionDatetime(IsolatedAsyncioTestCase):
 
     async def test_datetime_iso_format(self):
         iso_datetime = "2025-02-03T12:30:45.123456Z"  # ISO 8601 datetime
-        if sys.version_info < (3, 11):
-            iso_datetime = iso_datetime.replace("Z", "+00:00")
 
         date = IsoDateTimeWrapper(iso_datetime)
 
@@ -62,17 +60,14 @@ class TestAsyncWsSurrealConnectionDatetime(IsolatedAsyncioTestCase):
         )
         compact_test_outcome = await self.connection.query("SELECT * FROM datetime_tests;")
         self.assertEqual(
-            str(compact_test_outcome[0]["datetime"]) + "+00:00",
+            str(compact_test_outcome[0]["datetime"]),
             str(iso_datetime_obj)
         )
 
         # assert that the datetime returned from the DB is the same as the one serialized
-        date = compact_test_outcome[0]["datetime"].isoformat()
-        date_to_compare = date + "Z"
-        if sys.version_info < (3, 11):
-            date_to_compare = date_to_compare.replace("Z", "+00:00")
+        date = compact_test_outcome[0]["datetime"].isoformat().replace("+00:00", "Z")#
 
-        self.assertEqual(date_to_compare, iso_datetime)
+        self.assertEqual(date, iso_datetime)
 
         # Cleanup
         await self.connection.query("DELETE datetime_tests;")
