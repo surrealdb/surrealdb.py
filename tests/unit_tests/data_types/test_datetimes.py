@@ -48,6 +48,8 @@ class TestAsyncWsSurrealConnectionDatetime(IsolatedAsyncioTestCase):
 
     async def test_datetime_iso_format(self):
         iso_datetime = "2025-02-03T12:30:45.123456Z"  # ISO 8601 datetime
+        if sys.version_info < (3, 11):
+            iso_datetime = iso_datetime.replace("Z", "+00:00")
 
         date = IsoDateTimeWrapper(iso_datetime)
 
@@ -65,7 +67,9 @@ class TestAsyncWsSurrealConnectionDatetime(IsolatedAsyncioTestCase):
         )
 
         # assert that the datetime returned from the DB is the same as the one serialized
-        date = compact_test_outcome[0]["datetime"].isoformat().replace("+00:00", "Z")#
+        date = compact_test_outcome[0]["datetime"].isoformat()
+        if sys.version_info >= (3, 11):
+            date = date.replace("+00:00", "Z")
 
         self.assertEqual(date, iso_datetime)
 
