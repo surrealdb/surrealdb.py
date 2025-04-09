@@ -60,7 +60,7 @@ class TestAsyncWsSurrealConnectionNone(IsolatedAsyncioTestCase):
         outcome = await self.connection.query("SELECT * FROM person")
         self.assertEqual(2, len(outcome))
 
-        await self.connection.query("DELETE person;")
+        await self.connection.query("REMOVE TABLE person;")
         await self.connection.close()
 
 if __name__ == "__main__":

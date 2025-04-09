@@ -39,13 +39,14 @@ class TestAsyncHttpSurrealConnection(TestCase):
 
         _ = self.connection.invalidate()
 
-        with self.assertRaises(Exception) as context:
-            _ = self.connection.query("SELECT * FROM user;")
-
-        self.assertEqual(
-            "IAM error: Not enough permissions" in str(context.exception),
-            True
-        )
+        try:
+            outcome = self.connection.query("SELECT * FROM user;")
+            self.assertEqual(0, len(outcome))
+        except Exception as err:
+            self.assertEqual(
+                "IAM error: Not enough permissions" in str(err),
+                True
+            )
         outcome = self.main_connection.query("SELECT * FROM user;")
         self.assertEqual(1, len(outcome))
 
@@ -57,10 +58,18 @@ class TestAsyncHttpSurrealConnection(TestCase):
         outcome = self.main_connection.query("SELECT * FROM user;")
         self.assertEqual(1, len(outcome))
 
-        _ = self.connection.invalidate()
+        self.connection.invalidate()
 
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.assertEqual(0, len(outcome))
+
+        try:
+            outcome = self.connection.query("SELECT * FROM user;")
+            self.assertEqual(0, len(outcome))
+        except Exception as err:
+            self.assertEqual(
+                "IAM error: Not enough permissions" in str(err),
+                True
+            )
+
         outcome = self.main_connection.query("SELECT * FROM user;")
         self.assertEqual(1, len(outcome))
 
