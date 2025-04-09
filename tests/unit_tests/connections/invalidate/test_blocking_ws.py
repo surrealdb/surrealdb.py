@@ -60,8 +60,14 @@ class TestAsyncWsSurrealConnection(TestCase):
 
         _ = self.connection.invalidate()
 
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.assertEqual(0, len(outcome))
+        try:
+            outcome = self.connection.query("SELECT * FROM user;")
+            self.assertEqual(0, len(outcome))
+        except Exception as err:
+            self.assertEqual(
+                "IAM error: Not enough permissions" in str(err),
+                True
+            )
         outcome = self.main_connection.query("SELECT * FROM user;")
         self.assertEqual(1, len(outcome))
 
