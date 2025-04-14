@@ -43,8 +43,14 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
 
         _ = await self.connection.invalidate()
 
-        outcome = await self.connection.query("SELECT * FROM user;")
-        self.assertEqual(0, len(outcome))
+        try:
+            outcome = await self.connection.query("SELECT * FROM user;")
+            self.assertEqual(0, len(outcome))
+        except Exception as err:
+            self.assertEqual(
+                "IAM error: Not enough permissions" in str(err),
+                True
+            )
         outcome = await self.main_connection.query("SELECT * FROM user;")
         self.assertEqual(1, len(outcome))
         await self.main_connection.query("DELETE user;")

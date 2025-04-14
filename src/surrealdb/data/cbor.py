@@ -125,7 +125,9 @@ def tag_decoder(decoder, tag, shareable_index=None):
         seconds = tag.value[0]
         nanoseconds = tag.value[1]
         microseconds = nanoseconds // 1000  # Convert nanoseconds to microseconds
-        return datetime.fromtimestamp(seconds) + timedelta(microseconds=microseconds)
+        return datetime.fromtimestamp(seconds, timezone.utc) + timedelta(
+            microseconds=microseconds
+        )
 
     else:
         raise BufferError("no decoder for tag", tag.tag)
