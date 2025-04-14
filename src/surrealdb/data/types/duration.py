@@ -24,7 +24,12 @@ class Duration:
             return Duration(nanoseconds + value * UNITS["s"])
         elif isinstance(value, str):
             unit = value[-1]
-            num = int(value[:-1])
+            if unit == "s":
+                unit = value[-2] + unit
+                num = int(value[:-2])
+            else:
+                num = int(value[:-1])
+
             if unit in UNITS:
                 return Duration(num * UNITS[unit])
             else:
@@ -75,11 +80,12 @@ class Duration:
         return self.elapsed // UNITS["w"]
 
     def to_string(self) -> str:
-        for unit in reversed(["w", "d", "h", "m", "s", "ms", "us", "ns"]):
-            value = self.elapsed // UNITS[unit]
-            if value > 0:
+        for unit in ["w", "d", "h", "m", "s", "ms", "us"]:
+            if self.elapsed % UNITS[unit] == 0:
+                value = self.elapsed // UNITS[unit]
                 return f"{value}{unit}"
-        return "0ns"
+
+        return f"{self.elapsed}ns"
 
     def to_compact(self) -> list:
         return [self.elapsed // UNITS["s"]]
