@@ -19,29 +19,31 @@ from surrealdb.data.types.range import BoundIncluded, BoundExcluded, Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
+import decimal
+
 
 @shareable_encoder
 def default_encoder(encoder, obj):
-    if isinstance(obj, GeometryPoint):
-        tagged = CBORTag(constants.TAG_GEOMETRY_POINT, obj.get_coordinates())
-
     if obj is None:
         tagged = CBORTag(constants.TAG_NONE, None)
 
+    elif isinstance(obj, GeometryPoint):
+        tagged = CBORTag(constants.TAG_GEOMETRY_POINT, obj.get_coordinates())
+
     elif isinstance(obj, GeometryLine):
-        tagged = CBORTag(constants.TAG_GEOMETRY_LINE, obj.get_coordinates())
+        tagged = CBORTag(constants.TAG_GEOMETRY_LINE, obj.geometry_points)
 
     elif isinstance(obj, GeometryPolygon):
-        tagged = CBORTag(constants.TAG_GEOMETRY_POLYGON, obj.get_coordinates())
+        tagged = CBORTag(constants.TAG_GEOMETRY_POLYGON, obj.geometry_lines)
 
     elif isinstance(obj, GeometryMultiLine):
-        tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_LINE, obj.get_coordinates())
+        tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_LINE, obj.geometry_lines)
 
     elif isinstance(obj, GeometryMultiPoint):
-        tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_POINT, obj.get_coordinates())
+        tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_POINT, obj.geometry_points)
 
     elif isinstance(obj, GeometryMultiPolygon):
-        tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_POLYGON, obj.get_coordinates())
+        tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_POLYGON, obj.geometry_polygons)
 
     elif isinstance(obj, GeometryCollection):
         tagged = CBORTag(constants.TAG_GEOMETRY_COLLECTION, obj.geometries)
@@ -69,6 +71,7 @@ def default_encoder(encoder, obj):
 
     elif isinstance(obj, IsoDateTimeWrapper):
         tagged = CBORTag(constants.TAG_DATETIME, obj.dt)
+
     else:
         raise BufferError("no encoder for type ", type(obj))
 
@@ -80,19 +83,19 @@ def tag_decoder(decoder, tag, shareable_index=None):
         return GeometryPoint.parse_coordinates(tag.value)
 
     elif tag.tag == constants.TAG_GEOMETRY_LINE:
-        return GeometryLine.parse_coordinates(tag.value)
+        return GeometryLine(*tag.value)
 
     elif tag.tag == constants.TAG_GEOMETRY_POLYGON:
-        return GeometryPolygon.parse_coordinates(tag.value)
+        return GeometryPolygon(*tag.value)
 
     elif tag.tag == constants.TAG_GEOMETRY_MULTI_POINT:
-        return GeometryMultiPoint.parse_coordinates(tag.value)
+        return GeometryMultiPoint(*tag.value)
 
     elif tag.tag == constants.TAG_GEOMETRY_MULTI_LINE:
-        return GeometryMultiLine.parse_coordinates(tag.value)
+        return GeometryMultiLine(*tag.value)
 
     elif tag.tag == constants.TAG_GEOMETRY_MULTI_POLYGON:
-        return GeometryMultiPolygon.parse_coordinates(tag.value)
+        return GeometryMultiPolygon(*tag.value)
 
     elif tag.tag == constants.TAG_GEOMETRY_COLLECTION:
         return GeometryCollection(*tag.value)
@@ -129,6 +132,9 @@ def tag_decoder(decoder, tag, shareable_index=None):
         return datetime.fromtimestamp(seconds, timezone.utc) + timedelta(
             microseconds=microseconds
         )
+
+    elif tag.tag == constants.TAG_DECIMAL_STRING:
+        return decimal.Decimal(tag.value)
 
     else:
         raise BufferError("no decoder for tag", tag.tag)
