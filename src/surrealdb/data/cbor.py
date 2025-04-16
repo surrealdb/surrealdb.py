@@ -19,8 +19,6 @@ from surrealdb.data.types.range import BoundIncluded, BoundExcluded, Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
-import decimal
-
 
 @shareable_encoder
 def default_encoder(encoder, obj):
