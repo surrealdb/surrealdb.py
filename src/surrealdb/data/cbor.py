@@ -1,7 +1,7 @@
+import decimal
 from datetime import datetime, timedelta, timezone
 
 from surrealdb.cbor2 import shareable_encoder, CBORTag, dumps, loads
-
 from surrealdb.data.types import constants
 from surrealdb.data.types.datetime import IsoDateTimeWrapper
 from surrealdb.data.types.duration import Duration
