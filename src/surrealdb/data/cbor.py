@@ -1,7 +1,7 @@
+import decimal
 from datetime import datetime, timedelta, timezone
 
 from surrealdb.cbor2 import shareable_encoder, CBORTag, dumps, loads
-
 from surrealdb.data.types import constants
 from surrealdb.data.types.datetime import IsoDateTimeWrapper
 from surrealdb.data.types.duration import Duration
@@ -129,6 +129,9 @@ def tag_decoder(decoder, tag, shareable_index=None):
         return datetime.fromtimestamp(seconds, timezone.utc) + timedelta(
             microseconds=microseconds
         )
+
+    elif tag.tag == constants.TAG_DECIMAL_STRING:
+        return decimal.Decimal(tag.value)
 
     else:
         raise BufferError("no decoder for tag", tag.tag)
