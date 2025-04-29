@@ -3,13 +3,13 @@ from unittest import IsolatedAsyncioTestCase
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data.types.geometry import (
-    GeometryPoint,
-    GeometryLine,
-    GeometryPolygon,
-    GeometryMultiPoint,
-    GeometryMultiLine,
-    GeometryMultiPolygon,
     GeometryCollection,
+    GeometryLine,
+    GeometryMultiLine,
+    GeometryMultiPoint,
+    GeometryMultiPolygon,
+    GeometryPoint,
+    GeometryPolygon,
 )
 
 
@@ -78,18 +78,18 @@ class TestGeometryPoint(BaseTestGeometry):
             CREATE geometry_tests:point1 SET geometry = $geo;
         """
         initial_result = await self.connection.query(
-            create_query, params={"geo": geometry_dict}
+            create_query, vars={"geo": geometry_dict}
         )
         self.assertTrue("geometry" in initial_result[0])
 
-        select_result = await self.connection.query(
-            "SELECT * FROM geometry_tests;"
-        )
+        select_result = await self.connection.query("SELECT * FROM geometry_tests;")
         stored_geo = select_result[0]["geometry"]
         self.assertEqual(stored_geo["type"], "Point")
         self.assertEqual(stored_geo["coordinates"], [1.23, 4.56])
 
-        retrieved_point = GeometryPoint.parse_coordinates(tuple(stored_geo["coordinates"]))
+        retrieved_point = GeometryPoint.parse_coordinates(
+            tuple(stored_geo["coordinates"])
+        )
         self.assertEqual(retrieved_point, GeometryPoint(1.23, 4.56))
 
     async def test_db_insert_and_retrieve_point_as_python_object(self):
@@ -103,11 +103,9 @@ class TestGeometryPoint(BaseTestGeometry):
         create_query = """
             CREATE geometry_tests:obj_point1 SET geometry = $geo;
         """
-        await self.connection.query(create_query, params={"geo": my_point})
+        await self.connection.query(create_query, vars={"geo": my_point})
 
-        results = await self.connection.query(
-            "SELECT * FROM geometry_tests;"
-        )
+        results = await self.connection.query("SELECT * FROM geometry_tests;")
         stored_geo_obj = results[0]["geometry"]
 
         self.assertIsInstance(stored_geo_obj, GeometryPoint)
@@ -141,7 +139,7 @@ class TestGeometryPoint(BaseTestGeometry):
             CREATE geometry_tests:issue_5204 SET geometry = $geo;
         """
 
-        results = await self.connection.query(create_query, params={"geo": geometry_dict})
+        results = await self.connection.query(create_query, vars={"geo": geometry_dict})
         stored_geo_obj = results[0]["geometry"]
         self.assertEqual(stored_geo_obj, geometry_dict)
 
@@ -179,11 +177,9 @@ class TestGeometryLine(BaseTestGeometry):
         create_query = """
             CREATE geometry_tests:line1 SET geometry = $geo;
         """
-        await self.connection.query(create_query, params={"geo": geometry_dict})
+        await self.connection.query(create_query, vars={"geo": geometry_dict})
 
-        select_result = await self.connection.query(
-            "SELECT * FROM geometry_tests;"
-        )
+        select_result = await self.connection.query("SELECT * FROM geometry_tests;")
         stored_geo = select_result[0]["geometry"]
         self.assertEqual(stored_geo["type"], "Line")
         self.assertEqual(stored_geo["coordinates"], [[0, 0], [1, 1], [2, 2]])
@@ -202,11 +198,9 @@ class TestGeometryLine(BaseTestGeometry):
         create_query = """
             CREATE geometry_tests:obj_line1 SET geometry = $geo;
         """
-        await self.connection.query(create_query, params={"geo": line})
+        await self.connection.query(create_query, vars={"geo": line})
 
-        results = await self.connection.query(
-            "SELECT * FROM geometry_tests;"
-        )
+        results = await self.connection.query("SELECT * FROM geometry_tests;")
         stored_geo_obj = results[0]["geometry"]
 
         self.assertIsInstance(stored_geo_obj, GeometryLine)
@@ -253,11 +247,9 @@ class TestGeometryPolygon(BaseTestGeometry):
         create_query = """
             CREATE geometry_tests:polygon1 SET geometry = $geo;
         """
-        await self.connection.query(create_query, params={"geo": geometry_dict})
+        await self.connection.query(create_query, vars={"geo": geometry_dict})
 
-        select_result = await self.connection.query(
-            "SELECT * FROM geometry_tests;"
-        )
+        select_result = await self.connection.query("SELECT * FROM geometry_tests;")
         stored_geo = select_result[0]["geometry"]
         self.assertEqual(stored_geo["type"], "Polygon")
         self.assertEqual(stored_geo["coordinates"], [[[0, 0], [1, 1], [2, 2], [0, 0]]])
@@ -283,11 +275,9 @@ class TestGeometryMultiPoint(BaseTestGeometry):
         create_query = """
             CREATE geometry_tests:multipoint1 SET geometry = $geo;
         """
-        await self.connection.query(create_query, params={"geo": geometry_dict})
+        await self.connection.query(create_query, vars={"geo": geometry_dict})
 
-        select_result = await self.connection.query(
-            "SELECT * FROM geometry_tests;"
-        )
+        select_result = await self.connection.query("SELECT * FROM geometry_tests;")
         stored_geo = select_result[0]["geometry"]
         self.assertEqual(stored_geo["type"], "MultiPoint")
         self.assertEqual(stored_geo["coordinates"], [[1, 2], [3, 4], [5, 6]])
@@ -299,17 +289,15 @@ class TestGeometryMultiPoint(BaseTestGeometry):
         mp = GeometryMultiPoint(
             GeometryPoint(1, 2),
             GeometryPoint(3, 4),
-            GeometryPoint(5, 6)
+            GeometryPoint(5, 6),
         )
 
         create_query = """
             CREATE geometry_tests:obj_multipoint1 SET geometry = $geo;
         """
-        await self.connection.query(create_query, params={"geo": mp})
+        await self.connection.query(create_query, vars={"geo": mp})
 
-        results = await self.connection.query(
-            "SELECT * FROM geometry_tests;"
-        )
+        results = await self.connection.query("SELECT * FROM geometry_tests;")
         stored_geo_obj = results[0]["geometry"]
 
         self.assertIsInstance(stored_geo_obj, GeometryMultiPoint)
@@ -338,14 +326,14 @@ class TestGeometryMultiLine(BaseTestGeometry):
         create_query = """
             CREATE geometry_tests:multiline1 SET geometry = $geo;
         """
-        await self.connection.query(create_query, params={"geo": geometry_dict})
+        await self.connection.query(create_query, vars={"geo": geometry_dict})
 
-        select_result = await self.connection.query(
-            "SELECT * FROM geometry_tests;"
-        )
+        select_result = await self.connection.query("SELECT * FROM geometry_tests;")
         stored_geo = select_result[0]["geometry"]
         self.assertEqual(stored_geo["type"], "MultiLineString")
-        self.assertEqual(stored_geo["coordinates"], [[[0, 0], [1, 1]], [[2, 2], [3, 3]]])
+        self.assertEqual(
+            stored_geo["coordinates"], [[[0, 0], [1, 1]], [[2, 2], [3, 3]]]
+        )
 
     async def test_db_insert_and_retrieve_multiline_as_python_object(self):
         """
@@ -358,11 +346,9 @@ class TestGeometryMultiLine(BaseTestGeometry):
         create_query = """
             CREATE geometry_tests:obj_multiline1 SET geometry = $geo;
         """
-        await self.connection.query(create_query, params={"geo": ml})
+        await self.connection.query(create_query, vars={"geo": ml})
 
-        results = await self.connection.query(
-            "SELECT * FROM geometry_tests;"
-        )
+        results = await self.connection.query("SELECT * FROM geometry_tests;")
         stored_geo_obj = results[0]["geometry"]
 
         self.assertIsInstance(stored_geo_obj, GeometryMultiLine)
@@ -393,22 +379,16 @@ class TestGeometryMultiPolygon(BaseTestGeometry):
         geometry_dict = {
             "type": "MultiPolygon",
             "coordinates": [
-                [
-                    [[0, 0], [1, 1], [1, 0], [0, 0]]
-                ],
-                [
-                    [[5, 5], [6, 6], [6, 5], [5, 5]]
-                ],
+                [[[0, 0], [1, 1], [1, 0], [0, 0]]],
+                [[[5, 5], [6, 6], [6, 5], [5, 5]]],
             ],
         }
         create_query = """
             CREATE geometry_tests:multipolygon1 SET geometry = $geo;
         """
-        await self.connection.query(create_query, params={"geo": geometry_dict})
+        await self.connection.query(create_query, vars={"geo": geometry_dict})
 
-        select_result = await self.connection.query(
-            "SELECT * FROM geometry_tests;"
-        )
+        select_result = await self.connection.query("SELECT * FROM geometry_tests;")
         stored_geo = select_result[0]["geometry"]
         self.assertEqual(stored_geo["type"], "MultiPolygon")
         self.assertEqual(
@@ -439,11 +419,9 @@ class TestGeometryCollection(BaseTestGeometry):
         create_query = """
             CREATE geometry_tests:collection1 SET geometry = $geo;
         """
-        await self.connection.query(create_query, params={"geo": geometry_dict})
+        await self.connection.query(create_query, vars={"geo": geometry_dict})
 
-        select_result = await self.connection.query(
-            "SELECT * FROM geometry_tests;"
-        )
+        select_result = await self.connection.query("SELECT * FROM geometry_tests;")
         stored_geo = select_result[0]["geometry"]
         self.assertEqual(stored_geo["type"], "GeometryCollection")
         self.assertEqual(len(stored_geo["geometries"]), 2)
@@ -459,11 +437,9 @@ class TestGeometryCollection(BaseTestGeometry):
         create_query = """
             CREATE geometry_tests:obj_collection1 SET geometry = $geo;
         """
-        await self.connection.query(create_query, params={"geo": gc})
+        await self.connection.query(create_query, vars={"geo": gc})
 
-        results = await self.connection.query(
-            "SELECT * FROM geometry_tests;"
-        )
+        results = await self.connection.query("SELECT * FROM geometry_tests;")
         stored_geo_obj = results[0]["geometry"]
 
         self.assertIsInstance(stored_geo_obj, GeometryCollection)

@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional, Any, Dict, Union, List, cast
+from typing import Any, Dict, List, Optional, Union, cast
 
 import requests
 
@@ -14,7 +14,6 @@ from surrealdb.request_message.methods import RequestMethod
 
 
 class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
-
     def __init__(self, url: str) -> None:
         self.url: Url = Url(url)
         self.raw_url: str = url.rstrip("/")
@@ -56,10 +55,11 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     def set_token(self, token: str) -> None:
         self.token = token
 
-    def authenticate(self, token: str) -> dict:
+    def authenticate(self, token: str) -> None:
+        self.token = token
         message = RequestMessage(RequestMethod.AUTHENTICATE, token=token)
         self.id = message.id
-        return self._send(message, "authenticating")
+        self._send(message, "authenticating")
 
     def invalidate(self) -> None:
         message = RequestMessage(RequestMethod.INVALIDATE)
@@ -109,15 +109,15 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.namespace = namespace
         self.database = database
 
-    def query(self, query: str, params: Optional[dict] = None) -> dict:
-        if params is None:
-            params = {}
+    def query(self, query: str, vars: Optional[dict] = None) -> dict:
+        if vars is None:
+            vars = {}
         for key, value in self.vars.items():
-            params[key] = value
+            vars[key] = value
         message = RequestMessage(
             RequestMethod.QUERY,
             query=query,
-            params=params,
+            params=vars,
         )
         self.id = message.id
         response = self._send(message, "query")
@@ -196,7 +196,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         return response["result"]
 
     def patch(
-        self, thing: Union[str, RecordID, Table], data: Optional[Dict[Any, Any]] = None
+        self, thing: Union[str, RecordID, Table], data: Optional[list[Dict]] = None
     ) -> Union[List[dict], dict]:
         message = RequestMessage(RequestMethod.PATCH, collection=thing, params=data)
         self.id = message.id

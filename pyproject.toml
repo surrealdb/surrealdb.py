@@ -9,13 +9,12 @@ description = "SurrealDB python client"
 readme = "README.md"
 authors = [{ name = "SurrealDB" }]
 license = "Apache-2.0"
-repository = "https://github.com/surrealdb/surrealdb.py"
-documentation = "https://surrealdb.com/docs/sdk/python"
+# repository = "https://github.com/surrealdb/surrealdb.py"
+# documentation = "https://surrealdb.com/docs/sdk/python"
 keywords = ["SurrealDB", "Database"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
@@ -49,7 +48,7 @@ dependencies = [
     "typing_extensions==4.12.2",
     "urllib3==2.3.0",
     "websockets==14.2",
-    "yarl==1.18.3"
+    "yarl==1.18.3",
 ]
 
 [project.urls]

@@ -1,6 +1,6 @@
 import asyncio
 from asyncio import TimeoutError
-from unittest import main, IsolatedAsyncioTestCase
+from unittest import IsolatedAsyncioTestCase, main
 from uuid import UUID
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
@@ -8,7 +8,6 @@ from surrealdb.data import RecordID
 
 
 class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
-
     async def asyncSetUp(self):
         self.url = "ws://localhost:8000"
         self.password = "root"
@@ -26,7 +25,9 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         await self.connection.query("CREATE user:tobie SET name = 'Tobie';")
         self.pub_connection = AsyncWsSurrealConnection(self.url)
         await self.pub_connection.signin(self.vars_params)
-        await self.pub_connection.use(namespace=self.namespace, database=self.database_name)
+        await self.pub_connection.use(
+            namespace=self.namespace, database=self.database_name
+        )
 
     async def test_live_subscription(self):
         # Start the live query
@@ -34,7 +35,7 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         self.assertIsInstance(query_uuid, UUID)
 
         # Start the live subscription
-        subscription = self.connection.subscribe_live(query_uuid)
+        subscription = await self.connection.subscribe_live(query_uuid)
 
         # Push an update
         await self.pub_connection.query("CREATE user:jaime SET name = 'Jaime';")
