@@ -69,6 +69,3 @@ disable_error_code = ["return-value", "return-type"]
 [[tool.mypy.overrides]]
 module = "cerberus.*"
 ignore_missing_imports = true
-
-# [project.scripts]
-# sdblpy = "sblpy.cli.entrypoint:main"
