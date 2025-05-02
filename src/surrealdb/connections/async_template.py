@@ -126,6 +126,8 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"unset not implemented for: {self}")
 
+    # TODO: missing return types. E.g. this query returns a `bool`:
+    #       `RETURN record::exists($record)`
     async def query(
         self, query: str, vars: Optional[Dict] = None
     ) -> Union[List[dict], dict]:

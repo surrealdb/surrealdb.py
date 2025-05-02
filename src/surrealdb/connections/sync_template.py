@@ -131,6 +131,8 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"let not implemented for: {self}")
 
+    # TODO: missing return types. E.g. this query returns a `bool`:
+    #       `RETURN record::exists($record)`
     def query(self, query: str, vars: Optional[Dict] = None) -> Union[List[dict], dict]:
         """Run a set of SurrealQL statements against the database.
 
