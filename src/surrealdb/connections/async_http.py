@@ -89,7 +89,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
                     self.check_response_for_error(data, operation)
                 return data
 
-    # QUESTION: do we need this since `authenticate` is meant to get the token as an arg?
+    # TODO: do we need this since `authenticate` is meant to get the token as an arg?
     def set_token(self, token: str) -> None:
         """
         Sets the token for authentication.
