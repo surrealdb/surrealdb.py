@@ -1,5 +1,4 @@
-from asyncio import Queue
-from typing import Optional, List, Dict, Any, Union
+from typing import Any, Dict, Generator, List, Optional, Union
 from uuid import UUID
 
 from surrealdb.data.types.record_id import RecordID
@@ -7,7 +6,6 @@ from surrealdb.data.types.table import Table
 
 
 class SyncTemplate:
-
     # def connect(self, url: str, options: Optional[Dict] = None) -> None:
     #     """Connects to a local or remote database endpoint.
     #
@@ -133,6 +131,8 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"let not implemented for: {self}")
 
+    # TODO: missing return types. E.g. this query returns a `bool`:
+    #       `RETURN record::exists($record)`
     def query(self, query: str, vars: Optional[Dict] = None) -> Union[List[dict], dict]:
         """Run a set of SurrealQL statements against the database.
 
@@ -273,7 +273,7 @@ class SyncTemplate:
         raise NotImplementedError(f"merge not implemented for: {self}")
 
     def patch(
-        self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
+        self, thing: Union[str, RecordID, Table], data: Optional[List[Dict]] = None
     ) -> Union[List[dict], dict]:
         """Apply JSON Patch changes to all records, or a specific record, in the database.
 
@@ -382,7 +382,9 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"live not implemented for: {self}")
 
-    def subscribe_live(self, query_uuid: Union[str, UUID]) -> Queue:
+    def subscribe_live(
+        self, query_uuid: Union[str, UUID]
+    ) -> Generator[dict, None, None]:
         """Live notification returns a queue that receives notification messages from the back end.
 
         Args:

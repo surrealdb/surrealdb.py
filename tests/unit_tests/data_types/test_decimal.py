@@ -1,10 +1,10 @@
 import decimal
-from unittest import main, IsolatedAsyncioTestCase
+from unittest import IsolatedAsyncioTestCase, main
+
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 
 
 class TestAsyncWsSurrealConnectionNumeric(IsolatedAsyncioTestCase):
-
     async def asyncSetUp(self):
         self.url = "ws://localhost:8000/rpc"
         self.password = "root"
@@ -28,7 +28,9 @@ class TestAsyncWsSurrealConnectionNumeric(IsolatedAsyncioTestCase):
         """
         Test storing and retrieving a literal decimal using SurrealDB's 'dec' suffix directly in SurrealQL.
         """
-        await self.connection.query("CREATE numeric_tests:literal_test SET value = 99.99dec;")
+        await self.connection.query(
+            "CREATE numeric_tests:literal_test SET value = 99.99dec;"
+        )
 
         result = await self.connection.query("SELECT * FROM numeric_tests;")
         stored_value = result[0]["value"]
@@ -45,7 +47,7 @@ class TestAsyncWsSurrealConnectionNumeric(IsolatedAsyncioTestCase):
         # Insert the float value via parameterized query
         initial_result = await self.connection.query(
             "CREATE numeric_tests:float_test SET value = $float_val;",
-            params={"float_val": float_value}
+            vars={"float_val": float_value},
         )
         self.assertIsInstance(initial_result[0]["value"], float)
         self.assertEqual(initial_result[0]["value"], 3.141592653589793)

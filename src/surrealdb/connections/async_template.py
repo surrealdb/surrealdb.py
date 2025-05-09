@@ -1,12 +1,12 @@
-from typing import Optional, List, Dict, Any, Union, Coroutine
+from collections.abc import AsyncGenerator
+from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
-from asyncio import Queue
+
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
 
 class AsyncTemplate:
-
     async def connect(self, url: str) -> None:
         """Connects to a local or remote database endpoint.
 
@@ -126,6 +126,8 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"unset not implemented for: {self}")
 
+    # TODO: missing return types. E.g. this query returns a `bool`:
+    #       `RETURN record::exists($record)`
     async def query(
         self, query: str, vars: Optional[Dict] = None
     ) -> Union[List[dict], dict]:
@@ -270,7 +272,7 @@ class AsyncTemplate:
         raise NotImplementedError(f"merge not implemented for: {self}")
 
     async def patch(
-        self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
+        self, thing: Union[str, RecordID, Table], data: Optional[List[Dict]] = None
     ) -> Union[List[dict], dict]:
         """Apply JSON Patch changes to all records, or a specific record, in the database.
 
@@ -318,7 +320,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"delete not implemented for: {self}")
 
-    async def info(self) -> Coroutine[Any, Any, dict]:
+    async def info(self) -> dict:
         """This returns the record of an authenticated record user.
 
         Example:
@@ -381,7 +383,9 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"live not implemented for: {self}")
 
-    async def subscribe_live(self, query_uuid: Union[str, UUID]) -> Queue:
+    async def subscribe_live(
+        self, query_uuid: Union[str, UUID]
+    ) -> AsyncGenerator[Dict, None]:
         """Returns a queue that receives notification messages from a running live query.
 
         Args:

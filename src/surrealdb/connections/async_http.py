@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional, Any, Dict, Union, List
+from typing import Any, Dict, List, Optional, Union
 
 import aiohttp
 
@@ -36,7 +36,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         """
         self.url: Url = Url(url)
         self.raw_url: str = self.url.raw_url
-        self.host: str = self.url.hostname
+        self.host: Optional[str] = self.url.hostname
         self.port: Optional[int] = self.url.port
         self.token: Optional[str] = None
         self.id: str = str(uuid.uuid4())
@@ -89,6 +89,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
                     self.check_response_for_error(data, operation)
                 return data
 
+    # TODO: do we need this since `authenticate` is meant to get the token as an arg?
     def set_token(self, token: str) -> None:
         """
         Sets the token for authentication.
@@ -97,10 +98,11 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         """
         self.token = token
 
-    async def authenticate(self) -> None:
+    async def authenticate(self, token: str) -> None:
+        self.token = token
         message = RequestMessage(RequestMethod.AUTHENTICATE, token=self.token)
         self.id = message.id
-        return await self._send(message, "authenticating")
+        await self._send(message, "authenticating")
 
     async def invalidate(self) -> None:
         message = RequestMessage(RequestMethod.INVALIDATE)
@@ -116,7 +118,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.token = response["result"]
         return response["result"]
 
-    async def signin(self, vars: dict) -> dict:
+    async def signin(self, vars: Dict) -> str:
         message = RequestMessage(
             RequestMethod.SIGN_IN,
             username=vars.get("username"),
@@ -150,15 +152,17 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.namespace = namespace
         self.database = database
 
-    async def query(self, query: str, params: Optional[dict] = None) -> dict:
-        if params is None:
-            params = {}
+    async def query(
+        self, query: str, vars: Optional[dict] = None
+    ) -> Union[List[dict], dict]:
+        if vars is None:
+            vars = {}
         for key, value in self.vars.items():
-            params[key] = value
+            vars[key] = value
         message = RequestMessage(
             RequestMethod.QUERY,
             query=query,
-            params=params,
+            params=vars,
         )
         self.id = message.id
         response = await self._send(message, "query")
@@ -239,7 +243,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         return response["result"]
 
     async def patch(
-        self, thing: Union[str, RecordID, Table], data: Optional[List[dict]] = None
+        self, thing: Union[str, RecordID, Table], data: Optional[List[Dict]] = None
     ) -> Union[List[dict], dict]:
         message = RequestMessage(RequestMethod.PATCH, collection=thing, params=data)
         self.id = message.id
@@ -247,7 +251,9 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "patch")
         return response["result"]
 
-    async def select(self, thing: str) -> Union[List[dict], dict]:
+    async def select(
+        self, thing: Union[str, RecordID, Table]
+    ) -> Union[List[dict], dict]:
         message = RequestMessage(RequestMethod.SELECT, params=[thing])
         self.id = message.id
         response = await self._send(message, "select")

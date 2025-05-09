@@ -3,7 +3,7 @@ A basic blocking connection to a SurrealDB instance.
 """
 
 import uuid
-from typing import Optional, Any, Dict, Union, List, Generator
+from typing import Any, Dict, Generator, List, Optional, Union
 from uuid import UUID
 
 import websockets
@@ -40,8 +40,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         """
         self.url: Url = Url(url)
         self.raw_url: str = f"{self.url.raw_url}/rpc"
-        self.host: str = self.url.hostname
-        self.port: int = self.url.port
+        self.host: Optional[str] = self.url.hostname
+        self.port: Optional[int] = self.url.port
         self.id: str = str(uuid.uuid4())
         self.token: Optional[str] = None
         self.socket = None
@@ -61,10 +61,10 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             self.check_response_for_error(response, process)
         return response
 
-    def authenticate(self, token: str) -> dict:
+    def authenticate(self, token: str) -> None:
         message = RequestMessage(RequestMethod.AUTHENTICATE, token=token)
         self.id = message.id
-        return self._send(message, "authenticating")
+        self._send(message, "authenticating")
 
     def invalidate(self) -> None:
         message = RequestMessage(RequestMethod.INVALIDATE)
@@ -111,13 +111,13 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.id = message.id
         self._send(message, "use")
 
-    def query(self, query: str, params: Optional[dict] = None) -> dict:
-        if params is None:
-            params = {}
+    def query(self, query: str, vars: Optional[Dict] = None) -> Union[List[dict], dict]:
+        if vars is None:
+            vars = {}
         message = RequestMessage(
             RequestMethod.QUERY,
             query=query,
-            params=params,
+            params=vars,
         )
         self.id = message.id
         response = self._send(message, "query")
@@ -227,7 +227,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         return response["result"]
 
     def patch(
-        self, thing: Union[str, RecordID, Table], data: Optional[List[dict]] = None
+        self,
+        thing: Union[str, RecordID, Table],
+        data: Optional[List[dict]] = None,
     ) -> Union[List[dict], dict]:
         message = RequestMessage(RequestMethod.PATCH, collection=thing, params=data)
         self.id = message.id
@@ -236,7 +238,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         return response["result"]
 
     def subscribe_live(
-        self, query_uuid: Union[str, UUID]
+        self,
+        query_uuid: Union[str, UUID],
     ) -> Generator[dict, None, None]:
         """
         Subscribe to live updates for a given query UUID.
@@ -250,6 +253,11 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         try:
             while True:
                 try:
+                    if self.socket is None:
+                        raise ConnectionError(
+                            "WebSocket connection is not established."
+                        )
+
                     # Receive a message from the WebSocket
                     response = decode(self.socket.recv())
 
@@ -283,7 +291,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         return response["result"]
 
     def close(self):
-        self.socket.close()
+        if self.socket is not None:
+            self.socket.close()
 
     def __enter__(self) -> "BlockingWsSurrealConnection":
         """
