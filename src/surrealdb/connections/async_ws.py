@@ -26,11 +26,6 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     Attributes:
         url: The URL of the database to process queries for.
-        user: The username to login on.
-        password: The password to login on.
-        namespace: The namespace that the connection will stick to.
-        database: The database that the connection will stick to.
-        id: The ID of the connection.
     """
 
     def __init__(
@@ -48,9 +43,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.port: Optional[int] = self.url.port
         self.token: Optional[str] = None
         self.socket = None
-        self.loop: AbstractEventLoop | None = None
+        self.loop: Optional[AbstractEventLoop] = None
         self.qry: dict[str, Future] = {}
-        self.recv_task: Task[None] | None = None
+        self.recv_task: Optional[Task[None]] = None
         self.live_queues: dict[str, list] = {}
 
     async def _recv_task(self):
@@ -60,10 +55,13 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             if response_id := response.get("id"):
                 if fut := self.qry.get(response_id):
                     fut.set_result(response)
-            else:
-                live_id = str(response["result"]["id"])
+            elif response_result := response.get("result"):
+                live_id = str(response_result["id"])
                 for queue in self.live_queues.get(live_id, []):
-                    queue.put_nowait(response["result"])
+                    queue.put_nowait(response_result)
+            else:
+                self.check_response_for_error(response, "_recv_task")
+
 
     async def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
@@ -78,7 +76,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         query_id = message.id
         self.qry[query_id] = fut
         try:
-            # correlate mesage to query, send and forget it
+            # correlate message to query, send and forget it
             await self.socket.send(message.WS_CBOR_DESCRIPTOR)
             del message
 
@@ -89,7 +87,11 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
         if bypass is False:
             self.check_response_for_error(response, process)
-        return response
+
+        if isinstance(response, dict):
+            return response
+        else:
+            return {}
 
     async def connect(self, url: Optional[str] = None) -> None:
         if self.socket:
