@@ -62,7 +62,6 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             else:
                 self.check_response_for_error(response, "_recv_task")
 
-
     async def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
     ) -> dict:
