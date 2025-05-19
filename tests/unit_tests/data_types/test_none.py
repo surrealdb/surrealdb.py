@@ -6,6 +6,7 @@ Notes:
     will have to look into schema objects for more complete serialization.
 """
 from unittest import main, IsolatedAsyncioTestCase
+from os import environ
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
@@ -64,6 +65,7 @@ class TestAsyncWsSurrealConnectionNone(IsolatedAsyncioTestCase):
         await self.connection.close()
 
     async def test_none_with_query(self):
+        is_sdb21 = environ.get("SURREALDB_VERSION", "v2.1.4").startswith("v2.1.")
         schema = """
             DEFINE TABLE person SCHEMAFULL TYPE NORMAL;
             DEFINE FIELD name ON person TYPE string;
@@ -78,7 +80,10 @@ class TestAsyncWsSurrealConnectionNone(IsolatedAsyncioTestCase):
         self.assertEqual(1, len(outcome))
         self.assertEqual(record_check, outcome[0]["id"])
         self.assertEqual("John", outcome[0]["name"])
-        self.assertEqual([None], outcome[0].get("nums"))
+        if is_sdb21:
+            self.assertEqual([], outcome[0].get("nums"))
+        else:
+            self.assertEqual([None], outcome[0].get("nums"))
 
         outcome = await self.connection.query(
             "UPSERT person MERGE {id: $id, name: $name, nums: $nums}",
@@ -88,7 +93,10 @@ class TestAsyncWsSurrealConnectionNone(IsolatedAsyncioTestCase):
         self.assertEqual(1, len(outcome))
         self.assertEqual(record_check, outcome[0]["id"])
         self.assertEqual("Dave", outcome[0]["name"])
-        self.assertEqual([None], outcome[0].get("nums"))
+        if is_sdb21:
+            self.assertEqual([], outcome[0].get("nums"))
+        else:
+            self.assertEqual([None], outcome[0].get("nums"))
 
         outcome = await self.connection.query("SELECT * FROM person")
         self.assertEqual(2, len(outcome))
