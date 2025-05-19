@@ -604,6 +604,14 @@ class CBORDecoder:
 
         return self.set_shareable(Decimal(sig) * (2 ** Decimal(exp)))
 
+    def decode_none(self) -> None:
+        # Semantic tag 6
+        value = self._decode()
+        if not isinstance(value, type(None)):
+            raise CBORDecodeValueError("invalid None value " + str(value))
+
+        return self.set_shareable(None)
+
     def decode_stringref(self) -> str | bytes:
         # Semantic tag 25
         if self._stringref_namespace is None:
@@ -786,7 +794,7 @@ semantic_decoders: dict[int, Callable[[CBORDecoder], Any]] = {
     3: CBORDecoder.decode_negative_bignum,
     4: CBORDecoder.decode_fraction,
     5: CBORDecoder.decode_bigfloat,
-    6: lambda self: None,
+    6: CBORDecoder.decode_none,
     25: CBORDecoder.decode_stringref,
     28: CBORDecoder.decode_shareable,
     29: CBORDecoder.decode_sharedref,

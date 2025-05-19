@@ -658,8 +658,14 @@ class CBOREncoder:
 
     def encode_none(self, value: None) -> None:
         # tag(6, None)
-        self._fp_write(b"\xd9\x00\x06\xf6")
-        # self._fp_write(b"\xf6")
+
+        # Note that although just \xf6 (major type 6, 22) is already null in CBOR,
+        # which this cbor2 implementation decodes it as Python None,
+        # SurrealDB's variant of CBOR wraps it with \xc6 (major type 6, tag 6)
+        # which results in \xc6\xf6.
+        # We try to be compliant as much as SurrealDB's variant of CBOR
+        # and therefore encode it as \xc6\xf6.
+        self._fp_write(b"\xc6\xf6")
 
     def encode_undefined(self, value: UndefinedType) -> None:
         self._fp_write(b"\xf7")
