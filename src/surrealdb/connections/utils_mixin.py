@@ -1,5 +1,4 @@
 class UtilsMixin:
-
     @staticmethod
     def check_response_for_error(response: dict, process: str) -> None:
         if response.get("error") is not None:

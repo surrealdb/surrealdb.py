@@ -1,4 +1,4 @@
-from unittest import main, IsolatedAsyncioTestCase
+from unittest import IsolatedAsyncioTestCase, main
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
@@ -6,7 +6,6 @@ from surrealdb.data.types.table import Table
 
 
 class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
-
     async def asyncSetUp(self):
         self.url = "ws://localhost:8000"
         self.password = "root"
@@ -17,37 +16,30 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         }
         self.database_name = "test_db"
         self.namespace = "test_ns"
-        self.data = {
-            "name": "Jaime",
-            "age": 35
-        }
+        self.data = {"name": "Jaime", "age": 35}
         self.record_id = RecordID("user", "tobie")
         self.connection = AsyncWsSurrealConnection(self.url)
         _ = await self.connection.signin(self.vars_params)
-        _ = await self.connection.use(namespace=self.namespace, database=self.database_name)
+        _ = await self.connection.use(
+            namespace=self.namespace, database=self.database_name
+        )
         await self.connection.query("DELETE user;")
-        await self.connection.query("CREATE user:tobie SET name = 'Tobie';"),
+        (await self.connection.query("CREATE user:tobie SET name = 'Tobie';"),)
 
     def check_no_change(self, data: dict):
         self.assertEqual(self.record_id, data["id"])
-        self.assertEqual('Tobie', data["name"])
+        self.assertEqual("Tobie", data["name"])
 
     def check_change(self, data: dict):
         self.assertEqual(self.record_id, data["id"])
 
-        self.assertEqual('Jaime', data["name"])
+        self.assertEqual("Jaime", data["name"])
         self.assertEqual(35, data["age"])
 
     async def test_update_string(self):
         outcome = await self.connection.update("user:tobie")
-        self.assertEqual(
-            outcome["id"],
-            self.record_id
-        )
-        self.assertEqual(
-            outcome["name"],
-            "Tobie"
-        )
+        self.assertEqual(outcome["id"], self.record_id)
+        self.assertEqual(outcome["name"], "Tobie")
         outcome = await self.connection.query("SELECT * FROM user;")
         self.check_no_change(outcome[0])
         await self.connection.query("DELETE user;")
@@ -70,9 +62,7 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         outcome = await self.connection.update(self.record_id, self.data)
         self.check_change(outcome)
         outcome = await self.connection.query("SELECT * FROM user;")
-        self.check_change(
-            outcome[0]
-        )
+        self.check_change(outcome[0])
         await self.connection.query("DELETE user;")
 
     async def test_update_table(self):

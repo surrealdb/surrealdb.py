@@ -61,6 +61,12 @@ where = ["src"]
 [tool.ruff]
 exclude = ["src/surrealdb/__init__.py"]
 
+[tool.ruff.lint]
+select = [
+    "I",   # isort
+    "UP",  # pyupgrade
+]
+
 [tool.mypy]
 mypy_path = "src"
 explicit_package_bases = true
@@ -72,6 +78,5 @@ ignore_missing_imports = true
 
 [dependency-groups]
 dev = [
-    "black>=25.1.0",
-    "ruff>=0.11.9",
+    "ruff>=0.12.0",
 ]

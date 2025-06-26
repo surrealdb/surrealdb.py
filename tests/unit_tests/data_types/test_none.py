@@ -5,15 +5,15 @@ Notes:
     if an option<T> is None when being returned from the database it just isn't in the object
     will have to look into schema objects for more complete serialization.
 """
-from unittest import main, IsolatedAsyncioTestCase
+
 from os import environ
+from unittest import IsolatedAsyncioTestCase, main
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 
 
 class TestAsyncWsSurrealConnectionNone(IsolatedAsyncioTestCase):
-
     async def asyncSetUp(self):
         self.url = "ws://localhost:8000/rpc"
         self.password = "root"
@@ -41,8 +41,7 @@ class TestAsyncWsSurrealConnectionNone(IsolatedAsyncioTestCase):
         """
         await self.connection.query(schema)
         outcome = await self.connection.create(
-            "person:john",
-            {"name": "John", "age": None}
+            "person:john", {"name": "John", "age": None}
         )
         record_check = RecordID(table_name="person", identifier="john")
         self.assertEqual(record_check, outcome["id"])
@@ -50,8 +49,7 @@ class TestAsyncWsSurrealConnectionNone(IsolatedAsyncioTestCase):
         self.assertEqual(None, outcome.get("age"))
 
         outcome = await self.connection.create(
-            "person:dave",
-            {"name": "Dave", "age": 34}
+            "person:dave", {"name": "Dave", "age": 34}
         )
         record_check = RecordID(table_name="person", identifier="dave")
         self.assertEqual(record_check, outcome["id"])
@@ -74,7 +72,7 @@ class TestAsyncWsSurrealConnectionNone(IsolatedAsyncioTestCase):
         await self.connection.query(schema)
         outcome = await self.connection.query(
             "UPSERT person MERGE {id: $id, name: $name, nums: $nums}",
-            {"id": [1,2], "name": "John", "nums": [None]}
+            {"id": [1, 2], "name": "John", "nums": [None]},
         )
         record_check = RecordID(table_name="person", identifier=[1, 2])
         self.assertEqual(1, len(outcome))
@@ -87,7 +85,7 @@ class TestAsyncWsSurrealConnectionNone(IsolatedAsyncioTestCase):
 
         outcome = await self.connection.query(
             "UPSERT person MERGE {id: $id, name: $name, nums: $nums}",
-            {"id": [3,4], "name": "Dave", "nums": [None]}
+            {"id": [3, 4], "name": "Dave", "nums": [None]},
         )
         record_check = RecordID(table_name="person", identifier=[3, 4])
         self.assertEqual(1, len(outcome))
@@ -103,6 +101,7 @@ class TestAsyncWsSurrealConnectionNone(IsolatedAsyncioTestCase):
 
         await self.connection.query("REMOVE TABLE person;")
         await self.connection.close()
+
 
 if __name__ == "__main__":
     main()

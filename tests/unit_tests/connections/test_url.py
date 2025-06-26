@@ -4,7 +4,6 @@ from surrealdb.connections.url import Url
 
 
 class TestUrl(TestCase):
-
     def setUp(self) -> None:
         self.urls = [
             "http://localhost:5000",
@@ -26,6 +25,7 @@ class TestUrl(TestCase):
             self.assertEqual(self.schemes[x], url.scheme.value)
             self.assertEqual("localhost", url.hostname)
             self.assertEqual(5000, url.port)
+
 
 if __name__ == "__main__":
     main()

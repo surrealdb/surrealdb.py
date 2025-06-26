@@ -5,7 +5,7 @@ A basic async connection to a SurrealDB instance.
 import asyncio
 from asyncio import AbstractEventLoop, Future, Queue, Task
 from collections.abc import AsyncGenerator
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 from uuid import UUID
 
 import websockets
@@ -120,13 +120,13 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         await self._send(message, "invalidating")
         self.token = None
 
-    async def signup(self, vars: Dict) -> str:
+    async def signup(self, vars: dict) -> str:
         message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
         response = await self._send(message, "signup")
         self.check_response_for_result(response, "signup")
         return response["result"]
 
-    async def signin(self, vars: Dict[str, Any]) -> str:
+    async def signin(self, vars: dict[str, Any]) -> str:
         message = RequestMessage(
             RequestMethod.SIGN_IN,
             username=vars.get("username"),
@@ -157,7 +157,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def query(
         self, query: str, vars: Optional[dict] = None
-    ) -> Union[List[dict], dict]:
+    ) -> Union[list[dict], dict]:
         if vars is None:
             vars = {}
         message = RequestMessage(
@@ -196,7 +196,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def select(
         self, thing: Union[str, RecordID, Table]
-    ) -> Union[List[dict], dict]:
+    ) -> Union[list[dict], dict]:
         message = RequestMessage(RequestMethod.SELECT, params=[thing])
         response = await self._send(message, "select")
         self.check_response_for_result(response, "select")
@@ -205,8 +205,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def create(
         self,
         thing: Union[str, RecordID, Table],
-        data: Optional[Union[Union[List[dict], dict], dict]] = None,
-    ) -> Union[List[dict], dict]:
+        data: Optional[Union[Union[list[dict], dict], dict]] = None,
+    ) -> Union[list[dict], dict]:
         if isinstance(thing, str):
             if ":" in thing:
                 buffer = thing.split(":")
@@ -217,24 +217,24 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         return response["result"]
 
     async def update(
-        self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
-    ) -> Union[List[dict], dict]:
+        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
+    ) -> Union[list[dict], dict]:
         message = RequestMessage(RequestMethod.UPDATE, record_id=thing, data=data)
         response = await self._send(message, "update")
         self.check_response_for_result(response, "update")
         return response["result"]
 
     async def merge(
-        self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
-    ) -> Union[List[dict], dict]:
+        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
+    ) -> Union[list[dict], dict]:
         message = RequestMessage(RequestMethod.MERGE, record_id=thing, data=data)
         response = await self._send(message, "merge")
         self.check_response_for_result(response, "merge")
         return response["result"]
 
     async def patch(
-        self, thing: Union[str, RecordID, Table], data: Optional[List[Dict]] = None
-    ) -> Union[List[dict], dict]:
+        self, thing: Union[str, RecordID, Table], data: Optional[list[dict]] = None
+    ) -> Union[list[dict], dict]:
         message = RequestMessage(RequestMethod.PATCH, collection=thing, params=data)
         response = await self._send(message, "patch")
         self.check_response_for_result(response, "patch")
@@ -242,23 +242,23 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def delete(
         self, thing: Union[str, RecordID, Table]
-    ) -> Union[List[dict], dict]:
+    ) -> Union[list[dict], dict]:
         message = RequestMessage(RequestMethod.DELETE, record_id=thing)
         response = await self._send(message, "delete")
         self.check_response_for_result(response, "delete")
         return response["result"]
 
     async def insert(
-        self, table: Union[str, Table], data: Union[List[dict], dict]
-    ) -> Union[List[dict], dict]:
+        self, table: Union[str, Table], data: Union[list[dict], dict]
+    ) -> Union[list[dict], dict]:
         message = RequestMessage(RequestMethod.INSERT, collection=table, params=data)
         response = await self._send(message, "insert")
         self.check_response_for_result(response, "insert")
         return response["result"]
 
     async def insert_relation(
-        self, table: Union[str, Table], data: Union[List[dict], dict]
-    ) -> Union[List[dict], dict]:
+        self, table: Union[str, Table], data: Union[list[dict], dict]
+    ) -> Union[list[dict], dict]:
         message = RequestMessage(
             RequestMethod.INSERT_RELATION, table=table, params=data
         )
@@ -280,7 +280,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def subscribe_live(
         self, query_uuid: Union[str, UUID]
-    ) -> AsyncGenerator[Dict, None]:
+    ) -> AsyncGenerator[dict, None]:
         result_queue = Queue()
         suid = str(query_uuid)
         self.live_queues[suid].append(result_queue)
@@ -298,8 +298,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.live_queues.pop(str(query_uuid), None)
 
     async def upsert(
-        self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
-    ) -> Union[List[dict], dict]:
+        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
+    ) -> Union[list[dict], dict]:
         message = RequestMessage(RequestMethod.UPSERT, record_id=thing, data=data)
         response = await self._send(message, "upsert")
         self.check_response_for_result(response, "upsert")

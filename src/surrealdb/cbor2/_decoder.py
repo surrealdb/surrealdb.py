@@ -621,7 +621,7 @@ class CBORDecoder:
         try:
             value = self._stringref_namespace[index]
         except IndexError:
-            raise CBORDecodeValueError("string reference %d not found" % index)
+            raise CBORDecodeValueError(f"string reference {index} not found")
 
         return value
 
@@ -641,12 +641,10 @@ class CBORDecoder:
         try:
             shared = self._shareables[value]
         except IndexError:
-            raise CBORDecodeValueError("shared reference %d not found" % value)
+            raise CBORDecodeValueError(f"shared reference {value} not found")
 
         if shared is None:
-            raise CBORDecodeValueError(
-                "shared value %d has not been initialized" % value
-            )
+            raise CBORDecodeValueError(f"shared value {value} has not been initialized")
         else:
             return shared
 

@@ -1,4 +1,4 @@
-from unittest import main, IsolatedAsyncioTestCase
+from unittest import IsolatedAsyncioTestCase, main
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
@@ -6,7 +6,6 @@ from surrealdb.data.types.table import Table
 
 
 class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
-
     async def asyncSetUp(self):
         self.url = "http://localhost:8000"
         self.password = "root"
@@ -23,17 +22,16 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
         }
         self.connection = AsyncHttpSurrealConnection(self.url)
         _ = await self.connection.signin(self.vars_params)
-        _ = await self.connection.use(namespace=self.namespace, database=self.database_name)
+        _ = await self.connection.use(
+            namespace=self.namespace, database=self.database_name
+        )
         await self.connection.query("DELETE user;")
 
     async def test_create_string(self):
         outcome = await self.connection.create("user")
         self.assertEqual("user", outcome["id"].table_name)
 
-        self.assertEqual(
-            len(await self.connection.query("SELECT * FROM user;")),
-            1
-        )
+        self.assertEqual(len(await self.connection.query("SELECT * FROM user;")), 1)
         await self.connection.query("DELETE user;")
 
     async def test_create_string_with_data(self):
@@ -43,10 +41,7 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
         self.assertEqual(self.username, outcome["username"])
 
         outcome = await self.connection.query("SELECT * FROM user;")
-        self.assertEqual(
-            len(outcome),
-            1
-        )
+        self.assertEqual(len(outcome), 1)
         self.assertEqual("user", outcome[0]["id"].table_name)
         self.assertEqual(self.password, outcome[0]["password"])
         self.assertEqual(self.username, outcome[0]["username"])
@@ -61,10 +56,7 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
         self.assertEqual(self.username, first_outcome["username"])
 
         outcome = await self.connection.query("SELECT * FROM user;")
-        self.assertEqual(
-            len(outcome),
-            1
-        )
+        self.assertEqual(len(outcome), 1)
         self.assertEqual("user", outcome[0]["id"].table_name)
         self.assertEqual("tobie", outcome[0]["id"].id)
         self.assertEqual(self.password, outcome[0]["password"])
@@ -73,15 +65,12 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
         await self.connection.query("DELETE user;")
 
     async def test_create_record_id(self):
-        record_id = RecordID("user",1)
+        record_id = RecordID("user", 1)
         outcome = await self.connection.create(record_id)
         self.assertEqual("user", outcome["id"].table_name)
         self.assertEqual(1, outcome["id"].id)
 
-        self.assertEqual(
-            len(await self.connection.query("SELECT * FROM user;")),
-            1
-        )
+        self.assertEqual(len(await self.connection.query("SELECT * FROM user;")), 1)
 
         await self.connection.query("DELETE user;")
 
@@ -94,10 +83,7 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
         self.assertEqual(self.username, outcome["username"])
 
         outcome = await self.connection.query("SELECT * FROM user;")
-        self.assertEqual(
-            len(outcome),
-            1
-        )
+        self.assertEqual(len(outcome), 1)
         self.assertEqual("user", outcome[0]["id"].table_name)
         self.assertEqual(self.password, outcome[0]["password"])
         self.assertEqual(self.username, outcome[0]["username"])
@@ -109,10 +95,7 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
         outcome = await self.connection.create(table)
         self.assertEqual("user", outcome["id"].table_name)
 
-        self.assertEqual(
-            len(await self.connection.query("SELECT * FROM user;")),
-            1
-        )
+        self.assertEqual(len(await self.connection.query("SELECT * FROM user;")), 1)
 
         await self.connection.query("DELETE user;")
 
@@ -124,17 +107,12 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
         self.assertEqual(self.username, outcome["username"])
 
         outcome = await self.connection.query("SELECT * FROM user;")
-        self.assertEqual(
-            len(outcome),
-            1
-        )
+        self.assertEqual(len(outcome), 1)
         self.assertEqual("user", outcome[0]["id"].table_name)
         self.assertEqual(self.password, outcome[0]["password"])
         self.assertEqual(self.username, outcome[0]["username"])
 
         await self.connection.query("DELETE user;")
-
-
 
 
 if __name__ == "__main__":

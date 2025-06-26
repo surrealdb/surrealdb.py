@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-from typing import Tuple, Union
 from math import floor
+from typing import Union
 
 UNITS = {
     "ns": 1,
@@ -32,7 +32,7 @@ class Duration:
         else:
             raise TypeError("Duration must be initialized with an int or str")
 
-    def get_seconds_and_nano(self) -> Tuple[int, int]:
+    def get_seconds_and_nano(self) -> tuple[int, int]:
         sec = floor(self.elapsed / UNITS["s"])
         nsec = self.elapsed - (sec * UNITS["s"])
         return sec, nsec

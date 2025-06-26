@@ -1,10 +1,10 @@
-from unittest import main, TestCase
 import os
+from unittest import TestCase, main
+
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 
 
 class TestAsyncHttpSurrealConnection(TestCase):
-
     def setUp(self):
         self.url = "http://localhost:8000"
         self.password = "root"
@@ -17,7 +17,9 @@ class TestAsyncHttpSurrealConnection(TestCase):
         self.namespace = "test_ns"
         self.main_connection = BlockingHttpSurrealConnection(self.url)
         _ = self.main_connection.signin(self.vars_params)
-        _ = self.main_connection.use(namespace=self.namespace, database=self.database_name)
+        _ = self.main_connection.use(
+            namespace=self.namespace, database=self.database_name
+        )
         self.main_connection.query("DELETE user;")
         _ = self.main_connection.query_raw("CREATE user:jaime SET name = 'Jaime';")
 
@@ -43,10 +45,7 @@ class TestAsyncHttpSurrealConnection(TestCase):
             outcome = self.connection.query("SELECT * FROM user;")
             self.assertEqual(0, len(outcome))
         except Exception as err:
-            self.assertEqual(
-                "IAM error: Not enough permissions" in str(err),
-                True
-            )
+            self.assertEqual("IAM error: Not enough permissions" in str(err), True)
         outcome = self.main_connection.query("SELECT * FROM user;")
         self.assertEqual(1, len(outcome))
 
@@ -60,20 +59,17 @@ class TestAsyncHttpSurrealConnection(TestCase):
 
         self.connection.invalidate()
 
-
         try:
             outcome = self.connection.query("SELECT * FROM user;")
             self.assertEqual(0, len(outcome))
         except Exception as err:
-            self.assertEqual(
-                "IAM error: Not enough permissions" in str(err),
-                True
-            )
+            self.assertEqual("IAM error: Not enough permissions" in str(err), True)
 
         outcome = self.main_connection.query("SELECT * FROM user;")
         self.assertEqual(1, len(outcome))
 
         self.main_connection.query("DELETE user;")
+
 
 if __name__ == "__main__":
     main()

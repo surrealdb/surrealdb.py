@@ -1,10 +1,10 @@
-from unittest import main, IsolatedAsyncioTestCase
 import os
+from unittest import IsolatedAsyncioTestCase, main
+
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 
 
 class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
-
     async def asyncSetUp(self):
         self.url = "ws://localhost:8000"
         self.password = "root"
@@ -17,13 +17,19 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         self.namespace = "test_ns"
         self.main_connection = AsyncWsSurrealConnection(self.url)
         _ = await self.main_connection.signin(self.vars_params)
-        _ = await self.main_connection.use(namespace=self.namespace, database=self.database_name)
+        _ = await self.main_connection.use(
+            namespace=self.namespace, database=self.database_name
+        )
         await self.main_connection.query("DELETE user;")
-        _ = await self.main_connection.query_raw("CREATE user:jaime SET name = 'Jaime';")
+        _ = await self.main_connection.query_raw(
+            "CREATE user:jaime SET name = 'Jaime';"
+        )
 
         self.connection = AsyncWsSurrealConnection(self.url)
         _ = await self.connection.signin(self.vars_params)
-        _ = await self.connection.use(namespace=self.namespace, database=self.database_name)
+        _ = await self.connection.use(
+            namespace=self.namespace, database=self.database_name
+        )
 
     async def test_run_test(self):
         if os.environ.get("NO_GUEST_MODE") == "True":
@@ -43,10 +49,7 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
             outcome = await self.connection.query("SELECT * FROM user;")
             self.assertEqual(0, len(outcome))
         except Exception as err:
-            self.assertEqual(
-                "IAM error: Not enough permissions" in str(err),
-                True
-            )
+            self.assertEqual("IAM error: Not enough permissions" in str(err), True)
         outcome = await self.main_connection.query("SELECT * FROM user;")
         self.assertEqual(1, len(outcome))
         await self.main_connection.query("DELETE user;")
@@ -63,8 +66,7 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
             _ = await self.connection.query("SELECT * FROM user;")
 
         self.assertEqual(
-            "IAM error: Not enough permissions" in str(context.exception),
-            True
+            "IAM error: Not enough permissions" in str(context.exception), True
         )
         outcome = await self.main_connection.query("SELECT * FROM user;")
         self.assertEqual(1, len(outcome))
@@ -72,6 +74,7 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         await self.main_connection.query("DELETE user;")
         await self.main_connection.close()
         await self.connection.close()
+
 
 if __name__ == "__main__":
     main()

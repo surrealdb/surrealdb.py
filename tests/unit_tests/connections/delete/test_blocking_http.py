@@ -1,4 +1,4 @@
-from unittest import main, TestCase
+from unittest import TestCase, main
 
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
@@ -6,7 +6,6 @@ from surrealdb.data.types.table import Table
 
 
 class TestHttpSurrealConnection(TestCase):
-
     def setUp(self):
         self.url = "http://localhost:8000"
         self.password = "root"
@@ -17,10 +16,7 @@ class TestHttpSurrealConnection(TestCase):
         }
         self.database_name = "test_db"
         self.namespace = "test_ns"
-        self.data = {
-            "name": "Jaime",
-            "age": 35
-        }
+        self.data = {"name": "Jaime", "age": 35}
         self.record_id = RecordID("user", "tobie")
         self.connection = BlockingHttpSurrealConnection(self.url)
         self.connection.signin(self.vars_params)
@@ -30,11 +26,11 @@ class TestHttpSurrealConnection(TestCase):
 
     def check_no_change(self, data: dict):
         self.assertEqual(self.record_id, data["id"])
-        self.assertEqual('Tobie', data["name"])
+        self.assertEqual("Tobie", data["name"])
 
     def check_change(self, data: dict):
         self.assertEqual(self.record_id, data["id"])
-        self.assertEqual('Jaime', data["name"])
+        self.assertEqual("Jaime", data["name"])
         self.assertEqual(35, data["age"])
 
     def test_delete_string(self):

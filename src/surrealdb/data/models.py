@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Union
+from typing import Any, Union
 
-from surrealdb.data.types.table import Table
 from surrealdb.data.types.record_id import RecordID
+from surrealdb.data.types.table import Table
 
 
 @dataclass
@@ -34,7 +34,7 @@ class QueryResponse:
 
     time: str
     status: str
-    result: List[Dict[str, Any]]
+    result: list[dict[str, Any]]
 
 
 @dataclass

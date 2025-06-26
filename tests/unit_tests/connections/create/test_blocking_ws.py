@@ -34,10 +34,7 @@ class TestBlockingWsSurrealConnection(TestCase):
         outcome = self.connection.create("user")
         self.assertEqual("user", outcome["id"].table_name)
 
-        self.assertEqual(
-            len(self.connection.query("SELECT * FROM user;")),
-            1
-        )
+        self.assertEqual(len(self.connection.query("SELECT * FROM user;")), 1)
 
     def test_create_string_with_data(self):
         outcome = self.connection.create("user", self.data)
@@ -46,10 +43,7 @@ class TestBlockingWsSurrealConnection(TestCase):
         self.assertEqual(self.username, outcome["username"])
 
         outcome = self.connection.query("SELECT * FROM user;")
-        self.assertEqual(
-            len(outcome),
-            1
-        )
+        self.assertEqual(len(outcome), 1)
         self.assertEqual("user", outcome[0]["id"].table_name)
         self.assertEqual(self.password, outcome[0]["password"])
         self.assertEqual(self.username, outcome[0]["username"])
@@ -62,10 +56,7 @@ class TestBlockingWsSurrealConnection(TestCase):
         self.assertEqual(self.username, first_outcome["username"])
 
         outcome = self.connection.query("SELECT * FROM user;")
-        self.assertEqual(
-            len(outcome),
-            1
-        )
+        self.assertEqual(len(outcome), 1)
         self.assertEqual("user", outcome[0]["id"].table_name)
         self.assertEqual("tobie", outcome[0]["id"].id)
         self.assertEqual(self.password, outcome[0]["password"])
@@ -77,10 +68,7 @@ class TestBlockingWsSurrealConnection(TestCase):
         self.assertEqual("user", outcome["id"].table_name)
         self.assertEqual(1, outcome["id"].id)
 
-        self.assertEqual(
-            len(self.connection.query("SELECT * FROM user;")),
-            1
-        )
+        self.assertEqual(len(self.connection.query("SELECT * FROM user;")), 1)
 
     def test_create_record_id_with_data(self):
         record_id = RecordID("user", 1)
@@ -91,10 +79,7 @@ class TestBlockingWsSurrealConnection(TestCase):
         self.assertEqual(self.username, outcome["username"])
 
         outcome = self.connection.query("SELECT * FROM user;")
-        self.assertEqual(
-            len(outcome),
-            1
-        )
+        self.assertEqual(len(outcome), 1)
         self.assertEqual("user", outcome[0]["id"].table_name)
         self.assertEqual(self.password, outcome[0]["password"])
         self.assertEqual(self.username, outcome[0]["username"])
@@ -104,10 +89,7 @@ class TestBlockingWsSurrealConnection(TestCase):
         outcome = self.connection.create(table)
         self.assertEqual("user", outcome["id"].table_name)
 
-        self.assertEqual(
-            len(self.connection.query("SELECT * FROM user;")),
-            1
-        )
+        self.assertEqual(len(self.connection.query("SELECT * FROM user;")), 1)
 
     def test_create_table_with_data(self):
         table = Table("user")
@@ -117,10 +99,7 @@ class TestBlockingWsSurrealConnection(TestCase):
         self.assertEqual(self.username, outcome["username"])
 
         outcome = self.connection.query("SELECT * FROM user;")
-        self.assertEqual(
-            len(outcome),
-            1
-        )
+        self.assertEqual(len(outcome), 1)
         self.assertEqual("user", outcome[0]["id"].table_name)
         self.assertEqual(self.password, outcome[0]["password"])
         self.assertEqual(self.username, outcome[0]["username"])

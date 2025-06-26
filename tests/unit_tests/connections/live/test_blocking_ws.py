@@ -1,11 +1,10 @@
 from unittest import TestCase, main
+from uuid import UUID
 
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
-from uuid import UUID
 
 
 class TestBlockingWsSurrealConnection(TestCase):
-
     def setUp(self):
         self.url = "ws://localhost:8000"
         self.password = "root"

@@ -1,10 +1,9 @@
-from unittest import main, IsolatedAsyncioTestCase
+from unittest import IsolatedAsyncioTestCase, main
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 
 
 class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
-
     async def asyncSetUp(self):
         self.url = "http://localhost:8000"
         self.password = "root"
@@ -17,7 +16,9 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
         }
         self.connection = AsyncHttpSurrealConnection(self.url)
         _ = await self.connection.signin(self.vars_params)
-        _ = await self.connection.use(namespace=self.namespace, database=self.database_name)
+        _ = await self.connection.use(
+            namespace=self.namespace, database=self.database_name
+        )
         _ = await self.connection.query("DELETE user;")
         _ = await self.connection.query("REMOVE TABLE user;")
         _ = await self.connection.query(
@@ -29,9 +30,9 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
             "DEFINE INDEX email ON user FIELDS email UNIQUE;"
         )
         _ = await self.connection.query(
-            'DEFINE ACCESS user ON DATABASE TYPE RECORD '
-            'SIGNUP ( CREATE user SET name = $name, email = $email, password = crypto::argon2::generate($password), enabled = true ) '
-            'SIGNIN ( SELECT * FROM user WHERE email = $email AND crypto::argon2::compare(password, $password) );'
+            "DEFINE ACCESS user ON DATABASE TYPE RECORD "
+            "SIGNUP ( CREATE user SET name = $name, email = $email, password = crypto::argon2::generate($password), enabled = true ) "
+            "SIGNIN ( SELECT * FROM user WHERE email = $email AND crypto::argon2::compare(password, $password) );"
         )
         _ = await self.connection.query(
             'DEFINE USER test ON NAMESPACE PASSWORD "test" ROLES OWNER; '
@@ -78,10 +79,7 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
             "namespace": self.namespace,
             "database": self.database_name,
             "access": "user",
-            "variables": {
-                "email": "test@gmail.com",
-                "password": "test"
-            }
+            "variables": {"email": "test@gmail.com", "password": "test"},
         }
         connection = AsyncHttpSurrealConnection(self.url)
         response = await connection.signin(vars)

@@ -5,7 +5,6 @@ from surrealdb.data.types.record_id import RecordID
 
 
 class TestBlockingWsSurrealConnection(TestCase):
-
     def setUp(self):
         self.queries = ["DELETE user;"]
         self.url = "ws://localhost:8000"

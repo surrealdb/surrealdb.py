@@ -1,12 +1,11 @@
 from unittest import TestCase, main
 
+from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
-from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 
 
 class TestBlockingHttpSurrealConnection(TestCase):
-
     def setUp(self):
         self.url = "http://localhost:8000"
         self.password = "root"
@@ -31,9 +30,9 @@ class TestBlockingHttpSurrealConnection(TestCase):
             "DEFINE INDEX email ON user FIELDS email UNIQUE;"
         )
         _ = self.connection.query(
-            'DEFINE ACCESS user ON DATABASE TYPE RECORD '
-            'SIGNUP ( CREATE user SET name = $name, email = $email, password = crypto::argon2::generate($password), enabled = true ) '
-            'SIGNIN ( SELECT * FROM user WHERE email = $email AND crypto::argon2::compare(password, $password) );'
+            "DEFINE ACCESS user ON DATABASE TYPE RECORD "
+            "SIGNUP ( CREATE user SET name = $name, email = $email, password = crypto::argon2::generate($password), enabled = true ) "
+            "SIGNIN ( SELECT * FROM user WHERE email = $email AND crypto::argon2::compare(password, $password) );"
         )
 
     def test_signup(self):
@@ -44,8 +43,8 @@ class TestBlockingHttpSurrealConnection(TestCase):
             "variables": {
                 "email": "test@gmail.com",
                 "password": "test",
-                "name": "test"
-            }
+                "name": "test",
+            },
         }
         connection = BlockingHttpSurrealConnection(self.url)
         response = connection.signup(vars)

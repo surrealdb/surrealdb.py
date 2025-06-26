@@ -1,12 +1,11 @@
-from unittest import TestCase, main, IsolatedAsyncioTestCase
+from unittest import IsolatedAsyncioTestCase, TestCase, main
 
+from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
-from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 
 
 class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
-
     async def asyncSetUp(self):
         self.url = "ws://localhost:8000"
         self.password = "root"
@@ -19,7 +18,9 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
         self.namespace = "test_ns"
         self.connection = AsyncHttpSurrealConnection(self.url)
         _ = await self.connection.signin(self.vars_params)
-        _ = await self.connection.use(namespace=self.namespace, database=self.database_name)
+        _ = await self.connection.use(
+            namespace=self.namespace, database=self.database_name
+        )
         _ = await self.connection.query("DELETE user;")
         _ = await self.connection.query("REMOVE TABLE user;")
         _ = await self.connection.query(
@@ -31,9 +32,9 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
             "DEFINE INDEX email ON user FIELDS email UNIQUE;"
         )
         _ = await self.connection.query(
-            'DEFINE ACCESS user ON DATABASE TYPE RECORD '
-            'SIGNUP ( CREATE user SET name = $name, email = $email, password = crypto::argon2::generate($password), enabled = true ) '
-            'SIGNIN ( SELECT * FROM user WHERE email = $email AND crypto::argon2::compare(password, $password) );'
+            "DEFINE ACCESS user ON DATABASE TYPE RECORD "
+            "SIGNUP ( CREATE user SET name = $name, email = $email, password = crypto::argon2::generate($password), enabled = true ) "
+            "SIGNIN ( SELECT * FROM user WHERE email = $email AND crypto::argon2::compare(password, $password) );"
         )
 
     async def test_signup(self):
@@ -44,8 +45,8 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
             "variables": {
                 "email": "test@gmail.com",
                 "password": "test",
-                "name": "test"
-            }
+                "name": "test",
+            },
         }
         connection = AsyncHttpSurrealConnection(self.url)
         response = await connection.signup(vars)

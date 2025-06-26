@@ -27,14 +27,16 @@ jobs:
         with:
           python-version: 3.13
 
-      - name: Install tools
-        run: pip install black ruff
-
       - name: Run ruff checks
-        run: ruff check src/
+        uses: astral-sh/ruff-action@v3
+        with:
+          src: "./src"
 
-      - name: Run black checks
-        run: black --check --verbose --diff --color src/
+      - name: Run ruff format checks
+        uses: astral-sh/ruff-action@v3
+        with:
+          src: "./src"
+          args: "format --check --diff"
 
       # This is currently disabled because MyPy is very confused about Coroutine types
 #      - name: Run mypy checks

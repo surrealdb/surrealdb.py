@@ -1,4 +1,4 @@
-from unittest import main, TestCase
+from unittest import TestCase, main
 
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
@@ -6,7 +6,6 @@ from surrealdb.data.types.table import Table
 
 
 class TestBlockingHttpSurrealConnection(TestCase):
-
     def setUp(self):
         self.url = "http://localhost:8000"
         self.password = "root"
@@ -17,10 +16,7 @@ class TestBlockingHttpSurrealConnection(TestCase):
         }
         self.database_name = "test_db"
         self.namespace = "test_ns"
-        self.data = {
-            "name": "Jaime",
-            "age": 35
-        }
+        self.data = {"name": "Jaime", "age": 35}
         self.record_id = RecordID("user", "tobie")
         self.connection = BlockingHttpSurrealConnection(self.url)
         _ = self.connection.signin(self.vars_params)
@@ -31,24 +27,18 @@ class TestBlockingHttpSurrealConnection(TestCase):
     def check_no_change(self, data: dict, random_id: bool = False):
         if random_id is False:
             self.assertEqual(self.record_id, data["id"])
-        self.assertEqual('Tobie', data["name"])
+        self.assertEqual("Tobie", data["name"])
 
     def check_change(self, data: dict, random_id: bool = False):
         if random_id is False:
             self.assertEqual(self.record_id, data["id"])
-        self.assertEqual('Jaime', data["name"])
+        self.assertEqual("Jaime", data["name"])
         self.assertEqual(35, data["age"])
 
     def test_upsert_string(self):
         outcome = self.connection.upsert("user:tobie")
-        self.assertEqual(
-            outcome["id"],
-            self.record_id
-        )
-        self.assertEqual(
-            outcome["name"],
-            "Tobie"
-        )
+        self.assertEqual(outcome["id"], self.record_id)
+        self.assertEqual(outcome["name"], "Tobie")
         outcome = self.connection.query("SELECT * FROM user;")
         self.assertEqual(1, len(outcome))
         # self.check_no_change(outcome[0])

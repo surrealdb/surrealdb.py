@@ -4,7 +4,6 @@ from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 
 class TestBlockingWsSurrealConnection(TestCase):
-
     def setUp(self):
         self.url = "ws://localhost:8000"
         self.password = "root"
@@ -26,21 +25,30 @@ class TestBlockingWsSurrealConnection(TestCase):
 
     def test_unset(self):
         self.connection.query("DELETE person;")
-        outcome = self.connection.let('name', {
-            "first": 'Tobie',
-            "last": 'Morgan Hitchcock',
-        })
+        outcome = self.connection.let(
+            "name",
+            {
+                "first": "Tobie",
+                "last": "Morgan Hitchcock",
+            },
+        )
         self.assertIsNone(outcome)
 
-        self.connection.query('CREATE person SET name = $name')
-        outcome = self.connection.query('SELECT * FROM person WHERE name.first = $name.first')
+        self.connection.query("CREATE person SET name = $name")
+        outcome = self.connection.query(
+            "SELECT * FROM person WHERE name.first = $name.first"
+        )
         self.assertEqual(1, len(outcome))
-        self.assertEqual({'first': 'Tobie', 'last': 'Morgan Hitchcock'}, outcome[0]["name"])
+        self.assertEqual(
+            {"first": "Tobie", "last": "Morgan Hitchcock"}, outcome[0]["name"]
+        )
 
         self.connection.unset(key="name")
 
         # Because the key was unset, $name.first is None, returning []
-        outcome = self.connection.query('SELECT * FROM person WHERE name.first = $name.first')
+        outcome = self.connection.query(
+            "SELECT * FROM person WHERE name.first = $name.first"
+        )
         self.assertEqual([], outcome)
 
 

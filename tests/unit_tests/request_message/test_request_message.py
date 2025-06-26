@@ -1,10 +1,10 @@
 from unittest import TestCase, main
+
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 
 
 class TestRequestMessage(TestCase):
-
     def setUp(self):
         self.method = RequestMethod.USE
 

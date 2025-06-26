@@ -1,10 +1,9 @@
-from unittest import main, TestCase
+from unittest import TestCase, main
 
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 
 
 class TestAsyncHttpSurrealConnection(TestCase):
-
     def setUp(self):
         self.url = "http://localhost:8000"
         self.password = "root"
@@ -29,9 +28,9 @@ class TestAsyncHttpSurrealConnection(TestCase):
             "DEFINE INDEX email ON user FIELDS email UNIQUE;"
         )
         _ = self.connection.query(
-            'DEFINE ACCESS user ON DATABASE TYPE RECORD '
-            'SIGNUP ( CREATE user SET name = $name, email = $email, password = crypto::argon2::generate($password), enabled = true ) '
-            'SIGNIN ( SELECT * FROM user WHERE email = $email AND crypto::argon2::compare(password, $password) );'
+            "DEFINE ACCESS user ON DATABASE TYPE RECORD "
+            "SIGNUP ( CREATE user SET name = $name, email = $email, password = crypto::argon2::generate($password), enabled = true ) "
+            "SIGNIN ( SELECT * FROM user WHERE email = $email AND crypto::argon2::compare(password, $password) );"
         )
         _ = self.connection.query(
             'DEFINE USER test ON NAMESPACE PASSWORD "test" ROLES OWNER; '
@@ -78,10 +77,7 @@ class TestAsyncHttpSurrealConnection(TestCase):
             "namespace": self.namespace,
             "database": self.database_name,
             "access": "user",
-            "variables": {
-                "email": "test@gmail.com",
-                "password": "test"
-            }
+            "variables": {"email": "test@gmail.com", "password": "test"},
         }
         connection = BlockingHttpSurrealConnection(self.url)
         response = connection.signin(vars)

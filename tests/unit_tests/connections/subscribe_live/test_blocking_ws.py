@@ -6,7 +6,6 @@ from surrealdb.data import RecordID
 
 
 class TestBlockingWsSurrealConnection(TestCase):
-
     def setUp(self):
         self.url = "ws://localhost:8000"
         self.password = "root"
@@ -54,6 +53,7 @@ class TestBlockingWsSurrealConnection(TestCase):
             self.fail(f"Error waiting for live subscription update: {e}")
 
         self.pub_connection.kill(query_uuid)
+
 
 if __name__ == "__main__":
     main()

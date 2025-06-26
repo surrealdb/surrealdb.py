@@ -1,4 +1,4 @@
-from unittest import main, TestCase
+from unittest import TestCase, main
 
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
@@ -6,7 +6,6 @@ from surrealdb.data.types.table import Table
 
 
 class TestHttpSurrealConnection(TestCase):
-
     def setUp(self):
         self.url = "http://localhost:8000"
         self.password = "root"
@@ -24,6 +23,7 @@ class TestHttpSurrealConnection(TestCase):
     def test_info(self):
         outcome = self.connection.info()
         # TODO => confirm that the info is what we expect
+
 
 if __name__ == "__main__":
     main()

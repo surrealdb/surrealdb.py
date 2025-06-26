@@ -1,11 +1,10 @@
-from unittest import main, IsolatedAsyncioTestCase
+from unittest import IsolatedAsyncioTestCase, main
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 
 
 class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
-
     async def asyncSetUp(self):
         self.url = "ws://localhost:8000"
         self.password = "root"
@@ -24,9 +23,7 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
             {
                 "name": "Tobie",
             },
-            {
-                "name": "Jaime"
-            }
+            {"name": "Jaime"},
         ]
         self.insert_data = [
             {
@@ -35,27 +32,28 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         ]
         self.connection = AsyncWsSurrealConnection(self.url)
         _ = await self.connection.signin(self.vars_params)
-        _ = await self.connection.use(namespace=self.namespace, database=self.database_name)
+        _ = await self.connection.use(
+            namespace=self.namespace, database=self.database_name
+        )
         await self.connection.query("DELETE user;")
 
     async def test_insert_string_with_data(self):
         outcome = await self.connection.insert("user", self.insert_bulk_data)
         self.assertEqual(2, len(outcome))
-        self.assertEqual(
-            len(await self.connection.query("SELECT * FROM user;")),
-            2
-        )
+        self.assertEqual(len(await self.connection.query("SELECT * FROM user;")), 2)
         await self.connection.query("DELETE user;")
 
     async def test_insert_record_id_result_error(self):
-        record_id = RecordID("user","tobie")
+        record_id = RecordID("user", "tobie")
 
         with self.assertRaises(Exception) as context:
             _ = await self.connection.insert(record_id, self.insert_data)
         e = str(context.exception)
         self.assertEqual(
-            "There was a problem with the database: Can not execute INSERT statement using value" in e and "user:tobie" in e,
-            True
+            "There was a problem with the database: Can not execute INSERT statement using value"
+            in e
+            and "user:tobie" in e,
+            True,
         )
         await self.connection.query("DELETE user;")
 

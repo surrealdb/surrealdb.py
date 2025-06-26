@@ -2,9 +2,9 @@ from cerberus import Validator
 from cerberus.errors import ValidationError
 
 from surrealdb.data.cbor import encode
-from surrealdb.request_message.methods import RequestMethod
-from surrealdb.data.utils import process_thing
 from surrealdb.data.types.table import Table
+from surrealdb.data.utils import process_thing
+from surrealdb.request_message.methods import RequestMethod
 
 
 class WsCborDescriptor:

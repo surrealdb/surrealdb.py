@@ -1,5 +1,5 @@
-from urllib.parse import urlparse
 from enum import Enum
+from urllib.parse import urlparse
 
 
 class UrlScheme(Enum):
@@ -11,7 +11,6 @@ class UrlScheme(Enum):
 
 
 class Url:
-
     def __init__(self, url: str) -> None:
         self.raw_url = url.replace("/rpc", "")
         parsed_url = urlparse(url)

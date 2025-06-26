@@ -1,11 +1,10 @@
 import os
-from unittest import main, TestCase
+from unittest import TestCase, main
 
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 
 class TestAsyncWsSurrealConnection(TestCase):
-
     def setUp(self):
         self.url = "ws://localhost:8000"
         self.password = "root"
@@ -18,7 +17,9 @@ class TestAsyncWsSurrealConnection(TestCase):
         self.namespace = "test_ns"
         self.main_connection = BlockingWsSurrealConnection(self.url)
         _ = self.main_connection.signin(self.vars_params)
-        _ = self.main_connection.use(namespace=self.namespace, database=self.database_name)
+        _ = self.main_connection.use(
+            namespace=self.namespace, database=self.database_name
+        )
         self.main_connection.query("DELETE user;")
         _ = self.main_connection.query_raw("CREATE user:jaime SET name = 'Jaime';")
 
@@ -44,8 +45,7 @@ class TestAsyncWsSurrealConnection(TestCase):
             _ = self.connection.query("SELECT * FROM user;")
 
         self.assertEqual(
-            "IAM error: Not enough permissions" in str(context.exception),
-            True
+            "IAM error: Not enough permissions" in str(context.exception), True
         )
         outcome = self.main_connection.query("SELECT * FROM user;")
         self.assertEqual(1, len(outcome))
@@ -64,16 +64,14 @@ class TestAsyncWsSurrealConnection(TestCase):
             outcome = self.connection.query("SELECT * FROM user;")
             self.assertEqual(0, len(outcome))
         except Exception as err:
-            self.assertEqual(
-                "IAM error: Not enough permissions" in str(err),
-                True
-            )
+            self.assertEqual("IAM error: Not enough permissions" in str(err), True)
         outcome = self.main_connection.query("SELECT * FROM user;")
         self.assertEqual(1, len(outcome))
 
         self.main_connection.query("DELETE user;")
         self.main_connection.close()
         self.connection.close()
+
 
 if __name__ == "__main__":
     main()

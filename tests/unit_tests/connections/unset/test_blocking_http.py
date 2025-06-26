@@ -1,10 +1,9 @@
-from unittest import main, TestCase
+from unittest import TestCase, main
 
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 
 
 class TestAsyncWsSurrealConnection(TestCase):
-
     def setUp(self):
         self.url = "http://localhost:8000"
         self.password = "root"
@@ -21,20 +20,29 @@ class TestAsyncWsSurrealConnection(TestCase):
 
     def test_unset(self):
         self.connection.query("DELETE person;")
-        outcome = self.connection.let('name', {
-            "first": 'Tobie',
-            "last": 'Morgan Hitchcock',
-        })
+        outcome = self.connection.let(
+            "name",
+            {
+                "first": "Tobie",
+                "last": "Morgan Hitchcock",
+            },
+        )
         self.assertEqual(None, outcome)
-        self.connection.query('CREATE person SET name = $name')
-        outcome = self.connection.query('SELECT * FROM person WHERE name.first = $name.first')
+        self.connection.query("CREATE person SET name = $name")
+        outcome = self.connection.query(
+            "SELECT * FROM person WHERE name.first = $name.first"
+        )
         self.assertEqual(1, len(outcome))
-        self.assertEqual({'first': 'Tobie', 'last': 'Morgan Hitchcock'}, outcome[0]["name"])
+        self.assertEqual(
+            {"first": "Tobie", "last": "Morgan Hitchcock"}, outcome[0]["name"]
+        )
 
         self.connection.unset(key="name")
 
         # because the key was unset then $name.first is None returning []
-        outcome = self.connection.query('SELECT * FROM person WHERE name.first = $name.first')
+        outcome = self.connection.query(
+            "SELECT * FROM person WHERE name.first = $name.first"
+        )
         self.assertEqual([], outcome)
 
         self.connection.query("DELETE person;")

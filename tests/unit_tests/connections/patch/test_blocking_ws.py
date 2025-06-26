@@ -6,7 +6,6 @@ from surrealdb.data.types.table import Table
 
 
 class TestBlockingWsSurrealConnection(TestCase):
-
     def setUp(self):
         self.url = "ws://localhost:8000"
         self.password = "root"

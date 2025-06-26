@@ -3,7 +3,6 @@ Defines a unset of geometry classes for representing geometric shapes such as po
 """
 
 from dataclasses import dataclass
-from typing import List, Tuple
 
 
 class Geometry:
@@ -42,7 +41,7 @@ class GeometryPoint(Geometry):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(longitude={self.longitude}, latitude={self.latitude})"
 
-    def get_coordinates(self) -> Tuple[float, float]:
+    def get_coordinates(self) -> tuple[float, float]:
         """
         Returns the coordinates of the point.
 
@@ -52,7 +51,7 @@ class GeometryPoint(Geometry):
         return self.longitude, self.latitude
 
     @staticmethod
-    def parse_coordinates(coordinates: Tuple[float, float]) -> "GeometryPoint":
+    def parse_coordinates(coordinates: tuple[float, float]) -> "GeometryPoint":
         """
         Parses a tuple of coordinates into a GeometryPoint.
 
@@ -79,7 +78,7 @@ class GeometryLine(Geometry):
         geometry_points: A list of GeometryPoint objects defining the line.
     """
 
-    geometry_points: List[GeometryPoint]
+    geometry_points: list[GeometryPoint]
 
     def __init__(
         self, point1: GeometryPoint, point2: GeometryPoint, *other_points: GeometryPoint
@@ -89,7 +88,7 @@ class GeometryLine(Geometry):
         """
         self.geometry_points = [point1, point2] + list(other_points)
 
-    def get_coordinates(self) -> List[Tuple[float, float]]:
+    def get_coordinates(self) -> list[tuple[float, float]]:
         """
         Returns the coordinates of the line as a list of tuples.
 
@@ -99,10 +98,10 @@ class GeometryLine(Geometry):
         return [point.get_coordinates() for point in self.geometry_points]
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({", ".join(repr(geo) for geo in self.geometry_points)})'
+        return f"{self.__class__.__name__}({', '.join(repr(geo) for geo in self.geometry_points)})"
 
     @staticmethod
-    def parse_coordinates(coordinates: List[Tuple[float, float]]) -> "GeometryLine":
+    def parse_coordinates(coordinates: list[tuple[float, float]]) -> "GeometryLine":
         """
         Parses a list of coordinate tuples into a GeometryLine.
 
@@ -131,14 +130,14 @@ class GeometryPolygon(Geometry):
         geometry_lines: A list of GeometryLine objects defining the polygon.
     """
 
-    geometry_lines: List[GeometryLine]
+    geometry_lines: list[GeometryLine]
 
     def __init__(
         self, line1: GeometryLine, line2: GeometryLine, *other_lines: GeometryLine
     ):
         self.geometry_lines = [line1, line2] + list(other_lines)
 
-    def get_coordinates(self) -> List[List[Tuple[float, float]]]:
+    def get_coordinates(self) -> list[list[tuple[float, float]]]:
         """
         Returns the coordinates of the polygon as a list of lines, each containing a list of coordinate tuples.
 
@@ -148,11 +147,11 @@ class GeometryPolygon(Geometry):
         return [line.get_coordinates() for line in self.geometry_lines]
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({", ".join(repr(geo) for geo in self.geometry_lines)})'
+        return f"{self.__class__.__name__}({', '.join(repr(geo) for geo in self.geometry_lines)})"
 
     @staticmethod
     def parse_coordinates(
-        coordinates: List[List[Tuple[float, float]]],
+        coordinates: list[list[tuple[float, float]]],
     ) -> "GeometryPolygon":
         """
         Parses a list of lines, each defined by a list of coordinate tuples, into a GeometryPolygon.
@@ -182,12 +181,12 @@ class GeometryMultiPoint(Geometry):
         geometry_points: A list of GeometryPoint objects.
     """
 
-    geometry_points: List[GeometryPoint]
+    geometry_points: list[GeometryPoint]
 
     def __init__(self, *geometry_points: GeometryPoint):
         self.geometry_points = list(geometry_points)
 
-    def get_coordinates(self) -> List[Tuple[float, float]]:
+    def get_coordinates(self) -> list[tuple[float, float]]:
         """
         Returns the coordinates of all points as a list of tuples.
 
@@ -197,11 +196,11 @@ class GeometryMultiPoint(Geometry):
         return [point.get_coordinates() for point in self.geometry_points]
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({", ".join(repr(geo) for geo in self.geometry_points)})'
+        return f"{self.__class__.__name__}({', '.join(repr(geo) for geo in self.geometry_points)})"
 
     @staticmethod
     def parse_coordinates(
-        coordinates: List[Tuple[float, float]],
+        coordinates: list[tuple[float, float]],
     ) -> "GeometryMultiPoint":
         """
         Parses a list of coordinate tuples into a GeometryMultiPoint.
@@ -231,12 +230,12 @@ class GeometryMultiLine(Geometry):
         geometry_lines: A list of GeometryLine objects.
     """
 
-    geometry_lines: List[GeometryLine]
+    geometry_lines: list[GeometryLine]
 
     def __init__(self, *geometry_lines: GeometryLine):
         self.geometry_lines = list(geometry_lines)
 
-    def get_coordinates(self) -> List[List[Tuple[float, float]]]:
+    def get_coordinates(self) -> list[list[tuple[float, float]]]:
         """
         Returns the coordinates of all lines as a list of lists of tuples.
 
@@ -246,11 +245,11 @@ class GeometryMultiLine(Geometry):
         return [line.get_coordinates() for line in self.geometry_lines]
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({", ".join(repr(geo) for geo in self.geometry_lines)})'
+        return f"{self.__class__.__name__}({', '.join(repr(geo) for geo in self.geometry_lines)})"
 
     @staticmethod
     def parse_coordinates(
-        coordinates: List[List[Tuple[float, float]]],
+        coordinates: list[list[tuple[float, float]]],
     ) -> "GeometryMultiLine":
         """
         Parses a list of lines, each defined by a list of coordinate tuples, into a GeometryMultiLine.
@@ -280,12 +279,12 @@ class GeometryMultiPolygon(Geometry):
         geometry_polygons: A list of GeometryPolygon objects.
     """
 
-    geometry_polygons: List[GeometryPolygon]
+    geometry_polygons: list[GeometryPolygon]
 
     def __init__(self, *geometry_polygons: GeometryPolygon):
         self.geometry_polygons = list(geometry_polygons)
 
-    def get_coordinates(self) -> List[List[List[Tuple[float, float]]]]:
+    def get_coordinates(self) -> list[list[list[tuple[float, float]]]]:
         """
         Returns the coordinates of all polygons as a list of lists of lines, each containing a list of tuples.
 
@@ -295,11 +294,11 @@ class GeometryMultiPolygon(Geometry):
         return [polygon.get_coordinates() for polygon in self.geometry_polygons]
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({", ".join(repr(geo) for geo in self.geometry_polygons)})'
+        return f"{self.__class__.__name__}({', '.join(repr(geo) for geo in self.geometry_polygons)})"
 
     @staticmethod
     def parse_coordinates(
-        coordinates: List[List[List[Tuple[float, float]]]],
+        coordinates: list[list[list[tuple[float, float]]]],
     ) -> "GeometryMultiPolygon":
         """
         Parses a list of polygons, each defined by a list of lines, into a GeometryMultiPolygon.
@@ -329,13 +328,13 @@ class GeometryCollection:
         geometries: A list of Geometry objects.
     """
 
-    geometries: List[Geometry]
+    geometries: list[Geometry]
 
     def __init__(self, *geometries: Geometry):
         self.geometries = list(geometries)
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({", ".join(repr(geo) for geo in self.geometries)})'
+        return f"{self.__class__.__name__}({', '.join(repr(geo) for geo in self.geometries)})"
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, GeometryCollection):
