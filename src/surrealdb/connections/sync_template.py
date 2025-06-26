@@ -1,4 +1,5 @@
-from typing import Any, Dict, Generator, List, Optional, Union
+from collections.abc import Generator
+from typing import Any, Optional, Union
 from uuid import UUID
 
 from surrealdb.data.types.record_id import RecordID
@@ -6,7 +7,7 @@ from surrealdb.data.types.table import Table
 
 
 class SyncTemplate:
-    # def connect(self, url: str, options: Optional[Dict] = None) -> None:
+    # def connect(self, url: str, options: Optional[dict] = None) -> None:
     #     """Connects to a local or remote database endpoint.
     #
     #     Args:

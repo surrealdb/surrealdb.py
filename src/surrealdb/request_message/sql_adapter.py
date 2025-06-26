@@ -2,8 +2,6 @@
 Defines a class that adapts SQL commands from various sources into a single string.
 """
 
-from typing import List
-
 
 class SqlAdapter:
     """
@@ -15,7 +13,7 @@ class SqlAdapter:
         """
         Converts a list of SQL commands into a single string.
 
-        :param commands: (List[str]) the list of commands to create the migration from
+        :param commands: (list[str]) the list of commands to create the migration from
         :return: (str) a series of SQL commands as a single string
         """
         buffer = []

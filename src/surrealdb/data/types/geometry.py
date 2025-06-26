@@ -3,7 +3,6 @@ Defines a unset of geometry classes for representing geometric shapes such as po
 """
 
 from dataclasses import dataclass
-from typing import List, Tuple
 
 
 class Geometry:

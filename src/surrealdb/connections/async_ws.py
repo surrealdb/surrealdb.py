@@ -5,7 +5,7 @@ A basic async connection to a SurrealDB instance.
 import asyncio
 from asyncio import AbstractEventLoop, Future, Queue, Task
 from collections.abc import AsyncGenerator
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 from uuid import UUID
 
 import websockets

@@ -3,7 +3,8 @@ A basic blocking connection to a SurrealDB instance.
 """
 
 import uuid
-from typing import Any, Dict, Generator, List, Optional, Union
+from collections.abc import Generator
+from typing import Any, Optional, Union
 from uuid import UUID
 
 import websockets

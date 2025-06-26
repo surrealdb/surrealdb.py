@@ -1,5 +1,5 @@
 from collections.abc import AsyncGenerator
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 from uuid import UUID
 
 from surrealdb.data.types.record_id import RecordID
