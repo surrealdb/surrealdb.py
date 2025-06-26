@@ -14,6 +14,5 @@ fi
 mkdir logs
 
 ruff check src/ > ./logs/ruff_check.log
-black src/
-black --check --verbose --diff --color src/ > ./logs/black_check.log
+ruff format --check --diff src/ > ./logs/ruff_format_check.log
 mypy --explicit-package-bases src/ > ./logs/mypy_check.log
