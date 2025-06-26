@@ -11,7 +11,7 @@ class SqlAdapter:
     """
 
     @staticmethod
-    def from_list(commands: List[str]) -> str:
+    def from_list(commands: list[str]) -> str:
         """
         Converts a list of SQL commands into a single string.
 

@@ -72,14 +72,14 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self._send(message, "invalidating")
         self.token = None
 
-    def signup(self, vars: Dict) -> str:
+    def signup(self, vars: dict) -> str:
         message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
         self.id = message.id
         response = self._send(message, "signup")
         self.check_response_for_result(response, "signup")
         return response["result"]
 
-    def signin(self, vars: Dict[str, Any]) -> str:
+    def signin(self, vars: dict[str, Any]) -> str:
         message = RequestMessage(
             RequestMethod.SIGN_IN,
             username=vars.get("username"),
@@ -111,7 +111,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.id = message.id
         self._send(message, "use")
 
-    def query(self, query: str, vars: Optional[Dict] = None) -> Union[List[dict], dict]:
+    def query(self, query: str, vars: Optional[dict] = None) -> Union[list[dict], dict]:
         if vars is None:
             vars = {}
         message = RequestMessage(
@@ -153,7 +153,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.id = message.id
         self._send(message, "unsetting")
 
-    def select(self, thing: Union[str, RecordID, Table]) -> Union[List[dict], dict]:
+    def select(self, thing: Union[str, RecordID, Table]) -> Union[list[dict], dict]:
         message = RequestMessage(RequestMethod.SELECT, params=[thing])
         self.id = message.id
         response = self._send(message, "select")
@@ -163,8 +163,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def create(
         self,
         thing: Union[str, RecordID, Table],
-        data: Optional[Union[Union[List[dict], dict], dict]] = None,
-    ) -> Union[List[dict], dict]:
+        data: Optional[Union[Union[list[dict], dict], dict]] = None,
+    ) -> Union[list[dict], dict]:
         if isinstance(thing, str):
             if ":" in thing:
                 buffer = thing.split(":")
@@ -190,7 +190,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.id = message.id
         self._send(message, "kill")
 
-    def delete(self, thing: Union[str, RecordID, Table]) -> Union[List[dict], dict]:
+    def delete(self, thing: Union[str, RecordID, Table]) -> Union[list[dict], dict]:
         message = RequestMessage(RequestMethod.DELETE, record_id=thing)
         self.id = message.id
         response = self._send(message, "delete")
@@ -198,8 +198,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         return response["result"]
 
     def insert(
-        self, table: Union[str, Table], data: Union[List[dict], dict]
-    ) -> Union[List[dict], dict]:
+        self, table: Union[str, Table], data: Union[list[dict], dict]
+    ) -> Union[list[dict], dict]:
         message = RequestMessage(RequestMethod.INSERT, collection=table, params=data)
         self.id = message.id
         response = self._send(message, "insert")
@@ -207,8 +207,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         return response["result"]
 
     def insert_relation(
-        self, table: Union[str, Table], data: Union[List[dict], dict]
-    ) -> Union[List[dict], dict]:
+        self, table: Union[str, Table], data: Union[list[dict], dict]
+    ) -> Union[list[dict], dict]:
         message = RequestMessage(
             RequestMethod.INSERT_RELATION, table=table, params=data
         )
@@ -218,8 +218,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         return response["result"]
 
     def merge(
-        self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
-    ) -> Union[List[dict], dict]:
+        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
+    ) -> Union[list[dict], dict]:
         message = RequestMessage(RequestMethod.MERGE, record_id=thing, data=data)
         self.id = message.id
         response = self._send(message, "merge")
@@ -229,8 +229,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def patch(
         self,
         thing: Union[str, RecordID, Table],
-        data: Optional[List[dict]] = None,
-    ) -> Union[List[dict], dict]:
+        data: Optional[list[dict]] = None,
+    ) -> Union[list[dict], dict]:
         message = RequestMessage(RequestMethod.PATCH, collection=thing, params=data)
         self.id = message.id
         response = self._send(message, "patch")
@@ -273,8 +273,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             pass
 
     def update(
-        self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
-    ) -> Union[List[dict], dict]:
+        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
+    ) -> Union[list[dict], dict]:
         message = RequestMessage(RequestMethod.UPDATE, record_id=thing, data=data)
         self.id = message.id
         response = self._send(message, "update")
@@ -282,8 +282,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         return response["result"]
 
     def upsert(
-        self, thing: Union[str, RecordID, Table], data: Optional[Dict] = None
-    ) -> Union[List[dict], dict]:
+        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
+    ) -> Union[list[dict], dict]:
         message = RequestMessage(RequestMethod.UPSERT, record_id=thing, data=data)
         self.id = message.id
         response = self._send(message, "upsert")

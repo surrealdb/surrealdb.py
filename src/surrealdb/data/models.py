@@ -34,7 +34,7 @@ class QueryResponse:
 
     time: str
     status: str
-    result: List[Dict[str, Any]]
+    result: list[dict[str, Any]]
 
 
 @dataclass
