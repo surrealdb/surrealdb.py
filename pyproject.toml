@@ -63,7 +63,8 @@ exclude = ["src/surrealdb/__init__.py"]
 
 [tool.ruff.lint]
 select = [
-    "I",  # isort
+    "I",   # isort
+    "UP",  # pyupgrade
 ]
 
 [tool.mypy]
