@@ -1,5 +1,5 @@
-from urllib.parse import urlparse
 from enum import Enum
+from urllib.parse import urlparse
 
 
 class UrlScheme(Enum):

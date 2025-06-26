@@ -1,5 +1,6 @@
-from unittest import main, TestCase
 import os
+from unittest import TestCase, main
+
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 
 

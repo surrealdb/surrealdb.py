@@ -5,8 +5,8 @@ Notes:
     if an option<T> is None when being returned from the database it just isn't in the object
     will have to look into schema objects for more complete serialization.
 """
-from unittest import main, IsolatedAsyncioTestCase
 from os import environ
+from unittest import IsolatedAsyncioTestCase, main
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID

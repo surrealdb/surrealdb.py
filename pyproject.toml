@@ -61,6 +61,11 @@ where = ["src"]
 [tool.ruff]
 exclude = ["src/surrealdb/__init__.py"]
 
+[tool.ruff.lint]
+select = [
+    "I",  # isort
+]
+
 [tool.mypy]
 mypy_path = "src"
 explicit_package_bases = true

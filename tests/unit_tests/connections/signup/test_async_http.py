@@ -1,8 +1,8 @@
-from unittest import TestCase, main, IsolatedAsyncioTestCase
+from unittest import IsolatedAsyncioTestCase, TestCase, main
 
+from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
-from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 
 
 class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):

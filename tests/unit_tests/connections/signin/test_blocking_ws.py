@@ -1,4 +1,4 @@
-from unittest import main, TestCase
+from unittest import TestCase, main
 
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 

@@ -1,7 +1,7 @@
 from unittest import TestCase, main
+from uuid import UUID
 
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
-from uuid import UUID
 
 
 class TestBlockingWsSurrealConnection(TestCase):

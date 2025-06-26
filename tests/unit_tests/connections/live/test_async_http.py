@@ -1,7 +1,7 @@
-from unittest import main, IsolatedAsyncioTestCase
+from unittest import IsolatedAsyncioTestCase, main
+from uuid import UUID
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
-from uuid import UUID
 
 
 class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):

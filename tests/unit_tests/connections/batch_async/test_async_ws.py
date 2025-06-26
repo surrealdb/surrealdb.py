@@ -1,7 +1,7 @@
 import asyncio
 import os
 import sys
-from unittest import main, IsolatedAsyncioTestCase
+from unittest import IsolatedAsyncioTestCase, main
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 

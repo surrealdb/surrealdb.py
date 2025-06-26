@@ -1,5 +1,6 @@
 import os
 from unittest import TestCase, main
+
 from surrealdb.request_message.sql_adapter import SqlAdapter
 
 

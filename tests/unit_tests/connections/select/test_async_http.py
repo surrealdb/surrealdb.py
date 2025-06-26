@@ -1,4 +1,4 @@
-from unittest import main, IsolatedAsyncioTestCase
+from unittest import IsolatedAsyncioTestCase, main
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 

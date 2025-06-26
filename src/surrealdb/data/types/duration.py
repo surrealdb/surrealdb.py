@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-from typing import Tuple, Union
 from math import floor
+from typing import Tuple, Union
 
 UNITS = {
     "ns": 1,

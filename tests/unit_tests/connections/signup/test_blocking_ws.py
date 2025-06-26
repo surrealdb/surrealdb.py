@@ -1,8 +1,8 @@
 from unittest import TestCase, main
 
+from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
-from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 
 class TestAsyncWsSurrealConnection(TestCase):

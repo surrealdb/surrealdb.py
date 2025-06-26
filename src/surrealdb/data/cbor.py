@@ -1,21 +1,21 @@
 import decimal
 from datetime import datetime, timedelta, timezone
 
-from surrealdb.cbor2 import shareable_encoder, CBORTag, dumps, loads
+from surrealdb.cbor2 import CBORTag, dumps, loads, shareable_encoder
 from surrealdb.data.types import constants
 from surrealdb.data.types.datetime import IsoDateTimeWrapper
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.future import Future
 from surrealdb.data.types.geometry import (
-    GeometryPoint,
+    GeometryCollection,
     GeometryLine,
-    GeometryPolygon,
     GeometryMultiLine,
     GeometryMultiPoint,
     GeometryMultiPolygon,
-    GeometryCollection,
+    GeometryPoint,
+    GeometryPolygon,
 )
-from surrealdb.data.types.range import BoundIncluded, BoundExcluded, Range
+from surrealdb.data.types.range import BoundExcluded, BoundIncluded, Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 

@@ -1,7 +1,13 @@
 from unittest import TestCase, main
 
-from surrealdb import Surreal, BlockingHttpSurrealConnection, BlockingWsSurrealConnection
-from surrealdb import AsyncSurreal, AsyncHttpSurrealConnection, AsyncWsSurrealConnection
+from surrealdb import (
+    AsyncHttpSurrealConnection,
+    AsyncSurreal,
+    AsyncWsSurrealConnection,
+    BlockingHttpSurrealConnection,
+    BlockingWsSurrealConnection,
+    Surreal,
+)
 
 
 class TestUrl(TestCase):
