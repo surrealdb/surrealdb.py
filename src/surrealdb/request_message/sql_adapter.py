@@ -52,7 +52,7 @@ class SqlAdapter:
         :return: (str) a series of SQL commands as a single string
         """
         buffer = []
-        with open(file_path, "r") as file:
+        with open(file_path) as file:
             raw_buffer = file.read().split("\n")
             for i in raw_buffer:
                 if i == "":
