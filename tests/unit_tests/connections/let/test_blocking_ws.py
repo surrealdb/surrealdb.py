@@ -4,7 +4,6 @@ from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 
 class TestBlockingWsSurrealConnection(TestCase):
-
     def setUp(self):
         self.url = "ws://localhost:8000"
         self.password = "root"
@@ -26,15 +25,22 @@ class TestBlockingWsSurrealConnection(TestCase):
             self.connection.socket.close()
 
     def test_let(self):
-        outcome = self.connection.let('name', {
-            "first": 'Tobie',
-            "last": 'Morgan Hitchcock',
-        })
+        outcome = self.connection.let(
+            "name",
+            {
+                "first": "Tobie",
+                "last": "Morgan Hitchcock",
+            },
+        )
         self.assertIsNone(outcome)
 
-        self.connection.query('CREATE person SET name = $name')
-        outcome = self.connection.query('SELECT * FROM person WHERE name.first = $name.first')
-        self.assertEqual({'first': 'Tobie', 'last': 'Morgan Hitchcock'}, outcome[0]["name"])
+        self.connection.query("CREATE person SET name = $name")
+        outcome = self.connection.query(
+            "SELECT * FROM person WHERE name.first = $name.first"
+        )
+        self.assertEqual(
+            {"first": "Tobie", "last": "Morgan Hitchcock"}, outcome[0]["name"]
+        )
 
 
 if __name__ == "__main__":

@@ -4,7 +4,6 @@ from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 
 class TestBlockingWsSurrealConnection(TestCase):
-
     def setUp(self):
         self.url = "ws://localhost:8000"
         self.password = "root"

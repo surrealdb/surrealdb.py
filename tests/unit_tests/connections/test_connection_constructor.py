@@ -11,7 +11,6 @@ from surrealdb import (
 
 
 class TestUrl(TestCase):
-
     def setUp(self) -> None:
         self.urls = [
             "http://localhost:5000",
@@ -38,6 +37,7 @@ class TestUrl(TestCase):
 
         outcome = AsyncSurreal("http://localhost:5000")
         self.assertEqual(type(outcome), AsyncHttpSurrealConnection)
+
 
 if __name__ == "__main__":
     main()

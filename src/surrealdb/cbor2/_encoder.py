@@ -179,12 +179,12 @@ class CBOREncoder:
         self.string_namespacing = string_referencing
         self.default = default
         self._canonical = canonical
-        self._shared_containers: dict[int, tuple[object, int | None]] = (
-            {}
-        )  # indexes used for value sharing
-        self._string_references: dict[str | bytes, int] = (
-            {}
-        )  # indexes used for string references
+        self._shared_containers: dict[
+            int, tuple[object, int | None]
+        ] = {}  # indexes used for value sharing
+        self._string_references: dict[
+            str | bytes, int
+        ] = {}  # indexes used for string references
         self._encoders = default_encoders.copy()
         if canonical:
             self._encoders.update(canonical_encoders)

@@ -6,7 +6,6 @@ from surrealdb.data.types.table import Table
 
 
 class TestBlockingWsSurrealConnection(TestCase):
-
     def setUp(self):
         self.url = "ws://localhost:8000"
         self.password = "root"
@@ -17,10 +16,7 @@ class TestBlockingWsSurrealConnection(TestCase):
         }
         self.database_name = "test_db"
         self.namespace = "test_ns"
-        self.data = {
-            "name": "Jaime",
-            "age": 35
-        }
+        self.data = {"name": "Jaime", "age": 35}
         self.record_id = RecordID("user", "tobie")
         self.connection = BlockingWsSurrealConnection(self.url)
         self.connection.signin(self.vars_params)
@@ -44,14 +40,8 @@ class TestBlockingWsSurrealConnection(TestCase):
 
     def test_merge_string(self):
         outcome = self.connection.merge("user:tobie")
-        self.assertEqual(
-            outcome["id"],
-            self.record_id
-        )
-        self.assertEqual(
-            outcome["name"],
-            "Tobie"
-        )
+        self.assertEqual(outcome["id"], self.record_id)
+        self.assertEqual(outcome["name"], "Tobie")
         outcome = self.connection.query("SELECT * FROM user;")
         self.check_no_change(outcome[0])
 

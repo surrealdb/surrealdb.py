@@ -98,7 +98,7 @@ class GeometryLine(Geometry):
         return [point.get_coordinates() for point in self.geometry_points]
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({", ".join(repr(geo) for geo in self.geometry_points)})'
+        return f"{self.__class__.__name__}({', '.join(repr(geo) for geo in self.geometry_points)})"
 
     @staticmethod
     def parse_coordinates(coordinates: list[tuple[float, float]]) -> "GeometryLine":
@@ -147,7 +147,7 @@ class GeometryPolygon(Geometry):
         return [line.get_coordinates() for line in self.geometry_lines]
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({", ".join(repr(geo) for geo in self.geometry_lines)})'
+        return f"{self.__class__.__name__}({', '.join(repr(geo) for geo in self.geometry_lines)})"
 
     @staticmethod
     def parse_coordinates(
@@ -196,7 +196,7 @@ class GeometryMultiPoint(Geometry):
         return [point.get_coordinates() for point in self.geometry_points]
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({", ".join(repr(geo) for geo in self.geometry_points)})'
+        return f"{self.__class__.__name__}({', '.join(repr(geo) for geo in self.geometry_points)})"
 
     @staticmethod
     def parse_coordinates(
@@ -245,7 +245,7 @@ class GeometryMultiLine(Geometry):
         return [line.get_coordinates() for line in self.geometry_lines]
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({", ".join(repr(geo) for geo in self.geometry_lines)})'
+        return f"{self.__class__.__name__}({', '.join(repr(geo) for geo in self.geometry_lines)})"
 
     @staticmethod
     def parse_coordinates(
@@ -294,7 +294,7 @@ class GeometryMultiPolygon(Geometry):
         return [polygon.get_coordinates() for polygon in self.geometry_polygons]
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({", ".join(repr(geo) for geo in self.geometry_polygons)})'
+        return f"{self.__class__.__name__}({', '.join(repr(geo) for geo in self.geometry_polygons)})"
 
     @staticmethod
     def parse_coordinates(
@@ -334,7 +334,7 @@ class GeometryCollection:
         self.geometries = list(geometries)
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({", ".join(repr(geo) for geo in self.geometries)})'
+        return f"{self.__class__.__name__}({', '.join(repr(geo) for geo in self.geometries)})"
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, GeometryCollection):

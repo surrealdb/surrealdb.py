@@ -4,7 +4,6 @@ from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 
 
 class TestAsyncHttpSurrealConnection(TestCase):
-
     def setUp(self):
         self.url = "http://localhost:8000"
         self.password = "root"

@@ -5,7 +5,6 @@ from surrealdb.data.types.record_id import RecordID
 
 
 class TestBlockingWsSurrealConnection(TestCase):
-
     def setUp(self):
         self.url = "ws://localhost:8000"
         self.password = "root"
@@ -24,9 +23,7 @@ class TestBlockingWsSurrealConnection(TestCase):
             {
                 "name": "Tobie",
             },
-            {
-                "name": "Jaime"
-            }
+            {"name": "Jaime"},
         ]
         self.insert_data = [
             {
@@ -46,10 +43,7 @@ class TestBlockingWsSurrealConnection(TestCase):
     def test_insert_string_with_data(self):
         outcome = self.connection.insert("user", self.insert_bulk_data)
         self.assertEqual(2, len(outcome))
-        self.assertEqual(
-            len(self.connection.query("SELECT * FROM user;")),
-            2
-        )
+        self.assertEqual(len(self.connection.query("SELECT * FROM user;")), 2)
 
     def test_insert_record_id_result_error(self):
         record_id = RecordID("user", "tobie")
@@ -58,8 +52,10 @@ class TestBlockingWsSurrealConnection(TestCase):
             _ = self.connection.insert(record_id, self.insert_data)
         e = str(context.exception)
         self.assertEqual(
-            "There was a problem with the database: Can not execute INSERT statement using value" in e and "user:tobie" in e,
-            True
+            "There was a problem with the database: Can not execute INSERT statement using value"
+            in e
+            and "user:tobie" in e,
+            True,
         )
 
 

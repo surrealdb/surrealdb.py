@@ -5,7 +5,6 @@ from surrealdb.request_message.methods import RequestMethod
 
 
 class RequestMessage:
-
     WS_CBOR_DESCRIPTOR = WsCborDescriptor()
 
     def __init__(self, method: RequestMethod, **kwargs) -> None:

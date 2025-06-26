@@ -644,9 +644,7 @@ class CBORDecoder:
             raise CBORDecodeValueError(f"shared reference {value} not found")
 
         if shared is None:
-            raise CBORDecodeValueError(
-                f"shared value {value} has not been initialized"
-            )
+            raise CBORDecodeValueError(f"shared value {value} has not been initialized")
         else:
             return shared
 

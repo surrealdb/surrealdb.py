@@ -6,7 +6,6 @@ from surrealdb.data.types.table import Table
 
 
 class TestHttpSurrealConnection(TestCase):
-
     def setUp(self):
         self.url = "http://localhost:8000"
         self.password = "root"

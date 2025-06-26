@@ -5,7 +5,6 @@ from surrealdb.request_message.methods import RequestMethod
 
 
 class TestRequestMessage(TestCase):
-
     def setUp(self):
         self.method = RequestMethod.USE
 
