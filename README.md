@@ -98,30 +98,24 @@ docker-compose up -d
 uv run python -m unittest discover -s tests
 
 # Test against specific version
-./scripts/test-versions.sh v2.1.4
+./scripts/test-versions.sh v2.1.8
 
-# Test against v1.x (legacy)
-docker-compose --profile legacy up -d
-SURREALDB_VERSION=v1.5.5 uv run python -m unittest discover -s tests
-
-# Test against latest v2.x
-docker-compose --profile latest up -d  
-SURREALDB_VERSION=v2.2.2 uv run python -m unittest discover -s tests
+# Test against different v2.x versions
+SURREALDB_VERSION=v2.0.5 uv run python -m unittest discover -s tests
+SURREALDB_VERSION=v2.3.6 uv run python -m unittest discover -s tests
 ```
 
 ### CI/CD Testing
 
-- **Core Tests**: Run on every PR against key stable versions (v1.5.5, v2.0.4, v2.1.4, v2.2.2)
+- **Core Tests**: Run on every PR against key stable versions (v2.0.5, v2.1.8, v2.2.6, v2.3.6)
 - **Comprehensive Tests**: Run on schedule/manual trigger against all latest minor versions  
-- **Auto-Discovery**: Automatically discovers and tests latest patch versions
+- **Python Compatibility**: Tests all supported Python versions (3.10, 3.11, 3.12, 3.13)
 
 ### Version-Specific Behavior
 
-Tests automatically detect SurrealDB version behavior:
-- **v1.x**: `[None]` values preserved in arrays
-- **v2.1.x+**: `[None]` values filtered to `[]` in arrays
-
-Set `SURREALDB_VERSION` environment variable to override version detection.
+Tests are designed to be version-agnostic across all supported SurrealDB v2.x versions:
+- Automatically handles behavioral differences between v2.x minor versions
+- No environment variable configuration required for version detection
 
 ## Documentation
 
@@ -317,7 +311,7 @@ Use the test script for systematic testing:
 
 The CI automatically tests against multiple versions:
 
-- **Core tests**: Always run against key versions (v1.5.6, v2.0.5, v2.1.8, v2.2.6, v2.3.6)
+- **Core tests**: Always run against key versions (v2.0.5, v2.1.8, v2.2.6, v2.3.6)
 - **Comprehensive tests**: Scheduled tests against all latest versions
 - **Auto-discovery**: Dynamically finds latest patch versions
 
