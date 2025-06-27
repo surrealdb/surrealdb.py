@@ -71,5 +71,10 @@ ignore_missing_imports = true
 
 [dependency-groups]
 dev = [
+    { include-group = "test" },
+    "mypy>=1.0.0",
     "ruff>=0.12.0",
+]
+test = [
+    "hypothesis>=6.135.16",
 ]
