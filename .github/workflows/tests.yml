@@ -76,6 +76,7 @@ jobs:
           PYTHONPATH: ./src
           SURREALDB_URL: http://localhost:8000
           SURREALDB_VERSION: ${{ matrix.surrealdb-version }}
+          PYTHONWARNINGS: ignore::ResourceWarning
 
   # Comprehensive matrix test (runs on schedule or manual trigger)
   test-comprehensive:
@@ -121,6 +122,7 @@ jobs:
           PYTHONPATH: ./src
           SURREALDB_URL: http://localhost:8000
           SURREALDB_VERSION: ${{ matrix.surrealdb-version }}
+          PYTHONWARNINGS: ignore::ResourceWarning
 
 #      - name: Run unit tests (WebSocket)
 #        run: uv run python -m unittest discover -s tests
