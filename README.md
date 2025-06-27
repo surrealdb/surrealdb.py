@@ -280,13 +280,11 @@ uv run python -m unittest discover -s tests
 SURREALDB_VERSION=v2.1.8 docker-compose up -d surrealdb
 uv run python -m unittest discover -s tests
 
-# Test with v1.x for compatibility
-SURREALDB_VERSION=v1.5.6 docker-compose up -d surrealdb
-uv run python -m unittest discover -s tests
-
-# Use different profiles for parallel testing
-docker-compose --profile latest up -d    # v2.3.6 on port 8020
-docker-compose --profile legacy up -d    # v1.5.6 on port 8010
+# Use different profiles for testing specific v2.x versions
+docker-compose --profile v2-0 up -d    # v2.0.5 on port 8020
+docker-compose --profile v2-1 up -d    # v2.1.8 on port 8021
+docker-compose --profile v2-2 up -d    # v2.2.6 on port 8022
+docker-compose --profile v2-3 up -d    # v2.3.6 on port 8023
 ```
 
 ### Automated Version Testing
@@ -299,9 +297,6 @@ Use the test script for systematic testing:
 
 # Test specific version
 ./scripts/test-versions.sh v2.1.8
-
-# Test v1.x compatibility  
-./scripts/test-versions.sh v1.5.6
 
 # Test specific test directory
 ./scripts/test-versions.sh v2.3.6 tests/unit_tests/data_types
