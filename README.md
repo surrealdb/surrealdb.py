@@ -36,6 +36,93 @@
 
 The official SurrealDB SDK for Python.
 
+## Development Setup
+
+This project uses [uv](https://docs.astral.sh/uv/) for dependency management and [hatch](https://hatch.pypa.io/) as the build tool.
+
+### Prerequisites
+
+Install uv:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### Dependency Philosophy
+
+This project follows library best practices for dependency management:
+- **Minimal constraints**: Uses `>=` instead of exact pins for maximum compatibility
+- **Essential only**: Only direct dependencies that are actually imported
+- **Clean separation**: Development tools in separate dependency groups
+- **Well-maintained tools**: Avoid dependencies which go 6+ months without so much as a patch
+
+### Development Workflow
+
+1. **Install dependencies:**
+   ```bash
+   # Install main dependencies
+   uv sync
+   
+   # Install with dev dependencies (linting, type checking, testing)
+   uv sync --group dev
+   ```
+
+2. **Run development tools:**
+   ```bash
+   # Run linting
+   uv run ruff check src/
+   
+   # Run formatting
+   uv run ruff format src/
+   
+   # Run type checking
+   uv run mypy --explicit-package-bases src/
+   
+   # Run tests
+   uv run python -m unittest discover -s tests
+   ```
+
+3. **Build the project:**
+   ```bash
+   uv build
+   ```
+
+## Testing Strategy
+
+We use a multi-tier testing strategy to ensure compatibility across SurrealDB versions:
+
+### Local Development Testing
+
+```bash
+# Test with default version (latest stable)
+docker-compose up -d
+uv run python -m unittest discover -s tests
+
+# Test against specific version
+./scripts/test-versions.sh v2.1.4
+
+# Test against v1.x (legacy)
+docker-compose --profile legacy up -d
+SURREALDB_VERSION=v1.5.5 uv run python -m unittest discover -s tests
+
+# Test against latest v2.x
+docker-compose --profile latest up -d  
+SURREALDB_VERSION=v2.2.2 uv run python -m unittest discover -s tests
+```
+
+### CI/CD Testing
+
+- **Core Tests**: Run on every PR against key stable versions (v1.5.5, v2.0.4, v2.1.4, v2.2.2)
+- **Comprehensive Tests**: Run on schedule/manual trigger against all latest minor versions  
+- **Auto-Discovery**: Automatically discovers and tests latest patch versions
+
+### Version-Specific Behavior
+
+Tests automatically detect SurrealDB version behavior:
+- **v1.x**: `[None]` values preserved in arrays
+- **v2.1.x+**: `[None]` values filtered to `[]` in arrays
+
+Set `SURREALDB_VERSION` environment variable to override version detection.
+
 ## Documentation
 
 View the SDK documentation [here](https://surrealdb.com/docs/integration/libraries/python).
@@ -184,3 +271,241 @@ To exit the terminal session merely execute the following command:
 exit
 ```
  And there we have it, our tests are passing.
+
+## Testing Against Different SurrealDB Versions
+
+### Quick Testing with Docker Compose
+
+Test against different SurrealDB versions using environment variables:
+
+```bash
+# Test with latest v2.x (default: v2.3.6)
+uv run python -m unittest discover -s tests
+
+# Test with specific v2.x version  
+SURREALDB_VERSION=v2.1.8 docker-compose up -d surrealdb
+uv run python -m unittest discover -s tests
+
+# Test with v1.x for compatibility
+SURREALDB_VERSION=v1.5.6 docker-compose up -d surrealdb
+uv run python -m unittest discover -s tests
+
+# Use different profiles for parallel testing
+docker-compose --profile latest up -d    # v2.3.6 on port 8020
+docker-compose --profile legacy up -d    # v1.5.6 on port 8010
+```
+
+### Automated Version Testing
+
+Use the test script for systematic testing:
+
+```bash
+# Test latest version with all tests
+./scripts/test-versions.sh
+
+# Test specific version
+./scripts/test-versions.sh v2.1.8
+
+# Test v1.x compatibility  
+./scripts/test-versions.sh v1.5.6
+
+# Test specific test directory
+./scripts/test-versions.sh v2.3.6 tests/unit_tests/data_types
+```
+
+### GitHub Actions Matrix Testing
+
+The CI automatically tests against multiple versions:
+
+- **Core tests**: Always run against key versions (v1.5.6, v2.0.5, v2.1.8, v2.2.6, v2.3.6)
+- **Comprehensive tests**: Scheduled tests against all latest versions
+- **Auto-discovery**: Dynamically finds latest patch versions
+
+## Docker Usage
+
+### Using the Official Docker Image
+
+```bash
+# Build the image
+docker build -t surrealdb-python:latest .
+
+# Run with uv
+docker run -it surrealdb-python:latest uv run python -c "import surrealdb; print('Ready!')"
+
+# Run tests in container
+docker run -it surrealdb-python:latest uv run python -m unittest discover -s tests
+```
+
+### Development with Docker Compose
+
+```bash
+# Start latest SurrealDB for development
+docker-compose up -d
+
+# Start specific version for testing
+SURREALDB_VERSION=v2.1.8 docker-compose up -d
+
+# View logs
+docker-compose logs -f surrealdb
+```
+
+# SurrealDB Python SDK
+
+[![Tests](https://github.com/surrealdb/surrealdb.py/workflows/Tests/badge.svg)](https://github.com/surrealdb/surrealdb.py/actions)
+[![PyPI version](https://badge.fury.io/py/surrealdb.svg)](https://badge.fury.io/py/surrealdb)
+[![Python](https://img.shields.io/pypi/pyversions/surrealdb.svg)](https://pypi.org/project/surrealdb/)
+
+The official SurrealDB Python SDK.
+
+## Requirements
+
+- **Python**: 3.10 or greater
+- **SurrealDB**: v2.0.0 to v2.3.6
+
+> **Note**: This SDK works seamlessly with SurrealDB versions v2.0.0 to v2.3.6, ensuring compatibility with the latest features.
+
+## Quick Start
+
+1. **Install the SDK**:
+   ```bash
+   pip install surrealdb
+   ```
+
+2. **Start SurrealDB** (using Docker):
+   ```bash
+   docker run --rm -p 8000:8000 surrealdb/surrealdb:v2.3.6 start --allow-all
+   ```
+
+3. **Connect and query**:
+   ```python
+   from surrealdb import Surreal
+
+   async def main():
+       async with Surreal("ws://localhost:8000/rpc") as db:
+           await db.signin({"user": "root", "pass": "root"})
+           await db.use("test", "test")
+           
+           # Create
+           person = await db.create("person", {"name": "John", "age": 30})
+           print(person)
+           
+           # Query
+           people = await db.select("person")
+           print(people)
+
+   import asyncio
+   asyncio.run(main())
+   ```
+
+## Development
+
+This project uses **uv** for fast dependency management and **hatch** for building.
+
+### Setup
+
+1. **Install uv** (if not already installed):
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+2. **Clone and setup**:
+   ```bash
+   git clone https://github.com/surrealdb/surrealdb.py.git
+   cd surrealdb.py
+   uv sync --group dev
+   ```
+
+3. **Activate environment**:
+   ```bash
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   ```
+
+### Testing
+
+#### Quick Test (Latest Version)
+```bash
+# Start SurrealDB v2.3.6
+docker compose up -d
+
+# Run tests
+export SURREALDB_URL="http://localhost:8000"
+uv run python -m unittest discover -s tests
+```
+
+#### Test Multiple Versions
+```bash
+# Test latest v2.x versions
+./scripts/test-versions.sh --v2-latest
+
+# Test specific version
+./scripts/test-versions.sh v2.1.8
+
+# Test all supported versions
+./scripts/test-versions.sh --all
+```
+
+#### Available Docker Profiles
+```bash
+# Development (default - v2.3.6)
+docker compose up -d
+
+# Test specific v2.x versions
+docker compose --profile v2-0 up -d    # v2.0.5 on port 8020
+docker compose --profile v2-1 up -d    # v2.1.8 on port 8021  
+docker compose --profile v2-2 up -d    # v2.2.6 on port 8022
+docker compose --profile v2-3 up -d    # v2.3.6 on port 8023
+```
+
+### Code Quality
+
+```bash
+# Format code
+uv run ruff format
+
+# Lint code  
+uv run ruff check
+
+# Type checking
+uv run mypy src/
+```
+
+### Release
+
+```bash
+# Build package
+uv build
+
+# Publish to PyPI (requires authentication)
+uv publish
+```
+
+## SurrealDB Version Support
+
+This Python SDK supports **SurrealDB v2.0.0 to v2.3.6**. Here's the compatibility matrix:
+
+| Python SDK | SurrealDB Versions | Status |
+|------------|-------------------|---------|
+| v1.0.0+    | v2.0.0 - v2.3.6   | ✅ Supported |
+| v1.0.0+    | v1.x.x            | ❌ Not supported |
+
+### Tested Versions
+
+The SDK is continuously tested against:
+- **v2.0.5** (Latest v2.0.x)
+- **v2.1.8** (Latest v2.1.x) 
+- **v2.2.6** (Latest v2.2.x)
+- **v2.3.6** (Latest v2.3.x)
+
+## Documentation
+
+- [Official Documentation](https://surrealdb.com/docs/sdk/python)
+- [API Reference](https://docs.rs/surrealdb)
+- [Examples](./examples)
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
