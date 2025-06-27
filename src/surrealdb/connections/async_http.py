@@ -42,7 +42,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.id: str = str(uuid.uuid4())
         self.namespace: Optional[str] = None
         self.database: Optional[str] = None
-        self.vars = dict()
+        self.vars: dict[str, Any] = dict()
 
     async def _send(
         self,

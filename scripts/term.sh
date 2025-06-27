@@ -4,21 +4,30 @@
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 cd $SCRIPTPATH
 
-# Define the PYTHONPATH for the terminal session
-cd ../src
-export PYTHONPATH=$(pwd)
+# Go to project root
 cd ..
 
-# Configure the virtual environment if needed
-if [ -d "venv" ]; then
-  echo "existing python virtual environment exists."
-else
-  echo "python virtual environment does not exist. Creating one"
-  python3 -m venv venv
-fi
+# Define the PYTHONPATH for the terminal session
+export PYTHONPATH=$(pwd)/src
 
-# start the terminal session
-source venv/bin/activate
-pip install -r requirements.txt
-echo "now running in virtual environment. Execute the 'exit' to exit the virtual env terminal"
+echo "Setting up development environment with uv..."
+
+# Install dependencies with uv (this will create .venv automatically)
+uv sync --group dev
+
+echo "Activating uv environment..."
+echo "PYTHONPATH is set to: $PYTHONPATH"
+echo "You can now run:"
+echo "  uv run python <script>"
+echo "  uv run ruff check src/"
+echo "  uv run mypy src/"
+echo "  uv run python -m unittest discover -s tests"
+echo ""
+echo "Or activate the environment manually with:"
+echo "  source .venv/bin/activate"
+echo ""
+echo "Execute 'exit' to exit the terminal session"
+
+# Start shell with uv environment activated
+source .venv/bin/activate
 bash --norc

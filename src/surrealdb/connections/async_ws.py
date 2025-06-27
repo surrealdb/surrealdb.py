@@ -8,7 +8,7 @@ from collections.abc import AsyncGenerator
 from typing import Any, Optional, Union
 from uuid import UUID
 
-import websockets
+import websockets  # type: ignore
 
 from surrealdb.connections.async_template import AsyncTemplate
 from surrealdb.connections.url import Url
@@ -42,11 +42,11 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.host: Optional[str] = self.url.hostname
         self.port: Optional[int] = self.url.port
         self.token: Optional[str] = None
-        self.socket = None
+        self.socket: Any = None  # WebSocket connection
         self.loop: Optional[AbstractEventLoop] = None
         self.qry: dict[str, Future] = {}
         self.recv_task: Optional[Task[None]] = None
-        self.live_queues: dict[str, list] = {}
+        self.live_queues: dict[str, list[Queue[dict]]] = {}
 
     async def _recv_task(self):
         assert self.socket
@@ -281,7 +281,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def subscribe_live(
         self, query_uuid: Union[str, UUID]
     ) -> AsyncGenerator[dict, None]:
-        result_queue = Queue()
+        result_queue: Queue[dict] = Queue()
         suid = str(query_uuid)
         self.live_queues[suid].append(result_queue)
 
