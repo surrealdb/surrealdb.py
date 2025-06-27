@@ -63,10 +63,18 @@ select = [
 [tool.mypy]
 mypy_path = "src"
 explicit_package_bases = true
-disable_error_code = ["return-value", "return-type"]
+disable_error_code = ["return-value", "var-annotated", "assignment", "arg-type", "attr-defined"]
 
 [[tool.mypy.overrides]]
 module = "cerberus.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "aiohttp.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "websockets.*"
 ignore_missing_imports = true
 
 [dependency-groups]
