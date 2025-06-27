@@ -40,8 +40,16 @@ homepage = "https://github.com/surrealdb/surrealdb.py"
 repository = "https://github.com/surrealdb/surrealdb.py"
 documentation = "https://surrealdb.com/docs/sdk/python"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/surrealdb"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/README.md",
+    "/LICENSE",
+]
 
 [tool.ruff]
 exclude = ["src/surrealdb/__init__.py"]
