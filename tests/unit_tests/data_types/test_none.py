@@ -6,7 +6,6 @@ Notes:
     will have to look into schema objects for more complete serialization.
 """
 
-from os import environ
 from unittest import IsolatedAsyncioTestCase, main
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
@@ -63,7 +62,10 @@ class TestAsyncWsSurrealConnectionNone(IsolatedAsyncioTestCase):
         await self.connection.close()
 
     async def test_none_with_query(self):
-        is_sdb21 = environ.get("SURREALDB_VERSION", "v2.1.4").startswith("v2.1.")
+        """
+        Test None handling in arrays for SurrealDB v2.x.
+        In v2.x, None values in arrays are preserved as [None].
+        """
         schema = """
             DEFINE TABLE person SCHEMAFULL TYPE NORMAL;
             DEFINE FIELD name ON person TYPE string;
@@ -76,12 +78,10 @@ class TestAsyncWsSurrealConnectionNone(IsolatedAsyncioTestCase):
         )
         record_check = RecordID(table_name="person", identifier=[1, 2])
         self.assertEqual(1, len(outcome))
-        self.assertEqual(record_check, outcome[0]["id"])
-        self.assertEqual("John", outcome[0]["name"])
-        if is_sdb21:
-            self.assertEqual([], outcome[0].get("nums"))
-        else:
-            self.assertEqual([None], outcome[0].get("nums"))
+        self.assertEqual(record_check, outcome[0]["id"])  # type: ignore
+        self.assertEqual("John", outcome[0]["name"])  # type: ignore
+        # In SurrealDB v2.x, None values in arrays are preserved
+        self.assertEqual([None], outcome[0].get("nums"))  # type: ignore
 
         outcome = await self.connection.query(
             "UPSERT person MERGE {id: $id, name: $name, nums: $nums}",
@@ -89,12 +89,10 @@ class TestAsyncWsSurrealConnectionNone(IsolatedAsyncioTestCase):
         )
         record_check = RecordID(table_name="person", identifier=[3, 4])
         self.assertEqual(1, len(outcome))
-        self.assertEqual(record_check, outcome[0]["id"])
-        self.assertEqual("Dave", outcome[0]["name"])
-        if is_sdb21:
-            self.assertEqual([], outcome[0].get("nums"))
-        else:
-            self.assertEqual([None], outcome[0].get("nums"))
+        self.assertEqual(record_check, outcome[0]["id"])  # type: ignore
+        self.assertEqual("Dave", outcome[0]["name"])  # type: ignore
+        # In SurrealDB v2.x, None values in arrays are preserved
+        self.assertEqual([None], outcome[0].get("nums"))  # type: ignore
 
         outcome = await self.connection.query("SELECT * FROM person")
         self.assertEqual(2, len(outcome))
