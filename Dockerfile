@@ -1,42 +1,30 @@
-FROM ubuntu:latest
+FROM ghcr.io/astral-sh/uv:latest
 
-# Set the working directory
+# Create non-root user for security
+RUN useradd --create-home --shell /bin/bash app
+
+# Set working directory and switch to app user
 WORKDIR /app
+USER app
 
-# Copy the source code
-COPY src /app/src
+# Copy dependency files first for better caching
+COPY --chown=app:app pyproject.toml uv.lock ./
 
-# Copy the .cargo directory
-COPY .cargo /app/.cargo
+# Install dependencies
+RUN uv sync --frozen
 
-# Copy the surrealdb directory
-COPY surrealdb /app/surrealdb
+# Copy source code
+COPY --chown=app:app src/ ./src/
+COPY --chown=app:app tests/ ./tests/
+COPY --chown=app:app README.md LICENSE ./
 
-# Copy the Cargo.toml file
-COPY Cargo.toml /app/Cargo.toml
+# Build and install the package
+RUN uv build && uv pip install dist/*.whl
 
-# Copy the pyproject.toml file
-COPY pyproject.toml /app/pyproject.toml
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD uv run python -c "import surrealdb; print('SurrealDB Python client is ready')" || exit 1
 
-# Copy the setup.py file
-COPY setup.py /app/setup.py
-
-RUN apt update
-RUN apt install -y clang
-RUN apt-get install -y libclang-dev
-RUN apt install -y python3
-RUN apt install -y python3-pip
-RUN apt install -y curl
-RUN apt install -y vim
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-RUN export PATH="$HOME/.cargo/bin:$PATH"
-RUN pip3 install setuptools_rust
-RUN python3 setup.py bdist_wheel
-
-# docker build . -t package-test
-# docker run -d -p 18000:18000 package-test
-
-EXPOSE 18000
-
-CMD ["bash", "-c", "trap : TERM INT; sleep infinity & wait"]
+# Default command - can be overridden
+CMD ["uv", "run", "python", "-c", "import surrealdb; print('SurrealDB Python client container is running')"]
 

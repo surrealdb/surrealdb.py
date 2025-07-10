@@ -76,7 +76,7 @@ class BlockingSurrealDBMeta(type):
 
 
 def Surreal(
-    url: Optional[str] = None,
+    url: str,
 ) -> Union[BlockingWsSurrealConnection, BlockingHttpSurrealConnection]:
     constructed_url = Url(url)
     if (
@@ -96,7 +96,7 @@ def Surreal(
 
 
 def AsyncSurreal(
-    url: Optional[str] = None,
+    url: str,
 ) -> Union[AsyncWsSurrealConnection, AsyncHttpSurrealConnection]:
     constructed_url = Url(url)
     if (

@@ -1,57 +1,81 @@
-version: '3'
 services:
+  # Default service for local development
   surrealdb:
-    image: surrealdb/surrealdb
-    command: "start"
+    image: surrealdb/surrealdb:${SURREALDB_VERSION:-v2.3.6}
+    command: "start --allow-all"
     environment:
       - SURREAL_USER=root
       - SURREAL_PASS=root
       - SURREAL_INSECURE_FORWARD_ACCESS_ERRORS=true
       - SURREAL_LOG=debug
-      - SURREAL_CAPS_ALLOW_GUESTS=true
     ports:
-      - 8000:8000
+      - "${SURREALDB_PORT:-8000}:8000"
+    profiles:
+      - default
+      - development
 
-  surrealdb_121:
-    image: surrealdb/surrealdb:v1.2.1
-    command: "start"
+  # Service for testing specific v2.x versions
+  surrealdb-test:
+    image: surrealdb/surrealdb:${TEST_SURREALDB_VERSION:-v2.1.8}
+    command: "start --allow-all"
+    environment:
+      - SURREAL_USER=root
+      - SURREAL_PASS=root
+      - SURREAL_INSECURE_FORWARD_ACCESS_ERRORS=true
+      - SURREAL_LOG=trace
+    ports:
+      - "${TEST_SURREALDB_PORT:-8001}:8000"
+    profiles:
+      - test
+
+  # v2.0.x testing
+  surrealdb-v2-0:
+    image: surrealdb/surrealdb:v2.0.5
+    command: "start --allow-all"
     environment:
       - SURREAL_USER=root
       - SURREAL_PASS=root
       - SURREAL_LOG=trace
-      - SURREAL_CAPS_ALLOW_GUESTS=true
     ports:
-      - 8121:8000
+      - "8020:8000"
+    profiles:
+      - v2-0
 
-  surrealdb_120:
-    image: surrealdb/surrealdb:v1.2.0
-    command: "start"
+  # v2.1.x testing  
+  surrealdb-v2-1:
+    image: surrealdb/surrealdb:v2.1.8
+    command: "start --allow-all"
     environment:
       - SURREAL_USER=root
       - SURREAL_PASS=root
       - SURREAL_LOG=trace
-      - SURREAL_CAPS_ALLOW_GUESTS=true
     ports:
-      - 8120:8000
+      - "8021:8000"
+    profiles:
+      - v2-1
 
-  surrealdb_101:
-    image: surrealdb/surrealdb:v1.0.1
-    command: "start"
+  # v2.2.x testing  
+  surrealdb-v2-2:
+    image: surrealdb/surrealdb:v2.2.6
+    command: "start --allow-all"
     environment:
       - SURREAL_USER=root
       - SURREAL_PASS=root
       - SURREAL_LOG=trace
-      - SURREAL_CAPS_ALLOW_GUESTS=true
     ports:
-      - 8101:8000
+      - "8022:8000"
+    profiles:
+      - v2-2
 
-  surrealdb_111:
-    image: surrealdb/surrealdb:v1.1.1
-    command: "start"
+  # Latest v2.3.x testing  
+  surrealdb-v2-3:
+    image: surrealdb/surrealdb:v2.3.6
+    command: "start --allow-all"
     environment:
       - SURREAL_USER=root
       - SURREAL_PASS=root
       - SURREAL_LOG=trace
-      - SURREAL_CAPS_ALLOW_GUESTS=true
     ports:
-      - 8111:8000
+      - "8023:8000"
+    profiles:
+      - v2-3
