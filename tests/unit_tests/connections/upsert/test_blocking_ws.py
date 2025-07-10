@@ -73,7 +73,7 @@ class TestBlockingWsSurrealConnection(TestCase):
         # v2.3.x: Creates new record, total = 2
         # v2.0.x: May not create record, total = 1
         self.assertGreaterEqual(len(outcome), 1)  # At least the original record
-        self.assertLessEqual(len(outcome), 2)     # At most 2 records
+        self.assertLessEqual(len(outcome), 2)  # At most 2 records
 
         self.connection.query("DELETE user;")
 
@@ -85,7 +85,7 @@ class TestBlockingWsSurrealConnection(TestCase):
         # v2.3.x: Creates new record, total = 2
         # v2.0.x: May not create record, total = 1
         self.assertGreaterEqual(len(outcome), 1)  # At least the original record
-        self.assertLessEqual(len(outcome), 2)     # At most 2 records
+        self.assertLessEqual(len(outcome), 2)  # At most 2 records
         self.connection.query("DELETE user;")
 
 

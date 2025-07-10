@@ -1,6 +1,3 @@
-from cerberus import Validator
-from cerberus.errors import ValidationError
-
 from surrealdb.data.cbor import encode
 from surrealdb.data.types.table import Table
 from surrealdb.data.utils import process_thing
@@ -8,6 +5,13 @@ from surrealdb.request_message.methods import RequestMethod
 
 
 class WsCborDescriptor:
+    """
+    CBOR WebSocket Descriptor - Pure Encoding Layer
+
+    This class handles CBOR encoding for WebSocket messages.
+    Validation is now handled by ValidatedRequestMessage using Pydantic schemas.
+    """
+
     def __get__(self, obj, type=None) -> bytes:
         if obj.method == RequestMethod.USE:
             return self.prep_use(obj)
@@ -54,47 +58,20 @@ class WsCborDescriptor:
 
         raise ValueError(f"Invalid method for Cbor WS encoding: {obj.method}")
 
-    def _raise_invalid_schema(self, data: dict, schema: dict, method: str) -> None:
-        v = Validator(schema)
-        if not v.validate(data):
-            raise ValueError(
-                f"Invalid schema for Cbor WS encoding for {method}: {v.errors}"
-            )
-
     def prep_use(self, obj) -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
             "params": [obj.kwargs.get("namespace"), obj.kwargs.get("database")],
         }
-        schema = {
-            "id": {"required": True},
-            "method": {"type": "string", "required": True},  # "method" must be a string
-            "params": {
-                "type": "list",  # "params" must be a list
-                "schema": {"type": "string"},  # Elements of "params" must be strings
-                "required": True,
-            },
-        }
-        self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
     def prep_info(self, obj) -> bytes:
         data = {"id": obj.id, "method": obj.method.value}
-        schema = {
-            "id": {"required": True},
-            "method": {"type": "string", "required": True},  # "method" must be a string
-        }
-        self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
     def prep_version(self, obj) -> bytes:
         data = {"id": obj.id, "method": obj.method.value}
-        schema = {
-            "id": {"required": True},
-            "method": {"type": "string", "required": True},  # "method" must be a string
-        }
-        self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
     def prep_signup(self, obj) -> bytes:
@@ -112,30 +89,11 @@ class WsCborDescriptor:
         }
         for key, value in passed_params["variables"].items():
             data["params"][0][key] = value
-        # Sign-up schema is currently deactivated due to the different types of params passed in
-        # schema = {
-        #     "id": {"required": True},
-        #     "method": {"type": "string", "required": True},  # "method" must be a string
-        #     "params": {
-        #         "type": "list",  # "params" must be a list
-        #         "schema": {
-        #             "type": "dict",  # Each element of the "params" list must be a dictionary
-        #             "schema": {
-        #                 "NS": {"type": "string", "required": True},  # "NS" must be a string
-        #                 "DB": {"type": "string", "required": True},  # "DB" must be a string
-        #                 "AC": {"type": "string", "required": True},  # "AC" must be a string
-        #                 "username": {"type": "string", "required": True},  # "username" must be a string
-        #                 "password": {"type": "string", "required": True},  # "password" must be a string
-        #             },
-        #         },
-        #         "required": True,
-        #     },
-        # }
-        # self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
     def prep_signin(self, obj) -> bytes:
         """
+        Handle different signin patterns:
         - user+pass -> done
         - user+pass+ac -> done
         - user+pass+ns -> done
@@ -228,7 +186,6 @@ class WsCborDescriptor:
                         "ns": obj.kwargs.get("namespace"),
                         "db": obj.kwargs.get("database"),
                         "ac": obj.kwargs.get("access"),
-                        # "variables": obj.kwargs.get("variables")
                     }
                 ],
             }
@@ -263,30 +220,10 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [obj.kwargs.get("token")],
         }
-        schema = {
-            "id": {"required": True},
-            "method": {"type": "string", "required": True, "allowed": ["authenticate"]},
-            "params": {
-                "type": "list",
-                "schema": {
-                    "type": "string",
-                    "regex": r"^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$",  # Matches JWT format
-                },
-                "required": True,
-                "minlength": 1,
-                "maxlength": 1,  # Ensures exactly one token in the list
-            },
-        }
-        self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
     def prep_invalidate(self, obj) -> bytes:
         data = {"id": obj.id, "method": obj.method.value}
-        schema = {
-            "id": {"required": True},
-            "method": {"type": "string", "required": True},
-        }
-        self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
     def prep_let(self, obj) -> bytes:
@@ -295,12 +232,6 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [obj.kwargs.get("key"), obj.kwargs.get("value")],
         }
-        schema = {
-            "id": {"required": True},
-            "method": {"type": "string", "required": True, "allowed": ["let"]},
-            "params": {"type": "list", "minlength": 2, "required": True},
-        }
-        self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
     def prep_unset(self, obj) -> bytes:
@@ -309,12 +240,6 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": obj.kwargs.get("params"),
         }
-        schema = {
-            "id": {"required": True},
-            "method": {"type": "string", "required": True, "allowed": ["unset"]},
-            "params": {"type": "list", "required": True},
-        }
-        self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
     def prep_live(self, obj) -> bytes:
@@ -322,12 +247,6 @@ class WsCborDescriptor:
         if isinstance(table, str):
             table = Table(table)
         data = {"id": obj.id, "method": obj.method.value, "params": [table]}
-        schema = {
-            "id": {"required": True},
-            "method": {"type": "string", "required": True, "allowed": ["live"]},
-            "params": {"type": "list", "required": True},
-        }
-        self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
     def prep_kill(self, obj) -> bytes:
@@ -336,12 +255,6 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [obj.kwargs.get("uuid")],
         }
-        schema = {
-            "id": {"required": True},
-            "method": {"type": "string", "required": True, "allowed": ["kill"]},
-            "params": {"type": "list", "required": True},
-        }
-        self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
     def prep_query(self, obj) -> bytes:
@@ -350,17 +263,6 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [obj.kwargs.get("query"), obj.kwargs.get("params", dict())],
         }
-        schema = {
-            "id": {"required": True},
-            "method": {"type": "string", "required": True, "allowed": ["query"]},
-            "params": {
-                "type": "list",
-                "minlength": 2,  # Ensures there are at least two elements
-                "maxlength": 2,  # Ensures exactly two elements
-                "required": True,
-            },
-        }
-        self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
     def prep_insert(self, obj) -> bytes:
@@ -372,17 +274,6 @@ class WsCborDescriptor:
                 obj.kwargs.get("params"),
             ],
         }
-        schema = {
-            "id": {"required": True},
-            "method": {"type": "string", "required": True, "allowed": ["insert"]},
-            "params": {
-                "type": "list",
-                "minlength": 2,  # Ensure there are at least two elements
-                "maxlength": 2,  # Ensure exactly two elements
-                "required": True,
-            },
-        }
-        self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
     def prep_patch(self, obj) -> bytes:
@@ -395,18 +286,7 @@ class WsCborDescriptor:
             ],
         }
         if obj.kwargs.get("params") is None:
-            raise ValidationError("parameters cannot be None for a patch method")
-        schema = {
-            "id": {"required": True},
-            "method": {"type": "string", "required": True, "allowed": ["patch"]},
-            "params": {
-                "type": "list",
-                "minlength": 2,  # Ensure there are at least two elements
-                "maxlength": 2,  # Ensure exactly two elements
-                "required": True,
-            },
-        }
-        self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
+            raise ValueError("parameters cannot be None for a patch method")
         return encode(data)
 
     def prep_select(self, obj) -> bytes:
@@ -415,12 +295,6 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": obj.kwargs.get("params"),
         }
-        schema = {
-            "id": {"required": True},
-            "method": {"type": "string", "required": True, "allowed": ["select"]},
-            "params": {"type": "list", "required": True},
-        }
-        self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
     def prep_create(self, obj) -> bytes:
@@ -431,18 +305,6 @@ class WsCborDescriptor:
         }
         if obj.kwargs.get("data"):
             data["params"].append(obj.kwargs.get("data"))
-
-        schema = {
-            "id": {"required": True},
-            "method": {"type": "string", "required": True, "allowed": ["create"]},
-            "params": {
-                "type": "list",
-                "minlength": 1,
-                "maxlength": 2,
-                "required": True,
-            },
-        }
-        self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
     def prep_update(self, obj) -> bytes:
@@ -454,17 +316,6 @@ class WsCborDescriptor:
                 obj.kwargs.get("data", dict()),
             ],
         }
-        schema = {
-            "id": {"required": True},
-            "method": {"type": "string", "required": True, "allowed": ["update"]},
-            "params": {
-                "type": "list",
-                "minlength": 1,
-                "maxlength": 2,
-                "required": True,
-            },
-        }
-        self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
     def prep_merge(self, obj) -> bytes:
@@ -476,17 +327,6 @@ class WsCborDescriptor:
                 obj.kwargs.get("data", dict()),
             ],
         }
-        schema = {
-            "id": {"required": True},
-            "method": {"type": "string", "required": True, "allowed": ["merge"]},
-            "params": {
-                "type": "list",
-                "minlength": 1,
-                "maxlength": 2,
-                "required": True,
-            },
-        }
-        self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
     def prep_delete(self, obj) -> bytes:
@@ -495,17 +335,6 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [process_thing(obj.kwargs.get("record_id"))],
         }
-        schema = {
-            "id": {"required": True},
-            "method": {"type": "string", "required": True, "allowed": ["delete"]},
-            "params": {
-                "type": "list",
-                "minlength": 1,
-                "maxlength": 1,
-                "required": True,
-            },
-        }
-        self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
     def prep_insert_relation(self, obj) -> bytes:
@@ -517,24 +346,7 @@ class WsCborDescriptor:
             ],
         }
         params = obj.kwargs.get("params", [])
-        # for i in params:
         data["params"].append(params)
-
-        schema = {
-            "id": {"required": True},
-            "method": {
-                "type": "string",
-                "required": True,
-                "allowed": ["insert_relation"],
-            },
-            "params": {
-                "type": "list",
-                "minlength": 2,
-                "maxlength": 2,
-                "required": True,
-            },
-        }
-        self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
     def prep_upsert(self, obj) -> bytes:
@@ -546,15 +358,4 @@ class WsCborDescriptor:
                 obj.kwargs.get("data", dict()),
             ],
         }
-        schema = {
-            "id": {"required": True},
-            "method": {"type": "string", "required": True, "allowed": ["upsert"]},
-            "params": {
-                "type": "list",
-                "minlength": 1,
-                "maxlength": 2,
-                "required": True,
-            },
-        }
-        self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)

@@ -10,21 +10,21 @@ class TestWsCborAdapter(TestCase):
         outcome = message.WS_CBOR_DESCRIPTOR
         self.assertIsInstance(outcome, bytes)
 
-    def test_use_fail(self):
+    def test_use_encoding_only(self):
+        """
+        Test that CBOR encoding works regardless of parameter types.
+
+        Note: Validation is now handled by ValidatedRequestMessage with Pydantic.
+        The CBOR layer only handles encoding, not validation.
+        """
+        # CBOR layer just encodes whatever it receives
         message = RequestMessage(RequestMethod.USE, namespace="ns", database=1)
-        with self.assertRaises(ValueError) as context:
-            message.WS_CBOR_DESCRIPTOR
-        self.assertEqual(
-            "Invalid schema for Cbor WS encoding for use: {'params': [{1: ['must be of string type']}]}",
-            str(context.exception),
-        )
+        outcome = message.WS_CBOR_DESCRIPTOR
+        self.assertIsInstance(outcome, bytes)
+
         message = RequestMessage(RequestMethod.USE, namespace="ns")
-        with self.assertRaises(ValueError) as context:
-            message.WS_CBOR_DESCRIPTOR
-        self.assertEqual(
-            "Invalid schema for Cbor WS encoding for use: {'params': [{1: ['null value not allowed']}]}",
-            str(context.exception),
-        )
+        outcome = message.WS_CBOR_DESCRIPTOR
+        self.assertIsInstance(outcome, bytes)
 
     def test_info_pass(self):
         message = RequestMessage(RequestMethod.INFO)

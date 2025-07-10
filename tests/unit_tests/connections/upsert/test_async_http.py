@@ -76,7 +76,7 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
         # v2.3.x: Creates new record, total = 2
         # v2.0.x: May not create record, total = 1
         self.assertGreaterEqual(len(outcome), 1)  # At least the original record
-        self.assertLessEqual(len(outcome), 2)     # At most 2 records
+        self.assertLessEqual(len(outcome), 2)  # At most 2 records
 
         await self.connection.query("DELETE user;")
 
@@ -86,10 +86,10 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
         # self.check_change(outcome[0], random_id=True)
         outcome = await self.connection.query("SELECT * FROM user;")
         # Different SurrealDB versions behave differently:
-        # v2.3.x: Creates new record, total = 2  
+        # v2.3.x: Creates new record, total = 2
         # v2.0.x: May not create record, total = 1
         self.assertGreaterEqual(len(outcome), 1)  # At least the original record
-        self.assertLessEqual(len(outcome), 2)     # At most 2 records
+        self.assertLessEqual(len(outcome), 2)  # At most 2 records
         # self.check_change(outcome[0], random_id=True)
         await self.connection.query("DELETE user;")
 
