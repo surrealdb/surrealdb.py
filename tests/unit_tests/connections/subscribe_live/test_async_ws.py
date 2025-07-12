@@ -29,6 +29,12 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
             namespace=self.namespace, database=self.database_name
         )
 
+    async def asyncTearDown(self):
+        if self.connection:
+            await self.connection.close()
+        if self.pub_connection:
+            await self.pub_connection.close()
+
     async def test_live_subscription(self):
         # Start the live query
         query_uuid = await self.connection.live("user")

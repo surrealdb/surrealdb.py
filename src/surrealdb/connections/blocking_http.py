@@ -86,6 +86,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     def use(self, namespace: str, database: str) -> None:
         message = RequestMessage(RequestMethod.USE, [namespace, database])
         self._send(message, "use")
+        self.namespace = namespace
+        self.database = database
 
     def query(self, query: str, vars: Optional[dict] = None) -> Union[list[dict], dict]:
         if vars is None:
@@ -245,6 +247,13 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         response = self._send(message, "upsert")
         self.check_response_for_result(response, "upsert")
         return response["result"]
+
+    def close(self) -> None:
+        """
+        Blocking HTTP connections don't need to be closed as they create new sessions for each request.
+        This method is provided for compatibility with the test framework.
+        """
+        pass
 
     def __enter__(self) -> "BlockingHttpSurrealConnection":
         """

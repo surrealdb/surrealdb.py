@@ -21,6 +21,10 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
         )
         await self.connection.query("DELETE person;")
 
+    async def asyncTearDown(self):
+        if self.connection:
+            await self.connection.close()
+
     async def test_let(self):
         outcome = await self.connection.let(
             "name",

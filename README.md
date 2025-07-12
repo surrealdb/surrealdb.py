@@ -79,6 +79,12 @@ This project follows library best practices for dependency management:
    
    # Run tests
    uv run python -m unittest discover -s tests
+   
+   # Run tests with pytest (recommended)
+   uv run pytest
+   
+   # Run tests with coverage
+   ./scripts/run_tests_with_coverage.sh
    ```
 
 3. **Build the project:**
@@ -95,14 +101,17 @@ We use a multi-tier testing strategy to ensure compatibility across SurrealDB ve
 ```bash
 # Test with default version (latest stable)
 docker-compose up -d
-uv run python -m unittest discover -s tests
+uv run pytest
+
+# Test with coverage
+./scripts/run_tests_with_coverage.sh
 
 # Test against specific version
 ./scripts/test-versions.sh v2.1.8
 
 # Test against different v2.x versions
-SURREALDB_VERSION=v2.0.5 uv run python -m unittest discover -s tests
-SURREALDB_VERSION=v2.3.6 uv run python -m unittest discover -s tests
+SURREALDB_VERSION=v2.0.5 uv run pytest
+SURREALDB_VERSION=v2.3.6 uv run pytest
 ```
 
 ### CI/CD Testing

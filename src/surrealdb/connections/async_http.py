@@ -302,6 +302,13 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "upsert")
         return response["result"]
 
+    async def close(self) -> None:
+        """
+        HTTP connections don't need to be closed as they create new sessions for each request.
+        This method is provided for compatibility with the test framework.
+        """
+        pass
+
     async def __aenter__(self) -> "AsyncHttpSurrealConnection":
         """
         Asynchronous context manager entry.

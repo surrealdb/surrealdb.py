@@ -23,8 +23,8 @@ class TestBlockingHttpSurrealConnection(TestCase):
     def test_query(self):
         self.connection.query("DELETE user;")
         self.assertEqual(
-            self.connection.query("CREATE user:tobie SET name = 'Tobie';"),
-            [{"id": RecordID(table_name="user", identifier="tobie"), "name": "Tobie"}],
+            self.connection.query("CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true;"),
+            [{"id": RecordID(table_name="user", identifier="tobie"), "name": "Tobie", "email": "tobie@example.com", "enabled": True}],
         )
         self.assertEqual(
             self.connection.query("CREATE user:jaime SET name = 'Jaime';"),

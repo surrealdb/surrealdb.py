@@ -23,6 +23,10 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         await self.connection.query("DELETE user;")
         await self.connection.query("CREATE user:tobie SET name = 'Tobie';")
 
+    async def asyncTearDown(self):
+        if self.connection:
+            await self.connection.close()
+
     async def test_query(self):
         outcome = await self.connection.live("user")
         self.assertEqual(UUID, type(outcome))

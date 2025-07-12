@@ -32,6 +32,10 @@ class TestAsyncWsSurrealConnectionNone(IsolatedAsyncioTestCase):
         # Cleanup
         await self.connection.query("REMOVE TABLE person;")
 
+    async def asyncTearDown(self):
+        if self.connection:
+            await self.connection.close()
+
     async def test_none(self):
         schema = """
             DEFINE TABLE person SCHEMAFULL TYPE NORMAL;

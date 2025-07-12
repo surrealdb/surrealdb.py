@@ -29,6 +29,10 @@ class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
         await self.connection.query("DELETE user;")
         (await self.connection.query("CREATE user:tobie SET name = 'Tobie';"),)
 
+    async def asyncTearDown(self):
+        if self.connection:
+            await self.connection.close()
+
     def check_no_change(self, data: dict):
         self.assertEqual(self.record_id, data["id"])
         self.assertEqual("Tobie", data["name"])

@@ -16,37 +16,45 @@ class TestBlockingWsSurrealConnection(TestCase):
         self.database_name = "test_db"
         self.namespace = "test_ns"
         self.data = {
-            "username": self.username,
+            "name": self.username,
             "password": self.password,
         }
         self.insert_bulk_data = [
             {
                 "name": "Tobie",
+                "email": "tobie@example.com",
+                "enabled": True,
             },
-            {"name": "Jaime"},
+            {
+                "name": "Jaime",
+                "email": "jaime@example.com",
+                "enabled": True,
+            },
         ]
         self.insert_data = [
             {
                 "name": "Tobie",
+                "email": "tobie@example.com",
+                "enabled": True,
             }
         ]
         self.connection = BlockingWsSurrealConnection(self.url)
         self.connection.signin(self.vars_params)
         self.connection.use(namespace=self.namespace, database=self.database_name)
-        self.connection.query("DELETE user;")
+        self.connection.query("DELETE person;")
 
     def tearDown(self):
-        self.connection.query("DELETE user;")
+        self.connection.query("DELETE person;")
         if self.connection.socket:
             self.connection.socket.close()
 
     def test_insert_string_with_data(self):
-        outcome = self.connection.insert("user", self.insert_bulk_data)
+        outcome = self.connection.insert("person", self.insert_bulk_data)
         self.assertEqual(2, len(outcome))
-        self.assertEqual(len(self.connection.query("SELECT * FROM user;")), 2)
+        self.assertEqual(len(self.connection.query("SELECT * FROM person;")), 2)
 
     def test_insert_record_id_result_error(self):
-        record_id = RecordID("user", "tobie")
+        record_id = RecordID("person", "tobie")
 
         with self.assertRaises(Exception) as context:
             _ = self.connection.insert(record_id, self.insert_data)
@@ -54,7 +62,7 @@ class TestBlockingWsSurrealConnection(TestCase):
         self.assertEqual(
             "There was a problem with the database: Can not execute INSERT statement using value"
             in e
-            and "user:tobie" in e,
+            and "person:tobie" in e,
             True,
         )
 

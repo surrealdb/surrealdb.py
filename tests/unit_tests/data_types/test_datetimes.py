@@ -26,6 +26,10 @@ class TestAsyncWsSurrealConnectionDatetime(IsolatedAsyncioTestCase):
         # Cleanup
         await self.connection.query("DELETE datetime_tests;")
 
+    async def asyncTearDown(self):
+        if self.connection:
+            await self.connection.close()
+
     async def test_native_datetime(self):
         now = datetime.datetime.now(datetime.timezone.utc)
         await self.connection.query(

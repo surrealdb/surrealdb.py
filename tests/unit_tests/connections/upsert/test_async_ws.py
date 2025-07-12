@@ -16,7 +16,7 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         }
         self.database_name = "test_db"
         self.namespace = "test_ns"
-        self.data = {"name": "Jaime", "age": 35}
+        self.data = {"name": "Jaime", "age": 35, "email": "jaime@example.com", "enabled": True, "password": "password123"}
         self.record_id = RecordID("user", "tobie")
         self.connection = AsyncWsSurrealConnection(self.url)
         _ = await self.connection.signin(self.vars_params)
@@ -24,7 +24,11 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
             namespace=self.namespace, database=self.database_name
         )
         await self.connection.query("DELETE user;")
-        (await self.connection.query("CREATE user:tobie SET name = 'Tobie';"),)
+        (await self.connection.query("CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'password123';"),)
+
+    async def asyncTearDown(self):
+        if self.connection:
+            await self.connection.close()
 
     def check_no_change(self, data: dict, random_id: bool = False):
         if random_id is False:

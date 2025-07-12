@@ -20,6 +20,10 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
             namespace=self.namespace, database=self.database_name
         )
 
+    async def asyncTearDown(self):
+        if self.connection:
+            await self.connection.close()
+
     async def test_select(self):
         await self.connection.query("DELETE user;")
         await self.connection.query("DELETE users;")

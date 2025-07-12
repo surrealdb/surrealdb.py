@@ -22,11 +22,15 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
             namespace=self.namespace, database=self.database_name
         )
 
+    async def asyncTearDown(self):
+        if self.connection:
+            await self.connection.close()
+
     async def test_query(self):
         await self.connection.query("DELETE user;")
         self.assertEqual(
-            await self.connection.query("CREATE user:tobie SET name = 'Tobie';"),
-            [{"id": RecordID(table_name="user", identifier="tobie"), "name": "Tobie"}],
+            await self.connection.query("CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'password123';"),
+            [{"id": RecordID(table_name="user", identifier="tobie"), "name": "Tobie", "email": "tobie@example.com", "enabled": True, "password": "password123"}],
         )
         self.assertEqual(
             await self.connection.query("CREATE user:jaime SET name = 'Jaime';"),

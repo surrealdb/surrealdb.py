@@ -29,6 +29,10 @@ class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
         await self.connection.query("CREATE user:jaime SET name = 'Jaime';")
         await self.connection.query("CREATE user:tobie SET name = 'Tobie';")
 
+    async def asyncTearDown(self):
+        if self.connection:
+            await self.connection.close()
+
     def check_outcome(self, outcome: list):
         self.assertEqual(RecordID("user", "tobie"), outcome[0]["in"])
         self.assertEqual(RecordID("likes", 123), outcome[0]["out"])

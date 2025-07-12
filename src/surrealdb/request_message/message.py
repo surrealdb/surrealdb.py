@@ -1,5 +1,6 @@
 import uuid
 from typing import Any, Optional
+import warnings
 
 from surrealdb.request_message.descriptors.cbor_ws import WsCborDescriptor
 from surrealdb.request_message.methods import RequestMethod
@@ -15,17 +16,28 @@ class RequestMessage:
         self.id = str(uuid.uuid4())
         self.method = method
 
-        # Handle both old kwargs style and new params style for backward compatibility
+        legacy_keys = {"collection", "record_id", "data", "table", "uuid", "key", "value"}
+        using_old_style = False
         if params is not None and not kwargs:
             # New params-only API - perform Pydantic validation
             self.kwargs = {"params": params}
             self._validate_request(method, params)
         else:
             # Old kwargs-based API - store as-is for backward compatibility
-            # (This includes cases where params is passed as a kwarg alongside other kwargs)
             if params is not None:
                 kwargs["params"] = params
             self.kwargs = kwargs
+            # Deprecation warning if using old style
+            if not ("params" in kwargs and isinstance(kwargs["params"], list)):
+                using_old_style = True
+            if any(k in kwargs for k in legacy_keys):
+                using_old_style = True
+            if using_old_style:
+                warnings.warn(
+                    "The kwargs-based API for RequestMessage is deprecated and will be removed in a future major release. Please use the explicit params list style.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
 
     def _validate_request(self, method: RequestMethod, params: list[Any]) -> None:
         """Validate request using Pydantic schemas"""

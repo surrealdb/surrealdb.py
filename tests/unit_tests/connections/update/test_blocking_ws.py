@@ -16,13 +16,19 @@ class TestBlockingWsSurrealConnection(TestCase):
         }
         self.database_name = "test_db"
         self.namespace = "test_ns"
-        self.data = {"name": "Jaime", "age": 35}
+        self.data = {
+            "name": "Jaime",
+            "age": 35,
+            "email": "jaime@example.com",
+            "enabled": True,
+            "password": "password123"
+        }
         self.record_id = RecordID("user", "tobie")
         self.connection = BlockingWsSurrealConnection(self.url)
         self.connection.signin(self.vars_params)
         self.connection.use(namespace=self.namespace, database=self.database_name)
         self.connection.query("DELETE user;")
-        self.connection.query("CREATE user:tobie SET name = 'Tobie';")
+        self.connection.query("CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'password123';")
 
     def tearDown(self):
         self.connection.query("DELETE user;")
