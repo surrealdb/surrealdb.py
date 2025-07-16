@@ -1,50 +1,24 @@
-from unittest import TestCase, main
+import pytest
 
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 
-class TestBlockingWsSurrealConnection(TestCase):
-    def setUp(self):
-        self.url = "ws://localhost:8000"
-        self.password = "root"
-        self.username = "root"
-        self.vars_params = {
-            "username": self.username,
-            "password": self.password,
-        }
-        self.database_name = "test_db"
-        self.namespace = "test_ns"
-        self.connection = BlockingWsSurrealConnection(self.url)
-        self.connection.signin(self.vars_params)
-        self.connection.use(namespace=self.namespace, database=self.database_name)
+def test_select(blocking_ws_connection):
+    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query("DELETE users;")
 
-    def tearDown(self):
-        self.connection.query("DELETE user;")
-        self.connection.query("DELETE users;")
-        if self.connection.socket:
-            self.connection.socket.close()
+    # Create users with required fields
+    blocking_ws_connection.query(
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+    )
+    blocking_ws_connection.query(
+        "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', enabled = true, password = 'root';"
+    )
 
-    def test_select(self):
-        self.connection.query("DELETE user;")
-        self.connection.query("DELETE users;")
+    blocking_ws_connection.query("CREATE users:one SET name = 'one';")
+    blocking_ws_connection.query("CREATE users:two SET name = 'two';")
 
-        self.connection.query("CREATE user:tobie SET name = 'Tobie';")
-        self.connection.query("CREATE user:jaime SET name = 'Jaime';")
-
-        self.connection.query("CREATE users:one SET name = 'one';")
-        self.connection.query("CREATE users:two SET name = 'two';")
-
-        outcome = self.connection.select("user")
-        self.assertEqual(
-            outcome[0]["name"],
-            "Jaime",
-        )
-        self.assertEqual(
-            outcome[1]["name"],
-            "Tobie",
-        )
-        self.assertEqual(2, len(outcome))
-
-
-if __name__ == "__main__":
-    main()
+    outcome = blocking_ws_connection.select("user")
+    assert outcome[0]["name"] == "Jaime"
+    assert outcome[1]["name"] == "Tobie"
+    assert 2 == len(outcome)

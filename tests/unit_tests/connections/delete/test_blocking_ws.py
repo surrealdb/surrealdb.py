@@ -1,67 +1,58 @@
-from unittest import TestCase, main
+import pytest
 
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
 
-class TestBlockingWsSurrealConnection(TestCase):
-    def setUp(self):
-        self.url = "ws://localhost:8000"
-        self.password = "root"
-        self.username = "root"
-        self.vars_params = {
-            "username": self.username,
-            "password": self.password,
-        }
-        self.database_name = "test_db"
-        self.namespace = "test_ns"
-        self.data = {"name": "Jaime", "age": 35}
-        self.record_id = RecordID("user", "tobie")
-        self.connection = BlockingWsSurrealConnection(self.url)
-        self.connection.signin(self.vars_params)
-        self.connection.use(namespace=self.namespace, database=self.database_name)
-        self.connection.query("DELETE user;")
-        self.connection.query("CREATE user:tobie SET name = 'Tobie';")
-
-    def tearDown(self):
-        self.connection.query("DELETE user;")
-        if self.connection.socket:
-            self.connection.socket.close()
-
-    def check_no_change(self, data: dict):
-        self.assertEqual(self.record_id, data["id"])
-        self.assertEqual("Tobie", data["name"])
-
-    def check_change(self, data: dict):
-        self.assertEqual(self.record_id, data["id"])
-        self.assertEqual("Jaime", data["name"])
-        self.assertEqual(35, data["age"])
-
-    def test_delete_string(self):
-        outcome = self.connection.delete("user:tobie")
-        self.check_no_change(outcome)
-
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.assertEqual(outcome, [])
-
-    def test_delete_record_id(self):
-        first_outcome = self.connection.delete(self.record_id)
-        self.check_no_change(first_outcome)
-
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.assertEqual(outcome, [])
-
-    def test_delete_table(self):
-        self.connection.query("CREATE user:jaime SET name = 'Jaime';")
-        table = Table("user")
-
-        first_outcome = self.connection.delete(table)
-        self.assertEqual(2, len(first_outcome))
-
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.assertEqual(outcome, [])
+@pytest.fixture
+def record_id():
+    return RecordID("user", "tobie")
 
 
-if __name__ == "__main__":
-    main()
+def test_delete_string(blocking_ws_connection, record_id):
+    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';")
+
+    # Delete operation returns the deleted record
+    outcome = blocking_ws_connection.delete("user:tobie")
+    assert outcome is not None
+    assert outcome["id"] == record_id
+    assert outcome["name"] == "Tobie"
+
+    # Verify the record was actually deleted
+    outcome = blocking_ws_connection.query("SELECT * FROM user;")
+    assert outcome == []
+
+
+def test_delete_record_id(blocking_ws_connection, record_id):
+    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';")
+
+    # Delete operation returns the deleted record
+    outcome = blocking_ws_connection.delete(record_id)
+    assert outcome is not None
+    assert outcome["id"] == record_id
+    assert outcome["name"] == "Tobie"
+
+    # Verify the record was actually deleted
+    outcome = blocking_ws_connection.query("SELECT * FROM user;")
+    assert outcome == []
+
+
+def test_delete_table(blocking_ws_connection):
+    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';")
+    blocking_ws_connection.query("CREATE user:jaime SET name = 'Jaime';")
+
+    # Delete all users in the table
+    table = Table("user")
+    outcome = blocking_ws_connection.delete(table)
+    # Table delete returns list of deleted records
+    assert len(outcome) == 2
+    assert any(record["name"] == "Tobie" for record in outcome)
+    assert any(record["name"] == "Jaime" for record in outcome)
+
+    # Verify all records were deleted
+    outcome = blocking_ws_connection.query("SELECT * FROM user;")
+    assert outcome == []

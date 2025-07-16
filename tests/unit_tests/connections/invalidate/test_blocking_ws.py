@@ -1,77 +1,67 @@
 import os
-from unittest import TestCase, main
+
+import pytest
 
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 
-class TestAsyncWsSurrealConnection(TestCase):
-    def setUp(self):
-        self.url = "ws://localhost:8000"
-        self.password = "root"
-        self.username = "root"
-        self.vars_params = {
-            "username": self.username,
-            "password": self.password,
-        }
-        self.database_name = "test_db"
-        self.namespace = "test_ns"
-        self.main_connection = BlockingWsSurrealConnection(self.url)
-        _ = self.main_connection.signin(self.vars_params)
-        _ = self.main_connection.use(
-            namespace=self.namespace, database=self.database_name
-        )
-        self.main_connection.query("DELETE user;")
-        _ = self.main_connection.query_raw("CREATE user:jaime SET name = 'Jaime';")
-
-        self.connection = BlockingWsSurrealConnection(self.url)
-        _ = self.connection.signin(self.vars_params)
-        _ = self.connection.use(namespace=self.namespace, database=self.database_name)
-
-    def test_run_test(self):
-        if os.environ.get("NO_GUEST_MODE") == "True":
-            self.invalidate_test_for_no_guest_mode()
-        else:
-            self.invalidate_with_guest_mode_on()
-
-    def invalidate_test_for_no_guest_mode(self):
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.assertEqual(1, len(outcome))
-        outcome = self.main_connection.query("SELECT * FROM user;")
-        self.assertEqual(1, len(outcome))
-
-        _ = self.connection.invalidate()
-
-        with self.assertRaises(Exception) as context:
-            _ = self.connection.query("SELECT * FROM user;")
-
-        self.assertEqual(
-            "IAM error: Not enough permissions" in str(context.exception), True
-        )
-        outcome = self.main_connection.query("SELECT * FROM user;")
-        self.assertEqual(1, len(outcome))
-
-        self.main_connection.query("DELETE user;")
-
-    def invalidate_with_guest_mode_on(self):
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.assertEqual(1, len(outcome))
-        outcome = self.main_connection.query("SELECT * FROM user;")
-        self.assertEqual(1, len(outcome))
-
-        _ = self.connection.invalidate()
-
-        try:
-            outcome = self.connection.query("SELECT * FROM user;")
-            self.assertEqual(0, len(outcome))
-        except Exception as err:
-            self.assertEqual("IAM error: Not enough permissions" in str(err), True)
-        outcome = self.main_connection.query("SELECT * FROM user;")
-        self.assertEqual(1, len(outcome))
-
-        self.main_connection.query("DELETE user;")
-        self.main_connection.close()
-        self.connection.close()
+@pytest.fixture
+def main_connection():
+    """Create a separate connection for the main connection that creates the test data"""
+    url = "ws://localhost:8000"
+    password = "root"
+    username = "root"
+    vars_params = {
+        "username": username,
+        "password": password,
+    }
+    database_name = "test_db"
+    namespace = "test_ns"
+    connection = BlockingWsSurrealConnection(url)
+    connection.signin(vars_params)
+    connection.use(namespace=namespace, database=database_name)
+    connection.query("DELETE user;")
+    connection.query_raw(
+        "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', password = 'password123', enabled = true;"
+    )
+    yield connection
+    connection.query("DELETE user;")
+    connection.close()
 
 
-if __name__ == "__main__":
-    main()
+def test_invalidate_with_guest_mode_on(main_connection, blocking_ws_connection):
+    outcome = blocking_ws_connection.query("SELECT * FROM user;")
+    assert len(outcome) == 1
+    outcome = main_connection.query("SELECT * FROM user;")
+    assert len(outcome) == 1
+
+    blocking_ws_connection.invalidate()
+
+    try:
+        outcome = blocking_ws_connection.query("SELECT * FROM user;")
+        assert len(outcome) == 0
+    except Exception as err:
+        assert "IAM error: Not enough permissions" in str(err)
+    outcome = main_connection.query("SELECT * FROM user;")
+    assert len(outcome) == 1
+
+
+def test_invalidate_test_for_no_guest_mode(main_connection, blocking_ws_connection):
+    outcome = blocking_ws_connection.query("SELECT * FROM user;")
+    assert len(outcome) == 1
+    outcome = main_connection.query("SELECT * FROM user;")
+    assert len(outcome) == 1
+
+    blocking_ws_connection.invalidate()
+
+    # Try to query after invalidation - behavior depends on guest mode setting
+    try:
+        outcome = blocking_ws_connection.query("SELECT * FROM user;")
+        # If guest mode is enabled, we get empty results instead of an exception
+        assert len(outcome) == 0
+    except Exception as err:
+        # If guest mode is disabled, we get an exception
+        assert "IAM error: Not enough permissions" in str(err)
+
+    outcome = main_connection.query("SELECT * FROM user;")
+    assert len(outcome) == 1

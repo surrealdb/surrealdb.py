@@ -1,49 +1,28 @@
-from unittest import IsolatedAsyncioTestCase, main
+import pytest
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 
 
-class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
-        self.url = "http://localhost:8000"
-        self.password = "root"
-        self.username = "root"
-        self.vars_params = {
-            "username": self.username,
-            "password": self.password,
-        }
-        self.database_name = "test_db"
-        self.namespace = "test_ns"
-        self.connection = AsyncHttpSurrealConnection(self.url)
-        _ = await self.connection.signin(self.vars_params)
-        _ = await self.connection.use(
-            namespace=self.namespace, database=self.database_name
-        )
+@pytest.mark.asyncio
+async def test_select(async_http_connection):
+    await async_http_connection.query("DELETE user;")
+    await async_http_connection.query("DELETE users;")
 
-    async def test_select(self):
-        await self.connection.query("DELETE user;")
-        await self.connection.query("DELETE users;")
+    # Create users with required fields
+    await async_http_connection.query(
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+    )
+    await async_http_connection.query(
+        "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', enabled = true, password = 'root';"
+    )
 
-        await self.connection.query("CREATE user:tobie SET name = 'Tobie';")
-        await self.connection.query("CREATE user:jaime SET name = 'Jaime';")
+    await async_http_connection.query("CREATE users:one SET name = 'one';")
+    await async_http_connection.query("CREATE users:two SET name = 'two';")
 
-        await self.connection.query("CREATE users:one SET name = 'one';")
-        await self.connection.query("CREATE users:two SET name = 'two';")
+    outcome = await async_http_connection.select("user")
+    assert outcome[0]["name"] == "Jaime"
+    assert outcome[1]["name"] == "Tobie"
+    assert 2 == len(outcome)
 
-        outcome = await self.connection.select("user")
-        self.assertEqual(
-            outcome[0]["name"],
-            "Jaime",
-        )
-        self.assertEqual(
-            outcome[1]["name"],
-            "Tobie",
-        )
-        self.assertEqual(2, len(outcome))
-
-        await self.connection.query("DELETE user;")
-        await self.connection.query("DELETE users;")
-
-
-if __name__ == "__main__":
-    main()
+    await async_http_connection.query("DELETE user;")
+    await async_http_connection.query("DELETE users;")

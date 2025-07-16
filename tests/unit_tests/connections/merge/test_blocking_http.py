@@ -1,85 +1,98 @@
-from unittest import TestCase, main
+import pytest
 
-from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
 
-class TestBlockingHttpSurrealConnection(TestCase):
-    def setUp(self):
-        self.url = "http://localhost:8000"
-        self.password = "root"
-        self.username = "root"
-        self.vars_params = {
-            "username": self.username,
-            "password": self.password,
-        }
-        self.database_name = "test_db"
-        self.namespace = "test_ns"
-        self.data = {"name": "Jaime", "age": 35}
-        self.record_id = RecordID("user", "tobie")
-        self.connection = BlockingHttpSurrealConnection(self.url)
-        _ = self.connection.signin(self.vars_params)
-        _ = self.connection.use(namespace=self.namespace, database=self.database_name)
-        self.connection.query("DELETE user;")
-        (self.connection.query("CREATE user:tobie SET name = 'Tobie';"),)
-
-    def check_no_change(self, data: dict):
-        self.assertEqual(self.record_id, data["id"])
-        self.assertEqual("Tobie", data["name"])
-
-    def check_change(self, data: dict):
-        self.assertEqual(self.record_id, data["id"])
-
-        self.assertEqual("Jaime", data["name"])
-        self.assertEqual(35, data["age"])
-
-    def test_merge_string(self):
-        outcome = self.connection.merge("user:tobie")
-        self.assertEqual(outcome["id"], self.record_id)
-        self.assertEqual(outcome["name"], "Tobie")
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.check_no_change(outcome[0])
-        self.connection.query("DELETE user;")
-
-    def test_merge_string_with_data(self):
-        first_outcome = self.connection.merge("user:tobie", self.data)
-        self.check_change(first_outcome)
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.check_change(outcome[0])
-        self.connection.query("DELETE user;")
-
-    def test_merge_record_id(self):
-        first_outcome = self.connection.merge(self.record_id)
-        self.check_no_change(first_outcome)
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.check_no_change(outcome[0])
-        self.connection.query("DELETE user;")
-
-    def test_merge_record_id_with_data(self):
-        outcome = self.connection.merge(self.record_id, self.data)
-        self.check_change(outcome)
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.check_change(outcome[0])
-        self.connection.query("DELETE user;")
-
-    def test_merge_table(self):
-        table = Table("user")
-        first_outcome = self.connection.merge(table)
-        self.check_no_change(first_outcome[0])
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.check_no_change(outcome[0])
-
-        self.connection.query("DELETE user;")
-
-    def test_merge_table_with_data(self):
-        table = Table("user")
-        outcome = self.connection.merge(table, self.data)
-        self.check_change(outcome[0])
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.check_change(outcome[0])
-        self.connection.query("DELETE user;")
+@pytest.fixture
+def merge_data():
+    return {
+        "name": "Jaime",
+        "email": "jaime@example.com",
+        "password": "password456",
+        "enabled": True,
+    }
 
 
-if __name__ == "__main__":
-    main()
+@pytest.fixture(autouse=True)
+def setup_user(blocking_http_connection):
+    blocking_http_connection.query("DELETE user;")
+    blocking_http_connection.query(
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
+    )
+    yield
+    blocking_http_connection.query("DELETE user;")
+
+
+def test_merge_string(blocking_http_connection, setup_user):
+    record_id = RecordID("user", "tobie")
+    outcome = blocking_http_connection.merge("user:tobie")
+    assert outcome["id"] == record_id
+    assert outcome["name"] == "Tobie"
+    result = blocking_http_connection.query("SELECT * FROM user;")
+    assert result[0]["id"] == record_id
+    assert result[0]["name"] == "Tobie"
+
+
+def test_merge_string_with_data(blocking_http_connection, merge_data, setup_user):
+    record_id = RecordID("user", "tobie")
+    first_outcome = blocking_http_connection.merge("user:tobie", merge_data)
+    assert first_outcome["id"] == record_id
+    assert first_outcome["name"] == "Jaime"
+    assert first_outcome["email"] == "jaime@example.com"
+    assert first_outcome["enabled"] is True
+    result = blocking_http_connection.query("SELECT * FROM user;")
+    assert result[0]["id"] == record_id
+    assert result[0]["name"] == "Jaime"
+    assert result[0]["email"] == "jaime@example.com"
+    assert result[0]["enabled"] is True
+
+
+def test_merge_record_id(blocking_http_connection, setup_user):
+    record_id = RecordID("user", "tobie")
+    first_outcome = blocking_http_connection.merge(record_id)
+    assert first_outcome["id"] == record_id
+    assert first_outcome["name"] == "Tobie"
+    result = blocking_http_connection.query("SELECT * FROM user;")
+    assert result[0]["id"] == record_id
+    assert result[0]["name"] == "Tobie"
+
+
+def test_merge_record_id_with_data(blocking_http_connection, merge_data, setup_user):
+    record_id = RecordID("user", "tobie")
+    outcome = blocking_http_connection.merge(record_id, merge_data)
+    assert outcome["id"] == record_id
+    assert outcome["name"] == "Jaime"
+    assert outcome["email"] == "jaime@example.com"
+    assert outcome["enabled"] is True
+    result = blocking_http_connection.query("SELECT * FROM user;")
+    assert result[0]["id"] == record_id
+    assert result[0]["name"] == "Jaime"
+    assert result[0]["email"] == "jaime@example.com"
+    assert result[0]["enabled"] is True
+
+
+def test_merge_table(blocking_http_connection, setup_user):
+    table = Table("user")
+    record_id = RecordID("user", "tobie")
+    first_outcome = blocking_http_connection.merge(table)
+    assert first_outcome[0]["id"] == record_id
+    assert first_outcome[0]["name"] == "Tobie"
+    result = blocking_http_connection.query("SELECT * FROM user;")
+    assert result[0]["id"] == record_id
+    assert result[0]["name"] == "Tobie"
+
+
+def test_merge_table_with_data(blocking_http_connection, merge_data, setup_user):
+    table = Table("user")
+    record_id = RecordID("user", "tobie")
+    outcome = blocking_http_connection.merge(table, merge_data)
+    assert outcome[0]["id"] == record_id
+    assert outcome[0]["name"] == "Jaime"
+    assert outcome[0]["email"] == "jaime@example.com"
+    assert outcome[0]["enabled"] is True
+    result = blocking_http_connection.query("SELECT * FROM user;")
+    assert result[0]["id"] == record_id
+    assert result[0]["name"] == "Jaime"
+    assert result[0]["email"] == "jaime@example.com"
+    assert result[0]["enabled"] is True

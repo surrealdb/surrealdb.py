@@ -1,65 +1,69 @@
-from unittest import IsolatedAsyncioTestCase, main
+import pytest
 
-from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
 
-class TestAsyncHttpSurrealConnection(IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
-        self.url = "http://localhost:8000"
-        self.password = "root"
-        self.username = "root"
-        self.vars_params = {
-            "username": self.username,
-            "password": self.password,
-        }
-        self.database_name = "test_db"
-        self.namespace = "test_ns"
-        self.record_id = RecordID(table_name="user", identifier="tobie")
-        self.data = [
-            {"op": "replace", "path": "/name", "value": "Jaime"},
-            {"op": "replace", "path": "/age", "value": 35},
-        ]
-        self.connection = AsyncHttpSurrealConnection(self.url)
-        _ = await self.connection.signin(self.vars_params)
-        _ = await self.connection.use(
-            namespace=self.namespace, database=self.database_name
-        )
-        await self.connection.query("DELETE user;")
-        (await self.connection.query("CREATE user:tobie SET name = 'Tobie';"),)
-
-    def check_no_change(self, data: dict):
-        self.assertEqual(self.record_id, data["id"])
-        self.assertEqual("Tobie", data["name"])
-
-    def check_change(self, data: dict):
-        self.assertEqual(self.record_id, data["id"])
-        self.assertEqual("Jaime", data["name"])
-        self.assertEqual(35, data["age"])
-
-    async def test_patch_string_with_data(self):
-        outcome = await self.connection.patch("user:tobie", self.data)
-        self.check_change(outcome)
-        outcome = await self.connection.query("SELECT * FROM user;")
-        self.check_change(outcome[0])
-        await self.connection.query("DELETE user;")
-
-    async def test_patch_record_id_with_data(self):
-        outcome = await self.connection.patch(self.record_id, self.data)
-        self.check_change(outcome)
-        outcome = await self.connection.query("SELECT * FROM user;")
-        self.check_change(outcome[0])
-        await self.connection.query("DELETE user;")
-
-    async def test_patch_table_with_data(self):
-        table = Table("user")
-        outcome = await self.connection.patch(table, self.data)
-        self.check_change(outcome[0])
-        outcome = await self.connection.query("SELECT * FROM user;")
-        self.check_change(outcome[0])
-        await self.connection.query("DELETE user;")
+@pytest.fixture
+def patch_data():
+    return [
+        {"op": "replace", "path": "/name", "value": "Jaime"},
+        {"op": "replace", "path": "/email", "value": "jaime@example.com"},
+        {"op": "replace", "path": "/enabled", "value": False},
+    ]
 
 
-if __name__ == "__main__":
-    main()
+@pytest.fixture(autouse=True)
+async def setup_user(async_http_connection):
+    await async_http_connection.query("DELETE user;")
+    await async_http_connection.query(
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
+    )
+    yield
+    await async_http_connection.query("DELETE user;")
+
+
+@pytest.mark.asyncio
+async def test_patch_string_with_data(async_http_connection, patch_data, setup_user):
+    record_id = RecordID("user", "tobie")
+    outcome = await async_http_connection.patch("user:tobie", patch_data)
+    assert outcome["id"] == record_id
+    assert outcome["name"] == "Jaime"
+    assert outcome["email"] == "jaime@example.com"
+    assert outcome["enabled"] is False
+    result = await async_http_connection.query("SELECT * FROM user;")
+    assert result[0]["id"] == record_id
+    assert result[0]["name"] == "Jaime"
+    assert result[0]["email"] == "jaime@example.com"
+    assert result[0]["enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_patch_record_id_with_data(async_http_connection, patch_data, setup_user):
+    record_id = RecordID("user", "tobie")
+    outcome = await async_http_connection.patch(record_id, patch_data)
+    assert outcome["id"] == record_id
+    assert outcome["name"] == "Jaime"
+    assert outcome["email"] == "jaime@example.com"
+    assert outcome["enabled"] is False
+    result = await async_http_connection.query("SELECT * FROM user;")
+    assert result[0]["id"] == record_id
+    assert result[0]["name"] == "Jaime"
+    assert result[0]["email"] == "jaime@example.com"
+    assert result[0]["enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_patch_table_with_data(async_http_connection, patch_data, setup_user):
+    table = Table("user")
+    record_id = RecordID("user", "tobie")
+    outcome = await async_http_connection.patch(table, patch_data)
+    assert outcome[0]["id"] == record_id
+    assert outcome[0]["name"] == "Jaime"
+    assert outcome[0]["email"] == "jaime@example.com"
+    assert outcome[0]["enabled"] is False
+    result = await async_http_connection.query("SELECT * FROM user;")
+    assert result[0]["id"] == record_id
+    assert result[0]["name"] == "Jaime"
+    assert result[0]["email"] == "jaime@example.com"
+    assert result[0]["enabled"] is False

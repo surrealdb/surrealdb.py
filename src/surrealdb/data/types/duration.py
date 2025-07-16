@@ -23,6 +23,12 @@ class Duration:
         if isinstance(value, int):
             return Duration(nanoseconds + value * UNITS["s"])
         elif isinstance(value, str):
+            # Check for multi-character units first
+            for unit in ["ns", "us", "ms"]:
+                if value.endswith(unit):
+                    num = int(value[: -len(unit)])
+                    return Duration(num * UNITS[unit])
+            # Check for single-character units
             unit = value[-1]
             num = int(value[:-1])
             if unit in UNITS:
@@ -75,7 +81,7 @@ class Duration:
         return self.elapsed // UNITS["w"]
 
     def to_string(self) -> str:
-        for unit in reversed(["w", "d", "h", "m", "s", "ms", "us", "ns"]):
+        for unit in ["w", "d", "h", "m", "s", "ms", "us", "ns"]:
             value = self.elapsed // UNITS[unit]
             if value > 0:
                 return f"{value}{unit}"

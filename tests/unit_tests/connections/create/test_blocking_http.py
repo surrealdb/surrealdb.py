@@ -1,116 +1,112 @@
-from unittest import TestCase, main
+import pytest
 
-from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
 
-class TestHttpSurrealConnection(TestCase):
-    def setUp(self):
-        self.url = "http://localhost:8000"
-        self.password = "root"
-        self.username = "root"
-        self.vars_params = {
-            "username": self.username,
-            "password": self.password,
-        }
-        self.database_name = "test_db"
-        self.namespace = "test_ns"
-        self.data = {
-            "username": self.username,
-            "password": self.password,
-        }
-        self.connection = BlockingHttpSurrealConnection(self.url)
-        self.connection.signin(self.vars_params)
-        self.connection.use(namespace=self.namespace, database=self.database_name)
-        self.connection.query("DELETE user;")
-
-    def test_create_string(self):
-        outcome = self.connection.create("user")
-        self.assertEqual("user", outcome["id"].table_name)
-        self.assertEqual(len(self.connection.query("SELECT * FROM user;")), 1)
-        self.connection.query("DELETE user;")
-
-    def test_create_string_with_data(self):
-        outcome = self.connection.create("user", self.data)
-        self.assertEqual("user", outcome["id"].table_name)
-        self.assertEqual(self.password, outcome["password"])
-        self.assertEqual(self.username, outcome["username"])
-
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.assertEqual(len(outcome), 1)
-        self.assertEqual("user", outcome[0]["id"].table_name)
-        self.assertEqual(self.password, outcome[0]["password"])
-        self.assertEqual(self.username, outcome[0]["username"])
-
-        self.connection.query("DELETE user;")
-
-    def test_create_string_with_data_and_id(self):
-        first_outcome = self.connection.create("user:tobie", self.data)
-        self.assertEqual("user", first_outcome["id"].table_name)
-        self.assertEqual("tobie", first_outcome["id"].id)
-        self.assertEqual(self.password, first_outcome["password"])
-        self.assertEqual(self.username, first_outcome["username"])
-
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.assertEqual(len(outcome), 1)
-        self.assertEqual("user", outcome[0]["id"].table_name)
-        self.assertEqual("tobie", outcome[0]["id"].id)
-        self.assertEqual(self.password, outcome[0]["password"])
-        self.assertEqual(self.username, outcome[0]["username"])
-
-        self.connection.query("DELETE user;")
-
-    def test_create_record_id(self):
-        record_id = RecordID("user", 1)
-        outcome = self.connection.create(record_id)
-        self.assertEqual("user", outcome["id"].table_name)
-        self.assertEqual(1, outcome["id"].id)
-
-        self.assertEqual(len(self.connection.query("SELECT * FROM user;")), 1)
-
-        self.connection.query("DELETE user;")
-
-    def test_create_record_id_with_data(self):
-        record_id = RecordID("user", 1)
-        outcome = self.connection.create(record_id, self.data)
-        self.assertEqual("user", outcome["id"].table_name)
-        self.assertEqual(1, outcome["id"].id)
-        self.assertEqual(self.password, outcome["password"])
-        self.assertEqual(self.username, outcome["username"])
-
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.assertEqual(len(outcome), 1)
-        self.assertEqual("user", outcome[0]["id"].table_name)
-        self.assertEqual(self.password, outcome[0]["password"])
-        self.assertEqual(self.username, outcome[0]["username"])
-
-        self.connection.query("DELETE user;")
-
-    def test_create_table(self):
-        table = Table("user")
-        outcome = self.connection.create(table)
-        self.assertEqual("user", outcome["id"].table_name)
-
-        self.assertEqual(len(self.connection.query("SELECT * FROM user;")), 1)
-
-        self.connection.query("DELETE user;")
-
-    def test_create_table_with_data(self):
-        table = Table("user")
-        outcome = self.connection.create(table, self.data)
-        self.assertEqual("user", outcome["id"].table_name)
-        self.assertEqual(self.password, outcome["password"])
-        self.assertEqual(self.username, outcome["username"])
-
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.assertEqual(len(outcome), 1)
-        self.assertEqual("user", outcome[0]["id"].table_name)
-        self.assertEqual(self.password, outcome[0]["password"])
-        self.assertEqual(self.username, outcome[0]["username"])
-
-        self.connection.query("DELETE user;")
+@pytest.fixture
+def create_data():
+    return {
+        "name": "Test User",
+        "email": "test@example.com",
+        "password": "password123",
+        "enabled": True,
+    }
 
 
-if __name__ == "__main__":
-    main()
+@pytest.fixture(autouse=True)
+def setup_user(blocking_http_connection):
+    blocking_http_connection.query("DELETE user;")
+    yield
+    blocking_http_connection.query("DELETE user;")
+
+
+def test_create_string(blocking_http_connection, setup_user):
+    outcome = blocking_http_connection.create("user")
+    assert "user" == outcome["id"].table_name
+
+    assert len(blocking_http_connection.query("SELECT * FROM user;")) == 1
+
+
+def test_create_string_with_data(blocking_http_connection, create_data, setup_user):
+    outcome = blocking_http_connection.create("user", create_data)
+    assert "user" == outcome["id"].table_name
+    assert create_data["name"] == outcome["name"]
+    assert create_data["email"] == outcome["email"]
+    assert create_data["enabled"] == outcome["enabled"]
+
+    result = blocking_http_connection.query("SELECT * FROM user;")
+    assert len(result) == 1
+    assert "user" == result[0]["id"].table_name
+    assert create_data["name"] == result[0]["name"]
+    assert create_data["email"] == result[0]["email"]
+    assert create_data["enabled"] == result[0]["enabled"]
+
+
+def test_create_string_with_data_and_id(
+    blocking_http_connection, create_data, setup_user
+):
+    first_outcome = blocking_http_connection.create("user:tobie", create_data)
+    assert "user" == first_outcome["id"].table_name
+    assert "tobie" == first_outcome["id"].id
+    assert create_data["name"] == first_outcome["name"]
+    assert create_data["email"] == first_outcome["email"]
+    assert create_data["enabled"] == first_outcome["enabled"]
+
+    result = blocking_http_connection.query("SELECT * FROM user;")
+    assert len(result) == 1
+    assert "user" == result[0]["id"].table_name
+    assert "tobie" == result[0]["id"].id
+    assert create_data["name"] == result[0]["name"]
+    assert create_data["email"] == result[0]["email"]
+    assert create_data["enabled"] == result[0]["enabled"]
+
+
+def test_create_record_id(blocking_http_connection, setup_user):
+    record_id = RecordID("user", 1)
+    outcome = blocking_http_connection.create(record_id)
+    assert "user" == outcome["id"].table_name
+    assert 1 == outcome["id"].id
+
+    assert len(blocking_http_connection.query("SELECT * FROM user;")) == 1
+
+
+def test_create_record_id_with_data(blocking_http_connection, create_data, setup_user):
+    record_id = RecordID("user", 1)
+    outcome = blocking_http_connection.create(record_id, create_data)
+    assert "user" == outcome["id"].table_name
+    assert 1 == outcome["id"].id
+    assert create_data["name"] == outcome["name"]
+    assert create_data["email"] == outcome["email"]
+    assert create_data["enabled"] == outcome["enabled"]
+
+    result = blocking_http_connection.query("SELECT * FROM user;")
+    assert len(result) == 1
+    assert "user" == result[0]["id"].table_name
+    assert create_data["name"] == result[0]["name"]
+    assert create_data["email"] == result[0]["email"]
+    assert create_data["enabled"] == result[0]["enabled"]
+
+
+def test_create_table(blocking_http_connection, setup_user):
+    table = Table("user")
+    outcome = blocking_http_connection.create(table)
+    assert "user" == outcome["id"].table_name
+
+    assert len(blocking_http_connection.query("SELECT * FROM user;")) == 1
+
+
+def test_create_table_with_data(blocking_http_connection, create_data, setup_user):
+    table = Table("user")
+    outcome = blocking_http_connection.create(table, create_data)
+    assert "user" == outcome["id"].table_name
+    assert create_data["name"] == outcome["name"]
+    assert create_data["email"] == outcome["email"]
+    assert create_data["enabled"] == outcome["enabled"]
+
+    result = blocking_http_connection.query("SELECT * FROM user;")
+    assert len(result) == 1
+    assert "user" == result[0]["id"].table_name
+    assert create_data["name"] == result[0]["name"]
+    assert create_data["email"] == result[0]["email"]
+    assert create_data["enabled"] == result[0]["enabled"]

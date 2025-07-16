@@ -1,47 +1,27 @@
-from unittest import TestCase, main
+import pytest
 
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 
 
-class TestAsyncHttpSurrealConnection(TestCase):
-    def setUp(self):
-        self.url = "http://localhost:8000"
-        self.password = "root"
-        self.username = "root"
-        self.vars_params = {
-            "username": self.username,
-            "password": self.password,
-        }
-        self.database_name = "test_db"
-        self.namespace = "test_ns"
-        self.connection = BlockingHttpSurrealConnection(self.url)
-        _ = self.connection.signin(self.vars_params)
-        _ = self.connection.use(namespace=self.namespace, database=self.database_name)
+def test_select(blocking_http_connection):
+    blocking_http_connection.query("DELETE user;")
+    blocking_http_connection.query("DELETE users;")
 
-    def test_select(self):
-        self.connection.query("DELETE user;")
-        self.connection.query("DELETE users;")
+    # Create users with required fields
+    blocking_http_connection.query(
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+    )
+    blocking_http_connection.query(
+        "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', enabled = true, password = 'root';"
+    )
 
-        self.connection.query("CREATE user:tobie SET name = 'Tobie';")
-        self.connection.query("CREATE user:jaime SET name = 'Jaime';")
+    blocking_http_connection.query("CREATE users:one SET name = 'one';")
+    blocking_http_connection.query("CREATE users:two SET name = 'two';")
 
-        self.connection.query("CREATE users:one SET name = 'one';")
-        self.connection.query("CREATE users:two SET name = 'two';")
+    outcome = blocking_http_connection.select("user")
+    assert outcome[0]["name"] == "Jaime"
+    assert outcome[1]["name"] == "Tobie"
+    assert 2 == len(outcome)
 
-        outcome = self.connection.select("user")
-        self.assertEqual(
-            outcome[0]["name"],
-            "Jaime",
-        )
-        self.assertEqual(
-            outcome[1]["name"],
-            "Tobie",
-        )
-        self.assertEqual(2, len(outcome))
-
-        self.connection.query("DELETE user;")
-        self.connection.query("DELETE users;")
-
-
-if __name__ == "__main__":
-    main()
+    blocking_http_connection.query("DELETE user;")
+    blocking_http_connection.query("DELETE users;")
