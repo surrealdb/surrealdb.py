@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "surrealdb"
-version = "1.0.4"
+version = "1.0.5"
 description = "SurrealDB python client"
 readme = "README.md"
 authors = [{ name = "SurrealDB" }]
@@ -44,26 +44,27 @@ documentation = "https://surrealdb.com/docs/sdk/python"
 packages = ["src/surrealdb"]
 
 [tool.hatch.build.targets.sdist]
-include = [
-    "/src",
-    "/tests",
-    "/README.md",
-    "/LICENSE",
-]
+include = ["/src", "/tests", "/README.md", "/LICENSE"]
 
 [tool.ruff]
 exclude = ["src/surrealdb/__init__.py"]
 
 [tool.ruff.lint]
 select = [
-    "I",   # isort
-    "UP",  # pyupgrade
+    "I",  # isort
+    "UP", # pyupgrade
 ]
 
 [tool.mypy]
 mypy_path = "src"
 explicit_package_bases = true
-disable_error_code = ["return-value", "var-annotated", "assignment", "arg-type", "attr-defined"]
+disable_error_code = [
+    "return-value",
+    "var-annotated",
+    "assignment",
+    "arg-type",
+    "attr-defined",
+]
 
 [[tool.mypy.overrides]]
 module = "cerberus.*"
@@ -82,8 +83,6 @@ dev = [
     { include-group = "test" },
     "mypy>=1.0.0",
     "ruff>=0.12.0",
-    "types-requests>=2.25.0",  # Type stubs for requests
+    "types-requests>=2.25.0",   # Type stubs for requests
 ]
-test = [
-    "hypothesis>=6.135.16",
-]
+test = ["hypothesis>=6.135.16"]
