@@ -130,4 +130,3 @@ test = [
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
 ]
-test = ["hypothesis>=6.135.16"]
