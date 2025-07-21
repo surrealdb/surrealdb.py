@@ -71,7 +71,7 @@ jobs:
         run: uv sync --group dev
 
       - name: Run unit tests
-        run: uv run python -m unittest discover -s tests
+        run: uv run pytest
         env:
           PYTHONPATH: ./src
           SURREALDB_URL: http://localhost:8000
@@ -117,7 +117,7 @@ jobs:
         run: uv sync --group dev
 
       - name: Run unit tests
-        run: uv run python -m unittest discover -s tests
+        run: uv run pytest
         env:
           PYTHONPATH: ./src
           SURREALDB_URL: http://localhost:8000

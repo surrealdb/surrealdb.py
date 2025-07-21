@@ -8,4 +8,6 @@ cd ..
 cd src
 export PYTHONPATH=$(pwd)
 cd ..
-python -m unittest discover
+
+# Run tests with coverage
+pytest --cov=src/surrealdb --cov-report=term-missing --cov-report=html

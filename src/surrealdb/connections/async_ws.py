@@ -9,6 +9,7 @@ from typing import Any, Optional, Union
 from uuid import UUID
 
 import websockets  # type: ignore
+from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from surrealdb.connections.async_template import AsyncTemplate
 from surrealdb.connections.url import Url
@@ -50,17 +51,33 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def _recv_task(self):
         assert self.socket
-        async for data in self.socket:
-            response = decode(data)
-            if response_id := response.get("id"):
-                if fut := self.qry.get(response_id):
-                    fut.set_result(response)
-            elif response_result := response.get("result"):
-                live_id = str(response_result["id"])
-                for queue in self.live_queues.get(live_id, []):
-                    queue.put_nowait(response_result)
-            else:
-                self.check_response_for_error(response, "_recv_task")
+        try:
+            async for data in self.socket:
+                response = decode(data)
+                if response_id := response.get("id"):
+                    if fut := self.qry.get(response_id):
+                        fut.set_result(response)
+                elif response_result := response.get("result"):
+                    live_id = str(response_result["id"])
+                    for queue in self.live_queues.get(live_id, []):
+                        queue.put_nowait(response_result)
+                else:
+                    self.check_response_for_error(response, "_recv_task")
+        except (ConnectionClosed, WebSocketException, asyncio.CancelledError):
+            # Connection was closed or cancelled, this is expected
+            pass
+        except Exception as e:
+            # Log unexpected errors but don't let them propagate
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.debug(f"Unexpected error in _recv_task: {e}")
+        finally:
+            # Clean up any pending futures
+            for fut in self.qry.values():
+                if not fut.done():
+                    fut.cancel()
+            self.qry.clear()
 
     async def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
@@ -306,15 +323,27 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         return response["result"]
 
     async def close(self):
-        if self.recv_task:
+        # Cancel the receive task first
+        if self.recv_task and not self.recv_task.done():
             self.recv_task.cancel()
             try:
                 await self.recv_task
             except asyncio.CancelledError:
                 pass
+            except Exception:
+                # Ignore any other exceptions during cleanup
+                pass
 
+        # Close the WebSocket connection
         if self.socket is not None:
-            await self.socket.close()
+            try:
+                await self.socket.close()
+            except Exception:
+                # Ignore exceptions during socket closure
+                pass
+            finally:
+                self.socket = None
+                self.recv_task = None
 
     async def __aenter__(self) -> "AsyncWsSurrealConnection":
         """

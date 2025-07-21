@@ -1,97 +1,120 @@
-from unittest import TestCase, main
+import pytest
 
-from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
 
-class TestBlockingHttpSurrealConnection(TestCase):
-    def setUp(self):
-        self.url = "http://localhost:8000"
-        self.password = "root"
-        self.username = "root"
-        self.vars_params = {
-            "username": self.username,
-            "password": self.password,
-        }
-        self.database_name = "test_db"
-        self.namespace = "test_ns"
-        self.data = {"name": "Jaime", "age": 35}
-        self.record_id = RecordID("user", "tobie")
-        self.connection = BlockingHttpSurrealConnection(self.url)
-        _ = self.connection.signin(self.vars_params)
-        _ = self.connection.use(namespace=self.namespace, database=self.database_name)
-        self.connection.query("DELETE user;")
-        self.connection.query("CREATE user:tobie SET name = 'Tobie';")
-
-    def check_no_change(self, data: dict, random_id: bool = False):
-        if random_id is False:
-            self.assertEqual(self.record_id, data["id"])
-        self.assertEqual("Tobie", data["name"])
-
-    def check_change(self, data: dict, random_id: bool = False):
-        if random_id is False:
-            self.assertEqual(self.record_id, data["id"])
-        self.assertEqual("Jaime", data["name"])
-        self.assertEqual(35, data["age"])
-
-    def test_upsert_string(self):
-        outcome = self.connection.upsert("user:tobie")
-        self.assertEqual(outcome["id"], self.record_id)
-        self.assertEqual(outcome["name"], "Tobie")
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.assertEqual(1, len(outcome))
-        # self.check_no_change(outcome[0])
-        self.connection.query("DELETE user;")
-
-    def test_upsert_string_with_data(self):
-        first_outcome = self.connection.upsert("user:tobie", self.data)
-        # self.check_change(first_outcome)
-        outcome = self.connection.query("SELECT * FROM user;")
-        # self.check_change(outcome[0])
-        self.connection.query("DELETE user;")
-
-    def test_upsert_record_id(self):
-        first_outcome = self.connection.upsert(self.record_id)
-        # self.check_no_change(first_outcome)
-        outcome = self.connection.query("SELECT * FROM user;")
-        # self.check_no_change(outcome[0])
-        self.connection.query("DELETE user;")
-
-    def test_upsert_record_id_with_data(self):
-        outcome = self.connection.upsert(self.record_id, self.data)
-        # self.check_change(outcome)
-        outcome = self.connection.query("SELECT * FROM user;")
-        # self.check_change(
-        #     outcome[0]
-        # )
-        self.connection.query("DELETE user;")
-
-    def test_upsert_table(self):
-        table = Table("user")
-        first_outcome = self.connection.upsert(table)
-        outcome = self.connection.query("SELECT * FROM user;")
-        # Different SurrealDB versions behave differently:
-        # v2.3.x: Creates new record, total = 2
-        # v2.0.x: May not create record, total = 1
-        self.assertGreaterEqual(len(outcome), 1)  # At least the original record
-        self.assertLessEqual(len(outcome), 2)     # At most 2 records
-
-        self.connection.query("DELETE user;")
-
-    def test_upsert_table_with_data(self):
-        table = Table("user")
-        outcome = self.connection.upsert(table, self.data)
-        # self.check_change(outcome[0], random_id=True)
-        outcome = self.connection.query("SELECT * FROM user;")
-        # Different SurrealDB versions behave differently:
-        # v2.3.x: Creates new record, total = 2
-        # v2.0.x: May not create record, total = 1
-        self.assertGreaterEqual(len(outcome), 1)  # At least the original record
-        self.assertLessEqual(len(outcome), 2)     # At most 2 records
-        # self.check_change(outcome[0], random_id=True)
-        self.connection.query("DELETE user;")
+@pytest.fixture
+def upsert_data():
+    return {
+        "name": "Jaime",
+        "email": "jaime@example.com",
+        "password": "password456",
+        "enabled": True,
+    }
 
 
-if __name__ == "__main__":
-    main()
+@pytest.fixture
+def existing_data():
+    return {
+        "name": "Tobie",
+        "email": "tobie@example.com",
+        "password": "password123",
+        "enabled": True,
+    }
+
+
+@pytest.fixture(autouse=True)
+def setup_user(blocking_http_connection):
+    blocking_http_connection.query("DELETE user;")
+    blocking_http_connection.query(
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
+    )
+    yield
+    blocking_http_connection.query("DELETE user;")
+
+
+def test_upsert_string(blocking_http_connection, setup_user, existing_data):
+    record_id = RecordID("user", "tobie")
+    outcome = blocking_http_connection.upsert("user:tobie", existing_data)
+    assert outcome["id"] == record_id
+    assert outcome["name"] == "Tobie"
+    assert outcome["email"] == "tobie@example.com"
+    assert outcome["enabled"] is True
+    result = blocking_http_connection.query("SELECT * FROM user;")
+    assert result[0]["id"] == record_id
+    assert result[0]["name"] == "Tobie"
+    assert result[0]["email"] == "tobie@example.com"
+    assert result[0]["enabled"] is True
+
+
+def test_upsert_string_with_data(blocking_http_connection, upsert_data, setup_user):
+    record_id = RecordID("user", "tobie")
+    first_outcome = blocking_http_connection.upsert("user:tobie", upsert_data)
+    assert first_outcome["id"] == record_id
+    assert first_outcome["name"] == "Jaime"
+    assert first_outcome["email"] == "jaime@example.com"
+    assert first_outcome["enabled"] is True
+    result = blocking_http_connection.query("SELECT * FROM user;")
+    assert result[0]["id"] == record_id
+    assert result[0]["name"] == "Jaime"
+    assert result[0]["email"] == "jaime@example.com"
+    assert result[0]["enabled"] is True
+
+
+def test_upsert_record_id(blocking_http_connection, setup_user, existing_data):
+    record_id = RecordID("user", "tobie")
+    first_outcome = blocking_http_connection.upsert(record_id, existing_data)
+    assert first_outcome["id"] == record_id
+    assert first_outcome["name"] == "Tobie"
+    assert first_outcome["email"] == "tobie@example.com"
+    assert first_outcome["enabled"] is True
+    result = blocking_http_connection.query("SELECT * FROM user;")
+    assert result[0]["id"] == record_id
+    assert result[0]["name"] == "Tobie"
+    assert result[0]["email"] == "tobie@example.com"
+    assert result[0]["enabled"] is True
+
+
+def test_upsert_record_id_with_data(blocking_http_connection, upsert_data, setup_user):
+    record_id = RecordID("user", "tobie")
+    outcome = blocking_http_connection.upsert(record_id, upsert_data)
+    assert outcome["id"] == record_id
+    assert outcome["name"] == "Jaime"
+    assert outcome["email"] == "jaime@example.com"
+    assert outcome["enabled"] is True
+    result = blocking_http_connection.query("SELECT * FROM user;")
+    assert result[0]["id"] == record_id
+    assert result[0]["name"] == "Jaime"
+    assert result[0]["email"] == "jaime@example.com"
+    assert result[0]["enabled"] is True
+
+
+def test_upsert_table(blocking_http_connection, setup_user, existing_data):
+    table = Table("user")
+    record_id = RecordID("user", "tobie")
+    first_outcome = blocking_http_connection.upsert(table, existing_data)
+    result = blocking_http_connection.query("SELECT * FROM user;")
+    # SurrealDB may create a new record or not, depending on version
+    assert any(r["id"] == record_id for r in result)
+    assert any(r["name"] == "Tobie" for r in result)
+
+
+def test_upsert_table_with_data(blocking_http_connection, upsert_data, setup_user):
+    table = Table("user")
+    record_id = RecordID("user", "tobie")
+    outcome = blocking_http_connection.upsert(table, upsert_data)
+    # At least one record should match the upserted data
+    assert any(
+        r["name"] == "Jaime"
+        and r["email"] == "jaime@example.com"
+        and r["enabled"] is True
+        for r in outcome
+    )
+    result = blocking_http_connection.query("SELECT * FROM user;")
+    assert any(
+        r["name"] == "Jaime"
+        and r["email"] == "jaime@example.com"
+        and r["enabled"] is True
+        for r in result
+    )
