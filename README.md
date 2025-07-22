@@ -77,14 +77,10 @@ This project follows library best practices for dependency management:
    # Run type checking
    uv run mypy --explicit-package-bases src/
    
-   # Run tests
-   uv run python -m unittest discover -s tests
-   
-   # Run tests with pytest (recommended)
-   uv run pytest
-   
-   # Run tests with coverage
-   ./scripts/run_tests_with_coverage.sh
+   # Run tests (with coverage)
+   uv run scripts/run_tests.sh
+   # Or directly:
+   uv run pytest --cov=src/surrealdb --cov-report=term-missing --cov-report=html
    ```
 
 3. **Build the project:**
@@ -101,17 +97,14 @@ We use a multi-tier testing strategy to ensure compatibility across SurrealDB ve
 ```bash
 # Test with default version (latest stable)
 docker-compose up -d
-uv run pytest
-
-# Test with coverage
-./scripts/run_tests_with_coverage.sh
+uv run scripts/run_tests.sh
 
 # Test against specific version
 ./scripts/test-versions.sh v2.1.8
 
 # Test against different v2.x versions
-SURREALDB_VERSION=v2.0.5 uv run pytest
-SURREALDB_VERSION=v2.3.6 uv run pytest
+SURREALDB_VERSION=v2.0.5 uv run scripts/run_tests.sh
+SURREALDB_VERSION=v2.3.6 uv run scripts/run_tests.sh
 ```
 
 ### CI/CD Testing
@@ -248,18 +241,26 @@ bash scripts/term.sh
 You will now be running an interactive terminal through a python virtual environment with all the dependencies installed. We can now run the tests with the following command:
 
 ```bash
-python -m unittest discover
+pytest --cov=src/surrealdb --cov-report=term-missing --cov-report=html
 ```
 
 The number of tests might increase but at the time of writing this you should get a printout like the one below:
 
 ```bash
-.........................................................................................................................................Error in live subscription: sent 1000 (OK); no close frame received
-..........................................................................................
-----------------------------------------------------------------------
-Ran 227 tests in 6.313s
+================================ test session starts ================================
+platform ...
+collected 227 items
 
-OK
+....................................................................................
+... (test output)
+
+---------- coverage: platform ... -----------
+Name                        Stmts   Miss  Cover   Missing
+---------------------------------------------------------
+src/surrealdb/....
+...
+
+============================= 227 passed in 6.31s ================================
 ```
 Finally, we clean up the database with the command below:
 ```bash
@@ -283,11 +284,11 @@ Test against different SurrealDB versions using environment variables:
 
 ```bash
 # Test with latest v2.x (default: v2.3.6)
-uv run python -m unittest discover -s tests
+uv run scripts/run_tests.sh
 
 # Test with specific v2.x version  
 SURREALDB_VERSION=v2.1.8 docker-compose up -d surrealdb
-uv run python -m unittest discover -s tests
+uv run scripts/run_tests.sh
 
 # Use different profiles for testing specific v2.x versions
 docker-compose --profile v2-0 up -d    # v2.0.5 on port 8020
@@ -507,3 +508,30 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+# Running Tests and Coverage
+
+To run all tests with coverage reporting:
+
+```bash
+uv run scripts/run_tests.sh
+```
+
+This will:
+- Run all tests using pytest
+- Show a coverage summary in the terminal
+- Generate an HTML coverage report in the `htmlcov/` directory
+
+You can also run tests directly with:
+
+```bash
+uv run pytest --cov=src/surrealdb --cov-report=term-missing --cov-report=html
+```
+
+To test a specific file:
+
+```bash
+uv run pytest tests/unit_tests/connections/test_connection_constructor.py --cov=src/surrealdb
+```
+
+To view the HTML coverage report, open `htmlcov/index.html` in your browser after running the tests.

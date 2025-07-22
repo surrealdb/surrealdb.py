@@ -1,56 +1,53 @@
-from unittest import IsolatedAsyncioTestCase, main
+import pytest
 
-from surrealdb.connections.async_ws import AsyncWsSurrealConnection
+from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 
 
-class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
-        self.queries = ["DELETE user;"]
-        self.url = "ws://localhost:8000"
-        self.password = "root"
-        self.username = "root"
-        self.vars_params = {
-            "username": self.username,
-            "password": self.password,
+@pytest.mark.asyncio
+async def test_query(async_http_connection):
+    await async_http_connection.query("DELETE user;")
+    result = await async_http_connection.query(
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
+    )
+    assert result == [
+        {
+            "id": RecordID(table_name="user", identifier="tobie"),
+            "name": "Tobie",
+            "email": "tobie@example.com",
+            "password": "password123",
+            "enabled": True,
         }
-        self.database_name = "test_db"
-        self.namespace = "test_ns"
-        self.connection = AsyncWsSurrealConnection(self.url)
-        _ = await self.connection.signin(self.vars_params)
-        _ = await self.connection.use(
-            namespace=self.namespace, database=self.database_name
-        )
+    ]
 
-    async def asyncTearDown(self):
-        if self.connection:
-            await self.connection.close()
+    result = await async_http_connection.query(
+        "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', password = 'password456', enabled = true;"
+    )
+    assert result == [
+        {
+            "id": RecordID(table_name="user", identifier="jaime"),
+            "name": "Jaime",
+            "email": "jaime@example.com",
+            "password": "password456",
+            "enabled": True,
+        }
+    ]
 
-    async def test_query(self):
-        await self.connection.query("DELETE user;")
-        self.assertEqual(
-            await self.connection.query("CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true;"),
-            [{"id": RecordID(table_name="user", identifier="tobie"), "name": "Tobie", "email": "tobie@example.com", "enabled": True}],
-        )
-        self.assertEqual(
-            await self.connection.query("CREATE user:jaime SET name = 'Jaime';"),
-            [{"id": RecordID(table_name="user", identifier="jaime"), "name": "Jaime"}],
-        )
-        self.assertEqual(
-            await self.connection.query("SELECT * FROM user;"),
-            [
-                {
-                    "id": RecordID(table_name="user", identifier="jaime"),
-                    "name": "Jaime",
-                },
-                {
-                    "id": RecordID(table_name="user", identifier="tobie"),
-                    "name": "Tobie",
-                },
-            ],
-        )
-        await self.connection.query("DELETE user;")
-
-
-if __name__ == "__main__":
-    main()
+    result = await async_http_connection.query("SELECT * FROM user;")
+    assert result == [
+        {
+            "id": RecordID(table_name="user", identifier="jaime"),
+            "name": "Jaime",
+            "email": "jaime@example.com",
+            "password": "password456",
+            "enabled": True,
+        },
+        {
+            "id": RecordID(table_name="user", identifier="tobie"),
+            "name": "Tobie",
+            "email": "tobie@example.com",
+            "password": "password123",
+            "enabled": True,
+        },
+    ]
+    await async_http_connection.query("DELETE user;")

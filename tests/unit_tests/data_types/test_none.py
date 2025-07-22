@@ -6,119 +6,86 @@ Notes:
     will have to look into schema objects for more complete serialization.
 """
 
-from unittest import IsolatedAsyncioTestCase, main
+import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 
 
-class TestAsyncWsSurrealConnectionNone(IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
-        self.url = "ws://localhost:8000/rpc"
-        self.password = "root"
-        self.username = "root"
-        self.vars_params = {
-            "username": self.username,
-            "password": self.password,
-        }
-        self.database_name = "test_db"
-        self.namespace = "test_ns"
-        self.connection = AsyncWsSurrealConnection(self.url)
-
-        # Sign in and select DB
-        await self.connection.signin(self.vars_params)
-        await self.connection.use(namespace=self.namespace, database=self.database_name)
-
-        # Cleanup
-        await self.connection.query("REMOVE TABLE person;")
-
-    async def asyncTearDown(self):
-        if self.connection:
-            await self.connection.close()
-
-    async def test_none(self):
-        schema = """
-            DEFINE TABLE person SCHEMAFULL TYPE NORMAL;
-            DEFINE FIELD name ON person TYPE string;
-            DEFINE FIELD age ON person TYPE option<int>;
-        """
-        await self.connection.query(schema)
-        outcome = await self.connection.create(
-            "person:john", {"name": "John", "age": None}
-        )
-        record_check = RecordID(table_name="person", identifier="john")
-        self.assertEqual(record_check, outcome["id"])
-        self.assertEqual("John", outcome["name"])
-        self.assertEqual(None, outcome.get("age"))
-
-        outcome = await self.connection.create(
-            "person:dave", {"name": "Dave", "age": 34}
-        )
-        record_check = RecordID(table_name="person", identifier="dave")
-        self.assertEqual(record_check, outcome["id"])
-        self.assertEqual("Dave", outcome["name"])
-        self.assertEqual(34, outcome["age"])
-
-        outcome = await self.connection.query("SELECT * FROM person")
-        self.assertEqual(2, len(outcome))
-
-        await self.connection.query("REMOVE TABLE person;")
-        await self.connection.close()
-
-    async def test_none_with_query(self):
-        """
-        Test None handling in arrays for SurrealDB v2.x.
-        In v2.x, None values in arrays are preserved as [None].
-        """
-        schema = """
-            DEFINE TABLE person SCHEMAFULL TYPE NORMAL;
-            DEFINE FIELD name ON person TYPE string;
-            DEFINE FIELD nums ON person TYPE array<option<int>>;
-        """
-        await self.connection.query(schema)
-        outcome = await self.connection.query(
-            "UPSERT person MERGE {id: $id, name: $name, nums: $nums}",
-            {"id": [1, 2], "name": "John", "nums": [None]},
-        )
-        record_check = RecordID(table_name="person", identifier=[1, 2])
-
-        # Different SurrealDB versions may return different result counts for UPSERT
-        # v2.3.x: Returns 1 result
-        # v2.0.x: May return 0 results
-        if len(outcome) > 0:
-            self.assertEqual(record_check, outcome[0]["id"])  # type: ignore
-            self.assertEqual("John", outcome[0]["name"])  # type: ignore
-            # Different SurrealDB v2.x versions handle None in arrays differently:
-            # Some versions preserve [None], others return []
-            nums_value = outcome[0].get("nums")  # type: ignore
-            self.assertIn(nums_value, [[None], []])  # Accept both behaviors
-
-        outcome = await self.connection.query(
-            "UPSERT person MERGE {id: $id, name: $name, nums: $nums}",
-            {"id": [3, 4], "name": "Dave", "nums": [None]},
-        )
-        record_check = RecordID(table_name="person", identifier=[3, 4])
-
-        # Different SurrealDB versions may return different result counts for UPSERT
-        if len(outcome) > 0:
-            self.assertEqual(record_check, outcome[0]["id"])  # type: ignore
-            self.assertEqual("Dave", outcome[0]["name"])  # type: ignore
-            # Different SurrealDB v2.x versions handle None in arrays differently:
-            # Some versions preserve [None], others return []
-            nums_value = outcome[0].get("nums")  # type: ignore
-            self.assertIn(nums_value, [[None], []])  # Accept both behaviors
-
-        # Check that records were actually created by querying the table
-        outcome = await self.connection.query("SELECT * FROM person")
-        # Different SurrealDB versions behave differently with UPSERT:
-        # v2.3.x: UPSERT creates records, returns 2 records
-        # v2.0.x: UPSERT may not create records, returns 0 records
-        # We accept both behaviors as valid for cross-version compatibility
-        self.assertIn(len(outcome), [0, 2])  # Either 0 (v2.0.x) or 2 (v2.3.x) records
-
-        await self.connection.query("REMOVE TABLE person;")
-        await self.connection.close()
+@pytest.fixture
+async def surrealdb_connection():
+    url = "ws://localhost:8000/rpc"
+    password = "root"
+    username = "root"
+    vars_params = {"username": username, "password": password}
+    database_name = "test_db"
+    namespace = "test_ns"
+    connection = AsyncWsSurrealConnection(url)
+    await connection.signin(vars_params)
+    await connection.use(namespace=namespace, database=database_name)
+    await connection.query("REMOVE TABLE person;")
+    yield connection
+    await connection.query("REMOVE TABLE person;")
+    await connection.close()
 
 
-if __name__ == "__main__":
-    main()
+@pytest.mark.asyncio
+async def test_none(surrealdb_connection):
+    schema = """
+        DEFINE TABLE person SCHEMAFULL TYPE NORMAL;
+        DEFINE FIELD name ON person TYPE string;
+        DEFINE FIELD age ON person TYPE option<int>;
+    """
+    await surrealdb_connection.query(schema)
+    outcome = await surrealdb_connection.create(
+        "person:john", {"name": "John", "age": None}
+    )
+    record_check = RecordID(table_name="person", identifier="john")
+    assert record_check == outcome["id"]
+    assert "John" == outcome["name"]
+    assert None == outcome.get("age")
+
+    outcome = await surrealdb_connection.create(
+        "person:dave", {"name": "Dave", "age": 34}
+    )
+    record_check = RecordID(table_name="person", identifier="dave")
+    assert record_check == outcome["id"]
+    assert "Dave" == outcome["name"]
+    assert 34 == outcome["age"]
+
+    outcome = await surrealdb_connection.query("SELECT * FROM person")
+    assert 2 == len(outcome)
+
+
+@pytest.mark.asyncio
+async def test_none_with_query(surrealdb_connection):
+    schema = """
+        DEFINE TABLE person SCHEMAFULL TYPE NORMAL;
+        DEFINE FIELD name ON person TYPE string;
+        DEFINE FIELD nums ON person TYPE array<option<int>>;
+    """
+    await surrealdb_connection.query(schema)
+    outcome = await surrealdb_connection.query(
+        "UPSERT person MERGE {id: $id, name: $name, nums: $nums}",
+        {"id": [1, 2], "name": "John", "nums": [None]},
+    )
+    record_check = RecordID(table_name="person", identifier=[1, 2])
+    if len(outcome) > 0:
+        assert record_check == outcome[0]["id"]
+        assert "John" == outcome[0]["name"]
+        nums_value = outcome[0].get("nums")
+        assert nums_value in [[None], []]
+
+    outcome = await surrealdb_connection.query(
+        "UPSERT person MERGE {id: $id, name: $name, nums: $nums}",
+        {"id": [3, 4], "name": "Dave", "nums": [None]},
+    )
+    record_check = RecordID(table_name="person", identifier=[3, 4])
+    if len(outcome) > 0:
+        assert record_check == outcome[0]["id"]
+        assert "Dave" == outcome[0]["name"]
+        nums_value = outcome[0].get("nums")
+        assert nums_value in [[None], []]
+
+    outcome = await surrealdb_connection.query("SELECT * FROM person")
+    assert len(outcome) in [0, 2]

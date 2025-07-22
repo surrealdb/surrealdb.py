@@ -1,73 +1,57 @@
-from unittest import TestCase, main
+import pytest
 
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
 
-class TestHttpSurrealConnection(TestCase):
-    def setUp(self):
-        self.url = "http://localhost:8000"
-        self.password = "root"
-        self.username = "root"
-        self.vars_params = {
-            "username": self.username,
-            "password": self.password,
-        }
-        self.database_name = "test_db"
-        self.namespace = "test_ns"
-        self.data = {
-            "name": self.username,
-            "password": self.password,
-        }
-        self.insert_bulk_data = [
-            {
-                "name": "Tobie",
-                "email": "tobie@example.com",
-                "enabled": True,
-            },
-            {
-                "name": "Jaime",
-                "email": "jaime@example.com",
-                "enabled": True,
-            },
-        ]
-        self.insert_data = [
-            {
-                "name": "Tobie",
-                "email": "tobie@example.com",
-                "enabled": True,
-            }
-        ]
-        self.connection = BlockingHttpSurrealConnection(self.url)
-        self.connection.signin(self.vars_params)
-        self.connection.use(namespace=self.namespace, database=self.database_name)
-        self.connection.query("DELETE person;")
-
-    def test_info(self):
-        outcome = self.connection.info()
-        # TODO => confirm that the info is what we expect
-
-    def test_insert_string_with_data(self):
-        outcome = self.connection.insert("person", self.insert_bulk_data)
-        self.assertEqual(2, len(outcome))
-        self.assertEqual(len(self.connection.query("SELECT * FROM person;")), 2)
-        self.connection.query("DELETE person;")
-
-    def test_insert_record_id_result_error(self):
-        record_id = RecordID("person", "tobie")
-
-        with self.assertRaises(Exception) as context:
-            _ = self.connection.insert(record_id, self.insert_data)
-        e = str(context.exception)
-        self.assertEqual(
-            "There was a problem with the database: Can not execute INSERT statement using value"
-            in e
-            and "person:tobie" in e,
-            True,
-        )
-        self.connection.query("DELETE person;")
+@pytest.fixture
+def insert_bulk_data():
+    return [
+        {
+            "name": "Tobie",
+            "email": "tobie@example.com",
+            "enabled": True,
+            "password": "root",
+        },
+        {
+            "name": "Jaime",
+            "email": "jaime@example.com",
+            "enabled": True,
+            "password": "root",
+        },
+    ]
 
 
-if __name__ == "__main__":
-    main()
+@pytest.fixture
+def insert_data():
+    return [
+        {
+            "name": "Tobie",
+            "email": "tobie@example.com",
+            "enabled": True,
+            "password": "root",
+        },
+    ]
+
+
+def test_insert_string_with_data(blocking_http_connection, insert_bulk_data):
+    blocking_http_connection.query("DELETE user;")
+    outcome = blocking_http_connection.insert("user", insert_bulk_data)
+    assert 2 == len(outcome)
+    assert len(blocking_http_connection.query("SELECT * FROM user;")) == 2
+    blocking_http_connection.query("DELETE user;")
+
+
+def test_insert_record_id_result_error(blocking_http_connection, insert_data):
+    blocking_http_connection.query("DELETE user;")
+    record_id = RecordID("user", "tobie")
+    with pytest.raises(Exception) as context:
+        _ = blocking_http_connection.insert(record_id, insert_data)
+    e = str(context.value)
+    assert (
+        "There was a problem with the database: Can not execute INSERT statement using value"
+        in e
+        and "user:tobie" in e
+    )
+    blocking_http_connection.query("DELETE user;")

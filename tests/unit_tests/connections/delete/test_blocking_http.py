@@ -1,58 +1,83 @@
-from unittest import TestCase, main
+import pytest
 
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
 
-class TestHttpSurrealConnection(TestCase):
-    def setUp(self):
-        self.url = "http://localhost:8000"
-        self.password = "root"
-        self.username = "root"
-        self.vars_params = {
-            "username": self.username,
-            "password": self.password,
-        }
-        self.database_name = "test_db"
-        self.namespace = "test_ns"
-        self.data = {"name": "Jaime", "age": 35}
-        self.record_id = RecordID("person", "tobie")
-        self.connection = BlockingHttpSurrealConnection(self.url)
-        self.connection.signin(self.vars_params)
-        self.connection.use(namespace=self.namespace, database=self.database_name)
-        self.connection.query("DELETE person;")
-        self.connection.query("CREATE person:tobie SET name = 'Tobie';")
-
-    def check_no_change(self, data: dict):
-        self.assertEqual(self.record_id, data["id"])
-        self.assertEqual("Tobie", data["name"])
-
-    def check_change(self, data: dict):
-        self.assertEqual(self.record_id, data["id"])
-        self.assertEqual("Jaime", data["name"])
-        self.assertEqual(35, data["age"])
-
-    def test_delete_string(self):
-        outcome = self.connection.delete("person:tobie")
-        self.check_no_change(outcome)
-        outcome = self.connection.query("SELECT * FROM person;")
-        self.assertEqual(outcome, [])
-
-    def test_delete_record_id(self):
-        first_outcome = self.connection.delete(self.record_id)
-        self.check_no_change(first_outcome)
-        outcome = self.connection.query("SELECT * FROM person;")
-        self.assertEqual(outcome, [])
-
-    def test_delete_table(self):
-        self.connection.query("CREATE person:jaime SET name = 'Jaime';")
-        table = Table("person")
-        first_outcome = self.connection.delete(table)
-        self.assertEqual(2, len(first_outcome))
-        outcome = self.connection.query("SELECT * FROM person;")
-        self.assertEqual(outcome, [])
+@pytest.fixture
+def record_id():
+    return RecordID("user", "tobie")
 
 
-if __name__ == "__main__":
-    main()
+def check_no_change(data: dict, record_id: RecordID):
+    assert record_id == data["id"]
+    assert "Tobie" == data["name"]
+
+
+def check_change(data: dict, record_id: RecordID):
+    assert record_id == data["id"]
+    assert "Jaime" == data["name"]
+    assert 35 == data["age"]
+
+
+def test_debug_delete(blocking_http_connection):
+    blocking_http_connection.query("DELETE user;")
+    blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';")
+
+    # Debug: Check what delete actually returns
+    outcome = blocking_http_connection.delete("user:tobie")
+    print(f"DEBUG: Delete outcome: {outcome}")
+    print(f"DEBUG: Type: {type(outcome)}")
+
+    # Verify the record was actually deleted
+    outcome = blocking_http_connection.query("SELECT * FROM user;")
+    assert outcome == []
+
+
+def test_delete_string(blocking_http_connection, record_id):
+    blocking_http_connection.query("DELETE user;")
+    blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';")
+
+    # Delete operation returns the deleted record
+    outcome = blocking_http_connection.delete("user:tobie")
+    assert outcome is not None
+    assert outcome["id"] == record_id
+    assert outcome["name"] == "Tobie"
+
+    # Verify the record was actually deleted
+    outcome = blocking_http_connection.query("SELECT * FROM user;")
+    assert outcome == []
+
+
+def test_delete_record_id(blocking_http_connection, record_id):
+    blocking_http_connection.query("DELETE user;")
+    blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';")
+
+    # Delete operation returns the deleted record
+    outcome = blocking_http_connection.delete(record_id)
+    assert outcome is not None
+    assert outcome["id"] == record_id
+    assert outcome["name"] == "Tobie"
+
+    # Verify the record was actually deleted
+    outcome = blocking_http_connection.query("SELECT * FROM user;")
+    assert outcome == []
+
+
+def test_delete_table(blocking_http_connection):
+    blocking_http_connection.query("DELETE user;")
+    blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';")
+    blocking_http_connection.query("CREATE user:jaime SET name = 'Jaime';")
+
+    # Delete all users in the table
+    table = Table("user")
+    outcome = blocking_http_connection.delete(table)
+    # Table delete returns list of deleted records
+    assert len(outcome) == 2
+    assert any(record["name"] == "Tobie" for record in outcome)
+    assert any(record["name"] == "Jaime" for record in outcome)
+
+    # Verify all records were deleted
+    outcome = blocking_http_connection.query("SELECT * FROM user;")
+    assert outcome == []

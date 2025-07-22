@@ -1,65 +1,61 @@
-from unittest import IsolatedAsyncioTestCase, main
+import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
 
-class TestAsyncWsSurrealConnection(IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
-        self.url = "ws://localhost:8000"
-        self.password = "root"
-        self.username = "root"
-        self.vars_params = {
-            "username": self.username,
-            "password": self.password,
-        }
-        self.database_name = "test_db"
-        self.namespace = "test_ns"
-        self.data = {"name": "Jaime", "age": 35}
-        self.record_id = RecordID("person", "tobie")
-        self.connection = AsyncWsSurrealConnection(self.url)
-        _ = await self.connection.signin(self.vars_params)
-        _ = await self.connection.use(
-            namespace=self.namespace, database=self.database_name
-        )
-        await self.connection.query("DELETE person;")
-        await self.connection.query("CREATE person:tobie SET name = 'Tobie';")
-
-    async def asyncTearDown(self):
-        if self.connection:
-            await self.connection.close()
-
-    def check_no_change(self, data: dict):
-        self.assertEqual(self.record_id, data["id"])
-        self.assertEqual("Tobie", data["name"])
-
-    def check_change(self, data: dict):
-        self.assertEqual(self.record_id, data["id"])
-
-        self.assertEqual("Jaime", data["name"])
-        self.assertEqual(35, data["age"])
-
-    async def test_delete_string(self):
-        outcome = await self.connection.delete("person:tobie")
-        self.check_no_change(outcome)
-        outcome = await self.connection.query("SELECT * FROM person;")
-        self.assertEqual(outcome, [])
-
-    async def test_delete_record_id(self):
-        first_outcome = await self.connection.delete(self.record_id)
-        self.check_no_change(first_outcome)
-        outcome = await self.connection.query("SELECT * FROM person;")
-        self.assertEqual(outcome, [])
-
-    async def test_delete_table(self):
-        await self.connection.query("CREATE person:jaime SET name = 'Jaime';")
-        table = Table("person")
-        first_outcome = await self.connection.delete(table)
-        self.assertEqual(2, len(first_outcome))
-        outcome = await self.connection.query("SELECT * FROM person;")
-        self.assertEqual(outcome, [])
+@pytest.fixture
+def record_id():
+    return RecordID("user", "tobie")
 
 
-if __name__ == "__main__":
-    main()
+@pytest.mark.asyncio
+async def test_delete_string(async_ws_connection, record_id):
+    await async_ws_connection.query("DELETE user;")
+    await async_ws_connection.query("CREATE user:tobie SET name = 'Tobie';")
+
+    # Delete operation returns the deleted record
+    outcome = await async_ws_connection.delete("user:tobie")
+    assert outcome is not None
+    assert outcome["id"] == record_id
+    assert outcome["name"] == "Tobie"
+
+    # Verify the record was actually deleted
+    outcome = await async_ws_connection.query("SELECT * FROM user;")
+    assert outcome == []
+
+
+@pytest.mark.asyncio
+async def test_delete_record_id(async_ws_connection, record_id):
+    await async_ws_connection.query("DELETE user;")
+    await async_ws_connection.query("CREATE user:tobie SET name = 'Tobie';")
+
+    # Delete operation returns the deleted record
+    outcome = await async_ws_connection.delete(record_id)
+    assert outcome is not None
+    assert outcome["id"] == record_id
+    assert outcome["name"] == "Tobie"
+
+    # Verify the record was actually deleted
+    outcome = await async_ws_connection.query("SELECT * FROM user;")
+    assert outcome == []
+
+
+@pytest.mark.asyncio
+async def test_delete_table(async_ws_connection):
+    await async_ws_connection.query("DELETE user;")
+    await async_ws_connection.query("CREATE user:tobie SET name = 'Tobie';")
+    await async_ws_connection.query("CREATE user:jaime SET name = 'Jaime';")
+
+    # Delete all users in the table
+    table = Table("user")
+    outcome = await async_ws_connection.delete(table)
+    # Table delete returns list of deleted records
+    assert len(outcome) == 2
+    assert any(record["name"] == "Tobie" for record in outcome)
+    assert any(record["name"] == "Jaime" for record in outcome)
+
+    # Verify all records were deleted
+    outcome = await async_ws_connection.query("SELECT * FROM user;")
+    assert outcome == []

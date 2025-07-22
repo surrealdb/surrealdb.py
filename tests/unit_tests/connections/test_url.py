@@ -1,11 +1,12 @@
-from unittest import TestCase, main
+import pytest
 
 from surrealdb.connections.url import Url
 
 
-class TestUrl(TestCase):
-    def setUp(self) -> None:
-        self.urls = [
+@pytest.fixture
+def test_data():
+    return {
+        "urls": [
             "http://localhost:5000",
             "https://localhost:5000",
             "http://localhost:5000/",
@@ -14,18 +15,16 @@ class TestUrl(TestCase):
             "wss://localhost:5000",
             "ws://localhost:5000/",
             "wss://localhost:5000/",
-        ]
-        self.schemes = ["http", "https", "http", "https", "ws", "wss", "ws", "wss"]
-
-    def test___init(self):
-        for x in range(len(self.urls)):
-            i = self.urls[x]
-            url = Url(i)
-            self.assertEqual(i, url.raw_url)
-            self.assertEqual(self.schemes[x], url.scheme.value)
-            self.assertEqual("localhost", url.hostname)
-            self.assertEqual(5000, url.port)
+        ],
+        "schemes": ["http", "https", "http", "https", "ws", "wss", "ws", "wss"],
+    }
 
 
-if __name__ == "__main__":
-    main()
+def test_url_init(test_data):
+    for x in range(len(test_data["urls"])):
+        url_string = test_data["urls"][x]
+        url = Url(url_string)
+        assert url_string == url.raw_url
+        assert test_data["schemes"][x] == url.scheme.value
+        assert "localhost" == url.hostname
+        assert 5000 == url.port

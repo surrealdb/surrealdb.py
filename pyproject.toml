@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "surrealdb"
-version = "1.0.4"
+version = "1.0.6"
 description = "SurrealDB python client"
 readme = "README.md"
 authors = [{ name = "SurrealDB" }]
@@ -44,26 +44,27 @@ documentation = "https://surrealdb.com/docs/sdk/python"
 packages = ["src/surrealdb"]
 
 [tool.hatch.build.targets.sdist]
-include = [
-    "/src",
-    "/tests",
-    "/README.md",
-    "/LICENSE",
-]
+include = ["/src", "/tests", "/README.md", "/LICENSE"]
 
 [tool.ruff]
 exclude = ["src/surrealdb/__init__.py"]
 
 [tool.ruff.lint]
 select = [
-    "I",   # isort
-    "UP",  # pyupgrade
+    "I",  # isort
+    "UP", # pyupgrade
 ]
 
 [tool.mypy]
 mypy_path = "src"
 explicit_package_bases = true
-disable_error_code = ["return-value", "var-annotated", "assignment", "arg-type", "attr-defined"]
+disable_error_code = [
+    "return-value",
+    "var-annotated",
+    "assignment",
+    "arg-type",
+    "attr-defined",
+]
 
 [[tool.mypy.overrides]]
 module = "aiohttp.*"
@@ -78,16 +79,37 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+asyncio_mode = "auto"
 addopts = [
-    "-v",
-    "--tb=short",
     "--strict-markers",
-    "--disable-warnings",
+    "--strict-config",
+    "--verbose",
+    "--tb=short",
 ]
-markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
-    "unit: marks tests as unit tests",
+filterwarnings = [
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
 ]
 
 [dependency-groups]
@@ -95,10 +117,12 @@ dev = [
     { include-group = "test" },
     "mypy>=1.0.0",
     "ruff>=0.12.0",
-    "types-requests>=2.25.0", # Type stubs for requests
+    "types-requests>=2.25.0",   # Type stubs for requests
 ]
 test = [
+    "coverage>=7.0.0",
     "hypothesis>=6.135.16",
     "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
 ]

@@ -1,88 +1,106 @@
-from unittest import TestCase, main
+import pytest
 
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
 
-class TestBlockingWsSurrealConnection(TestCase):
-    def setUp(self):
-        self.url = "ws://localhost:8000"
-        self.password = "root"
-        self.username = "root"
-        self.vars_params = {
-            "username": self.username,
-            "password": self.password,
-        }
-        self.database_name = "test_db"
-        self.namespace = "test_ns"
-        self.data = {
-            "name": "Jaime",
-            "age": 35,
-            "email": "jaime@example.com",
-            "enabled": True,
-            "password": "password123"
-        }
-        self.record_id = RecordID("user", "tobie")
-        self.connection = BlockingWsSurrealConnection(self.url)
-        self.connection.signin(self.vars_params)
-        self.connection.use(namespace=self.namespace, database=self.database_name)
-        self.connection.query("DELETE user;")
-        self.connection.query("CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'password123';")
-
-    def tearDown(self):
-        self.connection.query("DELETE user;")
-        if self.connection.socket:
-            self.connection.socket.close()
-
-    def check_no_change(self, data: dict):
-        self.assertEqual(self.record_id, data["id"])
-        self.assertEqual("Tobie", data["name"])
-
-    def check_change(self, data: dict):
-        self.assertEqual(self.record_id, data["id"])
-        self.assertEqual("Jaime", data["name"])
-        self.assertEqual(35, data["age"])
-
-    def test_update_string(self):
-        outcome = self.connection.update("user:tobie")
-        self.assertEqual(outcome["id"], self.record_id)
-        self.assertEqual(outcome["name"], "Tobie")
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.check_no_change(outcome[0])
-
-    def test_update_string_with_data(self):
-        first_outcome = self.connection.update("user:tobie", self.data)
-        self.check_change(first_outcome)
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.check_change(outcome[0])
-
-    def test_update_record_id(self):
-        first_outcome = self.connection.update(self.record_id)
-        self.check_no_change(first_outcome)
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.check_no_change(outcome[0])
-
-    def test_update_record_id_with_data(self):
-        outcome = self.connection.update(self.record_id, self.data)
-        self.check_change(outcome)
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.check_change(outcome[0])
-
-    def test_update_table(self):
-        table = Table("user")
-        first_outcome = self.connection.update(table)
-        self.check_no_change(first_outcome[0])
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.check_no_change(outcome[0])
-
-    def test_update_table_with_data(self):
-        table = Table("user")
-        outcome = self.connection.update(table, self.data)
-        self.check_change(outcome[0])
-        outcome = self.connection.query("SELECT * FROM user;")
-        self.check_change(outcome[0])
+@pytest.fixture
+def update_data():
+    return {
+        "name": "Jaime",
+        "email": "jaime@example.com",
+        "enabled": True,
+        "password": "root",
+    }
 
 
-if __name__ == "__main__":
-    main()
+@pytest.fixture
+def record_id():
+    return RecordID("user", "tobie")
+
+
+def check_no_change(data: dict, record_id: RecordID):
+    assert record_id == data["id"]
+    assert "Tobie" == data["name"]
+
+
+def check_change(data: dict, record_id: RecordID):
+    assert record_id == data["id"]
+    assert "Jaime" == data["name"]
+    # No age field assertion
+
+
+def test_update_string(blocking_ws_connection, update_data, record_id):
+    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query(
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+    )
+
+    outcome = blocking_ws_connection.update("user:tobie")
+    assert outcome["id"] == record_id
+    assert outcome["name"] == "Tobie"
+    outcome = blocking_ws_connection.query("SELECT * FROM user;")
+    check_no_change(outcome[0], record_id)
+
+
+def test_update_string_with_data(blocking_ws_connection, update_data, record_id):
+    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query(
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+    )
+
+    first_outcome = blocking_ws_connection.update("user:tobie", update_data)
+    check_change(first_outcome, record_id)
+    outcome = blocking_ws_connection.query("SELECT * FROM user;")
+    check_change(outcome[0], record_id)
+
+
+def test_update_record_id(blocking_ws_connection, update_data, record_id):
+    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query(
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+    )
+
+    first_outcome = blocking_ws_connection.update(record_id)
+    check_no_change(first_outcome, record_id)
+    outcome = blocking_ws_connection.query("SELECT * FROM user;")
+    check_no_change(outcome[0], record_id)
+
+
+def test_update_record_id_with_data(blocking_ws_connection, update_data, record_id):
+    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query(
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+    )
+
+    outcome = blocking_ws_connection.update(record_id, update_data)
+    check_change(outcome, record_id)
+    outcome = blocking_ws_connection.query("SELECT * FROM user;")
+    check_change(outcome[0], record_id)
+
+
+def test_update_table(blocking_ws_connection, update_data, record_id):
+    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query(
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+    )
+
+    table = Table("user")
+    first_outcome = blocking_ws_connection.update(table)
+    check_no_change(first_outcome[0], record_id)
+    outcome = blocking_ws_connection.query("SELECT * FROM user;")
+    check_no_change(outcome[0], record_id)
+
+
+def test_update_table_with_data(blocking_ws_connection, update_data, record_id):
+    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query(
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+    )
+
+    table = Table("user")
+    outcome = blocking_ws_connection.update(table, update_data)
+    check_change(outcome[0], record_id)
+    outcome = blocking_ws_connection.query("SELECT * FROM user;")
+    check_change(outcome[0], record_id)

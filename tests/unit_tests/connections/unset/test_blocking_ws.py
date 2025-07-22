@@ -1,56 +1,29 @@
-from unittest import TestCase, main
-
-from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+import pytest
 
 
-class TestBlockingWsSurrealConnection(TestCase):
-    def setUp(self):
-        self.url = "ws://localhost:8000"
-        self.password = "root"
-        self.username = "root"
-        self.vars_params = {
-            "username": self.username,
-            "password": self.password,
-        }
-        self.database_name = "test_db"
-        self.namespace = "test_ns"
-        self.connection = BlockingWsSurrealConnection(self.url)
-        self.connection.signin(self.vars_params)
-        self.connection.use(namespace=self.namespace, database=self.database_name)
+def test_unset(blocking_ws_connection):
+    blocking_ws_connection.query("DELETE person;")
+    outcome = blocking_ws_connection.let(
+        "name",
+        {
+            "first": "Tobie",
+            "last": "Morgan Hitchcock",
+        },
+    )
+    assert outcome is None
+    blocking_ws_connection.query("CREATE person SET name = $name")
+    outcome = blocking_ws_connection.query(
+        "SELECT * FROM person WHERE name.first = $name.first"
+    )
+    assert len(outcome) == 1
+    assert outcome[0]["name"] == {"first": "Tobie", "last": "Morgan Hitchcock"}
 
-    def tearDown(self):
-        self.connection.query("DELETE person;")
-        if self.connection.socket:
-            self.connection.socket.close()
+    blocking_ws_connection.unset(key="name")
 
-    def test_unset(self):
-        self.connection.query("DELETE person;")
-        outcome = self.connection.let(
-            "name",
-            {
-                "first": "Tobie",
-                "last": "Morgan Hitchcock",
-            },
-        )
-        self.assertIsNone(outcome)
+    # because the key was unset then $name.first is None returning []
+    outcome = blocking_ws_connection.query(
+        "SELECT * FROM person WHERE name.first = $name.first"
+    )
+    assert outcome == []
 
-        self.connection.query("CREATE person SET name = $name")
-        outcome = self.connection.query(
-            "SELECT * FROM person WHERE name.first = $name.first"
-        )
-        self.assertEqual(1, len(outcome))
-        self.assertEqual(
-            {"first": "Tobie", "last": "Morgan Hitchcock"}, outcome[0]["name"]
-        )
-
-        self.connection.unset(key="name")
-
-        # Because the key was unset, $name.first is None, returning []
-        outcome = self.connection.query(
-            "SELECT * FROM person WHERE name.first = $name.first"
-        )
-        self.assertEqual([], outcome)
-
-
-if __name__ == "__main__":
-    main()
+    blocking_ws_connection.query("DELETE person;")

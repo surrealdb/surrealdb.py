@@ -1,4 +1,4 @@
-from unittest import TestCase, main
+import pytest
 
 from surrealdb import (
     AsyncHttpSurrealConnection,
@@ -10,9 +10,10 @@ from surrealdb import (
 )
 
 
-class TestUrl(TestCase):
-    def setUp(self) -> None:
-        self.urls = [
+@pytest.fixture
+def test_data():
+    return {
+        "urls": [
             "http://localhost:5000",
             "https://localhost:5000",
             "http://localhost:5000/",
@@ -21,23 +22,20 @@ class TestUrl(TestCase):
             "wss://localhost:5000",
             "ws://localhost:5000/",
             "wss://localhost:5000/",
-        ]
-        self.schemes = ["http", "https", "http", "https", "ws", "wss", "ws", "wss"]
-
-    def test_blocking___init__(self):
-        outcome = Surreal("ws://localhost:5000")
-        self.assertEqual(type(outcome), BlockingWsSurrealConnection)
-
-        outcome = Surreal("http://localhost:5000")
-        self.assertEqual(type(outcome), BlockingHttpSurrealConnection)
-
-    def test_async___init__(self):
-        outcome = AsyncSurreal("ws://localhost:5000")
-        self.assertEqual(type(outcome), AsyncWsSurrealConnection)
-
-        outcome = AsyncSurreal("http://localhost:5000")
-        self.assertEqual(type(outcome), AsyncHttpSurrealConnection)
+        ],
+        "schemes": ["http", "https", "http", "https", "ws", "wss", "ws", "wss"],
+    }
 
 
-if __name__ == "__main__":
-    main()
+def test_blocking___init__(test_data):
+    outcome = Surreal("ws://localhost:5000")
+    assert type(outcome) == BlockingWsSurrealConnection
+    outcome = Surreal("http://localhost:5000")
+    assert type(outcome) == BlockingHttpSurrealConnection
+
+
+def test_async___init__(test_data):
+    outcome = AsyncSurreal("ws://localhost:5000")
+    assert type(outcome) == AsyncWsSurrealConnection
+    outcome = AsyncSurreal("http://localhost:5000")
+    assert type(outcome) == AsyncHttpSurrealConnection
