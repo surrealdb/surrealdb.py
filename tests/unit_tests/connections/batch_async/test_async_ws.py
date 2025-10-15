@@ -19,7 +19,7 @@ async def test_batch(async_ws_connection):
             tasks = [
                 tg.create_task(
                     async_ws_connection.query(
-                        "RETURN sleep(duration::from::millis($d)) or $p**2",
+                        "RETURN sleep(duration::from_millis($d)) or $p**2",
                         dict(d=10 if num % 2 else 0, p=num),
                     )
                 )
