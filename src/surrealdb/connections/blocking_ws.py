@@ -9,6 +9,7 @@ from uuid import UUID
 
 import websockets
 import websockets.sync.client as ws_sync
+from websockets.sync.client import ClientConnection
 
 from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.url import Url
@@ -45,7 +46,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.port: Optional[int] = self.url.port
         self.id: str = str(uuid.uuid4())
         self.token: Optional[str] = None
-        self.socket = None
+        self.socket: Optional[ClientConnection] = None
 
     def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
@@ -156,7 +157,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self._send(message, "unsetting")
 
     def select(self, record: RecordIdType) -> Union[list[dict], dict]:
-        variables = {}
+        variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"SELECT * FROM {resource_ref}"
 
@@ -169,7 +170,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         record: RecordIdType,
         data: Optional[Union[Union[list[dict], dict], dict]] = None,
     ) -> Union[list[dict], dict]:
-        variables = {}
+        variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
@@ -200,7 +201,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self._send(message, "kill")
 
     def delete(self, record: RecordIdType) -> Union[list[dict], dict]:
-        variables = {}
+        variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"DELETE {resource_ref} RETURN BEFORE"
 
@@ -221,7 +222,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 f"There was a problem with the database: Can not execute INSERT statement using value '{table}'"
             )
 
-        variables = {}
+        variables: dict[str, Any] = {}
         table_ref = self._resource_to_variable(table, variables, "_table")
         variables["_data"] = data
         query = f"INSERT INTO {table_ref} $_data"
@@ -233,7 +234,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def insert_relation(
         self, table: Union[str, Table], data: Union[list[dict], dict]
     ) -> Union[list[dict], dict]:
-        variables = {}
+        variables: dict[str, Any] = {}
         table_ref = self._resource_to_variable(table, variables, "_table")
         variables["_data"] = data
         query = f"INSERT RELATION INTO {table_ref} $_data"
@@ -245,7 +246,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def merge(
         self, record: RecordIdType, data: Optional[dict] = None
     ) -> Union[list[dict], dict]:
-        variables = {}
+        variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
@@ -267,7 +268,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         record: RecordIdType,
         data: Optional[list[dict]] = None,
     ) -> Union[list[dict], dict]:
-        variables = {}
+        variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
@@ -322,7 +323,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def update(
         self, record: RecordIdType, data: Optional[dict] = None
     ) -> Union[list[dict], dict]:
-        variables = {}
+        variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
@@ -342,7 +343,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def upsert(
         self, record: RecordIdType, data: Optional[dict] = None
     ) -> Union[list[dict], dict]:
-        variables = {}
+        variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
