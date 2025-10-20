@@ -87,5 +87,5 @@ class Duration:
                 return f"{value}{unit}"
         return "0ns"
 
-    def to_compact(self) -> list:
+    def to_compact(self) -> list[int]:
         return [self.elapsed // UNITS["s"]]

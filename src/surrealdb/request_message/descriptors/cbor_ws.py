@@ -60,7 +60,9 @@ class WsCborDescriptor:
 
         raise ValueError(f"Invalid method for Cbor WS encoding: {obj.method}")
 
-    def _raise_invalid_schema(self, data: dict, schema: dict, method: str) -> None:
+    def _raise_invalid_schema(
+        self, data: dict[str, Any], schema: dict[str, Any], method: str
+    ) -> None:
         v = Validator(schema)
         if not v.validate(data):
             raise ValueError(

@@ -68,7 +68,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self._send(message, "invalidating")
         self.token = None
 
-    def signup(self, vars: dict) -> str:
+    def signup(self, vars: dict[str, Any]) -> str:
         message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
         self.id = message.id
         response = self._send(message, "signup")
@@ -76,7 +76,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.token = response["result"]
         return response["result"]
 
-    def signin(self, vars: dict) -> str:
+    def signin(self, vars: dict[str, Any]) -> str:
         message = RequestMessage(
             RequestMethod.SIGN_IN,
             username=vars.get("username"),
@@ -132,7 +132,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.namespace = namespace
         self.database = database
 
-    def query(self, query: str, vars: Optional[dict] = None) -> dict:
+    def query(
+        self, query: str, vars: Optional[dict[str, Any]] = None
+    ) -> dict[str, Any]:
         if vars is None:
             vars = {}
         for key, value in self.vars.items():
@@ -147,7 +149,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "query")
         return response["result"][0]["result"]
 
-    def query_raw(self, query: str, params: Optional[dict] = None) -> dict:
+    def query_raw(
+        self, query: str, params: Optional[dict[str, Any]] = None
+    ) -> dict[str, Any]:
         if params is None:
             params = {}
         for key, value in self.vars.items():
@@ -164,8 +168,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     def create(
         self,
         record: RecordIdType,
-        data: Optional[Union[Union[list[dict], dict], dict]] = None,
-    ) -> Union[list[dict], dict]:
+        data: Optional[Union[list[dict[str, Any]], dict[str, Any]]] = None,
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -181,7 +185,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         # CREATE always creates a single record, so always unwrap
         return self._unwrap_result(result, unwrap=True)
 
-    def delete(self, record: RecordIdType) -> Union[list[dict], dict]:
+    def delete(
+        self, record: RecordIdType
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"DELETE {resource_ref} RETURN BEFORE"
@@ -195,8 +201,10 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         )
 
     def insert(
-        self, table: Union[str, Table], data: Union[list[dict], dict]
-    ) -> Union[list[dict], dict]:
+        self,
+        table: Union[str, Table],
+        data: Union[list[dict[str, Any]], dict[str, Any]],
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
         # Validate that table is not a RecordID
         if isinstance(table, RecordID):
             raise Exception(
@@ -213,8 +221,10 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         return response["result"][0]["result"]
 
     def insert_relation(
-        self, table: Union[str, Table], data: Union[list[dict], dict]
-    ) -> Union[list[dict], dict]:
+        self,
+        table: Union[str, Table],
+        data: Union[list[dict[str, Any]], dict[str, Any]],
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
         variables: dict[str, Any] = {}
         table_ref = self._resource_to_variable(table, variables, "_table")
         variables["_data"] = data
@@ -231,8 +241,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.vars.pop(key)
 
     def merge(
-        self, record: RecordIdType, data: Optional[dict] = None
-    ) -> Union[list[dict], dict]:
+        self, record: RecordIdType, data: Optional[dict[str, Any]] = None
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -251,8 +261,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         )
 
     def patch(
-        self, record: RecordIdType, data: Optional[list[dict]] = None
-    ) -> Union[list[dict], dict]:
+        self, record: RecordIdType, data: Optional[list[dict[str, Any]]] = None
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -270,7 +280,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
             result, unwrap=self._is_single_record_operation(record)
         )
 
-    def select(self, record: RecordIdType) -> Union[list[dict], dict]:
+    def select(
+        self, record: RecordIdType
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"SELECT * FROM {resource_ref}"
@@ -280,8 +292,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         return response["result"][0]["result"]
 
     def update(
-        self, record: RecordIdType, data: Optional[dict] = None
-    ) -> Union[list[dict], dict]:
+        self, record: RecordIdType, data: Optional[dict[str, Any]] = None
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -307,8 +319,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         return response["result"]
 
     def upsert(
-        self, record: RecordIdType, data: Optional[dict] = None
-    ) -> Union[list[dict], dict]:
+        self, record: RecordIdType, data: Optional[dict[str, Any]] = None
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
