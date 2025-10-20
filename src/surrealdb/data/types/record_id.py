@@ -3,6 +3,7 @@ Defines the data type for the record ID.
 """
 
 from typing import Any, Union
+
 from surrealdb.data.types.table import Table
 
 RecordIdType = Union[str, "RecordID", Table]

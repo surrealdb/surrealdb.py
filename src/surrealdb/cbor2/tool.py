@@ -16,6 +16,7 @@ from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
 from datetime import datetime
 from functools import partial
 from typing import TYPE_CHECKING, Any, TypeVar, cast
+
 from typing_extensions import TypeAlias
 
 from . import CBORDecoder, CBORSimpleValue, CBORTag, FrozenDict, load, undefined
