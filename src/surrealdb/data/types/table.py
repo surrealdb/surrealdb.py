@@ -2,6 +2,10 @@
 Defines a Table class to represent a database table by its name.
 """
 
+from typing import Union
+
+TableType = Union[str, "Table"]
+
 
 class Table:
     """

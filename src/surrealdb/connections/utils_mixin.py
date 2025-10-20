@@ -1,6 +1,6 @@
 from typing import Any, Union
 
-from surrealdb.data.types.record_id import RecordID
+from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 
 
@@ -16,7 +16,7 @@ class UtilsMixin:
             raise Exception(f"no result {process}: {response}")
 
     @staticmethod
-    def _is_single_record_operation(resource: Union[str, RecordID, Table]) -> bool:
+    def _is_single_record_operation(resource: RecordIdType) -> bool:
         """
         Determines if a resource refers to a single record operation.
 
@@ -56,7 +56,7 @@ class UtilsMixin:
 
     @staticmethod
     def _resource_to_variable(
-        resource: Union[str, RecordID, Table], variables: dict[str, Any], var_name: str
+        resource: RecordIdType, variables: dict[str, Any], var_name: str
     ) -> str:
         """
         Converts a resource (Table, RecordID, or string) into a variable reference for SQL queries.

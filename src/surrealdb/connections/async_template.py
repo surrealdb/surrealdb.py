@@ -2,7 +2,7 @@ from collections.abc import AsyncGenerator
 from typing import Any, Optional, Union
 from uuid import UUID
 
-from surrealdb.data.types.record_id import RecordID
+from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 
 
@@ -145,17 +145,15 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"query not implemented for: {self}")
 
-    async def select(
-        self, thing: Union[str, RecordID, Table]
-    ) -> Union[list[dict], dict]:
+    async def select(self, record: RecordIdType) -> Union[list[dict], dict]:
         """Select all records in a table (or other entity),
         or a specific record, in the database.
 
         This function will run the following query in the database:
-        `select * from $thing`
+        `select * from $record`
 
         Args:
-            thing: The table or record ID to select.
+            record: The table or record ID to select.
 
         Example:
             db.select('person')
@@ -164,16 +162,16 @@ class AsyncTemplate:
 
     async def create(
         self,
-        thing: Union[str, RecordID, Table],
+        record: RecordIdType,
         data: Optional[Union[list[dict], dict]] = None,
     ) -> Union[list[dict], dict]:
         """Create a record in the database.
 
         This function will run the following query in the database:
-        `create $thing content $data`
+        `create $record content $data`
 
         Args:
-            thing: The table or record ID.
+            record: The table or record ID.
             data (optional): The document / record data to insert.
 
         Example:
@@ -182,7 +180,7 @@ class AsyncTemplate:
         raise NotImplementedError(f"create not implemented for: {self}")
 
     async def update(
-        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
+        self, record: RecordIdType, data: Optional[dict] = None
     ) -> Union[list[dict], dict]:
         """Update all records in a table, or a specific record, in the database.
 
@@ -190,10 +188,10 @@ class AsyncTemplate:
         specified data.
 
         This function will run the following query in the database:
-        `update $thing content $data`
+        `update $record content $data`
 
         Args:
-            thing: The table or record ID.
+            record: The table or record ID.
             data (optional): The document / record data to insert.
 
         Example:
@@ -212,16 +210,16 @@ class AsyncTemplate:
         raise NotImplementedError(f"update not implemented for: {self}")
 
     async def upsert(
-        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
+        self, record: RecordIdType, data: Optional[dict] = None
     ) -> Union[list[dict], dict]:
         """Insert records into the database, or to update them if they exist.
 
 
         This function will run the following query in the database:
-        `upsert $thing content $data`
+        `upsert $record content $data`
 
         Args:
-            thing: The table or record ID.
+            record: The table or record ID.
             data (optional): The document / record data to insert.
 
         Example:
@@ -240,7 +238,7 @@ class AsyncTemplate:
         raise NotImplementedError(f"upsert not implemented for: {self}")
 
     async def merge(
-        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
+        self, record: RecordIdType, data: Optional[dict] = None
     ) -> Union[list[dict], dict]:
         """Modify by deep merging all records in a table, or a specific record, in the database.
 
@@ -248,10 +246,10 @@ class AsyncTemplate:
         specified data.
 
         This function will run the following query in the database:
-        `update $thing merge $data`
+        `update $record merge $data`
 
         Args:
-            thing: The table name or the specific record ID to change.
+            record: The table name or the specific record ID to change.
             data (optional): The document / record data to insert.
 
         Example:
@@ -272,7 +270,7 @@ class AsyncTemplate:
         raise NotImplementedError(f"merge not implemented for: {self}")
 
     async def patch(
-        self, thing: Union[str, RecordID, Table], data: Optional[list[dict]] = None
+        self, record: RecordIdType, data: Optional[list[dict]] = None
     ) -> Union[list[dict], dict]:
         """Apply JSON Patch changes to all records, or a specific record, in the database.
 
@@ -280,10 +278,10 @@ class AsyncTemplate:
         the specified JSON Patch data.
 
         This function will run the following query in the database:
-        `update $thing patch $data`
+        `update $record patch $data`
 
         Args:
-            thing: The table or record ID.
+            record: The table or record ID.
             data: The data to modify the record with.
 
         Example:
@@ -300,16 +298,14 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"patch not implemented for: {self}")
 
-    async def delete(
-        self, thing: Union[str, RecordID, Table]
-    ) -> Union[list[dict], dict]:
+    async def delete(self, record: RecordIdType) -> Union[list[dict], dict]:
         """Delete all records in a table, or a specific record, from the database.
 
         This function will run the following query in the database:
-        `delete $thing`
+        `delete $record`
 
         Args:
-            thing: The table name or a RecordID to delete.
+            record: The table name or a RecordID to delete.
 
         Example:
             Delete a specific record from a table
@@ -335,7 +331,7 @@ class AsyncTemplate:
         Inserts one or multiple records in the database.
 
         This function will run the following query in the database:
-        `INSERT INTO $thing $data`
+        `INSERT INTO $record $data`
 
         Args:
             table: The table name to insert records in to

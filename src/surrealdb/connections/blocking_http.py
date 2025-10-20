@@ -7,7 +7,7 @@ from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import UtilsMixin
 from surrealdb.data.cbor import decode
-from surrealdb.data.types.record_id import RecordID
+from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
@@ -160,11 +160,11 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
 
     def create(
         self,
-        thing: Union[str, RecordID, Table],
+        record: RecordIdType,
         data: Optional[Union[Union[list[dict], dict], dict]] = None,
     ) -> Union[list[dict], dict]:
         variables = {}
-        resource_ref = self._resource_to_variable(thing, variables, "_resource")
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
             query = f"CREATE {resource_ref}"
@@ -178,9 +178,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         # CREATE always creates a single record, so always unwrap
         return self._unwrap_result(result, unwrap=True)
 
-    def delete(self, thing: Union[str, RecordID, Table]) -> Union[list[dict], dict]:
+    def delete(self, record: RecordIdType) -> Union[list[dict], dict]:
         variables = {}
-        resource_ref = self._resource_to_variable(thing, variables, "_resource")
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"DELETE {resource_ref} RETURN BEFORE"
 
         response = self.query_raw(query, variables)
@@ -188,7 +188,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         result = response["result"][0]["result"]
         # DELETE on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(thing)
+            result, unwrap=self._is_single_record_operation(record)
         )
 
     def insert(
@@ -228,10 +228,10 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.vars.pop(key)
 
     def merge(
-        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
+        self, record: RecordIdType, data: Optional[dict] = None
     ) -> Union[list[dict], dict]:
         variables = {}
-        resource_ref = self._resource_to_variable(thing, variables, "_resource")
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
             query = f"UPDATE {resource_ref} MERGE {{}}"
@@ -244,14 +244,14 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         result = response["result"][0]["result"]
         # MERGE on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(thing)
+            result, unwrap=self._is_single_record_operation(record)
         )
 
     def patch(
-        self, thing: Union[str, RecordID, Table], data: Optional[list[dict]] = None
+        self, record: RecordIdType, data: Optional[list[dict]] = None
     ) -> Union[list[dict], dict]:
         variables = {}
-        resource_ref = self._resource_to_variable(thing, variables, "_resource")
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
             query = f"UPDATE {resource_ref} PATCH []"
@@ -264,12 +264,12 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         result = response["result"][0]["result"]
         # PATCH on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(thing)
+            result, unwrap=self._is_single_record_operation(record)
         )
 
-    def select(self, thing: Union[str, RecordID, Table]) -> Union[list[dict], dict]:
+    def select(self, record: RecordIdType) -> Union[list[dict], dict]:
         variables = {}
-        resource_ref = self._resource_to_variable(thing, variables, "_resource")
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"SELECT * FROM {resource_ref}"
 
         response = self.query_raw(query, variables)
@@ -277,10 +277,10 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         return response["result"][0]["result"]
 
     def update(
-        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
+        self, record: RecordIdType, data: Optional[dict] = None
     ) -> Union[list[dict], dict]:
         variables = {}
-        resource_ref = self._resource_to_variable(thing, variables, "_resource")
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
             query = f"UPDATE {resource_ref}"
@@ -293,7 +293,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         result = response["result"][0]["result"]
         # UPDATE on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(thing)
+            result, unwrap=self._is_single_record_operation(record)
         )
 
     def version(self) -> str:
@@ -304,10 +304,10 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         return response["result"]
 
     def upsert(
-        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
+        self, record: RecordIdType, data: Optional[dict] = None
     ) -> Union[list[dict], dict]:
         variables = {}
-        resource_ref = self._resource_to_variable(thing, variables, "_resource")
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
             query = f"UPSERT {resource_ref}"
@@ -320,7 +320,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         result = response["result"][0]["result"]
         # UPSERT on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(thing)
+            result, unwrap=self._is_single_record_operation(record)
         )
 
     def __enter__(self) -> "BlockingHttpSurrealConnection":

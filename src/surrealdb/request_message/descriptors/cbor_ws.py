@@ -3,7 +3,7 @@ from cerberus.errors import ValidationError
 
 from surrealdb.data.cbor import encode
 from surrealdb.data.types.table import Table
-from surrealdb.data.utils import process_thing
+from surrealdb.data.utils import process_record
 from surrealdb.request_message.methods import RequestMethod
 
 
@@ -368,7 +368,7 @@ class WsCborDescriptor:
             "id": obj.id,
             "method": obj.method.value,
             "params": [
-                process_thing(obj.kwargs.get("collection")),
+                process_record(obj.kwargs.get("collection")),
                 obj.kwargs.get("params"),
             ],
         }
@@ -390,7 +390,7 @@ class WsCborDescriptor:
             "id": obj.id,
             "method": obj.method.value,
             "params": [
-                process_thing(obj.kwargs.get("collection")),
+                process_record(obj.kwargs.get("collection")),
                 obj.kwargs.get("params"),
             ],
         }
@@ -427,7 +427,7 @@ class WsCborDescriptor:
         data = {
             "id": obj.id,
             "method": obj.method.value,
-            "params": [process_thing(obj.kwargs.get("collection"))],
+            "params": [process_record(obj.kwargs.get("collection"))],
         }
         if obj.kwargs.get("data"):
             data["params"].append(obj.kwargs.get("data"))
@@ -450,7 +450,7 @@ class WsCborDescriptor:
             "id": obj.id,
             "method": obj.method.value,
             "params": [
-                process_thing(obj.kwargs.get("record_id")),
+                process_record(obj.kwargs.get("record_id")),
                 obj.kwargs.get("data", dict()),
             ],
         }
@@ -472,7 +472,7 @@ class WsCborDescriptor:
             "id": obj.id,
             "method": obj.method.value,
             "params": [
-                process_thing(obj.kwargs.get("record_id")),
+                process_record(obj.kwargs.get("record_id")),
                 obj.kwargs.get("data", dict()),
             ],
         }
@@ -493,7 +493,7 @@ class WsCborDescriptor:
         data = {
             "id": obj.id,
             "method": obj.method.value,
-            "params": [process_thing(obj.kwargs.get("record_id"))],
+            "params": [process_record(obj.kwargs.get("record_id"))],
         }
         schema = {
             "id": {"required": True},
@@ -542,7 +542,7 @@ class WsCborDescriptor:
             "id": obj.id,
             "method": obj.method.value,
             "params": [
-                process_thing(obj.kwargs.get("record_id")),
+                process_record(obj.kwargs.get("record_id")),
                 obj.kwargs.get("data", dict()),
             ],
         }

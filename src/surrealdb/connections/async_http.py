@@ -7,7 +7,7 @@ from surrealdb.connections.async_template import AsyncTemplate
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import UtilsMixin
 from surrealdb.data.cbor import decode
-from surrealdb.data.types.record_id import RecordID
+from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
@@ -141,25 +141,6 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
             message, "getting database information", bypass=True
         )
 
-        # Check if we got an error
-        if response.get("error"):
-            error = response.get("error")
-            # If INFO returns "No result found", try to get auth info via $auth
-            # This happens when using record-level authentication
-            if error.get("code") == -32000 and "No result found" in error.get(
-                "message", ""
-            ):
-                # Try to get authenticated user record via $auth
-                auth_response = await self.query("$auth")
-                if (
-                    auth_response
-                    and isinstance(auth_response, list)
-                    and len(auth_response) > 0
-                ):
-                    return auth_response[0]
-            # If it's a different error, raise it
-            raise Exception(error)
-
         self.check_response_for_result(response, "getting database information")
         return response["result"]
 
@@ -207,11 +188,11 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def create(
         self,
-        thing: Union[str, RecordID, Table],
+        record: RecordIdType,
         data: Optional[Union[Union[list[dict], dict], dict]] = None,
     ) -> Union[list[dict], dict]:
         variables = {}
-        resource_ref = self._resource_to_variable(thing, variables, "_resource")
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
             query = f"CREATE {resource_ref}"
@@ -225,11 +206,9 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         # CREATE always creates a single record, so always unwrap
         return self._unwrap_result(result, unwrap=True)
 
-    async def delete(
-        self, thing: Union[str, RecordID, Table]
-    ) -> Union[list[dict], dict]:
+    async def delete(self, record: RecordIdType) -> Union[list[dict], dict]:
         variables = {}
-        resource_ref = self._resource_to_variable(thing, variables, "_resource")
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"DELETE {resource_ref} RETURN BEFORE"
 
         response = await self.query_raw(query, variables)
@@ -237,7 +216,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         result = response["result"][0]["result"]
         # DELETE on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(thing)
+            result, unwrap=self._is_single_record_operation(record)
         )
 
     async def insert(
@@ -277,10 +256,10 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.vars.pop(key)
 
     async def merge(
-        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
+        self, record: RecordIdType, data: Optional[dict] = None
     ) -> Union[list[dict], dict]:
         variables = {}
-        resource_ref = self._resource_to_variable(thing, variables, "_resource")
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
             query = f"UPDATE {resource_ref} MERGE {{}}"
@@ -293,14 +272,14 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         result = response["result"][0]["result"]
         # MERGE on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(thing)
+            result, unwrap=self._is_single_record_operation(record)
         )
 
     async def patch(
-        self, thing: Union[str, RecordID, Table], data: Optional[list[dict]] = None
+        self, record: RecordIdType, data: Optional[list[dict]] = None
     ) -> Union[list[dict], dict]:
         variables = {}
-        resource_ref = self._resource_to_variable(thing, variables, "_resource")
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
             query = f"UPDATE {resource_ref} PATCH []"
@@ -313,14 +292,12 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         result = response["result"][0]["result"]
         # PATCH on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(thing)
+            result, unwrap=self._is_single_record_operation(record)
         )
 
-    async def select(
-        self, thing: Union[str, RecordID, Table]
-    ) -> Union[list[dict], dict]:
+    async def select(self, record: RecordIdType) -> Union[list[dict], dict]:
         variables = {}
-        resource_ref = self._resource_to_variable(thing, variables, "_resource")
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"SELECT * FROM {resource_ref}"
 
         response = await self.query_raw(query, variables)
@@ -328,10 +305,10 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         return response["result"][0]["result"]
 
     async def update(
-        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
+        self, record: RecordIdType, data: Optional[dict] = None
     ) -> Union[list[dict], dict]:
         variables = {}
-        resource_ref = self._resource_to_variable(thing, variables, "_resource")
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
             query = f"UPDATE {resource_ref}"
@@ -344,7 +321,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         result = response["result"][0]["result"]
         # UPDATE on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(thing)
+            result, unwrap=self._is_single_record_operation(record)
         )
 
     async def version(self) -> str:
@@ -355,10 +332,10 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         return response["result"]
 
     async def upsert(
-        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
+        self, record: RecordIdType, data: Optional[dict] = None
     ) -> Union[list[dict], dict]:
         variables = {}
-        resource_ref = self._resource_to_variable(thing, variables, "_resource")
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
             query = f"UPSERT {resource_ref}"
@@ -371,7 +348,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         result = response["result"][0]["result"]
         # UPSERT on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(thing)
+            result, unwrap=self._is_single_record_operation(record)
         )
 
     async def __aenter__(self) -> "AsyncHttpSurrealConnection":
