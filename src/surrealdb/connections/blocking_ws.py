@@ -110,8 +110,12 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 "message", ""
             ):
                 # Try to get authenticated user record via $auth
-                auth_response = self.query("RETURN $auth")
-                if auth_response and len(auth_response) > 0:
+                auth_response = self.query("SELECT * FROM $auth")
+                if (
+                    auth_response
+                    and isinstance(auth_response, list)
+                    and len(auth_response) > 0
+                ):
                     return auth_response[0]
             # If it's a different error, raise it
             self.check_response_for_error(response, "getting database information")

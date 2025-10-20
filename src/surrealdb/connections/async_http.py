@@ -150,7 +150,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
                 "message", ""
             ):
                 # Try to get authenticated user record via $auth
-                auth_response = await self.query("SELECT * FROM $auth")
+                auth_response = await self.query("$auth")
                 if (
                     auth_response
                     and isinstance(auth_response, list)
