@@ -1,4 +1,5 @@
 import uuid
+from types import TracebackType
 from typing import Any, Optional, Union, cast
 
 import requests
@@ -91,7 +92,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.token = response["result"]
         return str(response["result"])
 
-    def info(self):
+    def info(self) -> dict[str, Any]:
         message = RequestMessage(RequestMethod.INFO)
         self.id = message.id
         response = self._send(message, "getting database information", bypass=True)
@@ -333,7 +334,12 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.session = requests.Session()
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
         """
         Synchronous context manager exit.
         Closes the HTTP session upon exiting the context.

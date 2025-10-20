@@ -66,11 +66,11 @@ follow_imports = "normal"
 # Type checking strictness
 check_untyped_defs = true
 disallow_any_generics = false
-disallow_incomplete_defs = false
+disallow_incomplete_defs = true
 disallow_subclassing_any = false
-disallow_untyped_calls = false
+disallow_untyped_calls = true
 disallow_untyped_decorators = false
-disallow_untyped_defs = false
+disallow_untyped_defs = true
 no_implicit_optional = true
 strict_equality = true
 warn_redundant_casts = true

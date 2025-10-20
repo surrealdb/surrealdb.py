@@ -5,10 +5,11 @@ A basic async connection to a SurrealDB instance.
 import asyncio
 from asyncio import AbstractEventLoop, Future, Queue, Task
 from collections.abc import AsyncGenerator
+from types import TracebackType
 from typing import Any, Optional, Union
 from uuid import UUID
 
-import websockets  # type: ignore
+import websockets
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from surrealdb.connections.async_template import AsyncTemplate
@@ -49,7 +50,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.recv_task: Optional[Task[None]] = None
         self.live_queues: dict[str, list[Queue[dict]]] = {}
 
-    async def _recv_task(self):
+    async def _recv_task(self) -> None:
         assert self.socket
         try:
             async for data in self.socket:
@@ -384,7 +385,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         suid = str(query_uuid)
         self.live_queues[suid].append(result_queue)
 
-        async def _iter():
+        async def _iter() -> AsyncGenerator[dict, None]:
             while True:
                 ret = await result_queue.get()
                 yield ret["result"]
@@ -416,7 +417,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             result, unwrap=self._is_single_record_operation(record)
         )
 
-    async def close(self):
+    async def close(self) -> None:
         # Cancel the receive task first
         if self.recv_task and not self.recv_task.done():
             self.recv_task.cancel()
@@ -447,7 +448,12 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         await self.connect()
         return self
 
-    async def __aexit__(self, exc_type, exc_value, traceback) -> None:
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
         """
         Asynchronous context manager exit.
         Closes the websocket connection upon exiting the context.

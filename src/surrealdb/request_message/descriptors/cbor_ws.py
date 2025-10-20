@@ -1,14 +1,20 @@
+from typing import TYPE_CHECKING, Any, cast
+
 from cerberus import Validator
 from cerberus.errors import ValidationError
 
 from surrealdb.data.cbor import encode
+from surrealdb.data.types.record_id import RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.data.utils import process_record
 from surrealdb.request_message.methods import RequestMethod
 
+if TYPE_CHECKING:
+    from surrealdb.request_message.message import RequestMessage
+
 
 class WsCborDescriptor:
-    def __get__(self, obj, type=None) -> bytes:
+    def __get__(self, obj: "RequestMessage", type: Any = None) -> bytes:
         if obj.method == RequestMethod.USE:
             return self.prep_use(obj)
         elif obj.method == RequestMethod.INFO:
@@ -61,7 +67,7 @@ class WsCborDescriptor:
                 f"Invalid schema for Cbor WS encoding for {method}: {v.errors}"
             )
 
-    def prep_use(self, obj) -> bytes:
+    def prep_use(self, obj: "RequestMessage") -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
@@ -79,7 +85,7 @@ class WsCborDescriptor:
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
-    def prep_info(self, obj) -> bytes:
+    def prep_info(self, obj: "RequestMessage") -> bytes:
         data = {"id": obj.id, "method": obj.method.value}
         schema = {
             "id": {"required": True},
@@ -88,7 +94,7 @@ class WsCborDescriptor:
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
-    def prep_version(self, obj) -> bytes:
+    def prep_version(self, obj: "RequestMessage") -> bytes:
         data = {"id": obj.id, "method": obj.method.value}
         schema = {
             "id": {"required": True},
@@ -97,21 +103,21 @@ class WsCborDescriptor:
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
-    def prep_signup(self, obj) -> bytes:
-        passed_params = obj.kwargs.get("data")
+    def prep_signup(self, obj: "RequestMessage") -> bytes:
+        passed_params = cast(dict[str, Any], obj.kwargs.get("data"))
+        params_dict: dict[str, Any] = {
+            "NS": passed_params.get("namespace"),
+            "DB": passed_params.get("database"),
+            "AC": passed_params.get("access"),
+        }
+        for key, value in passed_params["variables"].items():
+            params_dict[key] = value
+
         data = {
             "id": obj.id,
             "method": obj.method.value,
-            "params": [
-                {
-                    "NS": passed_params.get("namespace"),
-                    "DB": passed_params.get("database"),
-                    "AC": passed_params.get("access"),
-                }
-            ],
+            "params": [params_dict],
         }
-        for key, value in passed_params["variables"].items():
-            data["params"][0][key] = value
         # Sign-up schema is currently deactivated due to the different types of params passed in
         # schema = {
         #     "id": {"required": True},
@@ -134,7 +140,7 @@ class WsCborDescriptor:
         # self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
-    def prep_signin(self, obj) -> bytes:
+    def prep_signin(self, obj: "RequestMessage") -> bytes:
         """
         - user+pass -> done
         - user+pass+ac -> done
@@ -220,20 +226,20 @@ class WsCborDescriptor:
             }
 
         elif obj.kwargs.get("username") is None and obj.kwargs.get("password") is None:
+            params_dict_signin: dict[str, Any] = {
+                "ns": obj.kwargs.get("namespace"),
+                "db": obj.kwargs.get("database"),
+                "ac": obj.kwargs.get("access"),
+            }
+            variables = cast(dict[str, Any], obj.kwargs.get("variables", {}))
+            for key, value in variables.items():
+                params_dict_signin[key] = value
+
             data = {
                 "id": obj.id,
                 "method": obj.method.value,
-                "params": [
-                    {
-                        "ns": obj.kwargs.get("namespace"),
-                        "db": obj.kwargs.get("database"),
-                        "ac": obj.kwargs.get("access"),
-                        # "variables": obj.kwargs.get("variables")
-                    }
-                ],
+                "params": [params_dict_signin],
             }
-            for key, value in obj.kwargs.get("variables", {}).items():
-                data["params"][0][key] = value
 
         elif (
             obj.kwargs.get("database") is not None
@@ -257,7 +263,7 @@ class WsCborDescriptor:
             raise ValueError(f"Invalid data for signin: {obj.kwargs}")
         return encode(data)
 
-    def prep_authenticate(self, obj) -> bytes:
+    def prep_authenticate(self, obj: "RequestMessage") -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
@@ -280,7 +286,7 @@ class WsCborDescriptor:
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
-    def prep_invalidate(self, obj) -> bytes:
+    def prep_invalidate(self, obj: "RequestMessage") -> bytes:
         data = {"id": obj.id, "method": obj.method.value}
         schema = {
             "id": {"required": True},
@@ -289,7 +295,7 @@ class WsCborDescriptor:
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
-    def prep_let(self, obj) -> bytes:
+    def prep_let(self, obj: "RequestMessage") -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
@@ -303,7 +309,7 @@ class WsCborDescriptor:
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
-    def prep_unset(self, obj) -> bytes:
+    def prep_unset(self, obj: "RequestMessage") -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
@@ -317,7 +323,7 @@ class WsCborDescriptor:
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
-    def prep_live(self, obj) -> bytes:
+    def prep_live(self, obj: "RequestMessage") -> bytes:
         table = obj.kwargs.get("table")
         if isinstance(table, str):
             table = Table(table)
@@ -330,7 +336,7 @@ class WsCborDescriptor:
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
-    def prep_kill(self, obj) -> bytes:
+    def prep_kill(self, obj: "RequestMessage") -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
@@ -344,7 +350,7 @@ class WsCborDescriptor:
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
-    def prep_query(self, obj) -> bytes:
+    def prep_query(self, obj: "RequestMessage") -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
@@ -363,12 +369,12 @@ class WsCborDescriptor:
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
-    def prep_insert(self, obj) -> bytes:
+    def prep_insert(self, obj: "RequestMessage") -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
             "params": [
-                process_record(obj.kwargs.get("collection")),
+                process_record(cast(RecordIdType, obj.kwargs.get("collection"))),
                 obj.kwargs.get("params"),
             ],
         }
@@ -385,12 +391,12 @@ class WsCborDescriptor:
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
-    def prep_patch(self, obj) -> bytes:
+    def prep_patch(self, obj: "RequestMessage") -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
             "params": [
-                process_record(obj.kwargs.get("collection")),
+                process_record(cast(RecordIdType, obj.kwargs.get("collection"))),
                 obj.kwargs.get("params"),
             ],
         }
@@ -409,7 +415,7 @@ class WsCborDescriptor:
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
-    def prep_select(self, obj) -> bytes:
+    def prep_select(self, obj: "RequestMessage") -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
@@ -423,14 +429,17 @@ class WsCborDescriptor:
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
-    def prep_create(self, obj) -> bytes:
+    def prep_create(self, obj: "RequestMessage") -> bytes:
+        params: list[Any] = [
+            process_record(cast(RecordIdType, obj.kwargs.get("collection")))
+        ]
         data = {
             "id": obj.id,
             "method": obj.method.value,
-            "params": [process_record(obj.kwargs.get("collection"))],
+            "params": params,
         }
         if obj.kwargs.get("data"):
-            data["params"].append(obj.kwargs.get("data"))
+            params.append(obj.kwargs.get("data"))
 
         schema = {
             "id": {"required": True},
@@ -445,12 +454,12 @@ class WsCborDescriptor:
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
-    def prep_update(self, obj) -> bytes:
+    def prep_update(self, obj: "RequestMessage") -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
             "params": [
-                process_record(obj.kwargs.get("record_id")),
+                process_record(cast(RecordIdType, obj.kwargs.get("record_id"))),
                 obj.kwargs.get("data", dict()),
             ],
         }
@@ -467,12 +476,12 @@ class WsCborDescriptor:
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
-    def prep_merge(self, obj) -> bytes:
+    def prep_merge(self, obj: "RequestMessage") -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
             "params": [
-                process_record(obj.kwargs.get("record_id")),
+                process_record(cast(RecordIdType, obj.kwargs.get("record_id"))),
                 obj.kwargs.get("data", dict()),
             ],
         }
@@ -489,11 +498,11 @@ class WsCborDescriptor:
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
-    def prep_delete(self, obj) -> bytes:
+    def prep_delete(self, obj: "RequestMessage") -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
-            "params": [process_record(obj.kwargs.get("record_id"))],
+            "params": [process_record(cast(RecordIdType, obj.kwargs.get("record_id")))],
         }
         schema = {
             "id": {"required": True},
@@ -508,17 +517,16 @@ class WsCborDescriptor:
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
-    def prep_insert_relation(self, obj) -> bytes:
+    def prep_insert_relation(self, obj: "RequestMessage") -> bytes:
+        params_list: list[Any] = [Table(cast(str, obj.kwargs.get("table")))]
         data = {
             "id": obj.id,
             "method": obj.method.value,
-            "params": [
-                Table(obj.kwargs.get("table")),
-            ],
+            "params": params_list,
         }
         params = obj.kwargs.get("params", [])
         # for i in params:
-        data["params"].append(params)
+        params_list.append(params)
 
         schema = {
             "id": {"required": True},
@@ -537,12 +545,12 @@ class WsCborDescriptor:
         self._raise_invalid_schema(data=data, schema=schema, method=obj.method.value)
         return encode(data)
 
-    def prep_upsert(self, obj) -> bytes:
+    def prep_upsert(self, obj: "RequestMessage") -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
             "params": [
-                process_record(obj.kwargs.get("record_id")),
+                process_record(cast(RecordIdType, obj.kwargs.get("record_id"))),
                 obj.kwargs.get("data", dict()),
             ],
         }

@@ -1,4 +1,5 @@
 import uuid
+from types import TracebackType
 from typing import Any, Optional, Union
 
 import aiohttp
@@ -359,7 +360,12 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self._session = aiohttp.ClientSession()
         return self
 
-    async def __aexit__(self, exc_type, exc_value, traceback) -> None:
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
         """
         Asynchronous context manager exit.
         Closes the aiohttp session upon exiting the context.

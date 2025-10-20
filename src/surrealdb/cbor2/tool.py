@@ -15,7 +15,7 @@ import uuid
 from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
 from datetime import datetime
 from functools import partial
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 from typing_extensions import TypeAlias
 
 from . import CBORDecoder, CBORSimpleValue, CBORTag, FrozenDict, load, undefined
@@ -122,11 +122,11 @@ def key_to_str(
             k = str(k)
 
         if isinstance(v, dict):
-            v = key_to_str(v, dict_ids)  # type: ignore[arg-type,assignment]
+            rval[k] = key_to_str(v, dict_ids)
         elif isinstance(v, (tuple, list, set)):
-            v = [key_to_str(x, dict_ids) for x in v]
-
-        rval[k] = v
+            rval[k] = [key_to_str(x, dict_ids) for x in v]
+        else:
+            rval[k] = v
 
     return rval
 

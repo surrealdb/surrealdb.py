@@ -4,6 +4,7 @@ A basic blocking connection to a SurrealDB instance.
 
 import uuid
 from collections.abc import Generator
+from types import TracebackType
 from typing import Any, Optional, Union
 from uuid import UUID
 
@@ -58,7 +59,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 subprotocols=[websockets.Subprotocol("cbor")],
             )
         self.socket.send(message.WS_CBOR_DESCRIPTOR)
-        response = decode(self.socket.recv())
+        data = self.socket.recv()
+        response = decode(data if isinstance(data, bytes) else data.encode())
         if bypass is False:
             self.check_response_for_error(response, process)
         return response
@@ -307,7 +309,10 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                         )
 
                     # Receive a message from the WebSocket
-                    response = decode(self.socket.recv())
+                    data = self.socket.recv()
+                    response = decode(
+                        data if isinstance(data, bytes) else data.encode()
+                    )
 
                     # Check if the response matches the query UUID
                     if response.get("result", {}).get("id") == query_uuid:
@@ -360,7 +365,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             result, unwrap=self._is_single_record_operation(record)
         )
 
-    def close(self):
+    def close(self) -> None:
         if self.socket is not None:
             self.socket.close()
 
@@ -374,7 +379,12 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         )
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
         """
         Synchronous context manager exit.
         Closes the websocket connection upon exiting the context.

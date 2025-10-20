@@ -3,6 +3,7 @@ Defines a unset of geometry classes for representing geometric shapes such as po
 """
 
 from dataclasses import dataclass
+from typing import Any
 
 
 class Geometry:
@@ -11,14 +12,14 @@ class Geometry:
     and parsing them into specific geometry types.
     """
 
-    def get_coordinates(self):
+    def get_coordinates(self) -> Any:
         """
         Returns the coordinates of the geometry. Should be implemented by subclasses.
         """
         pass
 
     @staticmethod
-    def parse_coordinates(coordinates):
+    def parse_coordinates(coordinates: Any) -> Any:
         """
         Parses a list of coordinates into a specific geometry type. Should be implemented by subclasses.
         """
