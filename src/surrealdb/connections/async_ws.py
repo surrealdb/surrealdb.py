@@ -83,7 +83,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
-    ) -> dict[str, Value]:
+    ) -> dict[str, Any]:
         await self.connect()
         assert (
             self.socket is not None and self.loop is not None
@@ -210,7 +210,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def query_raw(
         self, query: str, params: Optional[dict[str, Value]] = None
-    ) -> dict[str, Value]:
+    ) -> dict[str, Any]:
         if params is None:
             params = {}
         message = RequestMessage(
@@ -236,7 +236,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         await self._send(message, "unsetting")
 
     async def select(self, record: RecordIdType) -> Value:
-        variables: dict[str, Value] = {}
+        variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"SELECT * FROM {resource_ref}"
 
@@ -249,7 +249,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         record: RecordIdType,
         data: Optional[Value] = None,
     ) -> Value:
-        variables: dict[str, Value] = {}
+        variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
@@ -264,10 +264,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         # CREATE always creates a single record, so always unwrap
         return self._unwrap_result(result, unwrap=True)
 
-    async def update(
-        self, record: RecordIdType, data: Optional[dict[str, Any]] = None
-    ) -> Value:
-        variables: dict[str, Value] = {}
+    async def update(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+        variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
@@ -284,10 +282,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             result, unwrap=self._is_single_record_operation(record)
         )
 
-    async def merge(
-        self, record: RecordIdType, data: Optional[dict[str, Any]] = None
-    ) -> Value:
-        variables: dict[str, Value] = {}
+    async def merge(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+        variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
@@ -304,10 +300,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             result, unwrap=self._is_single_record_operation(record)
         )
 
-    async def patch(
-        self, record: RecordIdType, data: Optional[list[dict[str, Any]]] = None
-    ) -> Value:
-        variables: dict[str, Value] = {}
+    async def patch(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+        variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
@@ -325,7 +319,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         )
 
     async def delete(self, record: RecordIdType) -> Value:
-        variables: dict[str, Value] = {}
+        variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"DELETE {resource_ref} RETURN BEFORE"
 
@@ -341,7 +335,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self,
         table: Union[str, Table],
         data: Value,
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+    ) -> Value:
         # Validate that table is not a RecordID
         if isinstance(table, RecordID):
             raise Exception(
@@ -362,7 +356,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         table: Union[str, Table],
         data: Value,
     ) -> Value:
-        variables: dict[str, Value] = {}
+        variables: dict[str, Any] = {}
         table_ref = self._resource_to_variable(table, variables, "_table")
         variables["_data"] = data
         query = f"INSERT RELATION INTO {table_ref} $_data"
@@ -402,10 +396,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         await self._send(message, "kill")
         self.live_queues.pop(str(query_uuid), None)
 
-    async def upsert(
-        self, record: RecordIdType, data: Optional[dict[str, Any]] = None
-    ) -> Value:
-        variables: dict[str, Value] = {}
+    async def upsert(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+        variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
