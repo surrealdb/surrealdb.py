@@ -116,7 +116,7 @@ jobs:
           PYTHONWARNINGS: ignore::ResourceWarning
 
       - name: Run unit tests (WebSocket)
-        run: uv run python -m unittest discover -s tests
+        run: uv run pytest
         env:
           PYTHONPATH: ./src
           SURREALDB_URL: ws://localhost:8000
