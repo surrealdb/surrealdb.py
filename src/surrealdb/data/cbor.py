@@ -1,7 +1,15 @@
 import decimal
 from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
 
-from surrealdb.cbor2 import CBORTag, dumps, loads, shareable_encoder
+from surrealdb.cbor2 import (
+    CBORDecoder,
+    CBOREncoder,
+    CBORTag,
+    dumps,
+    loads,
+    shareable_encoder,
+)
 from surrealdb.data.types import constants
 from surrealdb.data.types.datetime import IsoDateTimeWrapper
 from surrealdb.data.types.duration import Duration
@@ -21,7 +29,7 @@ from surrealdb.data.types.table import Table
 
 
 @shareable_encoder
-def default_encoder(encoder, obj):
+def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
     if obj is None:
         tagged = CBORTag(constants.TAG_NONE, None)
 
@@ -76,7 +84,9 @@ def default_encoder(encoder, obj):
     encoder.encode(tagged)
 
 
-def tag_decoder(decoder, tag, shareable_index=None):
+def tag_decoder(
+    decoder: CBORDecoder, tag: CBORTag, shareable_index: Optional[int] = None
+) -> Any:
     if tag.tag == constants.TAG_GEOMETRY_POINT:
         return GeometryPoint.parse_coordinates(tag.value)
 
@@ -138,9 +148,9 @@ def tag_decoder(decoder, tag, shareable_index=None):
         raise BufferError("no decoder for tag", tag.tag)
 
 
-def encode(obj):
+def encode(obj: Any) -> bytes:
     return dumps(obj, default=default_encoder, timezone=timezone.utc)
 
 
-def decode(data):
+def decode(data: bytes) -> Any:
     return loads(data, tag_hook=tag_decoder)

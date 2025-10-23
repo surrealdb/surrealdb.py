@@ -5,17 +5,18 @@ A basic async connection to a SurrealDB instance.
 import asyncio
 from asyncio import AbstractEventLoop, Future, Queue, Task
 from collections.abc import AsyncGenerator
+from types import TracebackType
 from typing import Any, Optional, Union
 from uuid import UUID
 
-import websockets  # type: ignore
+import websockets
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from surrealdb.connections.async_template import AsyncTemplate
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import UtilsMixin
 from surrealdb.data.cbor import decode
-from surrealdb.data.types.record_id import RecordID
+from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
@@ -45,11 +46,11 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.token: Optional[str] = None
         self.socket: Any = None  # WebSocket connection
         self.loop: Optional[AbstractEventLoop] = None
-        self.qry: dict[str, Future] = {}
+        self.qry: dict[str, Future[dict[str, Any]]] = {}
         self.recv_task: Optional[Task[None]] = None
-        self.live_queues: dict[str, list[Queue[dict]]] = {}
+        self.live_queues: dict[str, list[Queue[dict[str, Any]]]] = {}
 
-    async def _recv_task(self):
+    async def _recv_task(self) -> None:
         assert self.socket
         try:
             async for data in self.socket:
@@ -81,7 +82,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
-    ) -> dict:
+    ) -> dict[str, Any]:
         await self.connect()
         assert (
             self.socket is not None and self.loop is not None
@@ -137,7 +138,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         await self._send(message, "invalidating")
         self.token = None
 
-    async def signup(self, vars: dict) -> str:
+    async def signup(self, vars: dict[str, Any]) -> str:
         message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
         response = await self._send(message, "signup")
         self.check_response_for_result(response, "signup")
@@ -158,11 +159,33 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.token = response["result"]
         return response["result"]
 
-    async def info(self) -> dict:
+    async def info(self) -> dict[str, Any]:
         message = RequestMessage(RequestMethod.INFO)
-        outcome = await self._send(message, "getting database information")
-        self.check_response_for_result(outcome, "getting database information")
-        return outcome["result"]
+        response = await self._send(
+            message, "getting database information", bypass=True
+        )
+
+        # # Check if we got an error
+        # if response.get("error"):
+        #     error = response.get("error")
+        #     # If INFO returns "No result found", try to get auth info via $auth
+        #     # This happens when using record-level authentication
+        #     if error.get("code") == -32000 and "No result found" in error.get(
+        #         "message", ""
+        #     ):
+        #         # Try to get authenticated user record via $auth
+        #         auth_response = await self.query("SELECT * FROM $auth")
+        #         if (
+        #             auth_response
+        #             and isinstance(auth_response, list)
+        #             and len(auth_response) > 0
+        #         ):
+        #             return auth_response[0]
+        #     # If it's a different error, raise it
+        #     self.check_response_for_error(response, "getting database information")
+
+        self.check_response_for_result(response, "getting database information")
+        return response["result"]
 
     async def use(self, namespace: str, database: str) -> None:
         message = RequestMessage(
@@ -173,8 +196,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         await self._send(message, "use")
 
     async def query(
-        self, query: str, vars: Optional[dict] = None
-    ) -> Union[list[dict], dict]:
+        self, query: str, vars: Optional[dict[str, Any]] = None
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
         if vars is None:
             vars = {}
         message = RequestMessage(
@@ -186,7 +209,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "query")
         return response["result"][0]["result"]
 
-    async def query_raw(self, query: str, params: Optional[dict] = None) -> dict:
+    async def query_raw(
+        self, query: str, params: Optional[dict[str, Any]] = None
+    ) -> dict[str, Any]:
         if params is None:
             params = {}
         message = RequestMessage(
@@ -212,76 +237,144 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         await self._send(message, "unsetting")
 
     async def select(
-        self, thing: Union[str, RecordID, Table]
-    ) -> Union[list[dict], dict]:
-        message = RequestMessage(RequestMethod.SELECT, params=[thing])
-        response = await self._send(message, "select")
-        self.check_response_for_result(response, "select")
-        return response["result"]
+        self, record: RecordIdType
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        variables: dict[str, Any] = {}
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
+        query = f"SELECT * FROM {resource_ref}"
+
+        response = await self.query_raw(query, variables)
+        self.check_response_for_error(response, "select")
+        return response["result"][0]["result"]
 
     async def create(
         self,
-        thing: Union[str, RecordID, Table],
-        data: Optional[Union[Union[list[dict], dict], dict]] = None,
-    ) -> Union[list[dict], dict]:
-        if isinstance(thing, str):
-            if ":" in thing:
-                buffer = thing.split(":")
-                thing = RecordID(table_name=buffer[0], identifier=buffer[1])
-        message = RequestMessage(RequestMethod.CREATE, collection=thing, data=data)
-        response = await self._send(message, "create")
-        self.check_response_for_result(response, "create")
-        return response["result"]
+        record: RecordIdType,
+        data: Optional[Union[list[dict[str, Any]], dict[str, Any]]] = None,
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        variables: dict[str, Any] = {}
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
+
+        if data is None:
+            query = f"CREATE {resource_ref}"
+        else:
+            variables["_content"] = data
+            query = f"CREATE {resource_ref} CONTENT $_content"
+
+        response = await self.query_raw(query, variables)
+        self.check_response_for_error(response, "create")
+        result = response["result"][0]["result"]
+        # CREATE always creates a single record, so always unwrap
+        return self._unwrap_result(result, unwrap=True)
 
     async def update(
-        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
-    ) -> Union[list[dict], dict]:
-        message = RequestMessage(RequestMethod.UPDATE, record_id=thing, data=data)
-        response = await self._send(message, "update")
-        self.check_response_for_result(response, "update")
-        return response["result"]
+        self, record: RecordIdType, data: Optional[dict[str, Any]] = None
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        variables: dict[str, Any] = {}
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
+
+        if data is None:
+            query = f"UPDATE {resource_ref}"
+        else:
+            variables["_content"] = data
+            query = f"UPDATE {resource_ref} CONTENT $_content"
+
+        response = await self.query_raw(query, variables)
+        self.check_response_for_error(response, "update")
+        result = response["result"][0]["result"]
+        # UPDATE on a specific record returns a single dict, on a table returns a list
+        return self._unwrap_result(
+            result, unwrap=self._is_single_record_operation(record)
+        )
 
     async def merge(
-        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
-    ) -> Union[list[dict], dict]:
-        message = RequestMessage(RequestMethod.MERGE, record_id=thing, data=data)
-        response = await self._send(message, "merge")
-        self.check_response_for_result(response, "merge")
-        return response["result"]
+        self, record: RecordIdType, data: Optional[dict[str, Any]] = None
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        variables: dict[str, Any] = {}
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
+
+        if data is None:
+            query = f"UPDATE {resource_ref} MERGE {{}}"
+        else:
+            variables["_data"] = data
+            query = f"UPDATE {resource_ref} MERGE $_data"
+
+        response = await self.query_raw(query, variables)
+        self.check_response_for_error(response, "merge")
+        result = response["result"][0]["result"]
+        # MERGE on a specific record returns a single dict, on a table returns a list
+        return self._unwrap_result(
+            result, unwrap=self._is_single_record_operation(record)
+        )
 
     async def patch(
-        self, thing: Union[str, RecordID, Table], data: Optional[list[dict]] = None
-    ) -> Union[list[dict], dict]:
-        message = RequestMessage(RequestMethod.PATCH, collection=thing, params=data)
-        response = await self._send(message, "patch")
-        self.check_response_for_result(response, "patch")
-        return response["result"]
+        self, record: RecordIdType, data: Optional[list[dict[str, Any]]] = None
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        variables: dict[str, Any] = {}
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
+
+        if data is None:
+            query = f"UPDATE {resource_ref} PATCH []"
+        else:
+            variables["_patches"] = data
+            query = f"UPDATE {resource_ref} PATCH $_patches"
+
+        response = await self.query_raw(query, variables)
+        self.check_response_for_error(response, "patch")
+        result = response["result"][0]["result"]
+        # PATCH on a specific record returns a single dict, on a table returns a list
+        return self._unwrap_result(
+            result, unwrap=self._is_single_record_operation(record)
+        )
 
     async def delete(
-        self, thing: Union[str, RecordID, Table]
-    ) -> Union[list[dict], dict]:
-        message = RequestMessage(RequestMethod.DELETE, record_id=thing)
-        response = await self._send(message, "delete")
-        self.check_response_for_result(response, "delete")
-        return response["result"]
+        self, record: RecordIdType
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        variables: dict[str, Any] = {}
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
+        query = f"DELETE {resource_ref} RETURN BEFORE"
+
+        response = await self.query_raw(query, variables)
+        self.check_response_for_error(response, "delete")
+        result = response["result"][0]["result"]
+        # DELETE on a specific record returns a single dict, on a table returns a list
+        return self._unwrap_result(
+            result, unwrap=self._is_single_record_operation(record)
+        )
 
     async def insert(
-        self, table: Union[str, Table], data: Union[list[dict], dict]
-    ) -> Union[list[dict], dict]:
-        message = RequestMessage(RequestMethod.INSERT, collection=table, params=data)
-        response = await self._send(message, "insert")
-        self.check_response_for_result(response, "insert")
-        return response["result"]
+        self,
+        table: Union[str, Table],
+        data: Union[list[dict[str, Any]], dict[str, Any]],
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        # Validate that table is not a RecordID
+        if isinstance(table, RecordID):
+            raise Exception(
+                f"There was a problem with the database: Can not execute INSERT statement using value '{table}'"
+            )
+
+        variables: dict[str, Any] = {}
+        table_ref = self._resource_to_variable(table, variables, "_table")
+        variables["_data"] = data
+        query = f"INSERT INTO {table_ref} $_data"
+
+        response = await self.query_raw(query, variables)
+        self.check_response_for_error(response, "insert")
+        return response["result"][0]["result"]
 
     async def insert_relation(
-        self, table: Union[str, Table], data: Union[list[dict], dict]
-    ) -> Union[list[dict], dict]:
-        message = RequestMessage(
-            RequestMethod.INSERT_RELATION, table=table, params=data
-        )
-        response = await self._send(message, "insert_relation")
-        self.check_response_for_result(response, "insert_relation")
-        return response["result"]
+        self,
+        table: Union[str, Table],
+        data: Union[list[dict[str, Any]], dict[str, Any]],
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        variables: dict[str, Any] = {}
+        table_ref = self._resource_to_variable(table, variables, "_table")
+        variables["_data"] = data
+        query = f"INSERT RELATION INTO {table_ref} $_data"
+
+        response = await self.query_raw(query, variables)
+        self.check_response_for_error(response, "insert_relation")
+        return response["result"][0]["result"]
 
     async def live(self, table: Union[str, Table], diff: bool = False) -> UUID:
         message = RequestMessage(
@@ -297,12 +390,12 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def subscribe_live(
         self, query_uuid: Union[str, UUID]
-    ) -> AsyncGenerator[dict, None]:
-        result_queue: Queue[dict] = Queue()
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        result_queue: Queue[dict[str, Any]] = Queue()
         suid = str(query_uuid)
         self.live_queues[suid].append(result_queue)
 
-        async def _iter():
+        async def _iter() -> AsyncGenerator[dict[str, Any], None]:
             while True:
                 ret = await result_queue.get()
                 yield ret["result"]
@@ -315,14 +408,26 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.live_queues.pop(str(query_uuid), None)
 
     async def upsert(
-        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
-    ) -> Union[list[dict], dict]:
-        message = RequestMessage(RequestMethod.UPSERT, record_id=thing, data=data)
-        response = await self._send(message, "upsert")
-        self.check_response_for_result(response, "upsert")
-        return response["result"]
+        self, record: RecordIdType, data: Optional[dict[str, Any]] = None
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        variables: dict[str, Any] = {}
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
 
-    async def close(self):
+        if data is None:
+            query = f"UPSERT {resource_ref}"
+        else:
+            variables["_content"] = data
+            query = f"UPSERT {resource_ref} CONTENT $_content"
+
+        response = await self.query_raw(query, variables)
+        self.check_response_for_error(response, "upsert")
+        result = response["result"][0]["result"]
+        # UPSERT on a specific record returns a single dict, on a table returns a list
+        return self._unwrap_result(
+            result, unwrap=self._is_single_record_operation(record)
+        )
+
+    async def close(self) -> None:
         # Cancel the receive task first
         if self.recv_task and not self.recv_task.done():
             self.recv_task.cancel()
@@ -353,7 +458,12 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         await self.connect()
         return self
 
-    async def __aexit__(self, exc_type, exc_value, traceback) -> None:
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
         """
         Asynchronous context manager exit.
         Closes the websocket connection upon exiting the context.

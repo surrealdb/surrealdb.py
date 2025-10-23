@@ -69,7 +69,7 @@ class CBORDecoder:
         self,
         fp: IO[bytes],
         tag_hook: Callable[[CBORDecoder, CBORTag], Any] | None = None,
-        object_hook: Callable[[CBORDecoder, dict[Any, Any]], Any] | None = None,
+        object_hook: Callable[[CBORDecoder, Mapping[Any, Any]], Any] | None = None,
         str_errors: Literal["strict", "error", "replace"] = "strict",
     ):
         """
@@ -138,7 +138,7 @@ class CBORDecoder:
             raise ValueError("tag_hook must be None or a callable")
 
     @property
-    def object_hook(self) -> Callable[[CBORDecoder, dict[Any, Any]], Any] | None:
+    def object_hook(self) -> Callable[[CBORDecoder, Mapping[Any, Any]], Any] | None:
         return self._object_hook
 
     @object_hook.setter
@@ -813,7 +813,7 @@ semantic_decoders: dict[int, Callable[[CBORDecoder], Any]] = {
 def loads(
     s: bytes | bytearray | memoryview,
     tag_hook: Callable[[CBORDecoder, CBORTag], Any] | None = None,
-    object_hook: Callable[[CBORDecoder, dict[Any, Any]], Any] | None = None,
+    object_hook: Callable[[CBORDecoder, Mapping[Any, Any]], Any] | None = None,
     str_errors: Literal["strict", "error", "replace"] = "strict",
 ) -> Any:
     """
@@ -848,7 +848,7 @@ def loads(
 def load(
     fp: IO[bytes],
     tag_hook: Callable[[CBORDecoder, CBORTag], Any] | None = None,
-    object_hook: Callable[[CBORDecoder, dict[Any, Any]], Any] | None = None,
+    object_hook: Callable[[CBORDecoder, Mapping[Any, Any]], Any] | None = None,
     str_errors: Literal["strict", "error", "replace"] = "strict",
 ) -> Any:
     """

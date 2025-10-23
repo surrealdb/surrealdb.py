@@ -1,9 +1,10 @@
+from typing import Any, Optional, Union
+
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.connections.url import Url, UrlScheme
-from typing import Union, Optional
 
 from surrealdb.data.types.table import Table
 from surrealdb.data.types.constants import *
@@ -17,7 +18,7 @@ from surrealdb.data.types.datetime import IsoDateTimeWrapper
 
 class AsyncSurrealDBMeta(type):
 
-    def __call__(cls, *args, **kwargs):
+    def __call__(cls, *args: Any, **kwargs: Any) -> Union[AsyncHttpSurrealConnection, AsyncWsSurrealConnection]:
         # Ensure `url` is provided as either an arg or kwarg
         if len(args) > 0:
             url = args[0]  # Assume the first positional argument is `url`
@@ -47,7 +48,7 @@ class AsyncSurrealDBMeta(type):
 
 class BlockingSurrealDBMeta(type):
 
-    def __call__(cls, *args, **kwargs):
+    def __call__(cls, *args: Any, **kwargs: Any) -> Union[BlockingHttpSurrealConnection, BlockingWsSurrealConnection]:
         # Ensure `url` is provided as either an arg or kwarg
         if len(args) > 0:
             url = args[0]  # Assume the first positional argument is `url`

@@ -10,7 +10,7 @@ async def setup_schema(async_ws_connection):
     await async_ws_connection.query(
         "DEFINE TABLE user SCHEMAFULL PERMISSIONS FOR select, update, delete WHERE id = $auth.id;"
         "DEFINE FIELD name ON user TYPE string;"
-        "DEFINE FIELD email ON user TYPE string ASSERT string::is::email($value);"
+        "DEFINE FIELD email ON user TYPE string;"
         "DEFINE FIELD password ON user TYPE string;"
         "DEFINE FIELD enabled ON user TYPE bool;"
         "DEFINE INDEX email ON user FIELDS email UNIQUE;"

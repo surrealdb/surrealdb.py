@@ -2,6 +2,12 @@
 Defines the data type for the record ID.
 """
 
+from typing import Any, Union
+
+from surrealdb.data.types.table import Table
+
+RecordIdType = Union[str, "RecordID", Table]
+
 
 class RecordID:
     """
@@ -12,7 +18,7 @@ class RecordID:
         identifier: The ID of the row
     """
 
-    def __init__(self, table_name: str, identifier) -> None:
+    def __init__(self, table_name: str, identifier: Any) -> None:
         """
         The constructor for the RecordID class.
 
@@ -31,9 +37,10 @@ class RecordID:
             self=self
         )
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, RecordID):
             return self.table_name == other.table_name and self.id == other.id
+        return False
 
     @staticmethod
     def parse(record_str: str) -> "RecordID":

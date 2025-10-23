@@ -25,7 +25,7 @@ def setup_blocking_ws_signup():
     _ = connection.query(
         "DEFINE TABLE user SCHEMAFULL PERMISSIONS FOR select, update, delete WHERE id = $auth.id;"
         "DEFINE FIELD name ON user TYPE string;"
-        "DEFINE FIELD email ON user TYPE string ASSERT string::is::email($value);"
+        "DEFINE FIELD email ON user TYPE string;"
         "DEFINE FIELD password ON user TYPE string;"
         "DEFINE FIELD enabled ON user TYPE bool;"
         "DEFINE INDEX email ON user FIELDS email UNIQUE;"

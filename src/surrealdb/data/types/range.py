@@ -12,7 +12,7 @@ class Bound:
     that can be extended by specific bound types, such as inclusive or exclusive bounds.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Initializes a generic bound.
         """
@@ -42,7 +42,7 @@ class BoundIncluded(Bound):
 
     value: Any
 
-    def __init__(self, value):
+    def __init__(self, value: Any) -> None:
         """
         Initializes an inclusive bound with a specific value.
 
@@ -78,7 +78,7 @@ class BoundExcluded(Bound):
 
     value: Any
 
-    def __init__(self, value):
+    def __init__(self, value: Any) -> None:
         """
         Initializes an exclusive bound with a specific value.
 

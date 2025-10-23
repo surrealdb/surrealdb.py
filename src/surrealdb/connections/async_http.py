@@ -1,4 +1,5 @@
 import uuid
+from types import TracebackType
 from typing import Any, Optional, Union
 
 import aiohttp
@@ -7,7 +8,7 @@ from surrealdb.connections.async_template import AsyncTemplate
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import UtilsMixin
 from surrealdb.data.cbor import decode
-from surrealdb.data.types.record_id import RecordID
+from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
@@ -110,7 +111,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         await self._send(message, "invalidating")
         self.token = None
 
-    async def signup(self, vars: dict) -> str:
+    async def signup(self, vars: dict[str, Any]) -> str:
         message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
         self.id = message.id
         response = await self._send(message, "signup")
@@ -118,7 +119,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.token = response["result"]
         return response["result"]
 
-    async def signin(self, vars: dict) -> str:
+    async def signin(self, vars: dict[str, Any]) -> str:
         message = RequestMessage(
             RequestMethod.SIGN_IN,
             username=vars.get("username"),
@@ -134,10 +135,13 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.token = response["result"]
         return response["result"]
 
-    async def info(self) -> dict:
+    async def info(self) -> dict[str, Any]:
         message = RequestMessage(RequestMethod.INFO)
         self.id = message.id
-        response = await self._send(message, "getting database information")
+        response = await self._send(
+            message, "getting database information", bypass=True
+        )
+
         self.check_response_for_result(response, "getting database information")
         return response["result"]
 
@@ -153,8 +157,8 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.database = database
 
     async def query(
-        self, query: str, vars: Optional[dict] = None
-    ) -> Union[list[dict], dict]:
+        self, query: str, vars: Optional[dict[str, Any]] = None
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
         if vars is None:
             vars = {}
         for key, value in self.vars.items():
@@ -169,7 +173,9 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "query")
         return response["result"][0]["result"]
 
-    async def query_raw(self, query: str, params: Optional[dict] = None) -> dict:
+    async def query_raw(
+        self, query: str, params: Optional[dict[str, Any]] = None
+    ) -> dict[str, Any]:
         if params is None:
             params = {}
         for key, value in self.vars.items():
@@ -185,47 +191,72 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def create(
         self,
-        thing: Union[str, RecordID, Table],
-        data: Optional[Union[Union[list[dict], dict], dict]] = None,
-    ) -> Union[list[dict], dict]:
-        if isinstance(thing, str):
-            if ":" in thing:
-                buffer = thing.split(":")
-                thing = RecordID(table_name=buffer[0], identifier=buffer[1])
-        message = RequestMessage(RequestMethod.CREATE, collection=thing, data=data)
-        self.id = message.id
-        response = await self._send(message, "create")
-        self.check_response_for_result(response, "create")
-        return response["result"]
+        record: RecordIdType,
+        data: Optional[Union[list[dict[str, Any]], dict[str, Any]]] = None,
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        variables: dict[str, Any] = {}
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
+
+        if data is None:
+            query = f"CREATE {resource_ref}"
+        else:
+            variables["_content"] = data
+            query = f"CREATE {resource_ref} CONTENT $_content"
+
+        response = await self.query_raw(query, variables)
+        self.check_response_for_error(response, "create")
+        result = response["result"][0]["result"]
+        # CREATE always creates a single record, so always unwrap
+        return self._unwrap_result(result, unwrap=True)
 
     async def delete(
-        self, thing: Union[str, RecordID, Table]
-    ) -> Union[list[dict], dict]:
-        message = RequestMessage(RequestMethod.DELETE, record_id=thing)
-        self.id = message.id
-        response = await self._send(message, "delete")
-        self.check_response_for_result(response, "delete")
-        return response["result"]
+        self, record: RecordIdType
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        variables: dict[str, Any] = {}
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
+        query = f"DELETE {resource_ref} RETURN BEFORE"
+
+        response = await self.query_raw(query, variables)
+        self.check_response_for_error(response, "delete")
+        result = response["result"][0]["result"]
+        # DELETE on a specific record returns a single dict, on a table returns a list
+        return self._unwrap_result(
+            result, unwrap=self._is_single_record_operation(record)
+        )
 
     async def insert(
-        self, table: Union[str, Table], data: Union[list[dict], dict]
-    ) -> Union[list[dict], dict]:
-        message = RequestMessage(RequestMethod.INSERT, collection=table, params=data)
-        self.id = message.id
-        response = await self._send(message, "insert")
-        self.check_response_for_result(response, "insert")
-        return response["result"]
+        self,
+        table: Union[str, Table],
+        data: Union[list[dict[str, Any]], dict[str, Any]],
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        # Validate that table is not a RecordID
+        if isinstance(table, RecordID):
+            raise Exception(
+                f"There was a problem with the database: Can not execute INSERT statement using value '{table}'"
+            )
+
+        variables: dict[str, Any] = {}
+        table_ref = self._resource_to_variable(table, variables, "_table")
+        variables["_data"] = data
+        query = f"INSERT INTO {table_ref} $_data"
+
+        response = await self.query_raw(query, variables)
+        self.check_response_for_error(response, "insert")
+        return response["result"][0]["result"]
 
     async def insert_relation(
-        self, table: Union[str, Table], data: Union[list[dict], dict]
-    ) -> Union[list[dict], dict]:
-        message = RequestMessage(
-            RequestMethod.INSERT_RELATION, table=table, params=data
-        )
-        self.id = message.id
-        response = await self._send(message, "insert_relation")
-        self.check_response_for_result(response, "insert_relation")
-        return response["result"]
+        self,
+        table: Union[str, Table],
+        data: Union[list[dict[str, Any]], dict[str, Any]],
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        variables: dict[str, Any] = {}
+        table_ref = self._resource_to_variable(table, variables, "_table")
+        variables["_data"] = data
+        query = f"INSERT RELATION INTO {table_ref} $_data"
+
+        response = await self.query_raw(query, variables)
+        self.check_response_for_error(response, "insert_relation")
+        return response["result"][0]["result"]
 
     async def let(self, key: str, value: Any) -> None:
         self.vars[key] = value
@@ -234,40 +265,75 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.vars.pop(key)
 
     async def merge(
-        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
-    ) -> Union[list[dict], dict]:
-        message = RequestMessage(RequestMethod.MERGE, record_id=thing, data=data)
-        self.id = message.id
-        response = await self._send(message, "merge")
-        self.check_response_for_result(response, "merge")
-        return response["result"]
+        self, record: RecordIdType, data: Optional[dict[str, Any]] = None
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        variables: dict[str, Any] = {}
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
+
+        if data is None:
+            query = f"UPDATE {resource_ref} MERGE {{}}"
+        else:
+            variables["_data"] = data
+            query = f"UPDATE {resource_ref} MERGE $_data"
+
+        response = await self.query_raw(query, variables)
+        self.check_response_for_error(response, "merge")
+        result = response["result"][0]["result"]
+        # MERGE on a specific record returns a single dict, on a table returns a list
+        return self._unwrap_result(
+            result, unwrap=self._is_single_record_operation(record)
+        )
 
     async def patch(
-        self, thing: Union[str, RecordID, Table], data: Optional[list[dict]] = None
-    ) -> Union[list[dict], dict]:
-        message = RequestMessage(RequestMethod.PATCH, collection=thing, params=data)
-        self.id = message.id
-        response = await self._send(message, "patch")
-        self.check_response_for_result(response, "patch")
-        return response["result"]
+        self, record: RecordIdType, data: Optional[list[dict[str, Any]]] = None
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        variables: dict[str, Any] = {}
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
+
+        if data is None:
+            query = f"UPDATE {resource_ref} PATCH []"
+        else:
+            variables["_patches"] = data
+            query = f"UPDATE {resource_ref} PATCH $_patches"
+
+        response = await self.query_raw(query, variables)
+        self.check_response_for_error(response, "patch")
+        result = response["result"][0]["result"]
+        # PATCH on a specific record returns a single dict, on a table returns a list
+        return self._unwrap_result(
+            result, unwrap=self._is_single_record_operation(record)
+        )
 
     async def select(
-        self, thing: Union[str, RecordID, Table]
-    ) -> Union[list[dict], dict]:
-        message = RequestMessage(RequestMethod.SELECT, params=[thing])
-        self.id = message.id
-        response = await self._send(message, "select")
-        self.check_response_for_result(response, "select")
-        return response["result"]
+        self, record: RecordIdType
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        variables: dict[str, Any] = {}
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
+        query = f"SELECT * FROM {resource_ref}"
+
+        response = await self.query_raw(query, variables)
+        self.check_response_for_error(response, "select")
+        return response["result"][0]["result"]
 
     async def update(
-        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
-    ) -> Union[list[dict], dict]:
-        message = RequestMessage(RequestMethod.UPDATE, record_id=thing, data=data)
-        self.id = message.id
-        response = await self._send(message, "update")
-        self.check_response_for_result(response, "update")
-        return response["result"]
+        self, record: RecordIdType, data: Optional[dict[str, Any]] = None
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        variables: dict[str, Any] = {}
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
+
+        if data is None:
+            query = f"UPDATE {resource_ref}"
+        else:
+            variables["_content"] = data
+            query = f"UPDATE {resource_ref} CONTENT $_content"
+
+        response = await self.query_raw(query, variables)
+        self.check_response_for_error(response, "update")
+        result = response["result"][0]["result"]
+        # UPDATE on a specific record returns a single dict, on a table returns a list
+        return self._unwrap_result(
+            result, unwrap=self._is_single_record_operation(record)
+        )
 
     async def version(self) -> str:
         message = RequestMessage(RequestMethod.VERSION)
@@ -277,13 +343,24 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         return response["result"]
 
     async def upsert(
-        self, thing: Union[str, RecordID, Table], data: Optional[dict] = None
-    ) -> Union[list[dict], dict]:
-        message = RequestMessage(RequestMethod.UPSERT, record_id=thing, data=data)
-        self.id = message.id
-        response = await self._send(message, "upsert")
-        self.check_response_for_result(response, "upsert")
-        return response["result"]
+        self, record: RecordIdType, data: Optional[dict[str, Any]] = None
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        variables: dict[str, Any] = {}
+        resource_ref = self._resource_to_variable(record, variables, "_resource")
+
+        if data is None:
+            query = f"UPSERT {resource_ref}"
+        else:
+            variables["_content"] = data
+            query = f"UPSERT {resource_ref} CONTENT $_content"
+
+        response = await self.query_raw(query, variables)
+        self.check_response_for_error(response, "upsert")
+        result = response["result"][0]["result"]
+        # UPSERT on a specific record returns a single dict, on a table returns a list
+        return self._unwrap_result(
+            result, unwrap=self._is_single_record_operation(record)
+        )
 
     async def __aenter__(self) -> "AsyncHttpSurrealConnection":
         """
@@ -293,7 +370,12 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self._session = aiohttp.ClientSession()
         return self
 
-    async def __aexit__(self, exc_type, exc_value, traceback) -> None:
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
         """
         Asynchronous context manager exit.
         Closes the aiohttp session upon exiting the context.

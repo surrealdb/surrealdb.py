@@ -12,15 +12,17 @@ import json
 import re
 import sys
 import uuid
-from collections.abc import Callable, Collection, Iterable, Iterator
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
 from datetime import datetime
 from functools import partial
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, cast
+
+from typing_extensions import TypeAlias
 
 from . import CBORDecoder, CBORSimpleValue, CBORTag, FrozenDict, load, undefined
 
 if TYPE_CHECKING:
-    from typing import Literal, TypeAlias
+    from typing import Literal
 
 T = TypeVar("T")
 JSONValue: TypeAlias = (
@@ -73,7 +75,7 @@ class DefaultEncoder(json.JSONEncoder):
 def iterdecode(
     f: io.BytesIO,
     tag_hook: Callable[[CBORDecoder, CBORTag], Any] | None = None,
-    object_hook: Callable[[CBORDecoder, dict[Any, Any]], Any] | None = None,
+    object_hook: Callable[[CBORDecoder, Mapping[Any, Any]], Any] | None = None,
     str_errors: Literal["strict", "error", "replace"] = "strict",
 ) -> Iterator[Any]:
     decoder = CBORDecoder(
@@ -121,11 +123,11 @@ def key_to_str(
             k = str(k)
 
         if isinstance(v, dict):
-            v = key_to_str(v, dict_ids)
+            rval[k] = key_to_str(v, dict_ids)
         elif isinstance(v, (tuple, list, set)):
-            v = [key_to_str(x, dict_ids) for x in v]
-
-        rval[k] = v
+            rval[k] = [key_to_str(x, dict_ids) for x in v]
+        else:
+            rval[k] = v
 
     return rval
 
