@@ -74,11 +74,12 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.surrealdb-version == 'nightly' }}
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
-        surrealdb-version: ["v2.0.5", "v2.1.8", "v2.2.8", "v2.3.10"]
+        surrealdb-version: ["v2.0.5", "v2.1.8", "v2.2.8", "v2.3.10", "nightly"]
     name: Core Tests - Python ${{ matrix.python-version }} - SurrealDB ${{ matrix.surrealdb-version }}
     steps:
       - name: Checkout repository
@@ -96,7 +97,12 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install surrealdb
-        run: curl -sSf https://install.surrealdb.com | sh -s -- --version ${{ matrix.surrealdb-version }}
+        run: |
+          if [ "${{ matrix.surrealdb-version }}" = "nightly" ]; then
+            curl --proto '=https' --tlsv1.2 -sSf https://install.surrealdb.com | sh -s -- --nightly
+          else
+            curl -sSf https://install.surrealdb.com | sh -s -- --version ${{ matrix.surrealdb-version }}
+          fi
 
       - name: Start surrealdb
         run: surreal start --allow-all -u root -p root --log trace &
