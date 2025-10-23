@@ -117,7 +117,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.id = message.id
         self._send(message, "use")
 
-    def query(self, query: str, vars: Optional[dict[str, Value]] = None) -> Value:
+    def query(
+        self, query: str, vars: Optional[dict[str, Value]] = None
+    ) -> Union[Value, list[Value], list[dict[str, Value]]]:
         if vars is None:
             vars = {}
         message = RequestMessage(
@@ -161,7 +163,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.id = message.id
         self._send(message, "unsetting")
 
-    def select(self, record: RecordIdType) -> Value:
+    def select(
+        self, record: RecordIdType
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"SELECT * FROM {resource_ref}"
@@ -174,7 +178,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self,
         record: RecordIdType,
         data: Optional[Value] = None,
-    ) -> Value:
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -205,7 +209,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.id = message.id
         self._send(message, "kill")
 
-    def delete(self, record: RecordIdType) -> Value:
+    def delete(
+        self, record: RecordIdType
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"DELETE {resource_ref} RETURN BEFORE"
@@ -222,7 +228,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self,
         table: Union[str, Table],
         data: Value,
-    ) -> Value:
+    ) -> list[dict[str, Value]]:
         # Validate that table is not a RecordID
         if isinstance(table, RecordID):
             raise Exception(
@@ -242,7 +248,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self,
         table: Union[str, Table],
         data: Value,
-    ) -> Value:
+    ) -> list[dict[str, Value]]:
         variables: dict[str, Any] = {}
         table_ref = self._resource_to_variable(table, variables, "_table")
         variables["_data"] = data
@@ -252,7 +258,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.check_response_for_error(response, "insert_relation")
         return response["result"][0]["result"]
 
-    def merge(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    def merge(
+        self, record: RecordIdType, data: Optional[Value] = None
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -274,7 +282,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self,
         record: RecordIdType,
         data: Optional[Value] = None,
-    ) -> Value:
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -330,7 +338,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             # Handle generator exit gracefully if needed
             pass
 
-    def update(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    def update(
+        self, record: RecordIdType, data: Optional[Value] = None
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -348,7 +358,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             result, unwrap=self._is_single_record_operation(record)
         )
 
-    def upsert(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    def upsert(
+        self, record: RecordIdType, data: Optional[Value] = None
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
