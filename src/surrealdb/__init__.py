@@ -15,6 +15,8 @@ from surrealdb.data.types.range import Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.datetime import IsoDateTimeWrapper
 
+from surrealdb.types import Value
+
 
 class AsyncSurrealDBMeta(type):
 

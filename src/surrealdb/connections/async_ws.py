@@ -6,7 +6,7 @@ import asyncio
 from asyncio import AbstractEventLoop, Future, Queue, Task
 from collections.abc import AsyncGenerator
 from types import TracebackType
-from typing import Any, Optional, Union
+from typing import Optional, Union
 from uuid import UUID
 
 import websockets
@@ -16,10 +16,11 @@ from surrealdb.connections.async_template import AsyncTemplate
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import UtilsMixin
 from surrealdb.data.cbor import decode
-from surrealdb.data.types.record_id import RecordID, RecordIdType
+from surrealdb.data.types.record_id import RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
+from surrealdb.types import Value
 
 
 class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
@@ -82,7 +83,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
-    ) -> dict[str, Any]:
+    ) -> dict[str, Value]:
         await self.connect()
         assert (
             self.socket is not None and self.loop is not None
@@ -138,13 +139,13 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         await self._send(message, "invalidating")
         self.token = None
 
-    async def signup(self, vars: dict[str, Any]) -> str:
+    async def signup(self, vars: dict[str, Value]) -> str:
         message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
         response = await self._send(message, "signup")
         self.check_response_for_result(response, "signup")
         return response["result"]
 
-    async def signin(self, vars: dict[str, Any]) -> str:
+    async def signin(self, vars: dict[str, Value]) -> str:
         message = RequestMessage(
             RequestMethod.SIGN_IN,
             username=vars.get("username"),
@@ -159,7 +160,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.token = response["result"]
         return response["result"]
 
-    async def info(self) -> dict[str, Any]:
+    async def info(self) -> dict[str, Value]:
         message = RequestMessage(RequestMethod.INFO)
         response = await self._send(
             message, "getting database information", bypass=True
@@ -196,8 +197,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         await self._send(message, "use")
 
     async def query(
-        self, query: str, vars: Optional[dict[str, Any]] = None
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        self, query: str, vars: Optional[dict[str, Value]] = None
+    ) -> Value:
         if vars is None:
             vars = {}
         message = RequestMessage(
@@ -210,8 +211,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         return response["result"][0]["result"]
 
     async def query_raw(
-        self, query: str, params: Optional[dict[str, Any]] = None
-    ) -> dict[str, Any]:
+        self, query: str, params: Optional[dict[str, Value]] = None
+    ) -> dict[str, Value]:
         if params is None:
             params = {}
         message = RequestMessage(
@@ -228,7 +229,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "getting database version")
         return response["result"]
 
-    async def let(self, key: str, value: Any) -> None:
+    async def let(self, key: str, value: Value) -> None:
         message = RequestMessage(RequestMethod.LET, key=key, value=value)
         await self._send(message, "letting")
 
@@ -238,8 +239,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def select(
         self, record: RecordIdType
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
-        variables: dict[str, Any] = {}
+    ) -> Value:
+        variables: dict[str, Value] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"SELECT * FROM {resource_ref}"
 
@@ -250,9 +251,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def create(
         self,
         record: RecordIdType,
-        data: Optional[Union[list[dict[str, Any]], dict[str, Any]]] = None,
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
-        variables: dict[str, Any] = {}
+        data: Optional[Value] = None,
+    ) -> Value:
+        variables: dict[str, Value] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
@@ -269,8 +270,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def update(
         self, record: RecordIdType, data: Optional[dict[str, Any]] = None
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
-        variables: dict[str, Any] = {}
+    ) -> Value:
+        variables: dict[str, Value] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
@@ -289,8 +290,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def merge(
         self, record: RecordIdType, data: Optional[dict[str, Any]] = None
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
-        variables: dict[str, Any] = {}
+    ) -> Value:
+        variables: dict[str, Value] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
@@ -309,8 +310,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def patch(
         self, record: RecordIdType, data: Optional[list[dict[str, Any]]] = None
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
-        variables: dict[str, Any] = {}
+    ) -> Value:
+        variables: dict[str, Value] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
@@ -329,8 +330,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def delete(
         self, record: RecordIdType
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
-        variables: dict[str, Any] = {}
+    ) -> Value:
+        variables: dict[str, Value] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"DELETE {resource_ref} RETURN BEFORE"
 
@@ -345,7 +346,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def insert(
         self,
         table: Union[str, Table],
-        data: Union[list[dict[str, Any]], dict[str, Any]],
+        data: Value,
     ) -> Union[list[dict[str, Any]], dict[str, Any]]:
         # Validate that table is not a RecordID
         if isinstance(table, RecordID):
@@ -365,9 +366,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def insert_relation(
         self,
         table: Union[str, Table],
-        data: Union[list[dict[str, Any]], dict[str, Any]],
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
-        variables: dict[str, Any] = {}
+        data: Value,
+    ) -> Value:
+        variables: dict[str, Value] = {}
         table_ref = self._resource_to_variable(table, variables, "_table")
         variables["_data"] = data
         query = f"INSERT RELATION INTO {table_ref} $_data"
@@ -390,7 +391,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def subscribe_live(
         self, query_uuid: Union[str, UUID]
-    ) -> AsyncGenerator[dict[str, Any], None]:
+    ) -> AsyncGenerator[dict[str, Value], None]:
         result_queue: Queue[dict[str, Any]] = Queue()
         suid = str(query_uuid)
         self.live_queues[suid].append(result_queue)
@@ -409,8 +410,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def upsert(
         self, record: RecordIdType, data: Optional[dict[str, Any]] = None
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
-        variables: dict[str, Any] = {}
+    ) -> Value:
+        variables: dict[str, Value] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:

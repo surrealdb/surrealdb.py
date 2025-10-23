@@ -1,6 +1,6 @@
 import uuid
 from types import TracebackType
-from typing import Any, Optional, Union, cast
+from typing import Optional, Union, cast
 
 import requests
 
@@ -8,10 +8,11 @@ from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import UtilsMixin
 from surrealdb.data.cbor import decode
-from surrealdb.data.types.record_id import RecordID, RecordIdType
+from surrealdb.data.types.record_id import RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
+from surrealdb.types import Value
 
 
 class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
@@ -24,11 +25,11 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.id: str = str(uuid.uuid4())
         self.namespace: Optional[str] = None
         self.database: Optional[str] = None
-        self.vars: dict[str, Any] = dict()
+        self.vars: dict[str, Value] = dict()
 
     def _send(
         self, message: RequestMessage, operation: str, bypass: bool = False
-    ) -> dict[str, Any]:
+    ) -> dict[str, Value]:
         data = message.WS_CBOR_DESCRIPTOR
         url = f"{self.url.raw_url}/rpc"
         headers = {
@@ -46,7 +47,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         response.raise_for_status()
 
         raw_cbor = response.content
-        data_dict = cast(dict[str, Any], decode(raw_cbor))
+        data_dict = cast(dict[str, Value], decode(raw_cbor))
 
         if not bypass:
             self.check_response_for_error(data_dict, operation)
@@ -68,7 +69,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self._send(message, "invalidating")
         self.token = None
 
-    def signup(self, vars: dict[str, Any]) -> str:
+    def signup(self, vars: dict[str, Value]) -> str:
         message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
         self.id = message.id
         response = self._send(message, "signup")
@@ -76,7 +77,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.token = response["result"]
         return response["result"]
 
-    def signin(self, vars: dict[str, Any]) -> str:
+    def signin(self, vars: dict[str, Value]) -> str:
         message = RequestMessage(
             RequestMethod.SIGN_IN,
             username=vars.get("username"),
@@ -133,8 +134,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.database = database
 
     def query(
-        self, query: str, vars: Optional[dict[str, Any]] = None
-    ) -> dict[str, Any]:
+        self, query: str, vars: Optional[dict[str, Value]] = None
+    ) -> Value:
         if vars is None:
             vars = {}
         for key, value in self.vars.items():
@@ -150,8 +151,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         return response["result"][0]["result"]
 
     def query_raw(
-        self, query: str, params: Optional[dict[str, Any]] = None
-    ) -> dict[str, Any]:
+        self, query: str, params: Optional[dict[str, Value]] = None
+    ) -> dict[str, Value]:
         if params is None:
             params = {}
         for key, value in self.vars.items():
@@ -168,9 +169,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     def create(
         self,
         record: RecordIdType,
-        data: Optional[Union[list[dict[str, Any]], dict[str, Any]]] = None,
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
-        variables: dict[str, Any] = {}
+        data: Optional[Value] = None,
+    ) -> Value:
+        variables: dict[str, Value] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
@@ -187,8 +188,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
 
     def delete(
         self, record: RecordIdType
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
-        variables: dict[str, Any] = {}
+    ) -> Value:
+        variables: dict[str, Value] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"DELETE {resource_ref} RETURN BEFORE"
 
@@ -203,7 +204,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     def insert(
         self,
         table: Union[str, Table],
-        data: Union[list[dict[str, Any]], dict[str, Any]],
+        data: Value,
     ) -> Union[list[dict[str, Any]], dict[str, Any]]:
         # Validate that table is not a RecordID
         if isinstance(table, RecordID):
@@ -223,9 +224,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     def insert_relation(
         self,
         table: Union[str, Table],
-        data: Union[list[dict[str, Any]], dict[str, Any]],
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
-        variables: dict[str, Any] = {}
+        data: Value,
+    ) -> Value:
+        variables: dict[str, Value] = {}
         table_ref = self._resource_to_variable(table, variables, "_table")
         variables["_data"] = data
         query = f"INSERT RELATION INTO {table_ref} $_data"
@@ -234,7 +235,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.check_response_for_error(response, "insert_relation")
         return response["result"][0]["result"]
 
-    def let(self, key: str, value: Any) -> None:
+    def let(self, key: str, value: Value) -> None:
         self.vars[key] = value
 
     def unset(self, key: str) -> None:
@@ -242,8 +243,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
 
     def merge(
         self, record: RecordIdType, data: Optional[dict[str, Any]] = None
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
-        variables: dict[str, Any] = {}
+    ) -> Value:
+        variables: dict[str, Value] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
@@ -262,8 +263,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
 
     def patch(
         self, record: RecordIdType, data: Optional[list[dict[str, Any]]] = None
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
-        variables: dict[str, Any] = {}
+    ) -> Value:
+        variables: dict[str, Value] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
@@ -282,8 +283,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
 
     def select(
         self, record: RecordIdType
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
-        variables: dict[str, Any] = {}
+    ) -> Value:
+        variables: dict[str, Value] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"SELECT * FROM {resource_ref}"
 
@@ -293,8 +294,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
 
     def update(
         self, record: RecordIdType, data: Optional[dict[str, Any]] = None
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
-        variables: dict[str, Any] = {}
+    ) -> Value:
+        variables: dict[str, Value] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
@@ -320,8 +321,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
 
     def upsert(
         self, record: RecordIdType, data: Optional[dict[str, Any]] = None
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
-        variables: dict[str, Any] = {}
+    ) -> Value:
+        variables: dict[str, Value] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
         if data is None:
