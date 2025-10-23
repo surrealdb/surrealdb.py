@@ -39,12 +39,8 @@ Value = Union[
     Decimal,
     # SurrealDB types
     RecordID,
-    Table,
     Duration,
     Datetime,
-    Range,
-    BoundIncluded,
-    BoundExcluded,
     GeometryPoint,
     GeometryLine,
     GeometryPolygon,
