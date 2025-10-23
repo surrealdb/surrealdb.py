@@ -69,10 +69,12 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             response = decode(data if isinstance(data, bytes) else data.encode())
 
             # Verify the response ID matches the request ID
-            # This ensures we got the right response for our request
-            if response.get("id") != message.id:
+            # Note: Some responses (like live query notifications) may not have an "id" field
+            # Only verify if the response has an id field
+            response_id = response.get("id")
+            if response_id is not None and response_id != message.id:
                 raise RuntimeError(
-                    f"Response ID mismatch: expected {message.id}, got {response.get('id')}. "
+                    f"Response ID mismatch: expected {message.id}, got {response_id}. "
                     "This should not happen with proper locking."
                 )
 
