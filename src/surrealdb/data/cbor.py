@@ -66,7 +66,7 @@ def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
         tagged = CBORTag(constants.TAG_BOUND_EXCLUDED, obj.value)
 
     elif isinstance(obj, Range):
-        tagged = CBORTag(constants.TAG_BOUND_EXCLUDED, [obj.begin, obj.end])
+        tagged = CBORTag(constants.TAG_RANGE, [obj.begin, obj.end])
 
     elif isinstance(obj, Duration):
         tagged = CBORTag(constants.TAG_DURATION, obj.get_seconds_and_nano())
