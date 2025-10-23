@@ -1,9 +1,10 @@
 from collections.abc import Generator
-from typing import Any, Optional, Union
+from typing import Optional, Union
 from uuid import UUID
 
-from surrealdb.data.types.record_id import RecordID, RecordIdType
+from surrealdb.data.types.record_id import RecordIdType
 from surrealdb.data.types.table import Table
+from surrealdb.types import Value
 
 
 class SyncTemplate:
@@ -65,7 +66,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"invalidate not implemented for: {self}")
 
-    def signup(self, vars: dict[str, Any]) -> str:
+    def signup(self, vars: dict[str, Value]) -> str:
         """Sign this connection up to a specific authentication scope.
         [See the docs](https://surrealdb.com/docs/sdk/python/methods/signup)
 
@@ -87,7 +88,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"signup not implemented for: {self}")
 
-    def signin(self, vars: dict[str, Any]) -> str:
+    def signin(self, vars: dict[str, Value]) -> str:
         """Sign this connection in to a specific authentication scope.
         [See the docs](https://surrealdb.com/docs/sdk/python/methods/signin)
 
@@ -102,7 +103,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"signin not implemented for: {self}")
 
-    def let(self, key: str, value: Any) -> None:
+    def let(self, key: str, value: Value) -> None:
         """Assign a value as a variable for this connection.
 
         Args:
@@ -132,11 +133,10 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"let not implemented for: {self}")
 
-    # TODO: missing return types. E.g. this query returns a `bool`:
-    #       `RETURN record::exists($record)`
+    # TODO: Query can return any Value type depending on the query
     def query(
-        self, query: str, vars: Optional[dict[str, Any]] = None
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        self, query: str, vars: Optional[dict[str, Value]] = None
+    ) -> Union[Value, list[Value], list[dict[str, Value]]]:
         """Run a set of SurrealQL statements against the database.
 
         Args:
@@ -153,7 +153,7 @@ class SyncTemplate:
 
     def select(
         self, record: RecordIdType
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         """Select all records in a table (or other entity),
         or a specific record, in the database.
 
@@ -171,8 +171,8 @@ class SyncTemplate:
     def create(
         self,
         record: RecordIdType,
-        data: Optional[Union[list[dict[str, Any]], dict[str, Any]]] = None,
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        data: Optional[Value] = None,
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         """Create a record in the database.
 
         This function will run the following query in the database:
@@ -188,8 +188,8 @@ class SyncTemplate:
         raise NotImplementedError(f"create not implemented for: {self}")
 
     def update(
-        self, record: RecordIdType, data: Optional[dict[str, Any]] = None
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        self, record: RecordIdType, data: Optional[Value] = None
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         """Update all records in a table, or a specific record, in the database.
 
         This function replaces the current document / record data with the
@@ -218,8 +218,8 @@ class SyncTemplate:
         raise NotImplementedError(f"update not implemented for: {self}")
 
     def upsert(
-        self, record: RecordIdType, data: Optional[dict[str, Any]] = None
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        self, record: RecordIdType, data: Optional[Value] = None
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         """Insert records into the database, or to update them if they exist.
 
 
@@ -246,8 +246,8 @@ class SyncTemplate:
         raise NotImplementedError(f"upsert not implemented for: {self}")
 
     def merge(
-        self, record: RecordIdType, data: Optional[dict[str, Any]] = None
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        self, record: RecordIdType, data: Optional[Value] = None
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         """Modify by deep merging all records in a table, or a specific record, in the database.
 
         This function merges the current document / record data with the
@@ -278,8 +278,8 @@ class SyncTemplate:
         raise NotImplementedError(f"merge not implemented for: {self}")
 
     def patch(
-        self, record: RecordIdType, data: Optional[list[dict[str, Any]]] = None
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        self, record: RecordIdType, data: Optional[Value] = None
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         """Apply JSON Patch changes to all records, or a specific record, in the database.
 
         This function patches the current document / record data with
@@ -308,7 +308,7 @@ class SyncTemplate:
 
     def delete(
         self, record: RecordIdType
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         """Delete all records in a table, or a specific record, from the database.
 
         This function will run the following query in the database:
@@ -326,7 +326,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"delete not implemented for: {self}")
 
-    def info(self) -> dict[str, Any]:
+    def info(self) -> dict[str, Value]:
         """This returns the record of an authenticated record user.
 
         Example:
@@ -337,8 +337,8 @@ class SyncTemplate:
     def insert(
         self,
         table: Union[str, Table],
-        data: Union[list[dict[str, Any]], dict[str, Any]],
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        data: Value,
+    ) -> list[dict[str, Value]]:
         """
         Inserts one or multiple records in the database.
 
@@ -358,8 +358,8 @@ class SyncTemplate:
     def insert_relation(
         self,
         table: Union[str, Table],
-        data: Union[list[dict[str, Any]], dict[str, Any]],
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        data: Value,
+    ) -> list[dict[str, Value]]:
         """
         Inserts one or multiple relations in the database.
 
@@ -395,7 +395,7 @@ class SyncTemplate:
 
     def subscribe_live(
         self, query_uuid: Union[str, UUID]
-    ) -> Generator[dict[str, Any], None, None]:
+    ) -> Generator[dict[str, Value], None, None]:
         """Live notification returns a queue that receives notification messages from the back end.
 
         Args:

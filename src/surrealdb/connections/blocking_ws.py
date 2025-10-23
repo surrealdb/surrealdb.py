@@ -20,6 +20,7 @@ from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
+from surrealdb.types import Value
 
 
 class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
@@ -76,14 +77,14 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self._send(message, "invalidating")
         self.token = None
 
-    def signup(self, vars: dict[str, Any]) -> str:
+    def signup(self, vars: dict[str, Value]) -> str:
         message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
         self.id = message.id
         response = self._send(message, "signup")
         self.check_response_for_result(response, "signup")
         return response["result"]
 
-    def signin(self, vars: dict[str, Any]) -> str:
+    def signin(self, vars: dict[str, Value]) -> str:
         message = RequestMessage(
             RequestMethod.SIGN_IN,
             username=vars.get("username"),
@@ -99,7 +100,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.token = response["result"]
         return response["result"]
 
-    def info(self) -> dict[str, Any]:
+    def info(self) -> dict[str, Value]:
         message = RequestMessage(RequestMethod.INFO)
         self.id = message.id
         response = self._send(message, "getting database information", bypass=True)
@@ -117,8 +118,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self._send(message, "use")
 
     def query(
-        self, query: str, vars: Optional[dict[str, Any]] = None
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        self, query: str, vars: Optional[dict[str, Value]] = None
+    ) -> Union[Value, list[Value], list[dict[str, Value]]]:
         if vars is None:
             vars = {}
         message = RequestMessage(
@@ -132,7 +133,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         return response["result"][0]["result"]
 
     def query_raw(
-        self, query: str, params: Optional[dict[str, Any]] = None
+        self, query: str, params: Optional[dict[str, Value]] = None
     ) -> dict[str, Any]:
         if params is None:
             params = {}
@@ -152,7 +153,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "getting database version")
         return response["result"]
 
-    def let(self, key: str, value: Any) -> None:
+    def let(self, key: str, value: Value) -> None:
         message = RequestMessage(RequestMethod.LET, key=key, value=value)
         self.id = message.id
         self._send(message, "letting")
@@ -164,7 +165,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
 
     def select(
         self, record: RecordIdType
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"SELECT * FROM {resource_ref}"
@@ -176,8 +177,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def create(
         self,
         record: RecordIdType,
-        data: Optional[Union[list[dict[str, Any]], dict[str, Any]]] = None,
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        data: Optional[Value] = None,
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -210,7 +211,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
 
     def delete(
         self, record: RecordIdType
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"DELETE {resource_ref} RETURN BEFORE"
@@ -226,8 +227,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def insert(
         self,
         table: Union[str, Table],
-        data: Union[list[dict[str, Any]], dict[str, Any]],
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        data: Value,
+    ) -> list[dict[str, Value]]:
         # Validate that table is not a RecordID
         if isinstance(table, RecordID):
             raise Exception(
@@ -246,8 +247,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def insert_relation(
         self,
         table: Union[str, Table],
-        data: Union[list[dict[str, Any]], dict[str, Any]],
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        data: Value,
+    ) -> list[dict[str, Value]]:
         variables: dict[str, Any] = {}
         table_ref = self._resource_to_variable(table, variables, "_table")
         variables["_data"] = data
@@ -258,8 +259,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         return response["result"][0]["result"]
 
     def merge(
-        self, record: RecordIdType, data: Optional[dict[str, Any]] = None
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        self, record: RecordIdType, data: Optional[Value] = None
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -280,8 +281,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def patch(
         self,
         record: RecordIdType,
-        data: Optional[list[dict[str, Any]]] = None,
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        data: Optional[Value] = None,
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -302,7 +303,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def subscribe_live(
         self,
         query_uuid: Union[str, UUID],
-    ) -> Generator[dict[str, Any], None, None]:
+    ) -> Generator[dict[str, Value], None, None]:
         """
         Subscribe to live updates for a given query UUID.
 
@@ -338,8 +339,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             pass
 
     def update(
-        self, record: RecordIdType, data: Optional[dict[str, Any]] = None
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        self, record: RecordIdType, data: Optional[Value] = None
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -358,8 +359,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         )
 
     def upsert(
-        self, record: RecordIdType, data: Optional[dict[str, Any]] = None
-    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        self, record: RecordIdType, data: Optional[Value] = None
+    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 

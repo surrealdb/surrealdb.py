@@ -11,9 +11,8 @@ from surrealdb.cbor2 import (
     shareable_encoder,
 )
 from surrealdb.data.types import constants
-from surrealdb.data.types.datetime import IsoDateTimeWrapper
+from surrealdb.data.types.datetime import Datetime
 from surrealdb.data.types.duration import Duration
-from surrealdb.data.types.future import Future
 from surrealdb.data.types.geometry import (
     GeometryCollection,
     GeometryLine,
@@ -67,15 +66,12 @@ def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
         tagged = CBORTag(constants.TAG_BOUND_EXCLUDED, obj.value)
 
     elif isinstance(obj, Range):
-        tagged = CBORTag(constants.TAG_BOUND_EXCLUDED, [obj.begin, obj.end])
-
-    elif isinstance(obj, Future):
-        tagged = CBORTag(constants.TAG_BOUND_EXCLUDED, obj.value)
+        tagged = CBORTag(constants.TAG_RANGE, [obj.begin, obj.end])
 
     elif isinstance(obj, Duration):
         tagged = CBORTag(constants.TAG_DURATION, obj.get_seconds_and_nano())
 
-    elif isinstance(obj, IsoDateTimeWrapper):
+    elif isinstance(obj, Datetime):
         tagged = CBORTag(constants.TAG_DATETIME, obj.dt)
 
     else:
