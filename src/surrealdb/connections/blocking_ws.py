@@ -67,7 +67,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             self.socket.send(message.WS_CBOR_DESCRIPTOR)
             data = self.socket.recv()
             response = decode(data if isinstance(data, bytes) else data.encode())
-            
+
             # Verify the response ID matches the request ID
             # This ensures we got the right response for our request
             if response.get("id") != message.id:
@@ -75,7 +75,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                     f"Response ID mismatch: expected {message.id}, got {response.get('id')}. "
                     "This should not happen with proper locking."
                 )
-            
+
             if bypass is False:
                 self.check_response_for_error(response, process)
             return response
