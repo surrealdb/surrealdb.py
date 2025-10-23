@@ -1,6 +1,6 @@
 import uuid
 from types import TracebackType
-from typing import Optional, Union, cast
+from typing import Any, Optional, Union, cast
 
 import requests
 

@@ -5,7 +5,7 @@ A basic blocking connection to a SurrealDB instance.
 import uuid
 from collections.abc import Generator
 from types import TracebackType
-from typing import Optional, Union
+from typing import Any, Optional, Union
 from uuid import UUID
 
 import websockets
