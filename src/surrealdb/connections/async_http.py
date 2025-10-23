@@ -157,9 +157,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.namespace = namespace
         self.database = database
 
-    async def query(
-        self, query: str, vars: Optional[dict[str, Value]] = None
-    ) -> Value:
+    async def query(self, query: str, vars: Optional[dict[str, Value]] = None) -> Value:
         if vars is None:
             vars = {}
         for key, value in self.vars.items():
@@ -210,9 +208,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         # CREATE always creates a single record, so always unwrap
         return self._unwrap_result(result, unwrap=True)
 
-    async def delete(
-        self, record: RecordIdType
-    ) -> Value:
+    async def delete(self, record: RecordIdType) -> Value:
         variables: dict[str, Value] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"DELETE {resource_ref} RETURN BEFORE"
@@ -305,9 +301,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
             result, unwrap=self._is_single_record_operation(record)
         )
 
-    async def select(
-        self, record: RecordIdType
-    ) -> Value:
+    async def select(self, record: RecordIdType) -> Value:
         variables: dict[str, Value] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"SELECT * FROM {resource_ref}"

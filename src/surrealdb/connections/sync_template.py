@@ -135,9 +135,7 @@ class SyncTemplate:
 
     # TODO: missing return types. E.g. this query returns a `bool`:
     #       `RETURN record::exists($record)`
-    def query(
-        self, query: str, vars: Optional[dict[str, Value]] = None
-    ) -> Value:
+    def query(self, query: str, vars: Optional[dict[str, Value]] = None) -> Value:
         """Run a set of SurrealQL statements against the database.
 
         Args:
@@ -152,9 +150,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"query not implemented for: {self}")
 
-    def select(
-        self, record: RecordIdType
-    ) -> Value:
+    def select(self, record: RecordIdType) -> Value:
         """Select all records in a table (or other entity),
         or a specific record, in the database.
 
@@ -188,9 +184,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"create not implemented for: {self}")
 
-    def update(
-        self, record: RecordIdType, data: Optional[Value] = None
-    ) -> Value:
+    def update(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
         """Update all records in a table, or a specific record, in the database.
 
         This function replaces the current document / record data with the
@@ -218,9 +212,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"update not implemented for: {self}")
 
-    def upsert(
-        self, record: RecordIdType, data: Optional[Value] = None
-    ) -> Value:
+    def upsert(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
         """Insert records into the database, or to update them if they exist.
 
 
@@ -246,9 +238,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"upsert not implemented for: {self}")
 
-    def merge(
-        self, record: RecordIdType, data: Optional[Value] = None
-    ) -> Value:
+    def merge(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
         """Modify by deep merging all records in a table, or a specific record, in the database.
 
         This function merges the current document / record data with the
@@ -278,9 +268,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"merge not implemented for: {self}")
 
-    def patch(
-        self, record: RecordIdType, data: Optional[Value] = None
-    ) -> Value:
+    def patch(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
         """Apply JSON Patch changes to all records, or a specific record, in the database.
 
         This function patches the current document / record data with
@@ -307,9 +295,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"patch not implemented for: {self}")
 
-    def delete(
-        self, record: RecordIdType
-    ) -> Value:
+    def delete(self, record: RecordIdType) -> Value:
         """Delete all records in a table, or a specific record, from the database.
 
         This function will run the following query in the database:

@@ -133,9 +133,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.namespace = namespace
         self.database = database
 
-    def query(
-        self, query: str, vars: Optional[dict[str, Value]] = None
-    ) -> Value:
+    def query(self, query: str, vars: Optional[dict[str, Value]] = None) -> Value:
         if vars is None:
             vars = {}
         for key, value in self.vars.items():
@@ -186,9 +184,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         # CREATE always creates a single record, so always unwrap
         return self._unwrap_result(result, unwrap=True)
 
-    def delete(
-        self, record: RecordIdType
-    ) -> Value:
+    def delete(self, record: RecordIdType) -> Value:
         variables: dict[str, Value] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"DELETE {resource_ref} RETURN BEFORE"
@@ -281,9 +277,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
             result, unwrap=self._is_single_record_operation(record)
         )
 
-    def select(
-        self, record: RecordIdType
-    ) -> Value:
+    def select(self, record: RecordIdType) -> Value:
         variables: dict[str, Value] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"SELECT * FROM {resource_ref}"
