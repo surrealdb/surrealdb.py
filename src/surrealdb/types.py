@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Union
 from uuid import UUID
 
-from surrealdb.data.types.datetime import IsoDateTimeWrapper
+from surrealdb.data.types.datetime import Datetime
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.geometry import (
     GeometryCollection,
@@ -41,7 +41,7 @@ Value = Union[
     RecordID,
     Table,
     Duration,
-    IsoDateTimeWrapper,
+    Datetime,
     Range,
     BoundIncluded,
     BoundExcluded,
