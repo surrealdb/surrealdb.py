@@ -240,10 +240,7 @@ class CBOREncoder:
 
     @timezone.setter
     def timezone(self, value: tzinfo | None) -> None:
-        if value is None or isinstance(value, tzinfo):
-            self._timezone = value
-        else:
-            raise ValueError("timezone must be None or a tzinfo instance")
+        self._timezone = value
 
     @property
     def default(self) -> Callable[[CBOREncoder, Any], Any] | None:
