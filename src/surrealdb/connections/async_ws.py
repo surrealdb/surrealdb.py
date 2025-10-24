@@ -106,10 +106,14 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         if bypass is False:
             self.check_response_for_error(response, process)
 
-        if isinstance(response, dict):
-            return response
-        else:
+        # Response comes from Future[dict[str, Any]] defined in self.qry
+        # The decode() function returns Any, but we know it's always a dict in this context
+        if not isinstance(response, dict):
+            # This should never happen in practice, but handle defensively
             return {}
+        # Return type is dict[str, Any] - contents are dynamic database responses
+        # Cannot be more specific without runtime schema validation
+        return response
 
     async def connect(self, url: Optional[str] = None) -> None:
         if self.socket:

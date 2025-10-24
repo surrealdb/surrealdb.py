@@ -213,6 +213,8 @@ class CBORDecoder:
         return data
 
     def _decode(self, immutable: bool = False, unshared: bool = False) -> Any:
+        old_immutable = None
+        old_index = None
         if immutable:
             old_immutable = self._immutable
             self._immutable = True
@@ -226,7 +228,7 @@ class CBORDecoder:
             decoder = major_decoders[major_type]
             return decoder(self, subtype)
         finally:
-            if immutable:
+            if immutable and old_immutable is not None:
                 self._immutable = old_immutable
             if unshared:
                 self._share_index = old_index
@@ -735,9 +737,12 @@ class CBORDecoder:
 
         net_map = self.decode()
         if isinstance(net_map, Mapping) and len(net_map) == 1:
-            for net in net_map.items():
+            # IP network data is encoded as a single-entry map
+            # The map contains a single key-value pair representing the network
+            for net_tuple in net_map.items():
                 try:
-                    return self.set_shareable(ip_network(net, strict=False))
+                    # net_tuple is a tuple[Any, Any] from the CBOR map
+                    return self.set_shareable(ip_network(net_tuple, strict=False))
                 except (TypeError, ValueError):
                     break
 
