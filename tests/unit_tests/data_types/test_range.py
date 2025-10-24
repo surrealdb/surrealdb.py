@@ -285,3 +285,19 @@ async def test_multiple_ranges_db_roundtrip(surrealdb_connection):
     result = await surrealdb_connection.query("SELECT * FROM range_tests;")
     assert result[0]["r1"] == ranges["range1"]
     assert result[0]["r2"] == ranges["range2"]
+
+
+@pytest.mark.asyncio
+async def test_range_in_array_db_roundtrip(surrealdb_connection):
+    """Test sending array of Range objects to SurrealDB."""
+    ranges_array = [
+        Range(BoundIncluded(1), BoundIncluded(10)),
+        Range(BoundExcluded(0), BoundExcluded(100)),
+        Range(BoundIncluded("a"), BoundIncluded("z")),
+    ]
+    await surrealdb_connection.query(
+        "CREATE range_tests:test6 SET ranges = $val;",
+        vars={"val": ranges_array},
+    )
+    result = await surrealdb_connection.query("SELECT * FROM range_tests;")
+    assert result[0]["ranges"] == ranges_array
