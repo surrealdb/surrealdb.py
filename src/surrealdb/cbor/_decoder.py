@@ -62,8 +62,11 @@ class CBORDecoder:
         "_stringref_namespace",
     )
 
-    _fp: IO[bytes]
-    _fp_read: Callable[[int], bytes]
+    _fp: IO[bytes]  # type: ignore[reportUninitializedInstanceVariable]
+    _fp_read: Callable[[int], bytes]  # type: ignore[reportUninitializedInstanceVariable]
+    _tag_hook: Callable[[CBORDecoder, CBORTag], Any] | None  # type: ignore[reportUninitializedInstanceVariable]
+    _object_hook: Callable[[CBORDecoder, Mapping[Any, Any]], Any] | None  # type: ignore[reportUninitializedInstanceVariable]
+    _str_errors: Literal["strict", "error", "replace"]  # type: ignore[reportUninitializedInstanceVariable]
 
     def __init__(
         self,
