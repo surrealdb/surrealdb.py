@@ -4,7 +4,7 @@ import threading
 from collections.abc import Iterable, Iterator, Mapping
 from functools import total_ordering
 from reprlib import recursive_repr
-from typing import Any, NamedTuple, TypeVar
+from typing import Any, TypeVar
 
 KT = TypeVar("KT")
 VT_co = TypeVar("VT_co", covariant=True)
@@ -95,24 +95,28 @@ class CBORTag:
                 del thread_locals.running_hashes
 
 
-class CBORSimpleValue(NamedTuple):
+class CBORSimpleValue:
     """
     Represents a CBOR "simple value".
 
     :param int value: the value (0-255)
+    
+    Note: In Python 3.14+, NamedTuple subclasses cannot override __new__, 
+    so this is implemented as a regular class with tuple-like behavior.
     """
 
-    value: int
+    __slots__ = ('value',)
+
+    def __init__(self, value: int) -> None:
+        if value < 0 or value > 255 or 23 < value < 32:
+            raise TypeError("simple value out of range (0..23, 32..255)")
+        self.value = value
+
+    def __repr__(self) -> str:
+        return f"CBORSimpleValue(value={self.value})"
 
     def __hash__(self) -> int:
         return hash(self.value)
-
-    def __new__(cls, value: int) -> CBORSimpleValue:  # type: ignore[misc]
-        if value < 0 or value > 255 or 23 < value < 32:
-            raise TypeError("simple value out of range (0..23, 32..255)")
-
-        # NamedTuple's parent is tuple, which requires an iterable
-        return super().__new__(cls, (value,))
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, int):
