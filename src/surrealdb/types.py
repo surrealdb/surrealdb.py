@@ -21,7 +21,7 @@ from surrealdb.data.types.geometry import (
     GeometryPoint,
     GeometryPolygon,
 )
-from surrealdb.data.types.range import BoundExcluded, BoundIncluded, Range
+from surrealdb.data.types.range import Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
