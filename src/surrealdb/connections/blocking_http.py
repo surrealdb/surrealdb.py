@@ -26,6 +26,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.namespace: Optional[str] = None
         self.database: Optional[str] = None
         self.vars: dict[str, Value] = dict()
+        self.session: Optional[requests.Session] = None
 
     def _send(
         self, message: RequestMessage, operation: str, bypass: bool = False
