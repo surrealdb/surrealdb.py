@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 from typing import IO, TYPE_CHECKING, Any, TypeVar, cast, overload
 
-from surrealdb.cbor2._types import (
+from surrealdb.cbor._types import (
     CBORDecodeEOF,
     CBORDecodeValueError,
     CBORSimpleValue,

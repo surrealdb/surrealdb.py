@@ -32,7 +32,6 @@ async def test_dec_literal(surrealdb_connection):
     assert str(stored_value) == "99.99"
     assert isinstance(stored_value, decimal.Decimal)
 
-
 @pytest.mark.asyncio
 async def test_float_parameter(surrealdb_connection):
     float_value = 3.141592653589793
@@ -45,3 +44,16 @@ async def test_float_parameter(surrealdb_connection):
     second_result = await surrealdb_connection.query("SELECT * FROM numeric_tests;")
     assert isinstance(second_result[0]["value"], float)
     assert second_result[0]["value"] == 3.141592653589793
+
+@pytest.mark.asyncio
+async def test_decimal_parameter(surrealdb_connection):
+    decimal_value = decimal.Decimal("3.141592653589793")
+    initial_result = await surrealdb_connection.query(
+        "CREATE numeric_tests:decimal_test SET value = $decimal_val;",
+        vars={"decimal_val": decimal_value},
+    )
+    assert isinstance(initial_result[0]["value"], decimal.Decimal)
+    assert initial_result[0]["value"] == decimal.Decimal("3.141592653589793")
+    second_result = await surrealdb_connection.query("SELECT * FROM numeric_tests;")
+    assert isinstance(second_result[0]["value"], decimal.Decimal)
+    assert second_result[0]["value"] == decimal.Decimal("3.141592653589793")

@@ -133,9 +133,9 @@ def key_to_str(
 
 
 def main() -> None:
-    prog = "python -m cbor2.tool"
+    prog = "python -m cbor.tool"
     description = (
-        "A simple command line interface for cbor2 module "
+        "A simple command line interface for cbor module "
         "to validate and pretty-print CBOR objects."
     )
     parser = argparse.ArgumentParser(prog=prog, description=description)

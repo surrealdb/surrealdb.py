@@ -2,7 +2,7 @@ import warnings
 
 import pytest
 
-from surrealdb.cbor2 import decoder, encoder, types
+from surrealdb.cbor import decoder, encoder, types
 
 
 def test_deprecated_decoder_module():
