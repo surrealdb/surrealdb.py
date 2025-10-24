@@ -74,6 +74,9 @@ def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
     elif isinstance(obj, Datetime):
         tagged = CBORTag(constants.TAG_DATETIME, obj.dt)
 
+    elif isinstance(obj, decimal.Decimal):
+        tagged = CBORTag(constants.TAG_DECIMAL_STRING, str(obj))
+
     else:
         raise BufferError("no encoder for type ", type(obj))
 

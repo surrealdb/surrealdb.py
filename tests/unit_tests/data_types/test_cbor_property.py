@@ -1,3 +1,4 @@
+import decimal
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
@@ -63,3 +64,38 @@ def test_cbor_roundtrip_empty_list(val):
 @given(st.just({}))
 def test_cbor_roundtrip_empty_dict(val):
     assert decode(encode(val)) == val
+
+# Test roundtrip for Decimal type
+@given(
+    st.decimals(
+        allow_nan=False,
+        allow_infinity=False,
+        places=2,
+        min_value=decimal.Decimal("-999999.99"),
+        max_value=decimal.Decimal("999999.99"),
+    )
+)
+def test_cbor_roundtrip_decimal(val):
+    """Test that Decimal values can be encoded and decoded via CBOR."""
+    result = decode(encode(val))
+    assert isinstance(result, decimal.Decimal)
+    assert result == val
+
+
+def test_cbor_decimal_specific_values():
+    """Test specific Decimal values that are commonly used."""
+    test_values = [
+        decimal.Decimal("99.99"),
+        decimal.Decimal("3.141592653589793"),
+        decimal.Decimal("0.01"),
+        decimal.Decimal("100"),
+        decimal.Decimal("-42.5"),
+        decimal.Decimal("0.0000001"),
+        decimal.Decimal("0"),
+        decimal.Decimal("-0.01"),
+    ]
+    
+    for val in test_values:
+        result = decode(encode(val))
+        assert isinstance(result, decimal.Decimal), f"Expected Decimal, got {type(result)} for value {val}"
+        assert result == val, f"Expected {val}, got {result}"

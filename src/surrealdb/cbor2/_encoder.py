@@ -551,20 +551,14 @@ class CBOREncoder:
             self.encode_semantic(CBORTag(1004, datestring))
 
     def encode_decimal(self, value: Decimal) -> None:
-        # Semantic tag 4
+        # Semantic tag 10
         if value.is_nan():
             self._fp_write(b"\xf9\x7e\x00")
         elif value.is_infinite():
             self._fp_write(b"\xf9\x7c\x00" if value > 0 else b"\xf9\xfc\x00")
         else:
-            dt = value.as_tuple()
-            sig = 0
-            for digit in dt.digits:
-                sig = (sig * 10) + digit
-            if dt.sign:
-                sig = -sig
             with self.disable_value_sharing():
-                self.encode_semantic(CBORTag(4, [dt.exponent, sig]))
+                self.encode_semantic(CBORTag(10, str(value)))
 
     def encode_stringref(self, value: str | bytes) -> None:
         # Semantic tag 25
