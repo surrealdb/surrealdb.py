@@ -152,10 +152,10 @@ def test_duration_cbor_decode_compact_single_element():
     """Test CBOR decoding of TAG_DURATION_COMPACT with single element array."""
     # Simulate server sending [seconds] only (no nanoseconds)
     tag = CBORTag(constants.TAG_DURATION_COMPACT, [3600])  # 1 hour in seconds
-    
+
     # tag_decoder doesn't actually use the decoder parameter for durations
     result = cbor.tag_decoder(None, tag)
-    
+
     assert isinstance(result, Duration)
     assert result.elapsed == 3600 * 1_000_000_000  # 1 hour in nanoseconds
 
@@ -164,10 +164,10 @@ def test_duration_cbor_decode_compact_dual_element():
     """Test CBOR decoding of TAG_DURATION_COMPACT with dual element array."""
     # Simulate server sending [seconds, nanoseconds]
     tag = CBORTag(constants.TAG_DURATION_COMPACT, [2, 500_000_000])  # 2.5 seconds
-    
+
     # tag_decoder doesn't actually use the decoder parameter for durations
     result = cbor.tag_decoder(None, tag)
-    
+
     assert isinstance(result, Duration)
     assert result.elapsed == 2_500_000_000  # 2.5 seconds in nanoseconds
 
@@ -176,20 +176,20 @@ def test_duration_cbor_encode_decode_roundtrip():
     """Test encoding and decoding Duration through CBOR."""
     # Create duration with both seconds and nanoseconds
     original = Duration(2_500_000_000)  # 2.5 seconds in nanoseconds
-    
+
     # Encode
     encoded = cbor.encode(original)
-    
+
     # Decode
     decoded = cbor.decode(encoded)
-    
+
     assert isinstance(decoded, Duration)
     assert decoded == original
-    
+
     # Test with whole seconds (no fractional nanoseconds)
     original_whole = Duration(5_000_000_000)  # 5 seconds
     encoded_whole = cbor.encode(original_whole)
     decoded_whole = cbor.decode(encoded_whole)
-    
+
     assert isinstance(decoded_whole, Duration)
     assert decoded_whole == original_whole

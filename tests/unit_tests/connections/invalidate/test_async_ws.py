@@ -42,7 +42,9 @@ async def test_invalidate_with_guest_mode_on(main_connection, async_ws_connectio
         outcome = await async_ws_connection.query("SELECT * FROM user;")
         assert len(outcome) == 0
     except Exception as err:
-        assert "Not enough permissions" in str(err) or "Anonymous access not allowed" in str(err)
+        assert "Not enough permissions" in str(
+            err
+        ) or "Anonymous access not allowed" in str(err)
     outcome = await main_connection.query("SELECT * FROM user;")
     assert len(outcome) == 1
 
@@ -63,7 +65,9 @@ async def test_invalidate_test_for_no_guest_mode(main_connection, async_ws_conne
         assert len(outcome) == 0
     except Exception as err:
         # If guest mode is disabled, we get an exception
-        assert "Not enough permissions" in str(err) or "Anonymous access not allowed" in str(err)
+        assert "Not enough permissions" in str(
+            err
+        ) or "Anonymous access not allowed" in str(err)
 
     outcome = await main_connection.query("SELECT * FROM user;")
     assert len(outcome) == 1

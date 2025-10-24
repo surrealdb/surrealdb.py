@@ -65,6 +65,7 @@ def test_cbor_roundtrip_empty_list(val):
 def test_cbor_roundtrip_empty_dict(val):
     assert decode(encode(val)) == val
 
+
 # Test roundtrip for Decimal type
 @given(
     st.decimals(
@@ -94,8 +95,10 @@ def test_cbor_decimal_specific_values():
         decimal.Decimal("0"),
         decimal.Decimal("-0.01"),
     ]
-    
+
     for val in test_values:
         result = decode(encode(val))
-        assert isinstance(result, decimal.Decimal), f"Expected Decimal, got {type(result)} for value {val}"
+        assert isinstance(result, decimal.Decimal), (
+            f"Expected Decimal, got {type(result)} for value {val}"
+        )
         assert result == val, f"Expected {val}, got {result}"
