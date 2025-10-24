@@ -358,5 +358,5 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         Synchronous context manager exit.
         Closes the HTTP session upon exiting the context.
         """
-        if hasattr(self, "session"):
+        if self.session is not None:
             self.session.close()

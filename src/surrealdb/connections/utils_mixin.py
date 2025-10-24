@@ -49,7 +49,12 @@ class UtilsMixin:
         Returns:
             The unwrapped result if unwrap is True and result is a single-item list,
             otherwise returns the result as-is
+        
+        Note: Returns Any because the database can return various types (dict, list, str, etc.)
+        and we preserve whatever type the database sends.
         """
+        # Intentionally returning Any - database results are dynamic and cannot be
+        # typed more specifically without runtime schema validation
         if unwrap and isinstance(result, list) and len(result) == 1:
             return result[0]
         return result

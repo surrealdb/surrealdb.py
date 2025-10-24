@@ -215,7 +215,8 @@ class CBOREncoder:
             else:
                 type_ = type_or_tuple
 
-            if issubclass(obj_type, type_):
+            # Type guard: ensure type_ is actually a type before using with issubclass
+            if isinstance(type_, type) and issubclass(obj_type, type_):
                 self._encoders[obj_type] = enc
                 return enc
 

@@ -63,13 +63,14 @@ def tag_hook(
 
 
 class DefaultEncoder(json.JSONEncoder):
-    def default(self, v: Any) -> Any:
-        obj_type = v.__class__
+    def default(self, o: Any) -> Any:
+        """Override default to match base class signature (parameter name 'o')."""
+        obj_type = o.__class__
         encoder = default_encoders.get(obj_type)
         if encoder:
-            return encoder(v)
+            return encoder(o)
 
-        return json.JSONEncoder.default(self, v)
+        return json.JSONEncoder.default(self, o)
 
 
 def iterdecode(
@@ -91,6 +92,12 @@ def iterdecode(
 def key_to_str(
     d: T, dict_ids: set[int] | None = None
 ) -> str | list[Any] | dict[str, Any] | T:
+    """
+    Recursively convert CBOR data to JSON-serializable format.
+    
+    This function handles dynamic CBOR data which can contain any types,
+    so some type checking is necessarily relaxed.
+    """
     dict_ids = set(dict_ids or [])
     rval: dict[str, Any] = {}
     if not isinstance(d, dict):
@@ -103,7 +110,9 @@ def key_to_str(
             else:
                 dict_ids.add(id(d))
 
-            v = [key_to_str(x, dict_ids) for x in d]
+            # Recursively convert items in collection - items can be any CBOR type
+            # x can be any type from CBOR data (dict, list, str, int, bytes, etc.)
+            v: list[Any] = [key_to_str(x, dict_ids) for x in d]
             dict_ids.remove(id(d))
             return v
         else:
@@ -114,6 +123,8 @@ def key_to_str(
     else:
         dict_ids.add(id(d))
 
+    # d is confirmed to be a dict, but contents are dynamic CBOR data
+    # Keys and values can be any CBOR type (bytes, CBORSimpleValue, dict, list, etc.)
     for k, v in d.items():
         if isinstance(k, bytes):
             k = k.decode(encoding="utf-8", errors="backslashreplace")
@@ -125,6 +136,7 @@ def key_to_str(
         if isinstance(v, dict):
             rval[k] = key_to_str(v, dict_ids)
         elif isinstance(v, (tuple, list, set)):
+            # Recursively convert items in collection - items can be any CBOR type
             rval[k] = [key_to_str(x, dict_ids) for x in v]
         else:
             rval[k] = v
@@ -198,7 +210,7 @@ def main() -> None:
         ignore_s = options.tag_ignore.split(",")
         droptags = {int(n) for n in ignore_s if (len(n) and n[0].isdigit())}
     else:
-        droptags = set()
+        droptags: set[int] = set()
 
     my_hook = partial(tag_hook, ignore_tags=droptags)
 
@@ -214,8 +226,10 @@ def main() -> None:
                     infile = io.BytesIO(base64.b64decode(infile.read()))
                 try:
                     if sequence:
-                        objs: Iterable[Any] = iterdecode(infile, tag_hook=my_hook)
+                        # iterdecode accepts BytesIO, BinaryIO, or TextIO
+                        objs: Iterable[Any] = iterdecode(io.BytesIO(infile.read()) if hasattr(infile, 'buffer') else infile, tag_hook=my_hook)
                     else:
+                        # load accepts IO[bytes]
                         objs = (load(infile, tag_hook=my_hook),)
 
                     for obj in objs:
