@@ -120,7 +120,6 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         message = RequestMessage(RequestMethod.INFO)
         self.id = message.id
         response = self._send(message, "getting database information", bypass=True)
-
         self.check_response_for_result(response, "getting database information")
         return response["result"]
 

@@ -165,27 +165,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         response = await self._send(
             message, "getting database information", bypass=True
         )
-
-        # # Check if we got an error
-        # if response.get("error"):
-        #     error = response.get("error")
-        #     # If INFO returns "No result found", try to get auth info via $auth
-        #     # This happens when using record-level authentication
-        #     if error.get("code") == -32000 and "No result found" in error.get(
-        #         "message", ""
-        #     ):
-        #         # Try to get authenticated user record via $auth
-        #         auth_response = await self.query("SELECT * FROM $auth")
-        #         if (
-        #             auth_response
-        #             and isinstance(auth_response, list)
-        #             and len(auth_response) > 0
-        #         ):
-        #             return auth_response[0]
-        #     # If it's a different error, raise it
-        #     self.check_response_for_error(response, "getting database information")
-
-        self.check_response_for_result(response, "getting database information")
+        self.check_response_for_result(response, "getting auth information")
         return response["result"]
 
     async def use(self, namespace: str, database: str) -> None:
