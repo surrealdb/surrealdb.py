@@ -301,7 +301,7 @@ class CBORDecoder:
                     break
                 elif initial_byte >> 5 == 2:
                     length = self._decode_length(initial_byte & 0x1F)
-                    if length is None or length > sys.maxsize:
+                    if length > sys.maxsize:
                         raise CBORDecodeValueError(
                             f"invalid length for indefinite bytestring chunk 0x{length:x}"
                         )
@@ -359,7 +359,7 @@ class CBORDecoder:
                     break
                 elif initial_byte >> 5 == 3:
                     length = self._decode_length(initial_byte & 0x1F)
-                    if length is None or length > sys.maxsize:
+                    if length > sys.maxsize:
                         raise CBORDecodeValueError(
                             f"invalid length for indefinite string chunk 0x{length:x}"
                         )
