@@ -30,12 +30,12 @@ class UtilsMixin:
             return True
         elif isinstance(resource, Table):
             return False
-        elif isinstance(resource, str):
+        else:
             # Check if it contains a colon (record ID format like "user:tobie")
             # But exclude range syntax like "user:1..10"
             if ":" in resource and ".." not in resource:
                 return True
-        return False
+            return False
 
     @staticmethod
     def _unwrap_result(result: Any, unwrap: bool) -> Any:
@@ -77,12 +77,8 @@ class UtilsMixin:
         elif isinstance(resource, RecordID):
             variables[var_name] = resource
             return f"${var_name}"
-        elif isinstance(resource, str):
+        else:
             # For strings, use them directly in SQL without converting to variables
             # This avoids issues with SurrealDB not properly handling RecordID/Table variables
             # in certain contexts (like DELETE)
             return resource
-        else:
-            # Fallback: add to variables
-            variables[var_name] = resource
-            return f"${var_name}"

@@ -22,7 +22,7 @@ class Duration:
     def parse(value: Union[str, int], nanoseconds: int = 0) -> "Duration":
         if isinstance(value, int):
             return Duration(nanoseconds + value * UNITS["s"])
-        elif isinstance(value, str):
+        else:
             # Check for multi-character units first
             for unit in ["ns", "us", "ms"]:
                 if value.endswith(unit):
@@ -35,8 +35,6 @@ class Duration:
                 return Duration(num * UNITS[unit])
             else:
                 raise ValueError(f"Unknown duration unit: {unit}")
-        else:
-            raise TypeError("Duration must be initialized with an int or str")
 
     def get_seconds_and_nano(self) -> tuple[int, int]:
         sec = floor(self.elapsed / UNITS["s"])
