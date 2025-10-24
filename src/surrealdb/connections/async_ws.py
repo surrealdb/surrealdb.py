@@ -164,7 +164,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.token = response["result"]
         return response["result"]
 
-    async def info(self) -> dict[str, Value]:
+    async def info(self) -> Value:
         message = RequestMessage(RequestMethod.INFO)
         response = await self._send(
             message, "getting database information", bypass=True
@@ -180,9 +180,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         )
         await self._send(message, "use")
 
-    async def query(
-        self, query: str, vars: Optional[dict[str, Value]] = None
-    ) -> Union[Value, list[Value], list[dict[str, Value]]]:
+    async def query(self, query: str, vars: Optional[dict[str, Value]] = None) -> Value:
         if vars is None:
             vars = {}
         message = RequestMessage(
@@ -196,7 +194,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def query_raw(
         self, query: str, params: Optional[dict[str, Value]] = None
-    ) -> dict[str, Any]:
+    ) -> Value:
         if params is None:
             params = {}
         message = RequestMessage(
@@ -221,9 +219,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         message = RequestMessage(RequestMethod.UNSET, params=[key])
         await self._send(message, "unsetting")
 
-    async def select(
-        self, record: RecordIdType
-    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
+    async def select(self, record: RecordIdType) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"SELECT * FROM {resource_ref}"
@@ -236,7 +232,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self,
         record: RecordIdType,
         data: Optional[Value] = None,
-    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
+    ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -252,9 +248,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         # CREATE always creates a single record, so always unwrap
         return self._unwrap_result(result, unwrap=True)
 
-    async def update(
-        self, record: RecordIdType, data: Optional[Value] = None
-    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
+    async def update(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -272,9 +266,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             result, unwrap=self._is_single_record_operation(record)
         )
 
-    async def merge(
-        self, record: RecordIdType, data: Optional[Value] = None
-    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
+    async def merge(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -292,9 +284,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             result, unwrap=self._is_single_record_operation(record)
         )
 
-    async def patch(
-        self, record: RecordIdType, data: Optional[Value] = None
-    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
+    async def patch(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -312,9 +302,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             result, unwrap=self._is_single_record_operation(record)
         )
 
-    async def delete(
-        self, record: RecordIdType
-    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
+    async def delete(self, record: RecordIdType) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"DELETE {resource_ref} RETURN BEFORE"
@@ -331,7 +319,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self,
         table: Union[str, Table],
         data: Value,
-    ) -> list[dict[str, Value]]:
+    ) -> Value:
         # Validate that table is not a RecordID
         if isinstance(table, RecordID):
             raise Exception(
@@ -351,7 +339,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self,
         table: Union[str, Table],
         data: Value,
-    ) -> list[dict[str, Value]]:
+    ) -> Value:
         variables: dict[str, Any] = {}
         table_ref = self._resource_to_variable(table, variables, "_table")
         variables["_data"] = data
@@ -397,9 +385,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         await self._send(message, "kill")
         self.live_queues.pop(str(query_uuid), None)
 
-    async def upsert(
-        self, record: RecordIdType, data: Optional[Value] = None
-    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
+    async def upsert(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
