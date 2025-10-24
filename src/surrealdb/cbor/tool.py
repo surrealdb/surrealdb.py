@@ -94,7 +94,7 @@ def key_to_str(
 ) -> str | list[Any] | dict[str, Any] | T:
     """
     Recursively convert CBOR data to JSON-serializable format.
-    
+
     This function handles dynamic CBOR data which can contain any types,
     so some type checking is necessarily relaxed.
     """
@@ -227,7 +227,12 @@ def main() -> None:
                 try:
                     if sequence:
                         # iterdecode accepts BytesIO, BinaryIO, or TextIO
-                        objs: Iterable[Any] = iterdecode(io.BytesIO(infile.read()) if hasattr(infile, 'buffer') else infile, tag_hook=my_hook)
+                        objs: Iterable[Any] = iterdecode(
+                            io.BytesIO(infile.read())
+                            if hasattr(infile, "buffer")
+                            else infile,
+                            tag_hook=my_hook,
+                        )
                     else:
                         # load accepts IO[bytes]
                         objs = (load(infile, tag_hook=my_hook),)

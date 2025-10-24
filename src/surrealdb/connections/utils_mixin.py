@@ -49,7 +49,7 @@ class UtilsMixin:
         Returns:
             The unwrapped result if unwrap is True and result is a single-item list,
             otherwise returns the result as-is
-        
+
         Note: Returns Any because the database can return various types (dict, list, str, etc.)
         and we preserve whatever type the database sends.
         """
