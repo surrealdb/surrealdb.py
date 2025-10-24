@@ -394,6 +394,11 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     ) -> AsyncGenerator[dict[str, Value], None]:
         result_queue: Queue[dict[str, Any]] = Queue()
         suid = str(query_uuid)
+        
+        # Auto-register if not already registered
+        if suid not in self.live_queues:
+            self.live_queues[suid] = []
+        
         self.live_queues[suid].append(result_queue)
 
         async def _iter() -> AsyncGenerator[dict[str, Any], None]:
