@@ -2,6 +2,8 @@ import os
 
 import pytest
 
+from surrealdb.connections.async_http import AsyncHttpSurrealConnection
+
 
 @pytest.fixture
 async def main_connection(async_http_connection: AsyncHttpSurrealConnection) -> None:

@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, AsyncGenerator
 import pytest
 
 from surrealdb.data.types.record_id import RecordID

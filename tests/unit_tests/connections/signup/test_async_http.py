@@ -1,3 +1,5 @@
+from typing import AsyncGenerator
+
 import pytest
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection

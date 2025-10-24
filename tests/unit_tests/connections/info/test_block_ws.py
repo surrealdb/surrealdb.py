@@ -2,6 +2,8 @@ from typing import Any
 
 import pytest
 
+from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+
 
 def test_info(blocking_ws_connection: BlockingWsSurrealConnection) -> None:
     outcome = blocking_ws_connection.info()
