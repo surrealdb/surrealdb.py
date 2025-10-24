@@ -175,7 +175,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def query_raw(
         self, query: str, params: Optional[dict[str, Value]] = None
-    ) -> Value:
+    ) -> dict[str, Any]:
         if params is None:
             params = {}
         for key, value in self.vars.items():
