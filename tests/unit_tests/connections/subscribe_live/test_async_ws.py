@@ -33,7 +33,9 @@ async def test_live_subscription(async_ws_connection_with_user, async_ws_connect
     await async_ws_connection.query("DELETE user;")
 
 
-async def test_live_subscription_via_query(async_ws_connection_with_user, async_ws_connection):
+async def test_live_subscription_via_query(
+    async_ws_connection_with_user, async_ws_connection
+):
     # Start the live query using query() method
     query_uuid = await async_ws_connection_with_user.query("LIVE SELECT * FROM user;")
     assert isinstance(query_uuid, UUID)
