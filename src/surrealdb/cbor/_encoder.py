@@ -125,10 +125,10 @@ class CBOREncoder:
         "_string_references",
     )
 
-    _fp: IO[bytes]  # type: ignore[reportUninitializedInstanceVariable]
-    _fp_write: Callable[[Buffer], int]  # type: ignore[reportUninitializedInstanceVariable]
-    _timezone: tzinfo | None  # type: ignore[reportUninitializedInstanceVariable]
-    _default: Callable[[CBOREncoder, Any], Any] | None  # type: ignore[reportUninitializedInstanceVariable]
+    _fp: IO[bytes]  # pyright: ignore[reportUninitializedInstanceVariable]
+    _fp_write: Callable[[Buffer], int]  # pyright: ignore[reportUninitializedInstanceVariable]
+    _timezone: tzinfo | None  # pyright: ignore[reportUninitializedInstanceVariable]
+    _default: Callable[[CBOREncoder, Any], Any] | None  # pyright: ignore[reportUninitializedInstanceVariable]
 
     def __init__(
         self,

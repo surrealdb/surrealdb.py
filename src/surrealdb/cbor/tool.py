@@ -206,11 +206,12 @@ def main() -> None:
         outfile = 1
         closefd = False
 
+    droptags: set[int]
     if options.tag_ignore:
         ignore_s = options.tag_ignore.split(",")
         droptags = {int(n) for n in ignore_s if (len(n) and n[0].isdigit())}
     else:
-        droptags: set[int] = set()
+        droptags = set()
 
     my_hook = partial(tag_hook, ignore_tags=droptags)
 

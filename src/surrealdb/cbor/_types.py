@@ -107,7 +107,7 @@ class CBORSimpleValue(NamedTuple):
     def __hash__(self) -> int:
         return hash(self.value)
 
-    def __new__(cls, value: int) -> CBORSimpleValue:
+    def __new__(cls, value: int) -> CBORSimpleValue:  # type: ignore[misc]
         if value < 0 or value > 255 or 23 < value < 32:
             raise TypeError("simple value out of range (0..23, 32..255)")
 
