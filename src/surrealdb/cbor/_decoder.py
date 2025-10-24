@@ -428,7 +428,7 @@ class CBORDecoder:
             if not self._immutable:
                 self.set_shareable(items)
 
-            for index in range(length):
+            for _ in range(length):
                 items.append(self._decode())
 
         if self._immutable:

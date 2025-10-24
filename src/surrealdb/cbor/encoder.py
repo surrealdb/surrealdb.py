@@ -1,5 +1,3 @@
-from warnings import warn
-
 from surrealdb.cbor._encoder import CBOREncoder as CBOREncoder
 from surrealdb.cbor._encoder import dump as dump
 from surrealdb.cbor._encoder import dumps as dumps

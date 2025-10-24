@@ -1,4 +1,4 @@
-from typing import Any, Union
+from typing import Any
 
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table

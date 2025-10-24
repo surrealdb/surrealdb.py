@@ -1,4 +1,4 @@
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
@@ -15,6 +15,22 @@ from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.datetime import Datetime
 
 from surrealdb.types import Value
+
+__all__ = [
+    "AsyncSurreal",
+    "Surreal",
+    "AsyncHttpSurrealConnection",
+    "AsyncWsSurrealConnection",
+    "BlockingHttpSurrealConnection",
+    "BlockingWsSurrealConnection",
+    "Table",
+    "Duration",
+    "Geometry",
+    "Range",
+    "RecordID",
+    "Datetime",
+    "Value",
+]
 
 
 class AsyncSurrealDBMeta(type):
