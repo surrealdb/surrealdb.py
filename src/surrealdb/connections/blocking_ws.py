@@ -2,6 +2,7 @@
 A basic blocking connection to a SurrealDB instance.
 """
 
+import threading
 import uuid
 from collections.abc import Generator
 from types import TracebackType
@@ -49,22 +50,37 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.id: str = str(uuid.uuid4())
         self.token: Optional[str] = None
         self.socket: Optional[ClientConnection] = None
+        self._lock: threading.Lock = threading.Lock()
 
     def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
     ) -> dict[str, Any]:
-        if self.socket is None:
-            self.socket = ws_sync.connect(
-                self.raw_url,
-                max_size=None,
-                subprotocols=[websockets.Subprotocol("cbor")],
-            )
-        self.socket.send(message.WS_CBOR_DESCRIPTOR)
-        data = self.socket.recv()
-        response = decode(data if isinstance(data, bytes) else data.encode())
-        if bypass is False:
-            self.check_response_for_error(response, process)
-        return response
+        # Use a lock to ensure thread-safe send/recv operations
+        # This prevents race conditions when multiple threads share the same connection
+        with self._lock:
+            if self.socket is None:
+                self.socket = ws_sync.connect(
+                    self.raw_url,
+                    max_size=None,
+                    subprotocols=[websockets.Subprotocol("cbor")],
+                )
+            self.socket.send(message.WS_CBOR_DESCRIPTOR)
+            data = self.socket.recv()
+            response = decode(data if isinstance(data, bytes) else data.encode())
+
+            # Verify the response ID matches the request ID
+            # Note: Some responses (like live query notifications) may not have an "id" field
+            # Only verify if the response has an id field
+            response_id = response.get("id")
+            if response_id is not None and response_id != message.id:
+                raise RuntimeError(
+                    f"Response ID mismatch: expected {message.id}, got {response_id}. "
+                    "This should not happen with proper locking."
+                )
+
+            if bypass is False:
+                self.check_response_for_error(response, process)
+            return response
 
     def authenticate(self, token: str) -> None:
         message = RequestMessage(RequestMethod.AUTHENTICATE, token=token)
