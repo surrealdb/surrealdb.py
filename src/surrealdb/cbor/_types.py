@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import threading
-from collections import namedtuple
 from collections.abc import Iterable, Iterator, Mapping
 from functools import total_ordering
 from reprlib import recursive_repr
@@ -77,9 +76,10 @@ class CBORTag:
     def __hash__(self) -> int:
         self_id = id(self)
         try:
-            running_hashes = thread_locals.running_hashes
+            running_hashes: set[int] = thread_locals.running_hashes
         except AttributeError:
-            running_hashes = thread_locals.running_hashes = set()
+            running_hashes = set()
+            thread_locals.running_hashes = running_hashes
 
         if self_id in running_hashes:
             raise RuntimeError(
@@ -95,25 +95,28 @@ class CBORTag:
                 del thread_locals.running_hashes
 
 
-class CBORSimpleValue(namedtuple("CBORSimpleValue", ["value"])):
+class CBORSimpleValue:
     """
     Represents a CBOR "simple value".
 
     :param int value: the value (0-255)
+
+    Note: In Python 3.14+, NamedTuple subclasses cannot override __new__,
+    so this is implemented as a regular class with tuple-like behavior.
     """
 
-    __slots__ = ()
+    __slots__ = ("value",)
 
-    value: int
+    def __init__(self, value: int) -> None:
+        if value < 0 or value > 255 or 23 < value < 32:
+            raise TypeError("simple value out of range (0..23, 32..255)")
+        self.value = value
+
+    def __repr__(self) -> str:
+        return f"CBORSimpleValue(value={self.value})"
 
     def __hash__(self) -> int:
         return hash(self.value)
-
-    def __new__(cls, value: int) -> CBORSimpleValue:
-        if value < 0 or value > 255 or 23 < value < 32:
-            raise TypeError("simple value out of range (0..23, 32..255)")
-
-        return super().__new__(cls, value)
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, int):
@@ -201,7 +204,8 @@ class UndefinedType:
         try:
             return undefined
         except NameError:
-            return super().__new__(cls)
+            # Singleton pattern: create instance only once
+            return object.__new__(cls)
 
     def __repr__(self) -> str:
         return "undefined"
@@ -217,7 +221,8 @@ class BreakMarkerType:
         try:
             return break_marker
         except NameError:
-            return super().__new__(cls)
+            # Singleton pattern: create instance only once
+            return object.__new__(cls)
 
     def __repr__(self) -> str:
         return "break_marker"

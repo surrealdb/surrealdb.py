@@ -125,8 +125,10 @@ class CBOREncoder:
         "_string_references",
     )
 
-    _fp: IO[bytes]
-    _fp_write: Callable[[Buffer], int]
+    _fp: IO[bytes]  # pyright: ignore[reportUninitializedInstanceVariable]
+    _fp_write: Callable[[Buffer], int]  # pyright: ignore[reportUninitializedInstanceVariable]
+    _timezone: tzinfo | None  # pyright: ignore[reportUninitializedInstanceVariable]
+    _default: Callable[[CBOREncoder, Any], Any] | None  # pyright: ignore[reportUninitializedInstanceVariable]
 
     def __init__(
         self,
@@ -213,7 +215,8 @@ class CBOREncoder:
             else:
                 type_ = type_or_tuple
 
-            if issubclass(obj_type, type_):
+            # Type guard: ensure type_ is actually a type before using with issubclass
+            if isinstance(type_, type) and issubclass(obj_type, type_):
                 self._encoders[obj_type] = enc
                 return enc
 
@@ -240,10 +243,7 @@ class CBOREncoder:
 
     @timezone.setter
     def timezone(self, value: tzinfo | None) -> None:
-        if value is None or isinstance(value, tzinfo):
-            self._timezone = value
-        else:
-            raise ValueError("timezone must be None or a tzinfo instance")
+        self._timezone = value
 
     @property
     def default(self) -> Callable[[CBOREncoder, Any], Any] | None:

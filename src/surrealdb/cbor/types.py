@@ -1,5 +1,3 @@
-from warnings import warn
-
 from surrealdb.cbor._types import CBORDecodeEOF as CBORDecodeEOF
 from surrealdb.cbor._types import CBORDecodeError as CBORDecodeError
 from surrealdb.cbor._types import CBORDecodeValueError as CBORDecodeValueError

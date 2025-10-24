@@ -40,11 +40,35 @@ homepage = "https://github.com/surrealdb/surrealdb.py"
 repository = "https://github.com/surrealdb/surrealdb.py"
 documentation = "https://surrealdb.com/docs/sdk/python"
 
+[dependency-groups]
+dev = [
+    { include-group = "test" },
+    "mypy>=1.0.0",
+    "pyright>=1.1.0",
+    "ruff>=0.12.0",
+    "types-requests>=2.25.0",   # Type stubs for requests
+]
+test = [
+    "coverage>=7.0.0",
+    "hypothesis>=6.135.16",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+]
+
+# --------------------------------------------------
+# hatch
+# --------------------------------------------------
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/surrealdb"]
 
 [tool.hatch.build.targets.sdist]
 include = ["/src", "/tests", "/README.md", "/LICENSE"]
+
+# --------------------------------------------------
+# ruff
+# --------------------------------------------------
 
 [tool.ruff]
 exclude = ["src/surrealdb/__init__.py"]
@@ -54,6 +78,10 @@ select = [
     "I",  # isort
     "UP", # pyupgrade
 ]
+
+# --------------------------------------------------
+# mypy
+# --------------------------------------------------
 
 [tool.mypy]
 mypy_path = "src"
@@ -122,6 +150,91 @@ disable_error_code = [
     "unused-ignore", "no-untyped-def"
 ]
 
+# --------------------------------------------------
+# pyright
+# --------------------------------------------------
+
+[tool.pyright]
+# Python version
+pythonVersion = "3.13"
+
+# Type checking mode
+typeCheckingMode = "strict"
+
+# Source configuration
+include = ["src"]
+exclude = [
+    "**/__pycache__",
+    "**/.pytest_cache",
+    "**/build",
+    "**/dist",
+    "**/.mypy_cache",
+]
+
+# Strict type checking settings (matching mypy configuration)
+strictListInference = true
+strictDictionaryInference = true
+strictSetInference = true
+strictParameterNoneValue = true
+
+# Report settings
+reportMissingTypeStubs = false
+reportMissingImports = true
+reportUnusedImport = true
+reportUnusedClass = true
+reportUnusedFunction = true
+reportUnusedVariable = true
+reportDuplicateImport = true
+reportOptionalSubscript = true
+reportOptionalMemberAccess = true
+reportOptionalCall = true
+reportOptionalIterable = true
+reportOptionalContextManager = true
+reportOptionalOperand = true
+reportTypedDictNotRequiredAccess = false
+reportUntypedFunctionDecorator = true
+reportUntypedClassDecorator = true
+reportUntypedBaseClass = true
+reportUntypedNamedTuple = true
+reportPrivateUsage = true
+reportConstantRedefinition = true
+reportIncompatibleMethodOverride = true
+reportIncompatibleVariableOverride = true
+reportInconsistentConstructor = true
+reportOverlappingOverload = true
+reportMissingSuperCall = false
+reportUninitializedInstanceVariable = true
+reportInvalidStringEscapeSequence = true
+reportUnknownParameterType = true
+reportUnknownArgumentType = false
+reportUnknownLambdaType = true
+reportUnknownVariableType = false
+reportUnknownMemberType = false
+reportMissingParameterType = true
+reportMissingTypeArgument = true
+reportInvalidTypeVarUse = true
+reportCallInDefaultInitializer = true
+reportUnnecessaryIsInstance = true
+reportUnnecessaryCast = true
+reportUnnecessaryComparison = true
+reportAssertAlwaysTrue = true
+reportSelfClsParameterName = true
+reportImplicitStringConcatenation = false
+reportUndefinedVariable = true
+reportUnboundVariable = true
+reportInvalidStubStatement = true
+reportIncompleteStub = true
+reportUnsupportedDunderAll = true
+reportUnusedCoroutine = true
+reportCallIssue = false
+reportAttributeAccessIssue = false
+reportArgumentType = false
+reportGeneralTypeIssues = false
+
+# --------------------------------------------------
+# pytest
+# --------------------------------------------------
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
@@ -137,6 +250,10 @@ addopts = [
 filterwarnings = [
     "ignore::pytest.PytestUnraisableExceptionWarning",
 ]
+
+# --------------------------------------------------
+# coverage
+# --------------------------------------------------
 
 [tool.coverage.run]
 source = ["src"]
@@ -158,19 +275,4 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
-]
-
-[dependency-groups]
-dev = [
-    { include-group = "test" },
-    "mypy>=1.0.0",
-    "ruff>=0.12.0",
-    "types-requests>=2.25.0",   # Type stubs for requests
-]
-test = [
-    "coverage>=7.0.0",
-    "hypothesis>=6.135.16",
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.0.0",
 ]

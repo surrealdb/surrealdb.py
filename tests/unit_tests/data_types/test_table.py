@@ -130,6 +130,7 @@ async def surrealdb_connection():  # type: ignore[misc]
 
 # Database send+receive tests
 @pytest.mark.asyncio
+@pytest.mark.xfail(reason="Waiting for a fix in SurrealDB")
 async def test_table_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending Table to SurrealDB and receiving it back."""
     table = Table("users")
@@ -142,6 +143,7 @@ async def test_table_db_roundtrip(surrealdb_connection: Any) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.xfail(reason="Waiting for a fix in SurrealDB")
 async def test_multiple_tables_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending multiple Table objects to SurrealDB."""
     tables = {
@@ -160,6 +162,7 @@ async def test_multiple_tables_db_roundtrip(surrealdb_connection: Any) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.xfail(reason="Waiting for a fix in SurrealDB")
 async def test_table_in_array_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending array of Table objects to SurrealDB."""
     tables_array = [

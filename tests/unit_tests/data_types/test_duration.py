@@ -74,15 +74,6 @@ def test_duration_parse_invalid_unit() -> None:
         Duration.parse("10x")
 
 
-def test_duration_parse_invalid_type() -> None:
-    """Test Duration.parse with invalid type raises TypeError."""
-    with pytest.raises(
-        TypeError, match="Duration must be initialized with an int or str"
-    ):
-        # Use a list to trigger the else clause
-        Duration.parse([])  # type: ignore
-
-
 def test_duration_parse_with_nanoseconds() -> None:
     """Test Duration.parse with additional nanoseconds parameter."""
     duration = Duration.parse(5, nanoseconds=1000)

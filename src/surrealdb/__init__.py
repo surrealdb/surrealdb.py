@@ -1,4 +1,4 @@
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
@@ -7,7 +7,27 @@ from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.connections.url import Url, UrlScheme
 
 from surrealdb.data.types.table import Table
-from surrealdb.data.types.constants import *
+from surrealdb.data.types.constants import (
+    TAG_BOUND_EXCLUDED,
+    TAG_BOUND_INCLUDED,
+    TAG_DATETIME,
+    TAG_DATETIME_COMPACT,
+    TAG_DECIMAL_STRING,
+    TAG_DURATION,
+    TAG_DURATION_COMPACT,
+    TAG_GEOMETRY_COLLECTION,
+    TAG_GEOMETRY_LINE,
+    TAG_GEOMETRY_MULTI_LINE,
+    TAG_GEOMETRY_MULTI_POINT,
+    TAG_GEOMETRY_MULTI_POLYGON,
+    TAG_GEOMETRY_POINT,
+    TAG_GEOMETRY_POLYGON,
+    TAG_NONE,
+    TAG_RANGE,
+    TAG_RECORD_ID,
+    TAG_TABLE_NAME,
+    TAG_UUID_STRING,
+)
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.geometry import Geometry
 from surrealdb.data.types.range import Range
@@ -15,6 +35,42 @@ from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.datetime import Datetime
 
 from surrealdb.types import Value
+
+__all__ = [
+    "AsyncSurreal",
+    "Surreal",
+    "AsyncHttpSurrealConnection",
+    "AsyncWsSurrealConnection",
+    "BlockingHttpSurrealConnection",
+    "BlockingWsSurrealConnection",
+    "Table",
+    "Duration",
+    "Geometry",
+    "Range",
+    "RecordID",
+    "Datetime",
+    "Value",
+    # Constants
+    "TAG_BOUND_EXCLUDED",
+    "TAG_BOUND_INCLUDED",
+    "TAG_DATETIME",
+    "TAG_DATETIME_COMPACT",
+    "TAG_DECIMAL_STRING",
+    "TAG_DURATION",
+    "TAG_DURATION_COMPACT",
+    "TAG_GEOMETRY_COLLECTION",
+    "TAG_GEOMETRY_LINE",
+    "TAG_GEOMETRY_MULTI_LINE",
+    "TAG_GEOMETRY_MULTI_POINT",
+    "TAG_GEOMETRY_MULTI_POLYGON",
+    "TAG_GEOMETRY_POINT",
+    "TAG_GEOMETRY_POLYGON",
+    "TAG_NONE",
+    "TAG_RANGE",
+    "TAG_RECORD_ID",
+    "TAG_TABLE_NAME",
+    "TAG_UUID_STRING",
+]
 
 
 class AsyncSurrealDBMeta(type):

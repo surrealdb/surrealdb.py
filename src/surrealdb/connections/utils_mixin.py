@@ -1,4 +1,4 @@
-from typing import Any, Union
+from typing import Any
 
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
@@ -30,12 +30,12 @@ class UtilsMixin:
             return True
         elif isinstance(resource, Table):
             return False
-        elif isinstance(resource, str):
+        else:
             # Check if it contains a colon (record ID format like "user:tobie")
             # But exclude range syntax like "user:1..10"
             if ":" in resource and ".." not in resource:
                 return True
-        return False
+            return False
 
     @staticmethod
     def _unwrap_result(result: Any, unwrap: bool) -> Any:
@@ -49,7 +49,12 @@ class UtilsMixin:
         Returns:
             The unwrapped result if unwrap is True and result is a single-item list,
             otherwise returns the result as-is
+
+        Note: Returns Any because the database can return various types (dict, list, str, etc.)
+        and we preserve whatever type the database sends.
         """
+        # Intentionally returning Any - database results are dynamic and cannot be
+        # typed more specifically without runtime schema validation
         if unwrap and isinstance(result, list) and len(result) == 1:
             return result[0]
         return result
@@ -77,12 +82,8 @@ class UtilsMixin:
         elif isinstance(resource, RecordID):
             variables[var_name] = resource
             return f"${var_name}"
-        elif isinstance(resource, str):
+        else:
             # For strings, use them directly in SQL without converting to variables
             # This avoids issues with SurrealDB not properly handling RecordID/Table variables
             # in certain contexts (like DELETE)
             return resource
-        else:
-            # Fallback: add to variables
-            variables[var_name] = resource
-            return f"${var_name}"

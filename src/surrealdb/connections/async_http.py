@@ -45,6 +45,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.namespace: Optional[str] = None
         self.database: Optional[str] = None
         self.vars: dict[str, Value] = dict()
+        self._session: Optional[aiohttp.ClientSession] = None
 
     async def _send(
         self,
@@ -65,7 +66,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         # json_body, method, endpoint = message.JSON_HTTP_DESCRIPTOR
         data = message.WS_CBOR_DESCRIPTOR
         url = f"{self.url.raw_url}/rpc"
-        headers = dict()
+        headers: dict[str, str] = {}
         headers["Accept"] = "application/cbor"
         headers["content-type"] = "application/cbor"
         if self.token:
@@ -381,5 +382,5 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         Asynchronous context manager exit.
         Closes the aiohttp session upon exiting the context.
         """
-        if hasattr(self, "_session"):
+        if self._session is not None:
             await self._session.close()

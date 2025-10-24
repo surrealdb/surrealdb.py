@@ -13,7 +13,7 @@ def process_record(record: RecordIdType) -> Union[RecordID, Table]:
         return record
     elif isinstance(record, Table):
         return record
-    elif isinstance(record, str):
+    else:
         if ":" in record:
             return RecordID.parse(record)
         else:
