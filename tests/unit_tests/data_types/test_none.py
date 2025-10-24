@@ -9,7 +9,71 @@ Notes:
 import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
+from surrealdb.data import cbor
 from surrealdb.data.types.record_id import RecordID
+
+
+# Unit tests for encoding
+def test_none_encode():
+    """Test encoding None to CBOR bytes."""
+    encoded = cbor.encode(None)
+    assert isinstance(encoded, bytes)
+    assert len(encoded) > 0
+
+
+def test_none_in_list_encode():
+    """Test encoding None in a list to CBOR bytes."""
+    test_list = [None, 1, None, "test"]
+    encoded = cbor.encode(test_list)
+    assert isinstance(encoded, bytes)
+
+
+def test_none_in_dict_encode():
+    """Test encoding None in a dict to CBOR bytes."""
+    test_dict = {"key1": None, "key2": "value"}
+    encoded = cbor.encode(test_dict)
+    assert isinstance(encoded, bytes)
+
+
+# Unit tests for decoding
+def test_none_decode():
+    """Test decoding CBOR bytes to None."""
+    encoded = cbor.encode(None)
+    decoded = cbor.decode(encoded)
+    assert decoded is None
+
+
+def test_none_in_list_decode():
+    """Test decoding CBOR bytes to list with None."""
+    test_list = [None, 1, None, "test"]
+    encoded = cbor.encode(test_list)
+    decoded = cbor.decode(encoded)
+    assert decoded == test_list
+
+
+# Encode+decode roundtrip tests
+def test_none_roundtrip():
+    """Test encode+decode roundtrip for None."""
+    encoded = cbor.encode(None)
+    decoded = cbor.decode(encoded)
+    assert decoded is None
+
+
+def test_none_in_structures_roundtrip():
+    """Test encode+decode roundtrip for None in various structures."""
+    test_cases = [
+        [None],
+        [None, None],
+        [1, None, 2],
+        {"key": None},
+        {"key1": None, "key2": "value"},
+        [{"nested": None}],
+    ]
+
+    for test_case in test_cases:
+        encoded = cbor.encode(test_case)
+        decoded = cbor.decode(encoded)
+        assert decoded == test_case
 
 
 @pytest.fixture
