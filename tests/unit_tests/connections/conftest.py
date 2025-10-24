@@ -1,3 +1,6 @@
+from collections.abc import AsyncGenerator, Generator
+from typing import Any
+
 import pytest
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
@@ -7,7 +10,7 @@ from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 
 @pytest.fixture
-def connection_params():
+def connection_params() -> dict[str, Any]:
     """Shared connection parameters for all tests"""
     return {
         "url": "http://localhost:8000",
@@ -24,7 +27,9 @@ def connection_params():
 
 
 @pytest.fixture
-async def async_http_connection(connection_params):
+async def async_http_connection(
+    connection_params: dict[str, Any],
+) -> AsyncGenerator[AsyncHttpSurrealConnection, None]:
     """Async HTTP connection fixture"""
     connection = AsyncHttpSurrealConnection(connection_params["url"])
     await connection.signin(connection_params["vars_params"])
@@ -36,7 +41,9 @@ async def async_http_connection(connection_params):
 
 
 @pytest.fixture
-async def async_ws_connection(connection_params):
+async def async_ws_connection(
+    connection_params: dict[str, Any],
+) -> AsyncGenerator[AsyncWsSurrealConnection, None]:
     """Async WebSocket connection fixture"""
     connection = AsyncWsSurrealConnection(connection_params["ws_url"])
     try:
@@ -56,7 +63,9 @@ async def async_ws_connection(connection_params):
 
 
 @pytest.fixture
-def blocking_http_connection(connection_params):
+def blocking_http_connection(
+    connection_params: dict[str, Any],
+) -> Generator[BlockingHttpSurrealConnection, None, None]:
     """Blocking HTTP connection fixture"""
     connection = BlockingHttpSurrealConnection(connection_params["url"])
     connection.signin(connection_params["vars_params"])
@@ -68,7 +77,9 @@ def blocking_http_connection(connection_params):
 
 
 @pytest.fixture
-def blocking_ws_connection(connection_params):
+def blocking_ws_connection(
+    connection_params: dict[str, Any],
+) -> Generator[BlockingWsSurrealConnection, None, None]:
     """Blocking WebSocket connection fixture"""
     connection = BlockingWsSurrealConnection(connection_params["ws_url"])
     connection.signin(connection_params["vars_params"])
@@ -82,7 +93,9 @@ def blocking_ws_connection(connection_params):
 
 
 @pytest.fixture
-async def async_http_connection_with_user(async_http_connection):
+async def async_http_connection_with_user(
+    async_http_connection: AsyncHttpSurrealConnection,
+) -> AsyncGenerator[AsyncHttpSurrealConnection, None]:
     """Async HTTP connection with a test user created"""
     await async_http_connection.query("DELETE user;")
     await async_http_connection.query(
@@ -92,7 +105,9 @@ async def async_http_connection_with_user(async_http_connection):
 
 
 @pytest.fixture
-async def async_ws_connection_with_user(async_ws_connection):
+async def async_ws_connection_with_user(
+    async_ws_connection: AsyncWsSurrealConnection,
+) -> AsyncGenerator[AsyncWsSurrealConnection, None]:
     """Async WebSocket connection with a test user created"""
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
@@ -102,7 +117,9 @@ async def async_ws_connection_with_user(async_ws_connection):
 
 
 @pytest.fixture
-def blocking_http_connection_with_user(blocking_http_connection):
+def blocking_http_connection_with_user(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+) -> Generator[BlockingHttpSurrealConnection, None, None]:
     """Blocking HTTP connection with a test user created"""
     blocking_http_connection.query("DELETE user;")
     blocking_http_connection.query(
@@ -112,7 +129,9 @@ def blocking_http_connection_with_user(blocking_http_connection):
 
 
 @pytest.fixture
-def blocking_ws_connection_with_user(blocking_ws_connection):
+def blocking_ws_connection_with_user(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+) -> Generator[BlockingWsSurrealConnection, None, None]:
     """Blocking WebSocket connection with a test user created"""
     blocking_ws_connection.query("DELETE user;")
     blocking_ws_connection.query(

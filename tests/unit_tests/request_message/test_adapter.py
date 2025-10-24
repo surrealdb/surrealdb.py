@@ -1,3 +1,5 @@
+from typing import Any
+
 import os
 
 import pytest
@@ -9,7 +11,7 @@ EXPECTED_SQL = (
 )
 
 
-def test_sql_adapter_from_docstring():
+def test_sql_adapter_from_docstring() -> None:
     query = """
     CREATE user:tobie SET name = 'Tobie';
     CREATE user:jaime SET name = 'Jaime';
@@ -31,7 +33,7 @@ def test_sql_adapter_from_docstring():
     assert EXPECTED_SQL == sql
 
 
-def test_sql_adapter_from_list():
+def test_sql_adapter_from_list() -> None:
     query = [
         "CREATE user:tobie SET name = 'Tobie';",
         "",
@@ -41,7 +43,7 @@ def test_sql_adapter_from_list():
     assert EXPECTED_SQL == sql
 
 
-def test_sql_adapter_from_file():
+def test_sql_adapter_from_file() -> None:
     current_file_path = os.path.abspath(__file__)
     directory = os.path.dirname(current_file_path)
     file_path = os.path.join(directory, "test.sql")

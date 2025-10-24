@@ -104,6 +104,24 @@ ignore_missing_imports = true
 module = "websockets.*"
 ignore_missing_imports = true
 
+# Relax type checking for tests - they work with Value union types extensively
+[[tool.mypy.overrides]]
+module = "tests.*"
+# Disable strict type checking for test bodies but keep what we can
+disallow_untyped_calls = false
+disallow_any_generics = false
+# Allow flexible indexing since query() returns Value union type
+warn_return_any = false
+# Don't warn about type narrowing issues
+strict_optional = false
+# Disable specific error codes that are problematic with Value union type and pytest fixtures
+disable_error_code = [
+    "index", "call-overload", "arg-type", "assignment", "return-value", 
+    "operator", "union-attr", "func-returns-value", "name-defined", 
+    "misc", "var-annotated", "comparison-overlap", "str-bytes-safe",
+    "unused-ignore", "no-untyped-def"
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

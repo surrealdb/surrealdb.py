@@ -1,3 +1,5 @@
+from typing import Any
+
 import warnings
 
 import pytest
@@ -5,7 +7,7 @@ import pytest
 from surrealdb.cbor import decoder, encoder, types
 
 
-def test_cbor_decoder_module():
+def test_cbor_decoder_module() -> None:
     """Test that the decoder module works."""
     # The warning is emitted at import time, so we need to import it fresh
     import importlib
@@ -18,7 +20,7 @@ def test_cbor_decoder_module():
     assert hasattr(decoder, "loads")
 
 
-def test_cbor_encoder_module():
+def test_cbor_encoder_module() -> None:
     """Test that the encoder module works."""
     # The warning is emitted at import time, so we need to import it fresh
     import importlib
@@ -32,7 +34,7 @@ def test_cbor_encoder_module():
     assert hasattr(encoder, "shareable_encoder")
 
 
-def test_cbor_types_module():
+def test_cbor_types_module() -> None:
     """Test that the types module works."""
     # The warning is emitted at import time, so we need to import it fresh
     import importlib

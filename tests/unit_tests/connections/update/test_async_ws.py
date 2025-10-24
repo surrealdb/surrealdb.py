@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
@@ -6,7 +8,7 @@ from surrealdb.data.types.table import Table
 
 
 @pytest.fixture
-def update_data():
+def update_data() -> dict[str, Any]:
     return {
         "name": "Jaime",
         "email": "jaime@example.com",
@@ -16,23 +18,27 @@ def update_data():
 
 
 @pytest.fixture
-def record_id():
+def record_id() -> RecordID:
     return RecordID("user", "tobie")
 
 
-def check_no_change(data: dict, record_id: RecordID):
+def check_no_change(data: dict[str, Any], record_id) -> None:
     assert record_id == data["id"]
     assert "Tobie" == data["name"]
 
 
-def check_change(data: dict, record_id: RecordID):
+def check_change(data: dict[str, Any], record_id) -> None:
     assert record_id == data["id"]
     assert "Jaime" == data["name"]
     # No age field assertion
 
 
 @pytest.mark.asyncio
-async def test_update_string(async_ws_connection, update_data, record_id):
+async def test_update_string(
+    async_ws_connection: AsyncWsSurrealConnection,
+    update_data: dict[str, Any],
+    record_id,
+) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
@@ -46,7 +52,11 @@ async def test_update_string(async_ws_connection, update_data, record_id):
 
 
 @pytest.mark.asyncio
-async def test_update_string_with_data(async_ws_connection, update_data, record_id):
+async def test_update_string_with_data(
+    async_ws_connection: AsyncWsSurrealConnection,
+    update_data: dict[str, Any],
+    record_id,
+) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
@@ -59,7 +69,11 @@ async def test_update_string_with_data(async_ws_connection, update_data, record_
 
 
 @pytest.mark.asyncio
-async def test_update_record_id(async_ws_connection, update_data, record_id):
+async def test_update_record_id(
+    async_ws_connection: AsyncWsSurrealConnection,
+    update_data: dict[str, Any],
+    record_id,
+) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
@@ -72,7 +86,11 @@ async def test_update_record_id(async_ws_connection, update_data, record_id):
 
 
 @pytest.mark.asyncio
-async def test_update_record_id_with_data(async_ws_connection, update_data, record_id):
+async def test_update_record_id_with_data(
+    async_ws_connection: AsyncWsSurrealConnection,
+    update_data: dict[str, Any],
+    record_id,
+) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
@@ -85,7 +103,11 @@ async def test_update_record_id_with_data(async_ws_connection, update_data, reco
 
 
 @pytest.mark.asyncio
-async def test_update_table(async_ws_connection, update_data, record_id):
+async def test_update_table(
+    async_ws_connection: AsyncWsSurrealConnection,
+    update_data: dict[str, Any],
+    record_id,
+) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
@@ -99,7 +121,11 @@ async def test_update_table(async_ws_connection, update_data, record_id):
 
 
 @pytest.mark.asyncio
-async def test_update_table_with_data(async_ws_connection, update_data, record_id):
+async def test_update_table_with_data(
+    async_ws_connection: AsyncWsSurrealConnection,
+    update_data: dict[str, Any],
+    record_id,
+) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"

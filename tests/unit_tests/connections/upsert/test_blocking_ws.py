@@ -2,10 +2,13 @@ import pytest
 
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
+from typing import Any
+from collections.abc import Generator
+from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 
 @pytest.fixture
-def upsert_data():
+def upsert_data() -> dict[str, Any]:
     return {
         "name": "Jaime",
         "email": "jaime@example.com",
@@ -15,7 +18,7 @@ def upsert_data():
 
 
 @pytest.fixture
-def existing_data():
+def existing_data() -> dict[str, Any]:
     return {
         "name": "Tobie",
         "email": "tobie@example.com",
@@ -25,7 +28,9 @@ def existing_data():
 
 
 @pytest.fixture(autouse=True)
-def setup_user(blocking_ws_connection):
+def setup_user(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+) -> Generator[None, None, None]:
     blocking_ws_connection.query("DELETE user;")
     blocking_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
@@ -34,7 +39,9 @@ def setup_user(blocking_ws_connection):
     blocking_ws_connection.query("DELETE user;")
 
 
-def test_upsert_string(blocking_ws_connection, setup_user, existing_data):
+def test_upsert_string(
+    blocking_ws_connection: BlockingWsSurrealConnection, setup_user: None, existing_data
+) -> None:
     record_id = RecordID("user", "tobie")
     outcome = blocking_ws_connection.upsert("user:tobie", existing_data)
     assert outcome["id"] == record_id
@@ -48,7 +55,11 @@ def test_upsert_string(blocking_ws_connection, setup_user, existing_data):
     assert result[0]["enabled"] is True
 
 
-def test_upsert_string_with_data(blocking_ws_connection, upsert_data, setup_user):
+def test_upsert_string_with_data(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    upsert_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     record_id = RecordID("user", "tobie")
     first_outcome = blocking_ws_connection.upsert("user:tobie", upsert_data)
     assert first_outcome["id"] == record_id
@@ -62,7 +73,9 @@ def test_upsert_string_with_data(blocking_ws_connection, upsert_data, setup_user
     assert result[0]["enabled"] is True
 
 
-def test_upsert_record_id(blocking_ws_connection, setup_user, existing_data):
+def test_upsert_record_id(
+    blocking_ws_connection: BlockingWsSurrealConnection, setup_user: None, existing_data
+) -> None:
     record_id = RecordID("user", "tobie")
     first_outcome = blocking_ws_connection.upsert(record_id, existing_data)
     assert first_outcome["id"] == record_id
@@ -76,7 +89,11 @@ def test_upsert_record_id(blocking_ws_connection, setup_user, existing_data):
     assert result[0]["enabled"] is True
 
 
-def test_upsert_record_id_with_data(blocking_ws_connection, upsert_data, setup_user):
+def test_upsert_record_id_with_data(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    upsert_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     record_id = RecordID("user", "tobie")
     outcome = blocking_ws_connection.upsert(record_id, upsert_data)
     assert outcome["id"] == record_id
@@ -90,7 +107,9 @@ def test_upsert_record_id_with_data(blocking_ws_connection, upsert_data, setup_u
     assert result[0]["enabled"] is True
 
 
-def test_upsert_table(blocking_ws_connection, setup_user, existing_data):
+def test_upsert_table(
+    blocking_ws_connection: BlockingWsSurrealConnection, setup_user: None, existing_data
+) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")
     first_outcome = blocking_ws_connection.upsert(table, existing_data)
@@ -100,7 +119,11 @@ def test_upsert_table(blocking_ws_connection, setup_user, existing_data):
     assert any(r["name"] == "Tobie" for r in result)
 
 
-def test_upsert_table_with_data(blocking_ws_connection, upsert_data, setup_user):
+def test_upsert_table_with_data(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    upsert_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")
     outcome = blocking_ws_connection.upsert(table, upsert_data)

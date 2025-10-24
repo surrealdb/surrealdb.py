@@ -4,7 +4,7 @@ from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 
 
 @pytest.mark.asyncio
-async def test_select(async_http_connection):
+async def test_select(async_http_connection: AsyncHttpSurrealConnection) -> None:
     await async_http_connection.query("DELETE user;")
     await async_http_connection.query("DELETE users;")
 

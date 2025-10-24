@@ -4,7 +4,9 @@ from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 
 
 @pytest.fixture(autouse=True)
-async def setup_schema(async_http_connection):
+async def setup_schema(
+    async_http_connection: AsyncHttpSurrealConnection,
+) -> AsyncGenerator[None, None]:
     await async_http_connection.query("DELETE user;")
     await async_http_connection.query("REMOVE TABLE user;")
     await async_http_connection.query(
@@ -33,7 +35,7 @@ async def setup_schema(async_http_connection):
 
 
 @pytest.mark.asyncio
-async def test_signin_root(setup_schema):
+async def test_signin_root(setup_schema: None) -> None:
     url = "http://localhost:8000"
     vars_params = {
         "username": "root",
@@ -45,7 +47,7 @@ async def test_signin_root(setup_schema):
 
 
 @pytest.mark.asyncio
-async def test_signin_namespace(setup_schema):
+async def test_signin_namespace(setup_schema: None) -> None:
     url = "http://localhost:8000"
     connection = AsyncHttpSurrealConnection(url)
     vars = {
@@ -58,7 +60,7 @@ async def test_signin_namespace(setup_schema):
 
 
 @pytest.mark.asyncio
-async def test_signin_database(setup_schema):
+async def test_signin_database(setup_schema: None) -> None:
     url = "http://localhost:8000"
     connection = AsyncHttpSurrealConnection(url)
     vars = {
@@ -72,7 +74,7 @@ async def test_signin_database(setup_schema):
 
 
 @pytest.mark.asyncio
-async def test_signin_record(setup_schema):
+async def test_signin_record(setup_schema: None) -> None:
     url = "http://localhost:8000"
     vars = {
         "namespace": "test_ns",

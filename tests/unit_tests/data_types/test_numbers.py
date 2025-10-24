@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
@@ -5,7 +7,7 @@ from surrealdb.data import cbor
 
 
 # Unit tests for encoding integers
-def test_positive_int_encode():
+def test_positive_int_encode() -> None:
     """Test encoding positive integer to CBOR bytes."""
     test_int = 42
     encoded = cbor.encode(test_int)
@@ -13,20 +15,20 @@ def test_positive_int_encode():
     assert len(encoded) > 0
 
 
-def test_negative_int_encode():
+def test_negative_int_encode() -> None:
     """Test encoding negative integer to CBOR bytes."""
     test_int = -42
     encoded = cbor.encode(test_int)
     assert isinstance(encoded, bytes)
 
 
-def test_zero_encode():
+def test_zero_encode() -> None:
     """Test encoding zero to CBOR bytes."""
     encoded = cbor.encode(0)
     assert isinstance(encoded, bytes)
 
 
-def test_large_int_encode():
+def test_large_int_encode() -> None:
     """Test encoding large integer to CBOR bytes."""
     test_int = 9999999999999999
     encoded = cbor.encode(test_int)
@@ -34,14 +36,14 @@ def test_large_int_encode():
 
 
 # Unit tests for encoding floats
-def test_float_encode():
+def test_float_encode() -> None:
     """Test encoding float to CBOR bytes."""
     test_float = 3.14159
     encoded = cbor.encode(test_float)
     assert isinstance(encoded, bytes)
 
 
-def test_negative_float_encode():
+def test_negative_float_encode() -> None:
     """Test encoding negative float to CBOR bytes."""
     test_float = -2.71828
     encoded = cbor.encode(test_float)
@@ -49,7 +51,7 @@ def test_negative_float_encode():
 
 
 # Unit tests for decoding integers
-def test_positive_int_decode():
+def test_positive_int_decode() -> None:
     """Test decoding CBOR bytes to positive integer."""
     test_int = 42
     encoded = cbor.encode(test_int)
@@ -58,7 +60,7 @@ def test_positive_int_decode():
     assert decoded == test_int
 
 
-def test_negative_int_decode():
+def test_negative_int_decode() -> None:
     """Test decoding CBOR bytes to negative integer."""
     test_int = -42
     encoded = cbor.encode(test_int)
@@ -68,7 +70,7 @@ def test_negative_int_decode():
 
 
 # Unit tests for decoding floats
-def test_float_decode():
+def test_float_decode() -> None:
     """Test decoding CBOR bytes to float."""
     test_float = 3.14159
     encoded = cbor.encode(test_float)
@@ -78,7 +80,7 @@ def test_float_decode():
 
 
 # Encode+decode roundtrip tests for integers
-def test_int_roundtrip():
+def test_int_roundtrip() -> None:
     """Test encode+decode roundtrip for various integers."""
     test_ints = [
         0,
@@ -104,7 +106,7 @@ def test_int_roundtrip():
 
 
 # Encode+decode roundtrip tests for floats
-def test_float_roundtrip():
+def test_float_roundtrip() -> None:
     """Test encode+decode roundtrip for various floats."""
     test_floats = [
         0.0,
@@ -125,7 +127,7 @@ def test_float_roundtrip():
         assert isinstance(decoded, float)
 
 
-def test_mixed_numbers_in_list_roundtrip():
+def test_mixed_numbers_in_list_roundtrip() -> None:
     """Test encode+decode roundtrip for mixed numbers in a list."""
     test_list = [1, 2.5, 3, -4.2, 0, 0.0, -1]
     encoded = cbor.encode(test_list)
@@ -133,7 +135,7 @@ def test_mixed_numbers_in_list_roundtrip():
     assert decoded == test_list
 
 
-def test_numbers_in_dict_roundtrip():
+def test_numbers_in_dict_roundtrip() -> None:
     """Test encode+decode roundtrip for numbers in a dict."""
     test_dict = {
         "count": 42,
@@ -148,7 +150,7 @@ def test_numbers_in_dict_roundtrip():
 
 # Database fixture
 @pytest.fixture
-async def surrealdb_connection():
+async def surrealdb_connection():  # type: ignore[misc]
     url = "ws://localhost:8000/rpc"
     password = "root"
     username = "root"
@@ -166,7 +168,7 @@ async def surrealdb_connection():
 
 # Database send+receive tests for integers
 @pytest.mark.asyncio
-async def test_positive_int_db_roundtrip(surrealdb_connection):
+async def test_positive_int_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending positive integer to SurrealDB and receiving it back."""
     test_int = 42
     await surrealdb_connection.query(
@@ -178,7 +180,7 @@ async def test_positive_int_db_roundtrip(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_negative_int_db_roundtrip(surrealdb_connection):
+async def test_negative_int_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending negative integer to SurrealDB and receiving it back."""
     test_int = -42
     await surrealdb_connection.query(
@@ -190,7 +192,7 @@ async def test_negative_int_db_roundtrip(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_zero_db_roundtrip(surrealdb_connection):
+async def test_zero_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending zero to SurrealDB and receiving it back."""
     await surrealdb_connection.query(
         "CREATE number_tests:test3 SET value = $val;",
@@ -201,7 +203,7 @@ async def test_zero_db_roundtrip(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_large_int_db_roundtrip(surrealdb_connection):
+async def test_large_int_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending large integer to SurrealDB and receiving it back."""
     test_int = 9999999999999999
     await surrealdb_connection.query(
@@ -214,7 +216,7 @@ async def test_large_int_db_roundtrip(surrealdb_connection):
 
 # Database send+receive tests for floats
 @pytest.mark.asyncio
-async def test_float_db_roundtrip(surrealdb_connection):
+async def test_float_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending float to SurrealDB and receiving it back."""
     test_float = 3.14159
     await surrealdb_connection.query(
@@ -226,7 +228,7 @@ async def test_float_db_roundtrip(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_negative_float_db_roundtrip(surrealdb_connection):
+async def test_negative_float_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending negative float to SurrealDB and receiving it back."""
     test_float = -2.71828
     await surrealdb_connection.query(
@@ -238,7 +240,7 @@ async def test_negative_float_db_roundtrip(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_mixed_numbers_db_roundtrip(surrealdb_connection):
+async def test_mixed_numbers_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending mixed integer and float fields to SurrealDB."""
     await surrealdb_connection.query(
         "CREATE number_tests:test7 SET int_val = $int_val, float_val = $float_val;",

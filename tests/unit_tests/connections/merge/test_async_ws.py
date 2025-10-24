@@ -2,10 +2,13 @@ import pytest
 
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
+from typing import Any
+from collections.abc import AsyncGenerator
+from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 
 
 @pytest.fixture
-def merge_data():
+def merge_data() -> dict[str, Any]:
     return {
         "name": "Jaime",
         "email": "jaime@example.com",
@@ -15,7 +18,9 @@ def merge_data():
 
 
 @pytest.fixture(autouse=True)
-async def setup_user(async_ws_connection):
+async def setup_user(
+    async_ws_connection: AsyncWsSurrealConnection,
+) -> AsyncGenerator[None, None]:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
@@ -25,7 +30,9 @@ async def setup_user(async_ws_connection):
 
 
 @pytest.mark.asyncio
-async def test_merge_string(async_ws_connection, setup_user):
+async def test_merge_string(
+    async_ws_connection: AsyncWsSurrealConnection, setup_user: None
+) -> None:
     record_id = RecordID("user", "tobie")
     outcome = await async_ws_connection.merge("user:tobie")
     assert outcome["id"] == record_id
@@ -36,7 +43,11 @@ async def test_merge_string(async_ws_connection, setup_user):
 
 
 @pytest.mark.asyncio
-async def test_merge_string_with_data(async_ws_connection, merge_data, setup_user):
+async def test_merge_string_with_data(
+    async_ws_connection: AsyncWsSurrealConnection,
+    merge_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     record_id = RecordID("user", "tobie")
     first_outcome = await async_ws_connection.merge("user:tobie", merge_data)
     assert first_outcome["id"] == record_id
@@ -51,7 +62,9 @@ async def test_merge_string_with_data(async_ws_connection, merge_data, setup_use
 
 
 @pytest.mark.asyncio
-async def test_merge_record_id(async_ws_connection, setup_user):
+async def test_merge_record_id(
+    async_ws_connection: AsyncWsSurrealConnection, setup_user: None
+) -> None:
     record_id = RecordID("user", "tobie")
     first_outcome = await async_ws_connection.merge(record_id)
     assert first_outcome["id"] == record_id
@@ -62,7 +75,11 @@ async def test_merge_record_id(async_ws_connection, setup_user):
 
 
 @pytest.mark.asyncio
-async def test_merge_record_id_with_data(async_ws_connection, merge_data, setup_user):
+async def test_merge_record_id_with_data(
+    async_ws_connection: AsyncWsSurrealConnection,
+    merge_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     record_id = RecordID("user", "tobie")
     outcome = await async_ws_connection.merge(record_id, merge_data)
     assert outcome["id"] == record_id
@@ -77,7 +94,9 @@ async def test_merge_record_id_with_data(async_ws_connection, merge_data, setup_
 
 
 @pytest.mark.asyncio
-async def test_merge_table(async_ws_connection, setup_user):
+async def test_merge_table(
+    async_ws_connection: AsyncWsSurrealConnection, setup_user: None
+) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")
     first_outcome = await async_ws_connection.merge(table)
@@ -89,7 +108,11 @@ async def test_merge_table(async_ws_connection, setup_user):
 
 
 @pytest.mark.asyncio
-async def test_merge_table_with_data(async_ws_connection, merge_data, setup_user):
+async def test_merge_table_with_data(
+    async_ws_connection: AsyncWsSurrealConnection,
+    merge_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")
     outcome = await async_ws_connection.merge(table, merge_data)

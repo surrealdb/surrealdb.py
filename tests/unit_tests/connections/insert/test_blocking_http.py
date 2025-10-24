@@ -1,3 +1,4 @@
+from typing import Any
 import pytest
 
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
@@ -6,7 +7,7 @@ from surrealdb.data.types.table import Table
 
 
 @pytest.fixture
-def insert_bulk_data():
+def insert_bulk_data() -> dict[str, Any]:
     return [
         {
             "name": "Tobie",
@@ -24,7 +25,7 @@ def insert_bulk_data():
 
 
 @pytest.fixture
-def insert_data():
+def insert_data() -> dict[str, Any]:
     return [
         {
             "name": "Tobie",
@@ -35,7 +36,9 @@ def insert_data():
     ]
 
 
-def test_insert_string_with_data(blocking_http_connection, insert_bulk_data):
+def test_insert_string_with_data(
+    blocking_http_connection: BlockingHttpSurrealConnection, insert_bulk_data
+) -> None:
     blocking_http_connection.query("DELETE user;")
     outcome = blocking_http_connection.insert("user", insert_bulk_data)
     assert 2 == len(outcome)
@@ -43,7 +46,9 @@ def test_insert_string_with_data(blocking_http_connection, insert_bulk_data):
     blocking_http_connection.query("DELETE user;")
 
 
-def test_insert_record_id_result_error(blocking_http_connection, insert_data):
+def test_insert_record_id_result_error(
+    blocking_http_connection: BlockingHttpSurrealConnection, insert_data
+) -> None:
     blocking_http_connection.query("DELETE user;")
     record_id = RecordID("user", "tobie")
     with pytest.raises(Exception) as context:

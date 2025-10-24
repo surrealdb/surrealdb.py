@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
@@ -6,19 +8,19 @@ from surrealdb.data.types.table import Table
 
 
 # Unit tests for Table class
-def test_table_init():
+def test_table_init() -> None:
     """Test Table initialization."""
     table = Table("users")
     assert table.table_name == "users"
 
 
-def test_table_str():
+def test_table_str() -> None:
     """Test Table string representation."""
     table = Table("users")
     assert str(table) == "users"
 
 
-def test_table_equality():
+def test_table_equality() -> None:
     """Test Table equality."""
     table1 = Table("users")
     table2 = Table("users")
@@ -30,7 +32,7 @@ def test_table_equality():
 
 
 # Unit tests for encoding
-def test_table_encode():
+def test_table_encode() -> None:
     """Test encoding Table to CBOR bytes."""
     table = Table("users")
     encoded = cbor.encode(table)
@@ -38,7 +40,7 @@ def test_table_encode():
     assert len(encoded) > 0
 
 
-def test_table_with_special_chars_encode():
+def test_table_with_special_chars_encode() -> None:
     """Test encoding Table with special characters to CBOR bytes."""
     table = Table("user_profiles")
     encoded = cbor.encode(table)
@@ -46,7 +48,7 @@ def test_table_with_special_chars_encode():
 
 
 # Unit tests for decoding
-def test_table_decode():
+def test_table_decode() -> None:
     """Test decoding CBOR bytes to Table."""
     table = Table("users")
     encoded = cbor.encode(table)
@@ -55,7 +57,7 @@ def test_table_decode():
     assert decoded == table
 
 
-def test_table_with_special_chars_decode():
+def test_table_with_special_chars_decode() -> None:
     """Test decoding CBOR bytes to Table with special characters."""
     table = Table("user_profiles")
     encoded = cbor.encode(table)
@@ -65,7 +67,7 @@ def test_table_with_special_chars_decode():
 
 
 # Encode+decode roundtrip tests
-def test_table_roundtrip():
+def test_table_roundtrip() -> None:
     """Test encode+decode roundtrip for Table."""
     test_tables = [
         Table("users"),
@@ -84,7 +86,7 @@ def test_table_roundtrip():
         assert decoded.table_name == table.table_name
 
 
-def test_table_in_object_roundtrip():
+def test_table_in_object_roundtrip() -> None:
     """Test encode+decode roundtrip for Table in an object."""
     test_obj = {
         "table1": Table("users"),
@@ -96,7 +98,7 @@ def test_table_in_object_roundtrip():
     assert decoded["table2"] == test_obj["table2"]
 
 
-def test_table_in_array_roundtrip():
+def test_table_in_array_roundtrip() -> None:
     """Test encode+decode roundtrip for Table in an array."""
     test_array = [
         Table("users"),
@@ -110,7 +112,7 @@ def test_table_in_array_roundtrip():
 
 # Database fixture
 @pytest.fixture
-async def surrealdb_connection():
+async def surrealdb_connection():  # type: ignore[misc]
     url = "ws://localhost:8000/rpc"
     password = "root"
     username = "root"
@@ -128,7 +130,7 @@ async def surrealdb_connection():
 
 # Database send+receive tests
 @pytest.mark.asyncio
-async def test_table_db_roundtrip(surrealdb_connection):
+async def test_table_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending Table to SurrealDB and receiving it back."""
     table = Table("users")
     await surrealdb_connection.query(
@@ -140,7 +142,7 @@ async def test_table_db_roundtrip(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_multiple_tables_db_roundtrip(surrealdb_connection):
+async def test_multiple_tables_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending multiple Table objects to SurrealDB."""
     tables = {
         "table1": Table("users"),
@@ -158,7 +160,7 @@ async def test_multiple_tables_db_roundtrip(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_table_in_array_db_roundtrip(surrealdb_connection):
+async def test_table_in_array_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending array of Table objects to SurrealDB."""
     tables_array = [
         Table("users"),

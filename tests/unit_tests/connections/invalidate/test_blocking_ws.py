@@ -6,7 +6,7 @@ from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 
 @pytest.fixture
-def main_connection():
+def main_connection() -> None:
     """Create a separate connection for the main connection that creates the test data"""
     url = "ws://localhost:8000"
     password = "root"
@@ -29,7 +29,9 @@ def main_connection():
     connection.close()
 
 
-def test_invalidate_with_guest_mode_on(main_connection, blocking_ws_connection):
+def test_invalidate_with_guest_mode_on(
+    main_connection, blocking_ws_connection: BlockingWsSurrealConnection
+) -> None:
     outcome = blocking_ws_connection.query("SELECT * FROM user;")
     assert len(outcome) == 1
     outcome = main_connection.query("SELECT * FROM user;")
@@ -48,7 +50,9 @@ def test_invalidate_with_guest_mode_on(main_connection, blocking_ws_connection):
     assert len(outcome) == 1
 
 
-def test_invalidate_test_for_no_guest_mode(main_connection, blocking_ws_connection):
+def test_invalidate_test_for_no_guest_mode(
+    main_connection, blocking_ws_connection: BlockingWsSurrealConnection
+) -> None:
     outcome = blocking_ws_connection.query("SELECT * FROM user;")
     assert len(outcome) == 1
     outcome = main_connection.query("SELECT * FROM user;")

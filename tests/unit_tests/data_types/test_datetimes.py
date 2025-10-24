@@ -1,3 +1,5 @@
+from typing import Any
+
 import datetime
 import sys
 
@@ -9,7 +11,7 @@ from surrealdb.data.types.datetime import Datetime
 
 
 # Unit tests for encoding
-def test_datetime_encode():
+def test_datetime_encode() -> None:
     """Test encoding datetime to CBOR bytes."""
     now = datetime.datetime.now(datetime.timezone.utc)
     encoded = cbor.encode(now)
@@ -17,7 +19,7 @@ def test_datetime_encode():
     assert len(encoded) > 0
 
 
-def test_datetime_custom_encode():
+def test_datetime_custom_encode() -> None:
     """Test encoding Datetime wrapper to CBOR bytes."""
     iso_datetime = "2025-02-03T12:30:45.123456Z"
     if sys.version_info < (3, 11):
@@ -27,7 +29,7 @@ def test_datetime_custom_encode():
     assert isinstance(encoded, bytes)
 
 
-def test_datetime_with_microseconds_encode():
+def test_datetime_with_microseconds_encode() -> None:
     """Test encoding datetime with microseconds to CBOR bytes."""
     dt = datetime.datetime(2025, 1, 1, 12, 30, 45, 123456, tzinfo=datetime.timezone.utc)
     encoded = cbor.encode(dt)
@@ -35,7 +37,7 @@ def test_datetime_with_microseconds_encode():
 
 
 # Unit tests for decoding
-def test_datetime_decode():
+def test_datetime_decode() -> None:
     """Test decoding CBOR bytes to datetime."""
     now = datetime.datetime.now(datetime.timezone.utc)
     encoded = cbor.encode(now)
@@ -45,7 +47,7 @@ def test_datetime_decode():
     assert abs((decoded - now).total_seconds()) < 0.001
 
 
-def test_datetime_with_microseconds_decode():
+def test_datetime_with_microseconds_decode() -> None:
     """Test decoding CBOR bytes to datetime with microseconds."""
     dt = datetime.datetime(2025, 1, 1, 12, 30, 45, 123456, tzinfo=datetime.timezone.utc)
     encoded = cbor.encode(dt)
@@ -55,7 +57,7 @@ def test_datetime_with_microseconds_decode():
 
 
 # Encode+decode roundtrip tests
-def test_datetime_roundtrip():
+def test_datetime_roundtrip() -> None:
     """Test encode+decode roundtrip for datetime."""
     test_datetimes = [
         datetime.datetime(2025, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc),
@@ -72,7 +74,7 @@ def test_datetime_roundtrip():
         assert decoded == dt
 
 
-def test_datetime_in_dict_roundtrip():
+def test_datetime_in_dict_roundtrip() -> None:
     """Test encode+decode roundtrip for datetime in a dict."""
     now = datetime.datetime.now(datetime.timezone.utc)
     test_dict = {
@@ -85,7 +87,7 @@ def test_datetime_in_dict_roundtrip():
     assert decoded["name"] == "test"
 
 
-def test_datetime_in_list_roundtrip():
+def test_datetime_in_list_roundtrip() -> None:
     """Test encode+decode roundtrip for datetime in a list."""
     dt1 = datetime.datetime(2025, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc)
     dt2 = datetime.datetime(2025, 6, 1, 12, 0, 0, tzinfo=datetime.timezone.utc)
@@ -96,7 +98,7 @@ def test_datetime_in_list_roundtrip():
 
 
 @pytest.fixture
-async def surrealdb_connection():
+async def surrealdb_connection():  # type: ignore[misc]
     url = "ws://localhost:8000/rpc"
     password = "root"
     username = "root"
@@ -113,7 +115,7 @@ async def surrealdb_connection():
 
 
 @pytest.mark.asyncio
-async def test_native_datetime(surrealdb_connection):
+async def test_native_datetime(surrealdb_connection: Any) -> None:
     now = datetime.datetime.now(datetime.timezone.utc)
     await surrealdb_connection.query(
         "CREATE datetime_tests:compact_test SET datetime = $compact_datetime;",
@@ -128,7 +130,7 @@ async def test_native_datetime(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_datetime_iso_format(surrealdb_connection):
+async def test_datetime_iso_format(surrealdb_connection: Any) -> None:
     iso_datetime = "2025-02-03T12:30:45.123456Z"  # ISO 8601 datetime
     if sys.version_info < (3, 11):
         iso_datetime = iso_datetime.replace("Z", "+00:00")

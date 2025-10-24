@@ -5,15 +5,21 @@ These tests verify that the fix for the race condition works correctly,
 ensuring responses are not mixed up when multiple threads share a connection.
 """
 
+from typing import Any
+
 import concurrent.futures
 
 import pytest
 
 from surrealdb.data.types.record_id import RecordID
+from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+from collections.abc import Generator
 
 
-@pytest.fixture(autouse=True)
-def setup_data(blocking_ws_connection):
+@pytest.fixture
+def setup_data(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+) -> Generator[None, None, None]:
     """Setup test data before each test and cleanup after."""
     blocking_ws_connection.query("DELETE user;")
     blocking_ws_connection.query("DELETE likes;")
@@ -26,7 +32,9 @@ def setup_data(blocking_ws_connection):
     blocking_ws_connection.query("DELETE document;")
 
 
-def test_concurrent_insert_relation(blocking_ws_connection, setup_data):
+def test_concurrent_insert_relation(
+    blocking_ws_connection: BlockingWsSurrealConnection, setup_data: None
+) -> None:
     """
     Test that concurrent insert_relation calls don't get mixed up responses.
 
@@ -70,7 +78,9 @@ def test_concurrent_insert_relation(blocking_ws_connection, setup_data):
     assert len(errors) == 0, f"Concurrent operations had errors: {errors}"
 
 
-def test_concurrent_create(blocking_ws_connection, setup_data):
+def test_concurrent_create(
+    blocking_ws_connection: BlockingWsSurrealConnection, setup_data: None
+) -> None:
     """
     Test that concurrent create calls don't get mixed up responses.
     """
@@ -109,7 +119,9 @@ def test_concurrent_create(blocking_ws_connection, setup_data):
     assert len(errors) == 0, f"Concurrent operations had errors: {errors}"
 
 
-def test_concurrent_mixed_operations(blocking_ws_connection, setup_data):
+def test_concurrent_mixed_operations(
+    blocking_ws_connection: BlockingWsSurrealConnection, setup_data: None
+) -> None:
     """
     Test that mixing different operation types concurrently works correctly.
 
@@ -168,7 +180,9 @@ def test_concurrent_mixed_operations(blocking_ws_connection, setup_data):
     assert len(errors) == 0, f"Concurrent mixed operations had errors: {errors}"
 
 
-def test_sequential_operations_still_work(blocking_ws_connection, setup_data):
+def test_sequential_operations_still_work(
+    blocking_ws_connection: BlockingWsSurrealConnection, setup_data: None
+) -> None:
     """
     Ensure the thread-safety fix doesn't break normal sequential usage.
     """

@@ -3,9 +3,13 @@ from uuid import UUID
 import pytest
 
 from surrealdb.data import RecordID
+from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 
-def test_live_subscription(blocking_ws_connection_with_user, blocking_ws_connection):
+def test_live_subscription(
+    blocking_ws_connection_with_user: BlockingWsSurrealConnection,
+    blocking_ws_connection: BlockingWsSurrealConnection,
+) -> None:
     # Start the live query
     query_uuid = blocking_ws_connection_with_user.live("user")
     assert isinstance(query_uuid, UUID)

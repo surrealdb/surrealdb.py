@@ -4,7 +4,7 @@ from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 
 @pytest.fixture(autouse=True)
-def setup_blocking_ws_signin():
+def setup_blocking_ws_signin() -> None:
     """Setup fixture for blocking WS signin tests"""
     url = "ws://localhost:8000"
     password = "root"
@@ -57,14 +57,14 @@ def setup_blocking_ws_signin():
         connection.socket.close()
 
 
-def test_signin_root(setup_blocking_ws_signin):
+def test_signin_root(setup_blocking_ws_signin) -> None:
     connection = BlockingWsSurrealConnection(setup_blocking_ws_signin["url"])
     response = connection.signin(setup_blocking_ws_signin["vars_params"])
     assert response is not None
     connection.close()
 
 
-def test_signin_namespace(setup_blocking_ws_signin):
+def test_signin_namespace(setup_blocking_ws_signin) -> None:
     connection = BlockingWsSurrealConnection(setup_blocking_ws_signin["url"])
     vars = {
         "namespace": setup_blocking_ws_signin["namespace"],
@@ -76,7 +76,7 @@ def test_signin_namespace(setup_blocking_ws_signin):
     connection.close()
 
 
-def test_signin_database(setup_blocking_ws_signin):
+def test_signin_database(setup_blocking_ws_signin) -> None:
     connection = BlockingWsSurrealConnection(setup_blocking_ws_signin["url"])
     vars = {
         "namespace": setup_blocking_ws_signin["namespace"],
@@ -89,7 +89,7 @@ def test_signin_database(setup_blocking_ws_signin):
     connection.close()
 
 
-def test_signin_record(setup_blocking_ws_signin):
+def test_signin_record(setup_blocking_ws_signin) -> None:
     vars = {
         "namespace": setup_blocking_ws_signin["namespace"],
         "database": setup_blocking_ws_signin["database_name"],

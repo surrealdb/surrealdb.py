@@ -4,7 +4,9 @@ from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 
 
 @pytest.fixture(autouse=True)
-async def setup_schema(async_ws_connection):
+async def setup_schema(
+    async_ws_connection: AsyncWsSurrealConnection,
+) -> AsyncGenerator[None, None]:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query("REMOVE TABLE user;")
     await async_ws_connection.query(
@@ -26,7 +28,7 @@ async def setup_schema(async_ws_connection):
 
 
 @pytest.mark.asyncio
-async def test_signup(setup_schema):
+async def test_signup(setup_schema: None) -> None:
     url = "ws://localhost:8000"
     vars = {
         "namespace": "test_ns",

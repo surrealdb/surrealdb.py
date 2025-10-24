@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
@@ -6,7 +8,7 @@ from surrealdb.data.types.table import Table
 
 
 @pytest.fixture
-def update_data():
+def update_data() -> dict[str, Any]:
     return {
         "name": "Jaime",
         "email": "jaime@example.com",
@@ -16,22 +18,26 @@ def update_data():
 
 
 @pytest.fixture
-def record_id():
+def record_id() -> RecordID:
     return RecordID("user", "tobie")
 
 
-def check_no_change(data: dict, record_id: RecordID):
+def check_no_change(data: dict[str, Any], record_id) -> None:
     assert record_id == data["id"]
     assert "Tobie" == data["name"]
 
 
-def check_change(data: dict, record_id: RecordID):
+def check_change(data: dict[str, Any], record_id) -> None:
     assert record_id == data["id"]
     assert "Jaime" == data["name"]
     # No age field assertion
 
 
-def test_update_string(blocking_http_connection, update_data, record_id):
+def test_update_string(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    update_data: dict[str, Any],
+    record_id,
+) -> None:
     blocking_http_connection.query("DELETE user;")
     blocking_http_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
@@ -45,7 +51,11 @@ def test_update_string(blocking_http_connection, update_data, record_id):
     blocking_http_connection.query("DELETE user;")
 
 
-def test_update_string_with_data(blocking_http_connection, update_data, record_id):
+def test_update_string_with_data(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    update_data: dict[str, Any],
+    record_id,
+) -> None:
     blocking_http_connection.query("DELETE user;")
     blocking_http_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
@@ -60,7 +70,11 @@ def test_update_string_with_data(blocking_http_connection, update_data, record_i
     blocking_http_connection.query("DELETE user;")
 
 
-def test_update_record_id(blocking_http_connection, update_data, record_id):
+def test_update_record_id(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    update_data: dict[str, Any],
+    record_id,
+) -> None:
     blocking_http_connection.query("DELETE user;")
     blocking_http_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
@@ -73,7 +87,11 @@ def test_update_record_id(blocking_http_connection, update_data, record_id):
     blocking_http_connection.query("DELETE user;")
 
 
-def test_update_record_id_with_data(blocking_http_connection, update_data, record_id):
+def test_update_record_id_with_data(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    update_data: dict[str, Any],
+    record_id,
+) -> None:
     blocking_http_connection.query("DELETE user;")
     blocking_http_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
@@ -88,7 +106,11 @@ def test_update_record_id_with_data(blocking_http_connection, update_data, recor
     blocking_http_connection.query("DELETE user;")
 
 
-def test_update_table(blocking_http_connection, update_data, record_id):
+def test_update_table(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    update_data: dict[str, Any],
+    record_id,
+) -> None:
     blocking_http_connection.query("DELETE user;")
     blocking_http_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
@@ -102,7 +124,11 @@ def test_update_table(blocking_http_connection, update_data, record_id):
     blocking_http_connection.query("DELETE user;")
 
 
-def test_update_table_with_data(blocking_http_connection, update_data, record_id):
+def test_update_table_with_data(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    update_data: dict[str, Any],
+    record_id,
+) -> None:
     blocking_http_connection.query("DELETE user;")
     blocking_http_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"

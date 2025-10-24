@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
@@ -5,7 +7,7 @@ from surrealdb.data import cbor
 
 
 # Unit tests for encoding
-def test_string_encode():
+def test_string_encode() -> None:
     """Test encoding string to CBOR bytes."""
     test_string = "hello world"
     encoded = cbor.encode(test_string)
@@ -13,14 +15,14 @@ def test_string_encode():
     assert len(encoded) > 0
 
 
-def test_empty_string_encode():
+def test_empty_string_encode() -> None:
     """Test encoding empty string to CBOR bytes."""
     test_string = ""
     encoded = cbor.encode(test_string)
     assert isinstance(encoded, bytes)
 
 
-def test_unicode_string_encode():
+def test_unicode_string_encode() -> None:
     """Test encoding unicode string to CBOR bytes."""
     test_string = "Hello 世界 🌍"
     encoded = cbor.encode(test_string)
@@ -28,7 +30,7 @@ def test_unicode_string_encode():
 
 
 # Unit tests for decoding
-def test_string_decode():
+def test_string_decode() -> None:
     """Test decoding CBOR bytes to string."""
     test_string = "hello world"
     encoded = cbor.encode(test_string)
@@ -37,7 +39,7 @@ def test_string_decode():
     assert decoded == test_string
 
 
-def test_unicode_string_decode():
+def test_unicode_string_decode() -> None:
     """Test decoding CBOR bytes to unicode string."""
     test_string = "Hello 世界 🌍"
     encoded = cbor.encode(test_string)
@@ -46,7 +48,7 @@ def test_unicode_string_decode():
 
 
 # Encode+decode roundtrip tests
-def test_string_roundtrip():
+def test_string_roundtrip() -> None:
     """Test encode+decode roundtrip for string."""
     test_strings = [
         "hello world",
@@ -66,7 +68,7 @@ def test_string_roundtrip():
         assert isinstance(decoded, str)
 
 
-def test_long_string_roundtrip():
+def test_long_string_roundtrip() -> None:
     """Test encode+decode roundtrip for long string."""
     test_string = "a" * 10000
     encoded = cbor.encode(test_string)
@@ -76,7 +78,7 @@ def test_long_string_roundtrip():
 
 # Database fixture
 @pytest.fixture
-async def surrealdb_connection():
+async def surrealdb_connection():  # type: ignore[misc]
     url = "ws://localhost:8000/rpc"
     password = "root"
     username = "root"
@@ -94,7 +96,7 @@ async def surrealdb_connection():
 
 # Database send+receive tests
 @pytest.mark.asyncio
-async def test_string_db_roundtrip(surrealdb_connection):
+async def test_string_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending string to SurrealDB and receiving it back."""
     test_string = "hello world"
     await surrealdb_connection.query(
@@ -106,7 +108,7 @@ async def test_string_db_roundtrip(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_empty_string_db_roundtrip(surrealdb_connection):
+async def test_empty_string_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending empty string to SurrealDB and receiving it back."""
     test_string = ""
     await surrealdb_connection.query(
@@ -118,7 +120,7 @@ async def test_empty_string_db_roundtrip(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_unicode_string_db_roundtrip(surrealdb_connection):
+async def test_unicode_string_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending unicode string to SurrealDB and receiving it back."""
     test_string = "Hello 世界 🌍"
     await surrealdb_connection.query(
@@ -130,7 +132,7 @@ async def test_unicode_string_db_roundtrip(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_multiline_string_db_roundtrip(surrealdb_connection):
+async def test_multiline_string_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending multiline string to SurrealDB and receiving it back."""
     test_string = "Line 1\nLine 2\nLine 3"
     await surrealdb_connection.query(

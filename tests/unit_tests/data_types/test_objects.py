@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
@@ -5,14 +7,14 @@ from surrealdb.data import cbor
 
 
 # Unit tests for encoding
-def test_empty_object_encode():
+def test_empty_object_encode() -> None:
     """Test encoding empty object to CBOR bytes."""
     test_obj = {}
     encoded = cbor.encode(test_obj)
     assert isinstance(encoded, bytes)
 
 
-def test_simple_object_encode():
+def test_simple_object_encode() -> None:
     """Test encoding simple object to CBOR bytes."""
     test_obj = {"name": "John", "age": 30}
     encoded = cbor.encode(test_obj)
@@ -20,7 +22,7 @@ def test_simple_object_encode():
     assert len(encoded) > 0
 
 
-def test_nested_object_encode():
+def test_nested_object_encode() -> None:
     """Test encoding nested object to CBOR bytes."""
     test_obj = {
         "user": {"name": "John", "address": {"city": "New York", "zip": "10001"}}
@@ -29,7 +31,7 @@ def test_nested_object_encode():
     assert isinstance(encoded, bytes)
 
 
-def test_object_with_mixed_types_encode():
+def test_object_with_mixed_types_encode() -> None:
     """Test encoding object with mixed value types to CBOR bytes."""
     test_obj = {
         "string": "hello",
@@ -44,7 +46,7 @@ def test_object_with_mixed_types_encode():
 
 
 # Unit tests for decoding
-def test_empty_object_decode():
+def test_empty_object_decode() -> None:
     """Test decoding CBOR bytes to empty object."""
     test_obj = {}
     encoded = cbor.encode(test_obj)
@@ -53,7 +55,7 @@ def test_empty_object_decode():
     assert decoded == test_obj
 
 
-def test_simple_object_decode():
+def test_simple_object_decode() -> None:
     """Test decoding CBOR bytes to simple object."""
     test_obj = {"name": "John", "age": 30}
     encoded = cbor.encode(test_obj)
@@ -62,7 +64,7 @@ def test_simple_object_decode():
     assert decoded == test_obj
 
 
-def test_nested_object_decode():
+def test_nested_object_decode() -> None:
     """Test decoding CBOR bytes to nested object."""
     test_obj = {"user": {"name": "John", "address": {"city": "New York"}}}
     encoded = cbor.encode(test_obj)
@@ -71,7 +73,7 @@ def test_nested_object_decode():
 
 
 # Encode+decode roundtrip tests
-def test_object_roundtrip():
+def test_object_roundtrip() -> None:
     """Test encode+decode roundtrip for various objects."""
     test_objects = [
         {},
@@ -88,7 +90,7 @@ def test_object_roundtrip():
         assert isinstance(decoded, dict)
 
 
-def test_nested_object_roundtrip():
+def test_nested_object_roundtrip() -> None:
     """Test encode+decode roundtrip for nested objects."""
     test_objects = [
         {"a": {"b": 1}},
@@ -108,7 +110,7 @@ def test_nested_object_roundtrip():
         assert decoded == test_obj
 
 
-def test_object_with_array_values_roundtrip():
+def test_object_with_array_values_roundtrip() -> None:
     """Test encode+decode roundtrip for object with array values."""
     test_obj = {
         "numbers": [1, 2, 3],
@@ -120,7 +122,7 @@ def test_object_with_array_values_roundtrip():
     assert decoded == test_obj
 
 
-def test_complex_nested_structure_roundtrip():
+def test_complex_nested_structure_roundtrip() -> None:
     """Test encode+decode roundtrip for complex nested structure."""
     test_obj = {
         "users": [
@@ -144,7 +146,7 @@ def test_complex_nested_structure_roundtrip():
     assert decoded == test_obj
 
 
-def test_object_with_special_characters_in_keys_roundtrip():
+def test_object_with_special_characters_in_keys_roundtrip() -> None:
     """Test encode+decode roundtrip for object with special characters in keys."""
     test_obj = {
         "key-with-dash": 1,
@@ -159,7 +161,7 @@ def test_object_with_special_characters_in_keys_roundtrip():
 
 # Database fixture
 @pytest.fixture
-async def surrealdb_connection():
+async def surrealdb_connection():  # type: ignore[misc]
     url = "ws://localhost:8000/rpc"
     password = "root"
     username = "root"
@@ -177,7 +179,7 @@ async def surrealdb_connection():
 
 # Database send+receive tests
 @pytest.mark.asyncio
-async def test_empty_object_db_roundtrip(surrealdb_connection):
+async def test_empty_object_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending empty object to SurrealDB and receiving it back."""
     test_obj = {}
     await surrealdb_connection.query(
@@ -189,7 +191,7 @@ async def test_empty_object_db_roundtrip(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_simple_object_db_roundtrip(surrealdb_connection):
+async def test_simple_object_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending simple object to SurrealDB and receiving it back."""
     test_obj = {"name": "John", "age": 30}
     await surrealdb_connection.query(
@@ -201,7 +203,7 @@ async def test_simple_object_db_roundtrip(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_nested_object_db_roundtrip(surrealdb_connection):
+async def test_nested_object_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending nested object to SurrealDB and receiving it back."""
     test_obj = {"user": {"name": "Alice", "contact": {"email": "alice@example.com"}}}
     await surrealdb_connection.query(
@@ -213,7 +215,7 @@ async def test_nested_object_db_roundtrip(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_object_with_mixed_types_db_roundtrip(surrealdb_connection):
+async def test_object_with_mixed_types_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending object with mixed types to SurrealDB and receiving it back."""
     test_obj = {
         "string": "hello",
@@ -231,7 +233,9 @@ async def test_object_with_mixed_types_db_roundtrip(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_object_with_arrays_and_nested_objects_db_roundtrip(surrealdb_connection):
+async def test_object_with_arrays_and_nested_objects_db_roundtrip(
+    surrealdb_connection: Any,
+) -> None:
     """Test sending complex nested structure to SurrealDB and receiving it back."""
     test_obj = {
         "users": [
@@ -249,7 +253,7 @@ async def test_object_with_arrays_and_nested_objects_db_roundtrip(surrealdb_conn
 
 
 @pytest.mark.asyncio
-async def test_top_level_object_fields_db_roundtrip(surrealdb_connection):
+async def test_top_level_object_fields_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending object fields at top level to SurrealDB."""
     await surrealdb_connection.query(
         "CREATE object_tests:test6 SET name = $name, age = $age, active = $active;",

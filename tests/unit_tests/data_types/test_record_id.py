@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
@@ -6,47 +8,47 @@ from surrealdb.data.types.record_id import RecordID
 
 
 # Unit tests for RecordID class
-def test_record_id_init():
+def test_record_id_init() -> None:
     """Test RecordID initialization."""
     record_id = RecordID("users", "john")
     assert record_id.table_name == "users"
     assert record_id.id == "john"
 
 
-def test_record_id_with_int_identifier():
+def test_record_id_with_int_identifier() -> None:
     """Test RecordID with integer identifier."""
     record_id = RecordID("users", 123)
     assert record_id.table_name == "users"
     assert record_id.id == 123
 
 
-def test_record_id_with_array_identifier():
+def test_record_id_with_array_identifier() -> None:
     """Test RecordID with array identifier."""
     record_id = RecordID("users", [1, 2, 3])
     assert record_id.table_name == "users"
     assert record_id.id == [1, 2, 3]
 
 
-def test_record_id_parse():
+def test_record_id_parse() -> None:
     """Test RecordID.parse method."""
     record_id = RecordID.parse("users:john")
     assert record_id.table_name == "users"
     assert record_id.id == "john"
 
 
-def test_record_id_parse_invalid():
+def test_record_id_parse_invalid() -> None:
     """Test RecordID.parse with invalid string."""
     with pytest.raises(ValueError, match="invalid string provided for parse"):
         RecordID.parse("invalid_string")
 
 
-def test_record_id_str():
+def test_record_id_str() -> None:
     """Test RecordID string representation."""
     record_id = RecordID("users", "john")
     assert str(record_id) == "users:john"
 
 
-def test_record_id_equality():
+def test_record_id_equality() -> None:
     """Test RecordID equality."""
     record_id1 = RecordID("users", "john")
     record_id2 = RecordID("users", "john")
@@ -60,7 +62,7 @@ def test_record_id_equality():
 
 
 # Unit tests for encoding
-def test_record_id_encode():
+def test_record_id_encode() -> None:
     """Test encoding RecordID to CBOR bytes."""
     record_id = RecordID("users", "john")
     encoded = cbor.encode(record_id)
@@ -68,14 +70,14 @@ def test_record_id_encode():
     assert len(encoded) > 0
 
 
-def test_record_id_with_int_encode():
+def test_record_id_with_int_encode() -> None:
     """Test encoding RecordID with integer identifier to CBOR bytes."""
     record_id = RecordID("users", 123)
     encoded = cbor.encode(record_id)
     assert isinstance(encoded, bytes)
 
 
-def test_record_id_with_array_encode():
+def test_record_id_with_array_encode() -> None:
     """Test encoding RecordID with array identifier to CBOR bytes."""
     record_id = RecordID("users", [1, 2])
     encoded = cbor.encode(record_id)
@@ -83,7 +85,7 @@ def test_record_id_with_array_encode():
 
 
 # Unit tests for decoding
-def test_record_id_decode():
+def test_record_id_decode() -> None:
     """Test decoding CBOR bytes to RecordID."""
     record_id = RecordID("users", "john")
     encoded = cbor.encode(record_id)
@@ -92,7 +94,7 @@ def test_record_id_decode():
     assert decoded == record_id
 
 
-def test_record_id_with_int_decode():
+def test_record_id_with_int_decode() -> None:
     """Test decoding CBOR bytes to RecordID with integer identifier."""
     record_id = RecordID("users", 123)
     encoded = cbor.encode(record_id)
@@ -103,7 +105,7 @@ def test_record_id_with_int_decode():
 
 
 # Encode+decode roundtrip tests
-def test_record_id_roundtrip():
+def test_record_id_roundtrip() -> None:
     """Test encode+decode roundtrip for RecordID."""
     test_record_ids = [
         RecordID("users", "john"),
@@ -124,7 +126,7 @@ def test_record_id_roundtrip():
         assert decoded.id == record_id.id
 
 
-def test_record_id_in_object_roundtrip():
+def test_record_id_in_object_roundtrip() -> None:
     """Test encode+decode roundtrip for RecordID in an object."""
     test_obj = {
         "user_id": RecordID("users", "john"),
@@ -136,7 +138,7 @@ def test_record_id_in_object_roundtrip():
     assert decoded["post_id"] == test_obj["post_id"]
 
 
-def test_record_id_in_array_roundtrip():
+def test_record_id_in_array_roundtrip() -> None:
     """Test encode+decode roundtrip for RecordID in an array."""
     test_array = [
         RecordID("users", "john"),
@@ -150,7 +152,7 @@ def test_record_id_in_array_roundtrip():
 
 # Database fixture
 @pytest.fixture
-async def surrealdb_connection():
+async def surrealdb_connection():  # type: ignore[misc]
     url = "ws://localhost:8000/rpc"
     password = "root"
     username = "root"
@@ -168,7 +170,7 @@ async def surrealdb_connection():
 
 # Database send+receive tests
 @pytest.mark.asyncio
-async def test_record_id_db_roundtrip(surrealdb_connection):
+async def test_record_id_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending RecordID to SurrealDB and receiving it back."""
     record_id = RecordID("users", "john")
     await surrealdb_connection.query(
@@ -180,7 +182,7 @@ async def test_record_id_db_roundtrip(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_record_id_with_int_db_roundtrip(surrealdb_connection):
+async def test_record_id_with_int_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending RecordID with integer identifier to SurrealDB."""
     record_id = RecordID("users", 123)
     await surrealdb_connection.query(
@@ -192,7 +194,7 @@ async def test_record_id_with_int_db_roundtrip(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_record_id_with_array_db_roundtrip(surrealdb_connection):
+async def test_record_id_with_array_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending RecordID with array identifier to SurrealDB."""
     record_id = RecordID("events", [1, 2])
     await surrealdb_connection.query(
@@ -204,7 +206,7 @@ async def test_record_id_with_array_db_roundtrip(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_create_with_record_id(surrealdb_connection):
+async def test_create_with_record_id(surrealdb_connection: Any) -> None:
     """Test creating a record using RecordID."""
     record_id = RecordID("record_id_tests", "custom_id")
     result = await surrealdb_connection.create(record_id, {"name": "Test"})
@@ -213,7 +215,7 @@ async def test_create_with_record_id(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_multiple_record_ids_db_roundtrip(surrealdb_connection):
+async def test_multiple_record_ids_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending multiple RecordIDs to SurrealDB."""
     record_ids = {
         "user": RecordID("users", "john"),

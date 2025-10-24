@@ -1,3 +1,5 @@
+from typing import Any
+
 import decimal
 
 import pytest
@@ -7,7 +9,7 @@ from surrealdb.data import cbor
 
 
 # Unit tests for encoding
-def test_decimal_encode():
+def test_decimal_encode() -> None:
     """Test encoding Decimal to CBOR bytes."""
     test_decimal = decimal.Decimal("99.99")
     encoded = cbor.encode(test_decimal)
@@ -15,14 +17,14 @@ def test_decimal_encode():
     assert len(encoded) > 0
 
 
-def test_decimal_with_precision_encode():
+def test_decimal_with_precision_encode() -> None:
     """Test encoding Decimal with high precision to CBOR bytes."""
     test_decimal = decimal.Decimal("3.141592653589793")
     encoded = cbor.encode(test_decimal)
     assert isinstance(encoded, bytes)
 
 
-def test_negative_decimal_encode():
+def test_negative_decimal_encode() -> None:
     """Test encoding negative Decimal to CBOR bytes."""
     test_decimal = decimal.Decimal("-42.5")
     encoded = cbor.encode(test_decimal)
@@ -30,7 +32,7 @@ def test_negative_decimal_encode():
 
 
 # Unit tests for decoding
-def test_decimal_decode():
+def test_decimal_decode() -> None:
     """Test decoding CBOR bytes to Decimal."""
     test_decimal = decimal.Decimal("99.99")
     encoded = cbor.encode(test_decimal)
@@ -39,7 +41,7 @@ def test_decimal_decode():
     assert decoded == test_decimal
 
 
-def test_decimal_with_precision_decode():
+def test_decimal_with_precision_decode() -> None:
     """Test decoding CBOR bytes to Decimal with high precision."""
     test_decimal = decimal.Decimal("3.141592653589793")
     encoded = cbor.encode(test_decimal)
@@ -49,7 +51,7 @@ def test_decimal_with_precision_decode():
 
 
 # Encode+decode roundtrip tests
-def test_decimal_roundtrip():
+def test_decimal_roundtrip() -> None:
     """Test encode+decode roundtrip for various Decimal values."""
     test_decimals = [
         decimal.Decimal("0"),
@@ -72,7 +74,7 @@ def test_decimal_roundtrip():
         assert decoded == test_decimal
 
 
-def test_decimal_in_list_roundtrip():
+def test_decimal_in_list_roundtrip() -> None:
     """Test encode+decode roundtrip for Decimal in a list."""
     test_list = [
         decimal.Decimal("1.5"),
@@ -84,7 +86,7 @@ def test_decimal_in_list_roundtrip():
     assert decoded == test_list
 
 
-def test_decimal_in_dict_roundtrip():
+def test_decimal_in_dict_roundtrip() -> None:
     """Test encode+decode roundtrip for Decimal in a dict."""
     test_dict = {
         "price": decimal.Decimal("99.99"),
@@ -97,7 +99,7 @@ def test_decimal_in_dict_roundtrip():
 
 
 @pytest.fixture
-async def surrealdb_connection():
+async def surrealdb_connection():  # type: ignore[misc]
     url = "ws://localhost:8000/rpc"
     password = "root"
     username = "root"
@@ -114,7 +116,7 @@ async def surrealdb_connection():
 
 
 @pytest.mark.asyncio
-async def test_dec_literal(surrealdb_connection):
+async def test_dec_literal(surrealdb_connection: Any) -> None:
     await surrealdb_connection.query(
         "CREATE numeric_tests:literal_test SET value = 99.99dec;"
     )
@@ -125,7 +127,7 @@ async def test_dec_literal(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_float_parameter(surrealdb_connection):
+async def test_float_parameter(surrealdb_connection: Any) -> None:
     float_value = 3.141592653589793
     initial_result = await surrealdb_connection.query(
         "CREATE numeric_tests:float_test SET value = $float_val;",
@@ -139,7 +141,7 @@ async def test_float_parameter(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_decimal_parameter(surrealdb_connection):
+async def test_decimal_parameter(surrealdb_connection: Any) -> None:
     decimal_value = decimal.Decimal("3.141592653589793")
     initial_result = await surrealdb_connection.query(
         "CREATE numeric_tests:decimal_test SET value = $decimal_val;",

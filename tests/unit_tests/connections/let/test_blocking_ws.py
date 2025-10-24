@@ -1,7 +1,8 @@
 import pytest
+from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 
-def test_let(blocking_ws_connection):
+def test_let(blocking_ws_connection: BlockingWsSurrealConnection) -> None:
     blocking_ws_connection.query("DELETE person;")
     outcome = blocking_ws_connection.let(
         "name",

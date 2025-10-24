@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
@@ -5,14 +7,14 @@ from surrealdb.data import cbor
 
 
 # Unit tests for encoding
-def test_true_encode():
+def test_true_encode() -> None:
     """Test encoding True to CBOR bytes."""
     encoded = cbor.encode(True)
     assert isinstance(encoded, bytes)
     assert len(encoded) > 0
 
 
-def test_false_encode():
+def test_false_encode() -> None:
     """Test encoding False to CBOR bytes."""
     encoded = cbor.encode(False)
     assert isinstance(encoded, bytes)
@@ -20,7 +22,7 @@ def test_false_encode():
 
 
 # Unit tests for decoding
-def test_true_decode():
+def test_true_decode() -> None:
     """Test decoding CBOR bytes to True."""
     encoded = cbor.encode(True)
     decoded = cbor.decode(encoded)
@@ -28,7 +30,7 @@ def test_true_decode():
     assert decoded is True
 
 
-def test_false_decode():
+def test_false_decode() -> None:
     """Test decoding CBOR bytes to False."""
     encoded = cbor.encode(False)
     decoded = cbor.decode(encoded)
@@ -37,7 +39,7 @@ def test_false_decode():
 
 
 # Encode+decode roundtrip tests
-def test_boolean_roundtrip():
+def test_boolean_roundtrip() -> None:
     """Test encode+decode roundtrip for boolean values."""
     for value in [True, False]:
         encoded = cbor.encode(value)
@@ -46,7 +48,7 @@ def test_boolean_roundtrip():
         assert isinstance(decoded, bool)
 
 
-def test_boolean_in_list_roundtrip():
+def test_boolean_in_list_roundtrip() -> None:
     """Test encode+decode roundtrip for booleans in a list."""
     test_list = [True, False, True, True, False]
     encoded = cbor.encode(test_list)
@@ -54,7 +56,7 @@ def test_boolean_in_list_roundtrip():
     assert decoded == test_list
 
 
-def test_boolean_in_dict_roundtrip():
+def test_boolean_in_dict_roundtrip() -> None:
     """Test encode+decode roundtrip for booleans in a dict."""
     test_dict = {
         "is_active": True,
@@ -68,7 +70,7 @@ def test_boolean_in_dict_roundtrip():
 
 # Database fixture
 @pytest.fixture
-async def surrealdb_connection():
+async def surrealdb_connection():  # type: ignore[misc]
     url = "ws://localhost:8000/rpc"
     password = "root"
     username = "root"
@@ -86,7 +88,7 @@ async def surrealdb_connection():
 
 # Database send+receive tests
 @pytest.mark.asyncio
-async def test_true_db_roundtrip(surrealdb_connection):
+async def test_true_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending True to SurrealDB and receiving it back."""
     await surrealdb_connection.query(
         "CREATE boolean_tests:test1 SET value = $val;",
@@ -97,7 +99,7 @@ async def test_true_db_roundtrip(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_false_db_roundtrip(surrealdb_connection):
+async def test_false_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending False to SurrealDB and receiving it back."""
     await surrealdb_connection.query(
         "CREATE boolean_tests:test2 SET value = $val;",
@@ -108,7 +110,7 @@ async def test_false_db_roundtrip(surrealdb_connection):
 
 
 @pytest.mark.asyncio
-async def test_boolean_fields_db_roundtrip(surrealdb_connection):
+async def test_boolean_fields_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending multiple boolean fields to SurrealDB and receiving them back."""
     await surrealdb_connection.query(
         "CREATE boolean_tests:test3 SET is_active = $active, is_admin = $admin, is_verified = $verified;",
