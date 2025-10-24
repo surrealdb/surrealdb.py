@@ -136,8 +136,7 @@ async def test_table_db_roundtrip(surrealdb_connection):
         vars={"val": table},
     )
     result = await surrealdb_connection.query("SELECT * FROM table_tests;")
-    # SurrealDB returns Table objects as strings
-    assert result[0]["table_ref"] == table.table_name
+    assert result[0]["table_ref"] == table
 
 
 @pytest.mark.asyncio
@@ -153,10 +152,9 @@ async def test_multiple_tables_db_roundtrip(surrealdb_connection):
         vars=tables,
     )
     result = await surrealdb_connection.query("SELECT * FROM table_tests;")
-    # SurrealDB returns Table objects as strings
-    assert result[0]["t1"] == tables["table1"].table_name
-    assert result[0]["t2"] == tables["table2"].table_name
-    assert result[0]["t3"] == tables["table3"].table_name
+    assert result[0]["t1"] == tables["table1"]
+    assert result[0]["t2"] == tables["table2"]
+    assert result[0]["t3"] == tables["table3"]
 
 
 @pytest.mark.asyncio
@@ -172,6 +170,4 @@ async def test_table_in_array_db_roundtrip(surrealdb_connection):
         vars={"val": tables_array},
     )
     result = await surrealdb_connection.query("SELECT * FROM table_tests;")
-    # SurrealDB returns Table objects as strings
-    expected_strings = [t.table_name for t in tables_array]
-    assert result[0]["tables"] == expected_strings
+    assert result[0]["tables"] == tables_array
