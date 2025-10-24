@@ -126,10 +126,20 @@ def tag_decoder(
         return Range(tag.value[0], tag.value[1])
 
     elif tag.tag == constants.TAG_DURATION_COMPACT:
-        return Duration.parse(tag.value[0], tag.value[1])  # Two numbers (s, ns)
+        if len(tag.value) == 1:
+            return Duration.parse(tag.value[0], 0)  # seconds only
+        else:
+            return Duration.parse(tag.value[0], tag.value[1])  # seconds and nanoseconds
 
     elif tag.tag == constants.TAG_DURATION:
-        return Duration.parse(tag.value)  # String (e.g., "1d3m5ms")
+        # TAG_DURATION is encoded as [seconds, nanoseconds] tuple
+        if isinstance(tag.value, (list, tuple)) and len(tag.value) == 2:
+            return Duration.parse(tag.value[0], tag.value[1])
+        # Fallback for string format (if server sends it)
+        elif isinstance(tag.value, str):
+            return Duration.parse(tag.value)
+        else:
+            raise ValueError(f"Unexpected TAG_DURATION value format: {tag.value}")
 
     elif tag.tag == constants.TAG_DATETIME_COMPACT:
         # TODO => convert [seconds, nanoseconds] => return datetime
