@@ -122,6 +122,79 @@ disable_error_code = [
     "unused-ignore", "no-untyped-def"
 ]
 
+[tool.pyright]
+# Python version
+pythonVersion = "3.13"
+
+# Type checking mode
+typeCheckingMode = "strict"
+
+# Source configuration
+include = ["src"]
+exclude = [
+    "**/__pycache__",
+    "**/.pytest_cache",
+    "**/build",
+    "**/dist",
+    "**/.mypy_cache",
+]
+
+# Strict type checking settings (matching mypy configuration)
+strictListInference = true
+strictDictionaryInference = true
+strictSetInference = true
+strictParameterNoneValue = true
+
+# Report settings
+reportMissingTypeStubs = false
+reportMissingImports = true
+reportUnusedImport = true
+reportUnusedClass = true
+reportUnusedFunction = true
+reportUnusedVariable = true
+reportDuplicateImport = true
+reportOptionalSubscript = true
+reportOptionalMemberAccess = true
+reportOptionalCall = true
+reportOptionalIterable = true
+reportOptionalContextManager = true
+reportOptionalOperand = true
+reportTypedDictNotRequiredAccess = false
+reportUntypedFunctionDecorator = true
+reportUntypedClassDecorator = true
+reportUntypedBaseClass = true
+reportUntypedNamedTuple = true
+reportPrivateUsage = true
+reportConstantRedefinition = true
+reportIncompatibleMethodOverride = true
+reportIncompatibleVariableOverride = true
+reportInconsistentConstructor = true
+reportOverlappingOverload = true
+reportMissingSuperCall = false
+reportUninitializedInstanceVariable = true
+reportInvalidStringEscapeSequence = true
+reportUnknownParameterType = true
+reportUnknownArgumentType = false
+reportUnknownLambdaType = true
+reportUnknownVariableType = true
+reportUnknownMemberType = false
+reportMissingParameterType = true
+reportMissingTypeArgument = true
+reportInvalidTypeVarUse = true
+reportCallInDefaultInitializer = true
+reportUnnecessaryIsInstance = true
+reportUnnecessaryCast = true
+reportUnnecessaryComparison = true
+reportAssertAlwaysTrue = true
+reportSelfClsParameterName = true
+reportImplicitStringConcatenation = false
+reportUndefinedVariable = true
+reportUnboundVariable = true
+reportInvalidStubStatement = true
+reportIncompleteStub = true
+reportUnsupportedDunderAll = true
+reportUnusedCoroutine = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
@@ -164,6 +237,7 @@ exclude_lines = [
 dev = [
     { include-group = "test" },
     "mypy>=1.0.0",
+    "pyright>=1.1.0",
     "ruff>=0.12.0",
     "types-requests>=2.25.0",   # Type stubs for requests
 ]
