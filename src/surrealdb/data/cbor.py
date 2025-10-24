@@ -2,7 +2,7 @@ import decimal
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from surrealdb.cbor2 import (
+from surrealdb.cbor import (
     CBORDecoder,
     CBOREncoder,
     CBORTag,

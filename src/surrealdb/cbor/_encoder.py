@@ -13,7 +13,7 @@ from io import BytesIO
 from sys import modules
 from typing import IO, TYPE_CHECKING, Any, cast
 
-from surrealdb.cbor2._types import (
+from surrealdb.cbor._types import (
     CBOREncodeTypeError,
     CBOREncodeValueError,
     CBORSimpleValue,
