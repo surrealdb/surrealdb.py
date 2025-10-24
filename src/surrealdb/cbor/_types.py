@@ -100,12 +100,12 @@ class CBORSimpleValue:
     Represents a CBOR "simple value".
 
     :param int value: the value (0-255)
-    
-    Note: In Python 3.14+, NamedTuple subclasses cannot override __new__, 
+
+    Note: In Python 3.14+, NamedTuple subclasses cannot override __new__,
     so this is implemented as a regular class with tuple-like behavior.
     """
 
-    __slots__ = ('value',)
+    __slots__ = ("value",)
 
     def __init__(self, value: int) -> None:
         if value < 0 or value > 255 or 23 < value < 32:
