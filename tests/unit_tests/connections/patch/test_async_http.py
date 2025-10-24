@@ -1,11 +1,13 @@
+from typing import Any, AsyncGenerator
 import pytest
 
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
+from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 
 
 @pytest.fixture
-def patch_data():
+def patch_data() -> dict[str, Any]:
     return [
         {"op": "replace", "path": "/name", "value": "Jaime"},
         {"op": "replace", "path": "/email", "value": "jaime@example.com"},
@@ -14,7 +16,9 @@ def patch_data():
 
 
 @pytest.fixture(autouse=True)
-async def setup_user(async_http_connection):
+async def setup_user(
+    async_http_connection: AsyncHttpSurrealConnection,
+) -> AsyncGenerator[None, None]:
     await async_http_connection.query("DELETE user;")
     await async_http_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
@@ -24,7 +28,11 @@ async def setup_user(async_http_connection):
 
 
 @pytest.mark.asyncio
-async def test_patch_string_with_data(async_http_connection, patch_data, setup_user):
+async def test_patch_string_with_data(
+    async_http_connection: AsyncHttpSurrealConnection,
+    patch_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     record_id = RecordID("user", "tobie")
     outcome = await async_http_connection.patch("user:tobie", patch_data)
     assert outcome["id"] == record_id
@@ -39,7 +47,11 @@ async def test_patch_string_with_data(async_http_connection, patch_data, setup_u
 
 
 @pytest.mark.asyncio
-async def test_patch_record_id_with_data(async_http_connection, patch_data, setup_user):
+async def test_patch_record_id_with_data(
+    async_http_connection: AsyncHttpSurrealConnection,
+    patch_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     record_id = RecordID("user", "tobie")
     outcome = await async_http_connection.patch(record_id, patch_data)
     assert outcome["id"] == record_id
@@ -54,7 +66,11 @@ async def test_patch_record_id_with_data(async_http_connection, patch_data, setu
 
 
 @pytest.mark.asyncio
-async def test_patch_table_with_data(async_http_connection, patch_data, setup_user):
+async def test_patch_table_with_data(
+    async_http_connection: AsyncHttpSurrealConnection,
+    patch_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")
     outcome = await async_http_connection.patch(table, patch_data)

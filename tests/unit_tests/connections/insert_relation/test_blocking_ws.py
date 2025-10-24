@@ -1,3 +1,6 @@
+from typing import Any
+from collections.abc import Generator
+
 import pytest
 
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
@@ -5,7 +8,9 @@ from surrealdb.data.types.record_id import RecordID
 
 
 @pytest.fixture(autouse=True)
-def setup_data(blocking_ws_connection):
+def setup_data(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+) -> Generator[None, None, None]:
     blocking_ws_connection.query("DELETE user;")
     blocking_ws_connection.query("DELETE likes;")
     blocking_ws_connection.query(
@@ -19,14 +24,16 @@ def setup_data(blocking_ws_connection):
     blocking_ws_connection.query("DELETE likes;")
 
 
-def check_outcome(outcome: list):
+def check_outcome(outcome: list[Any]) -> None:
     assert RecordID("user", "tobie") == outcome[0]["in"]
     assert RecordID("likes", 123) == outcome[0]["out"]
     assert RecordID("user", "jaime") == outcome[1]["in"]
     assert RecordID("likes", 400) == outcome[1]["out"]
 
 
-def test_insert_relation_record_ids(blocking_ws_connection, setup_data):
+def test_insert_relation_record_ids(
+    blocking_ws_connection: BlockingWsSurrealConnection, setup_data: None
+) -> None:
     data = [
         {
             "in": RecordID("user", "tobie"),
@@ -44,7 +51,9 @@ def test_insert_relation_record_ids(blocking_ws_connection, setup_data):
     assert RecordID("likes", 400) == outcome[1]["out"]
 
 
-def test_insert_relation_record_id(blocking_ws_connection, setup_data):
+def test_insert_relation_record_id(
+    blocking_ws_connection: BlockingWsSurrealConnection, setup_data: None
+) -> None:
     data = {
         "in": RecordID("user", "tobie"),
         "out": RecordID("likes", 123),

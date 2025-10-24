@@ -1,10 +1,11 @@
 import pytest
 
 from surrealdb.connections.url import Url
+from typing import Any
 
 
 @pytest.fixture
-def test_data():
+def test_data() -> None:
     return {
         "urls": [
             "http://localhost:5000",
@@ -20,7 +21,7 @@ def test_data():
     }
 
 
-def test_url_init(test_data):
+def test_url_init(test_data: dict[str, Any]) -> None:
     for x in range(len(test_data["urls"])):
         url_string = test_data["urls"][x]
         url = Url(url_string)

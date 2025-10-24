@@ -1,3 +1,4 @@
+from typing import Any
 import pytest
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
@@ -5,7 +6,7 @@ from surrealdb.data.types.record_id import RecordID
 
 
 @pytest.fixture
-def insert_bulk_data():
+def insert_bulk_data() -> dict[str, Any]:
     return [
         {
             "name": "Tobie",
@@ -23,7 +24,7 @@ def insert_bulk_data():
 
 
 @pytest.fixture
-def insert_data():
+def insert_data() -> dict[str, Any]:
     return [
         {
             "name": "Tobie",
@@ -35,7 +36,9 @@ def insert_data():
 
 
 @pytest.mark.asyncio
-async def test_insert_string_with_data(async_http_connection, insert_bulk_data):
+async def test_insert_string_with_data(
+    async_http_connection: AsyncHttpSurrealConnection, insert_bulk_data
+) -> None:
     await async_http_connection.query("DELETE user;")
     outcome = await async_http_connection.insert("user", insert_bulk_data)
     assert 2 == len(outcome)
@@ -44,7 +47,9 @@ async def test_insert_string_with_data(async_http_connection, insert_bulk_data):
 
 
 @pytest.mark.asyncio
-async def test_insert_record_id_result_error(async_http_connection, insert_data):
+async def test_insert_record_id_result_error(
+    async_http_connection: AsyncHttpSurrealConnection, insert_data
+) -> None:
     await async_http_connection.query("DELETE user;")
     record_id = RecordID("user", "tobie")
     with pytest.raises(Exception) as context:

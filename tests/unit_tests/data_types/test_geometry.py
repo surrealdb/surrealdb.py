@@ -1,6 +1,9 @@
+from typing import Any
+
 import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
+from surrealdb.data import cbor
 from surrealdb.data.types.geometry import (
     GeometryCollection,
     GeometryLine,
@@ -12,8 +15,272 @@ from surrealdb.data.types.geometry import (
 )
 
 
+# Unit tests for encoding - GeometryPoint
+def test_geometry_point_encode() -> None:
+    """Test encoding GeometryPoint to CBOR bytes."""
+    point = GeometryPoint(1.23, 4.56)
+    encoded = cbor.encode(point)
+    assert isinstance(encoded, bytes)
+    assert len(encoded) > 0
+
+
+# Unit tests for decoding - GeometryPoint
+def test_geometry_point_decode() -> None:
+    """Test decoding CBOR bytes to GeometryPoint."""
+    point = GeometryPoint(1.23, 4.56)
+    encoded = cbor.encode(point)
+    decoded = cbor.decode(encoded)
+    assert isinstance(decoded, GeometryPoint)
+    assert decoded == point
+
+
+# Encode+decode roundtrip tests - GeometryPoint
+def test_geometry_point_roundtrip() -> None:
+    """Test encode+decode roundtrip for GeometryPoint."""
+    test_points = [
+        GeometryPoint(0.0, 0.0),
+        GeometryPoint(1.23, 4.56),
+        GeometryPoint(-7.9735981, 37.0497115),
+        GeometryPoint(180.0, 90.0),
+        GeometryPoint(-180.0, -90.0),
+    ]
+
+    for point in test_points:
+        encoded = cbor.encode(point)
+        decoded = cbor.decode(encoded)
+        assert decoded == point
+        assert isinstance(decoded, GeometryPoint)
+
+
+# Unit tests for encoding - GeometryLine
+def test_geometry_line_encode() -> None:
+    """Test encoding GeometryLine to CBOR bytes."""
+    line = GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0))
+    encoded = cbor.encode(line)
+    assert isinstance(encoded, bytes)
+
+
+# Unit tests for decoding - GeometryLine
+def test_geometry_line_decode() -> None:
+    """Test decoding CBOR bytes to GeometryLine."""
+    line = GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0))
+    encoded = cbor.encode(line)
+    decoded = cbor.decode(encoded)
+    assert isinstance(decoded, GeometryLine)
+    assert decoded == line
+
+
+# Encode+decode roundtrip tests - GeometryLine
+def test_geometry_line_roundtrip() -> None:
+    """Test encode+decode roundtrip for GeometryLine."""
+    test_lines = [
+        GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
+        GeometryLine(
+            GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0), GeometryPoint(2.0, 2.0)
+        ),
+    ]
+
+    for line in test_lines:
+        encoded = cbor.encode(line)
+        decoded = cbor.decode(encoded)
+        assert decoded == line
+        assert isinstance(decoded, GeometryLine)
+
+
+# Unit tests for encoding - GeometryPolygon
+def test_geometry_polygon_encode() -> None:
+    """Test encoding GeometryPolygon to CBOR bytes."""
+    polygon = GeometryPolygon(
+        GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
+        GeometryLine(GeometryPoint(1.0, 1.0), GeometryPoint(0.0, 0.0)),
+    )
+    encoded = cbor.encode(polygon)
+    assert isinstance(encoded, bytes)
+
+
+# Unit tests for decoding - GeometryPolygon
+def test_geometry_polygon_decode() -> None:
+    """Test decoding CBOR bytes to GeometryPolygon."""
+    polygon = GeometryPolygon(
+        GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
+        GeometryLine(GeometryPoint(1.0, 1.0), GeometryPoint(0.0, 0.0)),
+    )
+    encoded = cbor.encode(polygon)
+    decoded = cbor.decode(encoded)
+    assert isinstance(decoded, GeometryPolygon)
+    assert decoded == polygon
+
+
+# Encode+decode roundtrip tests - GeometryPolygon
+def test_geometry_polygon_roundtrip() -> None:
+    """Test encode+decode roundtrip for GeometryPolygon."""
+    polygon = GeometryPolygon(
+        GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
+        GeometryLine(GeometryPoint(1.0, 1.0), GeometryPoint(2.0, 2.0)),
+    )
+    encoded = cbor.encode(polygon)
+    decoded = cbor.decode(encoded)
+    assert decoded == polygon
+    assert isinstance(decoded, GeometryPolygon)
+
+
+# Unit tests for encoding - GeometryMultiPoint
+def test_geometry_multipoint_encode() -> None:
+    """Test encoding GeometryMultiPoint to CBOR bytes."""
+    mp = GeometryMultiPoint(GeometryPoint(1.0, 2.0), GeometryPoint(3.0, 4.0))
+    encoded = cbor.encode(mp)
+    assert isinstance(encoded, bytes)
+
+
+# Unit tests for decoding - GeometryMultiPoint
+def test_geometry_multipoint_decode() -> None:
+    """Test decoding CBOR bytes to GeometryMultiPoint."""
+    mp = GeometryMultiPoint(GeometryPoint(1.0, 2.0), GeometryPoint(3.0, 4.0))
+    encoded = cbor.encode(mp)
+    decoded = cbor.decode(encoded)
+    assert isinstance(decoded, GeometryMultiPoint)
+    assert decoded == mp
+
+
+# Encode+decode roundtrip tests - GeometryMultiPoint
+def test_geometry_multipoint_roundtrip() -> None:
+    """Test encode+decode roundtrip for GeometryMultiPoint."""
+    mp = GeometryMultiPoint(
+        GeometryPoint(1.0, 2.0), GeometryPoint(3.0, 4.0), GeometryPoint(5.0, 6.0)
+    )
+    encoded = cbor.encode(mp)
+    decoded = cbor.decode(encoded)
+    assert decoded == mp
+    assert isinstance(decoded, GeometryMultiPoint)
+
+
+# Unit tests for encoding - GeometryMultiLine
+def test_geometry_multiline_encode() -> None:
+    """Test encoding GeometryMultiLine to CBOR bytes."""
+    ml = GeometryMultiLine(
+        GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
+        GeometryLine(GeometryPoint(2.0, 2.0), GeometryPoint(3.0, 3.0)),
+    )
+    encoded = cbor.encode(ml)
+    assert isinstance(encoded, bytes)
+
+
+# Unit tests for decoding - GeometryMultiLine
+def test_geometry_multiline_decode() -> None:
+    """Test decoding CBOR bytes to GeometryMultiLine."""
+    ml = GeometryMultiLine(
+        GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
+        GeometryLine(GeometryPoint(2.0, 2.0), GeometryPoint(3.0, 3.0)),
+    )
+    encoded = cbor.encode(ml)
+    decoded = cbor.decode(encoded)
+    assert isinstance(decoded, GeometryMultiLine)
+    assert decoded == ml
+
+
+# Encode+decode roundtrip tests - GeometryMultiLine
+def test_geometry_multiline_roundtrip() -> None:
+    """Test encode+decode roundtrip for GeometryMultiLine."""
+    ml = GeometryMultiLine(
+        GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
+        GeometryLine(GeometryPoint(2.0, 2.0), GeometryPoint(3.0, 3.0)),
+    )
+    encoded = cbor.encode(ml)
+    decoded = cbor.decode(encoded)
+    assert decoded == ml
+    assert isinstance(decoded, GeometryMultiLine)
+
+
+# Unit tests for encoding - GeometryMultiPolygon
+def test_geometry_multipolygon_encode() -> None:
+    """Test encoding GeometryMultiPolygon to CBOR bytes."""
+    mp = GeometryMultiPolygon(
+        GeometryPolygon(
+            GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
+            GeometryLine(GeometryPoint(1.0, 1.0), GeometryPoint(0.0, 0.0)),
+        )
+    )
+    encoded = cbor.encode(mp)
+    assert isinstance(encoded, bytes)
+
+
+# Unit tests for decoding - GeometryMultiPolygon
+def test_geometry_multipolygon_decode() -> None:
+    """Test decoding CBOR bytes to GeometryMultiPolygon."""
+    mp = GeometryMultiPolygon(
+        GeometryPolygon(
+            GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
+            GeometryLine(GeometryPoint(1.0, 1.0), GeometryPoint(0.0, 0.0)),
+        )
+    )
+    encoded = cbor.encode(mp)
+    decoded = cbor.decode(encoded)
+    assert isinstance(decoded, GeometryMultiPolygon)
+    assert decoded == mp
+
+
+# Encode+decode roundtrip tests - GeometryMultiPolygon
+def test_geometry_multipolygon_roundtrip() -> None:
+    """Test encode+decode roundtrip for GeometryMultiPolygon."""
+    mp = GeometryMultiPolygon(
+        GeometryPolygon(
+            GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
+            GeometryLine(GeometryPoint(1.0, 1.0), GeometryPoint(0.0, 0.0)),
+        ),
+        GeometryPolygon(
+            GeometryLine(GeometryPoint(5.0, 5.0), GeometryPoint(6.0, 6.0)),
+            GeometryLine(GeometryPoint(6.0, 6.0), GeometryPoint(5.0, 5.0)),
+        ),
+    )
+    encoded = cbor.encode(mp)
+    decoded = cbor.decode(encoded)
+    assert decoded == mp
+    assert isinstance(decoded, GeometryMultiPolygon)
+
+
+# Unit tests for encoding - GeometryCollection
+def test_geometry_collection_encode() -> None:
+    """Test encoding GeometryCollection to CBOR bytes."""
+    gc = GeometryCollection(
+        GeometryPoint(1.1, 2.2),
+        GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
+    )
+    encoded = cbor.encode(gc)
+    assert isinstance(encoded, bytes)
+
+
+# Unit tests for decoding - GeometryCollection
+def test_geometry_collection_decode() -> None:
+    """Test decoding CBOR bytes to GeometryCollection."""
+    gc = GeometryCollection(
+        GeometryPoint(1.1, 2.2),
+        GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
+    )
+    encoded = cbor.encode(gc)
+    decoded = cbor.decode(encoded)
+    assert isinstance(decoded, GeometryCollection)
+    assert decoded == gc
+
+
+# Encode+decode roundtrip tests - GeometryCollection
+def test_geometry_collection_roundtrip() -> None:
+    """Test encode+decode roundtrip for GeometryCollection."""
+    gc = GeometryCollection(
+        GeometryPoint(1.1, 2.2),
+        GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
+        GeometryPolygon(
+            GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
+            GeometryLine(GeometryPoint(1.0, 1.0), GeometryPoint(0.0, 0.0)),
+        ),
+    )
+    encoded = cbor.encode(gc)
+    decoded = cbor.decode(encoded)
+    assert decoded == gc
+    assert isinstance(decoded, GeometryCollection)
+
+
 @pytest.fixture
-async def surrealdb_connection():
+async def surrealdb_connection():  # type: ignore[misc]
     url = "ws://localhost:8000/rpc"
     password = "root"
     username = "root"
@@ -31,7 +298,7 @@ async def surrealdb_connection():
 
 # GeometryPoint tests
 @pytest.mark.asyncio
-async def test_geometry_point_class_methods():
+async def test_geometry_point_class_methods() -> None:
     p = GeometryPoint(longitude=1.23, latitude=4.56)
     assert p.get_coordinates() == (1.23, 4.56)
     coords = (10.0, -20.0)
@@ -44,7 +311,7 @@ async def test_geometry_point_class_methods():
 
 
 @pytest.mark.asyncio
-async def test_geometry_point_db_insert_and_retrieve(surrealdb_connection):
+async def test_geometry_point_db_insert_and_retrieve(surrealdb_connection: Any) -> None:
     geometry_dict = {"type": "Point", "coordinates": [1.23, 4.56]}
     create_query = """
         CREATE geometry_tests:point1 SET geometry = $geo;
@@ -77,7 +344,7 @@ async def test_geometry_point_db_insert_and_retrieve_as_python_object(
 
 
 @pytest.mark.asyncio
-async def test_geometry_point_mixed_coordinates(surrealdb_connection):
+async def test_geometry_point_mixed_coordinates(surrealdb_connection: Any) -> None:
     bad_coords = [
         [-7.9735981, 37.0497115],
         [-7.9758082, 37.0457381],
@@ -102,7 +369,7 @@ async def test_geometry_point_mixed_coordinates(surrealdb_connection):
 
 # GeometryLine tests
 @pytest.mark.asyncio
-async def test_geometry_line_class_methods():
+async def test_geometry_line_class_methods() -> None:
     p1 = GeometryPoint(0.0, 0.0)
     p2 = GeometryPoint(1.0, 1.0)
     line = GeometryLine(p1, p2)
@@ -117,7 +384,7 @@ async def test_geometry_line_class_methods():
 
 
 @pytest.mark.asyncio
-async def test_geometry_line_db_insert_and_retrieve(surrealdb_connection):
+async def test_geometry_line_db_insert_and_retrieve(surrealdb_connection: Any) -> None:
     geometry_dict = {
         "type": "Line",
         "coordinates": [[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]],
@@ -151,7 +418,7 @@ async def test_geometry_line_db_insert_and_retrieve_as_python_object(
 
 # GeometryPolygon tests
 @pytest.mark.asyncio
-async def test_geometry_polygon_class_methods():
+async def test_geometry_polygon_class_methods() -> None:
     line1 = GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0))
     line2 = GeometryLine(GeometryPoint(1.0, 1.0), GeometryPoint(2.0, 2.0))
     poly = GeometryPolygon(line1, line2)
@@ -169,7 +436,9 @@ async def test_geometry_polygon_class_methods():
 
 
 @pytest.mark.asyncio
-async def test_geometry_polygon_db_insert_and_retrieve(surrealdb_connection):
+async def test_geometry_polygon_db_insert_and_retrieve(
+    surrealdb_connection: Any,
+) -> None:
     geometry_dict = {
         "type": "Polygon",
         "coordinates": [[[0.0, 0.0], [1.0, 1.0], [2.0, 2.0], [0.0, 0.0]]],
@@ -188,7 +457,7 @@ async def test_geometry_polygon_db_insert_and_retrieve(surrealdb_connection):
 
 # GeometryMultiPoint tests
 @pytest.mark.asyncio
-async def test_geometry_multipoint_class_methods():
+async def test_geometry_multipoint_class_methods() -> None:
     mp = GeometryMultiPoint(
         GeometryPoint(1.0, 2.0),
         GeometryPoint(3.0, 4.0),
@@ -200,7 +469,9 @@ async def test_geometry_multipoint_class_methods():
 
 
 @pytest.mark.asyncio
-async def test_geometry_multipoint_db_insert_and_retrieve(surrealdb_connection):
+async def test_geometry_multipoint_db_insert_and_retrieve(
+    surrealdb_connection: Any,
+) -> None:
     geometry_dict = {
         "type": "MultiPoint",
         "coordinates": [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]],
@@ -236,7 +507,7 @@ async def test_geometry_multipoint_db_insert_and_retrieve_as_python_object(
 
 # GeometryMultiLine tests
 @pytest.mark.asyncio
-async def test_geometry_multiline_class_methods():
+async def test_geometry_multiline_class_methods() -> None:
     l1 = GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0))
     l2 = GeometryLine(GeometryPoint(2.0, 2.0), GeometryPoint(3.0, 3.0))
     ml = GeometryMultiLine(l1, l2)
@@ -247,7 +518,9 @@ async def test_geometry_multiline_class_methods():
 
 
 @pytest.mark.asyncio
-async def test_geometry_multiline_db_insert_and_retrieve(surrealdb_connection):
+async def test_geometry_multiline_db_insert_and_retrieve(
+    surrealdb_connection: Any,
+) -> None:
     geometry_dict = {
         "type": "MultiLineString",
         "coordinates": [
@@ -287,7 +560,7 @@ async def test_geometry_multiline_db_insert_and_retrieve_as_python_object(
 
 # GeometryMultiPolygon tests
 @pytest.mark.asyncio
-async def test_geometry_multipolygon_class_methods():
+async def test_geometry_multipolygon_class_methods() -> None:
     p1 = GeometryPolygon(
         GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
         GeometryLine(GeometryPoint(1.0, 1.0), GeometryPoint(0.0, 2.0)),
@@ -307,7 +580,9 @@ async def test_geometry_multipolygon_class_methods():
 
 
 @pytest.mark.asyncio
-async def test_geometry_multipolygon_db_insert_and_retrieve(surrealdb_connection):
+async def test_geometry_multipolygon_db_insert_and_retrieve(
+    surrealdb_connection: Any,
+) -> None:
     geometry_dict = {
         "type": "MultiPolygon",
         "coordinates": [
@@ -330,7 +605,7 @@ async def test_geometry_multipolygon_db_insert_and_retrieve(surrealdb_connection
 
 # GeometryCollection tests
 @pytest.mark.asyncio
-async def test_geometry_collection_class_methods():
+async def test_geometry_collection_class_methods() -> None:
     pt = GeometryPoint(1.1, 2.2)
     ln = GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0))
     gc = GeometryCollection(pt, ln)
@@ -339,7 +614,9 @@ async def test_geometry_collection_class_methods():
 
 
 @pytest.mark.asyncio
-async def test_geometry_collection_db_insert_and_retrieve(surrealdb_connection):
+async def test_geometry_collection_db_insert_and_retrieve(
+    surrealdb_connection: Any,
+) -> None:
     geometry_dict = {
         "type": "GeometryCollection",
         "geometries": [

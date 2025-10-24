@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
@@ -6,22 +8,22 @@ from surrealdb.data.types.table import Table
 
 
 @pytest.fixture
-def record_id():
+def record_id() -> RecordID:
     return RecordID("user", "tobie")
 
 
-def check_no_change(data: dict, record_id: RecordID):
+def check_no_change(data: dict[str, Any], record_id) -> None:
     assert record_id == data["id"]
     assert "Tobie" == data["name"]
 
 
-def check_change(data: dict, record_id: RecordID):
+def check_change(data: dict[str, Any], record_id) -> None:
     assert record_id == data["id"]
     assert "Jaime" == data["name"]
     assert 35 == data["age"]
 
 
-def test_debug_delete(blocking_http_connection):
+def test_debug_delete(blocking_http_connection: BlockingHttpSurrealConnection) -> None:
     blocking_http_connection.query("DELETE user;")
     blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';")
 
@@ -35,7 +37,9 @@ def test_debug_delete(blocking_http_connection):
     assert outcome == []
 
 
-def test_delete_string(blocking_http_connection, record_id):
+def test_delete_string(
+    blocking_http_connection: BlockingHttpSurrealConnection, record_id: RecordID
+) -> None:
     blocking_http_connection.query("DELETE user;")
     blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';")
 
@@ -50,7 +54,9 @@ def test_delete_string(blocking_http_connection, record_id):
     assert outcome == []
 
 
-def test_delete_record_id(blocking_http_connection, record_id):
+def test_delete_record_id(
+    blocking_http_connection: BlockingHttpSurrealConnection, record_id: RecordID
+) -> None:
     blocking_http_connection.query("DELETE user;")
     blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';")
 
@@ -65,7 +71,7 @@ def test_delete_record_id(blocking_http_connection, record_id):
     assert outcome == []
 
 
-def test_delete_table(blocking_http_connection):
+def test_delete_table(blocking_http_connection: BlockingHttpSurrealConnection) -> None:
     blocking_http_connection.query("DELETE user;")
     blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';")
     blocking_http_connection.query("CREATE user:jaime SET name = 'Jaime';")

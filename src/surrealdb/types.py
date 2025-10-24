@@ -38,6 +38,8 @@ Value = Union[
     UUID,
     Decimal,
     # SurrealDB types
+    Table,
+    Range,
     RecordID,
     Duration,
     Datetime,

@@ -2,10 +2,13 @@ import pytest
 
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
+from typing import Any
+from collections.abc import Generator
+from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 
 
 @pytest.fixture
-def create_data():
+def create_data() -> dict[str, Any]:
     return {
         "name": "Test User",
         "email": "test@example.com",
@@ -15,20 +18,28 @@ def create_data():
 
 
 @pytest.fixture(autouse=True)
-def setup_user(blocking_http_connection):
+def setup_user(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+) -> Generator[None, None, None]:
     blocking_http_connection.query("DELETE user;")
     yield
     blocking_http_connection.query("DELETE user;")
 
 
-def test_create_string(blocking_http_connection, setup_user):
+def test_create_string(
+    blocking_http_connection: BlockingHttpSurrealConnection, setup_user: None
+) -> None:
     outcome = blocking_http_connection.create("user")
     assert "user" == outcome["id"].table_name
 
     assert len(blocking_http_connection.query("SELECT * FROM user;")) == 1
 
 
-def test_create_string_with_data(blocking_http_connection, create_data, setup_user):
+def test_create_string_with_data(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    create_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     outcome = blocking_http_connection.create("user", create_data)
     assert "user" == outcome["id"].table_name
     assert create_data["name"] == outcome["name"]
@@ -44,7 +55,7 @@ def test_create_string_with_data(blocking_http_connection, create_data, setup_us
 
 
 def test_create_string_with_data_and_id(
-    blocking_http_connection, create_data, setup_user
+    blocking_http_connection, create_data: dict[str, Any], setup_user
 ):
     first_outcome = blocking_http_connection.create("user:tobie", create_data)
     assert "user" == first_outcome["id"].table_name
@@ -62,7 +73,9 @@ def test_create_string_with_data_and_id(
     assert create_data["enabled"] == result[0]["enabled"]
 
 
-def test_create_record_id(blocking_http_connection, setup_user):
+def test_create_record_id(
+    blocking_http_connection: BlockingHttpSurrealConnection, setup_user: None
+) -> None:
     record_id = RecordID("user", 1)
     outcome = blocking_http_connection.create(record_id)
     assert "user" == outcome["id"].table_name
@@ -71,7 +84,11 @@ def test_create_record_id(blocking_http_connection, setup_user):
     assert len(blocking_http_connection.query("SELECT * FROM user;")) == 1
 
 
-def test_create_record_id_with_data(blocking_http_connection, create_data, setup_user):
+def test_create_record_id_with_data(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    create_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     record_id = RecordID("user", 1)
     outcome = blocking_http_connection.create(record_id, create_data)
     assert "user" == outcome["id"].table_name
@@ -88,7 +105,9 @@ def test_create_record_id_with_data(blocking_http_connection, create_data, setup
     assert create_data["enabled"] == result[0]["enabled"]
 
 
-def test_create_table(blocking_http_connection, setup_user):
+def test_create_table(
+    blocking_http_connection: BlockingHttpSurrealConnection, setup_user: None
+) -> None:
     table = Table("user")
     outcome = blocking_http_connection.create(table)
     assert "user" == outcome["id"].table_name
@@ -96,7 +115,11 @@ def test_create_table(blocking_http_connection, setup_user):
     assert len(blocking_http_connection.query("SELECT * FROM user;")) == 1
 
 
-def test_create_table_with_data(blocking_http_connection, create_data, setup_user):
+def test_create_table_with_data(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    create_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     table = Table("user")
     outcome = blocking_http_connection.create(table, create_data)
     assert "user" == outcome["id"].table_name

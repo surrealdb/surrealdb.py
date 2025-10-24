@@ -5,9 +5,13 @@ from uuid import UUID
 import pytest
 
 from surrealdb.data import RecordID
+from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 
 
-async def test_live_subscription(async_ws_connection_with_user, async_ws_connection):
+async def test_live_subscription(
+    async_ws_connection_with_user: AsyncWsSurrealConnection,
+    async_ws_connection: AsyncWsSurrealConnection,
+) -> None:
     # Start the live query
     query_uuid = await async_ws_connection_with_user.live("user")
     assert isinstance(query_uuid, UUID)
@@ -34,8 +38,8 @@ async def test_live_subscription(async_ws_connection_with_user, async_ws_connect
 
 
 async def test_live_subscription_via_query(
-    async_ws_connection_with_user, async_ws_connection
-):
+    async_ws_connection_with_user, async_ws_connection: AsyncWsSurrealConnection
+) -> None:
     # Start the live query using query() method
     query_uuid = await async_ws_connection_with_user.query("LIVE SELECT * FROM user;")
     assert isinstance(query_uuid, UUID)

@@ -6,7 +6,7 @@ from surrealdb.request_message.methods import RequestMethod
 
 
 @pytest.fixture(autouse=True)
-def setup_blocking_http_signup():
+def setup_blocking_http_signup() -> None:
     """Setup fixture for blocking HTTP signup tests"""
     url = "http://localhost:8000"
     password = "root"
@@ -50,7 +50,7 @@ def setup_blocking_http_signup():
     connection.query("REMOVE TABLE user;")
 
 
-def test_signup(setup_blocking_http_signup):
+def test_signup(setup_blocking_http_signup) -> None:
     vars = {
         "namespace": setup_blocking_http_signup["namespace"],
         "database": setup_blocking_http_signup["database_name"],

@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from surrealdb import (
@@ -11,7 +13,7 @@ from surrealdb import (
 
 
 @pytest.fixture
-def test_data():
+def test_data() -> dict[str, list[str]]:
     return {
         "urls": [
             "http://localhost:5000",
@@ -27,14 +29,14 @@ def test_data():
     }
 
 
-def test_blocking___init__(test_data):
+def test_blocking___init__(test_data: dict[str, list[str]]) -> None:
     outcome = Surreal("ws://localhost:5000")
     assert type(outcome) == BlockingWsSurrealConnection
     outcome = Surreal("http://localhost:5000")
     assert type(outcome) == BlockingHttpSurrealConnection
 
 
-def test_async___init__(test_data):
+def test_async___init__(test_data: dict[str, list[str]]) -> None:
     outcome = AsyncSurreal("ws://localhost:5000")
     assert type(outcome) == AsyncWsSurrealConnection
     outcome = AsyncSurreal("http://localhost:5000")

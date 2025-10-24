@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
@@ -6,12 +8,14 @@ from surrealdb.data.types.table import Table
 
 
 @pytest.fixture
-def record_id():
+def record_id() -> RecordID:
     return RecordID("user", "tobie")
 
 
 @pytest.mark.asyncio
-async def test_delete_string(async_http_connection, record_id):
+async def test_delete_string(
+    async_http_connection: AsyncHttpSurrealConnection, record_id
+) -> None:
     await async_http_connection.query("DELETE user;")
     await async_http_connection.query("CREATE user:tobie SET name = 'Tobie';")
 
@@ -27,7 +31,9 @@ async def test_delete_string(async_http_connection, record_id):
 
 
 @pytest.mark.asyncio
-async def test_delete_record_id(async_http_connection, record_id):
+async def test_delete_record_id(
+    async_http_connection: AsyncHttpSurrealConnection, record_id
+) -> None:
     await async_http_connection.query("DELETE user;")
     await async_http_connection.query("CREATE user:tobie SET name = 'Tobie';")
 
@@ -43,7 +49,7 @@ async def test_delete_record_id(async_http_connection, record_id):
 
 
 @pytest.mark.asyncio
-async def test_delete_table(async_http_connection):
+async def test_delete_table(async_http_connection: AsyncHttpSurrealConnection) -> None:
     await async_http_connection.query("DELETE user;")
     await async_http_connection.query("CREATE user:tobie SET name = 'Tobie';")
     await async_http_connection.query("CREATE user:jaime SET name = 'Jaime';")

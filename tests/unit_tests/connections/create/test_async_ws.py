@@ -1,11 +1,15 @@
+from collections.abc import AsyncGenerator
+from typing import Any
+
 import pytest
 
+from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
 
 @pytest.fixture
-def create_data():
+def create_data() -> dict[str, Any]:
     return {
         "name": "Test User",
         "email": "test@example.com",
@@ -15,14 +19,18 @@ def create_data():
 
 
 @pytest.fixture(autouse=True)
-async def setup_user(async_ws_connection):
+async def setup_user(
+    async_ws_connection: AsyncWsSurrealConnection,
+) -> AsyncGenerator[None, None]:
     await async_ws_connection.query("DELETE user;")
     yield
     await async_ws_connection.query("DELETE user;")
 
 
 @pytest.mark.asyncio
-async def test_create_string(async_ws_connection, setup_user):
+async def test_create_string(
+    async_ws_connection: AsyncWsSurrealConnection, setup_user: None
+) -> None:
     outcome = await async_ws_connection.create("user")
     assert "user" == outcome["id"].table_name
 
@@ -30,7 +38,11 @@ async def test_create_string(async_ws_connection, setup_user):
 
 
 @pytest.mark.asyncio
-async def test_create_string_with_data(async_ws_connection, create_data, setup_user):
+async def test_create_string_with_data(
+    async_ws_connection: AsyncWsSurrealConnection,
+    create_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     outcome = await async_ws_connection.create("user", create_data)
     assert "user" == outcome["id"].table_name
     assert create_data["name"] == outcome["name"]
@@ -47,8 +59,10 @@ async def test_create_string_with_data(async_ws_connection, create_data, setup_u
 
 @pytest.mark.asyncio
 async def test_create_string_with_data_and_id(
-    async_ws_connection, create_data, setup_user
-):
+    async_ws_connection: AsyncWsSurrealConnection,
+    create_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     first_outcome = await async_ws_connection.create("user:tobie", create_data)
     assert "user" == first_outcome["id"].table_name
     assert "tobie" == first_outcome["id"].id
@@ -66,7 +80,9 @@ async def test_create_string_with_data_and_id(
 
 
 @pytest.mark.asyncio
-async def test_create_record_id(async_ws_connection, setup_user):
+async def test_create_record_id(
+    async_ws_connection: AsyncWsSurrealConnection, setup_user: None
+) -> None:
     record_id = RecordID("user", 1)
     outcome = await async_ws_connection.create(record_id)
     assert "user" == outcome["id"].table_name
@@ -76,7 +92,11 @@ async def test_create_record_id(async_ws_connection, setup_user):
 
 
 @pytest.mark.asyncio
-async def test_create_record_id_with_data(async_ws_connection, create_data, setup_user):
+async def test_create_record_id_with_data(
+    async_ws_connection: AsyncWsSurrealConnection,
+    create_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     record_id = RecordID("user", 1)
     outcome = await async_ws_connection.create(record_id, create_data)
     assert "user" == outcome["id"].table_name
@@ -94,7 +114,9 @@ async def test_create_record_id_with_data(async_ws_connection, create_data, setu
 
 
 @pytest.mark.asyncio
-async def test_create_table(async_ws_connection, setup_user):
+async def test_create_table(
+    async_ws_connection: AsyncWsSurrealConnection, setup_user: None
+) -> None:
     table = Table("user")
     outcome = await async_ws_connection.create(table)
     assert "user" == outcome["id"].table_name
@@ -103,7 +125,11 @@ async def test_create_table(async_ws_connection, setup_user):
 
 
 @pytest.mark.asyncio
-async def test_create_table_with_data(async_ws_connection, create_data, setup_user):
+async def test_create_table_with_data(
+    async_ws_connection: AsyncWsSurrealConnection,
+    create_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     table = Table("user")
     outcome = await async_ws_connection.create(table, create_data)
     assert "user" == outcome["id"].table_name

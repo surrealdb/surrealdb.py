@@ -1,11 +1,14 @@
+from typing import Any
+
 import asyncio
 import os
 import sys
 
 import pytest
+from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 
 
-async def test_batch(async_ws_connection):
+async def test_batch(async_ws_connection: AsyncWsSurrealConnection) -> None:
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
     # async batching doesn't work for surrealDB v2.1.0" or lower
     surrealdb_version = os.environ.get("SURREALDB_VERSION")

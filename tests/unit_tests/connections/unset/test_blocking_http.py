@@ -1,7 +1,8 @@
 import pytest
+from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 
 
-def test_unset(blocking_http_connection):
+def test_unset(blocking_http_connection: BlockingHttpSurrealConnection) -> None:
     blocking_http_connection.query("DELETE person;")
     outcome = blocking_http_connection.let(
         "name",

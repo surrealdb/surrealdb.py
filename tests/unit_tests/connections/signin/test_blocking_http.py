@@ -4,7 +4,7 @@ from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 
 
 @pytest.fixture(autouse=True)
-def setup_blocking_http_signin():
+def setup_blocking_http_signin() -> None:
     """Setup fixture for blocking HTTP signin tests"""
     url = "http://localhost:8000"
     password = "root"
@@ -55,13 +55,13 @@ def setup_blocking_http_signin():
     connection.query("REMOVE TABLE user;")
 
 
-def test_signin_root(setup_blocking_http_signin):
+def test_signin_root(setup_blocking_http_signin) -> None:
     connection = BlockingHttpSurrealConnection(setup_blocking_http_signin["url"])
     response = connection.signin(setup_blocking_http_signin["vars_params"])
     assert response is not None
 
 
-def test_signin_namespace(setup_blocking_http_signin):
+def test_signin_namespace(setup_blocking_http_signin) -> None:
     connection = BlockingHttpSurrealConnection(setup_blocking_http_signin["url"])
     vars = {
         "namespace": setup_blocking_http_signin["namespace"],
@@ -72,7 +72,7 @@ def test_signin_namespace(setup_blocking_http_signin):
     assert response is not None
 
 
-def test_signin_database(setup_blocking_http_signin):
+def test_signin_database(setup_blocking_http_signin) -> None:
     connection = BlockingHttpSurrealConnection(setup_blocking_http_signin["url"])
     vars = {
         "namespace": setup_blocking_http_signin["namespace"],
@@ -84,7 +84,7 @@ def test_signin_database(setup_blocking_http_signin):
     assert response is not None
 
 
-def test_signin_record(setup_blocking_http_signin):
+def test_signin_record(setup_blocking_http_signin) -> None:
     vars = {
         "namespace": setup_blocking_http_signin["namespace"],
         "database": setup_blocking_http_signin["database_name"],

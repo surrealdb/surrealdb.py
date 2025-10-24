@@ -6,7 +6,7 @@ from surrealdb.request_message.methods import RequestMethod
 
 
 @pytest.fixture(autouse=True)
-def setup_blocking_ws_signup():
+def setup_blocking_ws_signup() -> None:
     """Setup fixture for blocking WS signup tests"""
     url = "ws://localhost:8000"
     password = "root"
@@ -52,7 +52,7 @@ def setup_blocking_ws_signup():
         connection.socket.close()
 
 
-def test_signup(setup_blocking_ws_signup):
+def test_signup(setup_blocking_ws_signup) -> None:
     vars = {
         "namespace": setup_blocking_ws_signup["namespace"],
         "database": setup_blocking_ws_signup["database_name"],

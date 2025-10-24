@@ -5,7 +5,7 @@ from surrealdb.data.types.record_id import RecordID
 
 
 @pytest.mark.asyncio
-async def test_query(async_ws_connection):
+async def test_query(async_ws_connection: AsyncWsSurrealConnection) -> None:
     await async_ws_connection.query("DELETE user;")
     result = await async_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"

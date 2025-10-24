@@ -1,8 +1,9 @@
 import pytest
+from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 
 
 @pytest.mark.asyncio
-async def test_let(async_ws_connection):
+async def test_let(async_ws_connection: AsyncWsSurrealConnection) -> None:
     await async_ws_connection.query("DELETE person;")
     outcome = await async_ws_connection.let(
         "name",

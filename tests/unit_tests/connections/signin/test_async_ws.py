@@ -4,7 +4,7 @@ from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 
 
 @pytest.fixture(autouse=True)
-async def setup_async_ws_signin():
+async def setup_async_ws_signin() -> None:
     """Setup fixture for async WS signin tests"""
     url = "ws://localhost:8000"
     password = "root"
@@ -56,14 +56,14 @@ async def setup_async_ws_signin():
 
 
 @pytest.mark.asyncio
-async def test_signin_root(setup_async_ws_signin):
+async def test_signin_root(setup_async_ws_signin) -> None:
     connection = AsyncWsSurrealConnection(setup_async_ws_signin["url"])
     response = await connection.signin(setup_async_ws_signin["vars_params"])
     assert response is not None
 
 
 @pytest.mark.asyncio
-async def test_signin_namespace(setup_async_ws_signin):
+async def test_signin_namespace(setup_async_ws_signin) -> None:
     connection = AsyncWsSurrealConnection(setup_async_ws_signin["url"])
     vars = {
         "namespace": setup_async_ws_signin["namespace"],
@@ -75,7 +75,7 @@ async def test_signin_namespace(setup_async_ws_signin):
 
 
 @pytest.mark.asyncio
-async def test_signin_database(setup_async_ws_signin):
+async def test_signin_database(setup_async_ws_signin) -> None:
     connection = AsyncWsSurrealConnection(setup_async_ws_signin["url"])
     vars = {
         "namespace": setup_async_ws_signin["namespace"],
@@ -88,7 +88,7 @@ async def test_signin_database(setup_async_ws_signin):
 
 
 @pytest.mark.asyncio
-async def test_signin_record(setup_async_ws_signin):
+async def test_signin_record(setup_async_ws_signin) -> None:
     vars = {
         "namespace": setup_async_ws_signin["namespace"],
         "database": setup_async_ws_signin["database_name"],

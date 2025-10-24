@@ -3,7 +3,7 @@ import pytest
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 
 
-def test_select(blocking_http_connection):
+def test_select(blocking_http_connection: BlockingHttpSurrealConnection) -> None:
     blocking_http_connection.query("DELETE user;")
     blocking_http_connection.query("DELETE users;")
 

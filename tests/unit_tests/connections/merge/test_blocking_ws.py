@@ -3,10 +3,12 @@ import pytest
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
+from typing import Any
+from collections.abc import Generator
 
 
 @pytest.fixture
-def merge_data():
+def merge_data() -> dict[str, Any]:
     return {
         "name": "Jaime",
         "email": "jaime@example.com",
@@ -16,7 +18,9 @@ def merge_data():
 
 
 @pytest.fixture(autouse=True)
-def setup_user(blocking_ws_connection):
+def setup_user(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+) -> Generator[None, None, None]:
     blocking_ws_connection.query("DELETE user;")
     blocking_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
@@ -25,7 +29,9 @@ def setup_user(blocking_ws_connection):
     blocking_ws_connection.query("DELETE user;")
 
 
-def test_merge_string(blocking_ws_connection, setup_user):
+def test_merge_string(
+    blocking_ws_connection: BlockingWsSurrealConnection, setup_user: None
+) -> None:
     record_id = RecordID("user", "tobie")
     outcome = blocking_ws_connection.merge("user:tobie")
     assert outcome["id"] == record_id
@@ -35,7 +41,11 @@ def test_merge_string(blocking_ws_connection, setup_user):
     assert result[0]["name"] == "Tobie"
 
 
-def test_merge_string_with_data(blocking_ws_connection, merge_data, setup_user):
+def test_merge_string_with_data(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    merge_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     record_id = RecordID("user", "tobie")
     first_outcome = blocking_ws_connection.merge("user:tobie", merge_data)
     assert first_outcome["id"] == record_id
@@ -49,7 +59,9 @@ def test_merge_string_with_data(blocking_ws_connection, merge_data, setup_user):
     assert result[0]["enabled"] is True
 
 
-def test_merge_record_id(blocking_ws_connection, setup_user):
+def test_merge_record_id(
+    blocking_ws_connection: BlockingWsSurrealConnection, setup_user: None
+) -> None:
     record_id = RecordID("user", "tobie")
     first_outcome = blocking_ws_connection.merge(record_id)
     assert first_outcome["id"] == record_id
@@ -59,7 +71,11 @@ def test_merge_record_id(blocking_ws_connection, setup_user):
     assert result[0]["name"] == "Tobie"
 
 
-def test_merge_record_id_with_data(blocking_ws_connection, merge_data, setup_user):
+def test_merge_record_id_with_data(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    merge_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     record_id = RecordID("user", "tobie")
     outcome = blocking_ws_connection.merge(record_id, merge_data)
     assert outcome["id"] == record_id
@@ -73,7 +89,9 @@ def test_merge_record_id_with_data(blocking_ws_connection, merge_data, setup_use
     assert result[0]["enabled"] is True
 
 
-def test_merge_table(blocking_ws_connection, setup_user):
+def test_merge_table(
+    blocking_ws_connection: BlockingWsSurrealConnection, setup_user: None
+) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")
     first_outcome = blocking_ws_connection.merge(table)
@@ -84,7 +102,11 @@ def test_merge_table(blocking_ws_connection, setup_user):
     assert result[0]["name"] == "Tobie"
 
 
-def test_merge_table_with_data(blocking_ws_connection, merge_data, setup_user):
+def test_merge_table_with_data(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    merge_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")
     outcome = blocking_ws_connection.merge(table, merge_data)

@@ -2,10 +2,13 @@ import pytest
 
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
+from typing import Any
+from collections.abc import Generator
+from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 
 
 @pytest.fixture
-def upsert_data():
+def upsert_data() -> dict[str, Any]:
     return {
         "name": "Jaime",
         "email": "jaime@example.com",
@@ -15,7 +18,7 @@ def upsert_data():
 
 
 @pytest.fixture
-def existing_data():
+def existing_data() -> dict[str, Any]:
     return {
         "name": "Tobie",
         "email": "tobie@example.com",
@@ -25,7 +28,9 @@ def existing_data():
 
 
 @pytest.fixture(autouse=True)
-def setup_user(blocking_http_connection):
+def setup_user(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+) -> Generator[None, None, None]:
     blocking_http_connection.query("DELETE user;")
     blocking_http_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
@@ -34,7 +39,11 @@ def setup_user(blocking_http_connection):
     blocking_http_connection.query("DELETE user;")
 
 
-def test_upsert_string(blocking_http_connection, setup_user, existing_data):
+def test_upsert_string(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    setup_user: None,
+    existing_data,
+) -> None:
     record_id = RecordID("user", "tobie")
     outcome = blocking_http_connection.upsert("user:tobie", existing_data)
     assert outcome["id"] == record_id
@@ -48,7 +57,11 @@ def test_upsert_string(blocking_http_connection, setup_user, existing_data):
     assert result[0]["enabled"] is True
 
 
-def test_upsert_string_with_data(blocking_http_connection, upsert_data, setup_user):
+def test_upsert_string_with_data(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    upsert_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     record_id = RecordID("user", "tobie")
     first_outcome = blocking_http_connection.upsert("user:tobie", upsert_data)
     assert first_outcome["id"] == record_id
@@ -62,7 +75,11 @@ def test_upsert_string_with_data(blocking_http_connection, upsert_data, setup_us
     assert result[0]["enabled"] is True
 
 
-def test_upsert_record_id(blocking_http_connection, setup_user, existing_data):
+def test_upsert_record_id(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    setup_user: None,
+    existing_data,
+) -> None:
     record_id = RecordID("user", "tobie")
     first_outcome = blocking_http_connection.upsert(record_id, existing_data)
     assert first_outcome["id"] == record_id
@@ -76,7 +93,11 @@ def test_upsert_record_id(blocking_http_connection, setup_user, existing_data):
     assert result[0]["enabled"] is True
 
 
-def test_upsert_record_id_with_data(blocking_http_connection, upsert_data, setup_user):
+def test_upsert_record_id_with_data(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    upsert_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     record_id = RecordID("user", "tobie")
     outcome = blocking_http_connection.upsert(record_id, upsert_data)
     assert outcome["id"] == record_id
@@ -90,7 +111,11 @@ def test_upsert_record_id_with_data(blocking_http_connection, upsert_data, setup
     assert result[0]["enabled"] is True
 
 
-def test_upsert_table(blocking_http_connection, setup_user, existing_data):
+def test_upsert_table(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    setup_user: None,
+    existing_data,
+) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")
     first_outcome = blocking_http_connection.upsert(table, existing_data)
@@ -100,7 +125,11 @@ def test_upsert_table(blocking_http_connection, setup_user, existing_data):
     assert any(r["name"] == "Tobie" for r in result)
 
 
-def test_upsert_table_with_data(blocking_http_connection, upsert_data, setup_user):
+def test_upsert_table_with_data(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    upsert_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")
     outcome = blocking_http_connection.upsert(table, upsert_data)

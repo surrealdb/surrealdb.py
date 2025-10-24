@@ -1,10 +1,14 @@
+from typing import AsyncGenerator
+
 import pytest
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 
 
 @pytest.fixture(autouse=True)
-async def setup_schema(async_http_connection):
+async def setup_schema(
+    async_http_connection: AsyncHttpSurrealConnection,
+) -> AsyncGenerator[None, None]:
     await async_http_connection.query("DELETE user;")
     await async_http_connection.query("REMOVE TABLE user;")
     await async_http_connection.query(
@@ -26,7 +30,7 @@ async def setup_schema(async_http_connection):
 
 
 @pytest.mark.asyncio
-async def test_signup(setup_schema):
+async def test_signup(setup_schema: None) -> None:
     url = "http://localhost:8000"
     vars = {
         "namespace": "test_ns",

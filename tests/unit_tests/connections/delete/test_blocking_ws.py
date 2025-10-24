@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
@@ -6,11 +8,13 @@ from surrealdb.data.types.table import Table
 
 
 @pytest.fixture
-def record_id():
+def record_id() -> RecordID:
     return RecordID("user", "tobie")
 
 
-def test_delete_string(blocking_ws_connection, record_id):
+def test_delete_string(
+    blocking_ws_connection: BlockingWsSurrealConnection, record_id
+) -> None:
     blocking_ws_connection.query("DELETE user;")
     blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';")
 
@@ -25,7 +29,9 @@ def test_delete_string(blocking_ws_connection, record_id):
     assert outcome == []
 
 
-def test_delete_record_id(blocking_ws_connection, record_id):
+def test_delete_record_id(
+    blocking_ws_connection: BlockingWsSurrealConnection, record_id
+) -> None:
     blocking_ws_connection.query("DELETE user;")
     blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';")
 
@@ -40,7 +46,7 @@ def test_delete_record_id(blocking_ws_connection, record_id):
     assert outcome == []
 
 
-def test_delete_table(blocking_ws_connection):
+def test_delete_table(blocking_ws_connection: BlockingWsSurrealConnection) -> None:
     blocking_ws_connection.query("DELETE user;")
     blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';")
     blocking_ws_connection.query("CREATE user:jaime SET name = 'Jaime';")

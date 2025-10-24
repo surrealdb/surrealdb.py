@@ -4,7 +4,7 @@ from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 
 
-def test_query(blocking_ws_connection):
+def test_query(blocking_ws_connection: BlockingWsSurrealConnection) -> None:
     blocking_ws_connection.query("DELETE user;")
     result = blocking_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"

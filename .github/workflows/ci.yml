@@ -72,6 +72,9 @@ jobs:
       - name: Run mypy checks
         run: uv run mypy --explicit-package-bases src/
 
+      - name: Run mypy checks
+        run: uv run mypy --explicit-package-bases tests/
+
   test:
     runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.surrealdb-version == 'nightly' }}
