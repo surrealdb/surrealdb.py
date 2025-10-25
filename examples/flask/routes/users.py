@@ -132,7 +132,8 @@ def update_user(user_id):
         }), 200
     
     except Exception as e:
-        return jsonify({"error": f"Database error: {str(e)}"}), 500
+        logging.error(f"Database error in update_user: {e}", exc_info=True)
+        return jsonify({"error": "Database error"}), 500
 
 
 @bp.route("/<user_id>", methods=["DELETE"])
