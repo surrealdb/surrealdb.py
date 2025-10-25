@@ -1,4 +1,5 @@
 """Database connection management."""
+
 from typing import AsyncGenerator
 from contextlib import asynccontextmanager
 from surrealdb import AsyncSurreal
@@ -15,10 +16,12 @@ class DatabaseManager:
         """Initialize database connection."""
         self.db = AsyncSurreal(settings.surrealdb_url)
         await self.db.connect()
-        await self.db.signin({
-            "username": settings.surrealdb_username,
-            "password": settings.surrealdb_password,
-        })
+        await self.db.signin(
+            {
+                "username": settings.surrealdb_username,
+                "password": settings.surrealdb_password,
+            }
+        )
         await self.db.use(settings.surrealdb_namespace, settings.surrealdb_database)
 
     async def disconnect(self) -> None:
@@ -51,4 +54,3 @@ async def lifespan(app):
 async def get_db() -> AsyncGenerator[AsyncSurreal, None]:
     """Dependency to get database connection."""
     yield db_manager.get_db()
-

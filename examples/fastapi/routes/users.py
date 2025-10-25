@@ -1,4 +1,5 @@
 """User CRUD endpoints."""
+
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from surrealdb import AsyncSurreal
@@ -24,16 +25,16 @@ async def create_user(
                 "age": user.age,
             },
         )
-        
+
         if not result:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to create user",
             )
-        
+
         # Handle both list and dict responses
         user_data = result[0] if isinstance(result, list) else result
-        
+
         return UserResponse(
             id=str(user_data.get("id", "")),
             name=user_data["name"],
@@ -54,10 +55,10 @@ async def list_users(
     """Get all users."""
     try:
         result = await db.select("users")
-        
+
         if not result:
             return []
-        
+
         users = []
         for user_data in result:
             users.append(
@@ -68,7 +69,7 @@ async def list_users(
                     age=user_data.get("age"),
                 )
             )
-        
+
         return users
     except Exception as e:
         raise HTTPException(
@@ -85,16 +86,16 @@ async def get_user(
     """Get a user by ID."""
     try:
         result = await db.select(user_id)
-        
+
         if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"User {user_id} not found",
             )
-        
+
         # Handle both list and dict responses
         user_data = result[0] if isinstance(result, list) else result
-        
+
         return UserResponse(
             id=str(user_data.get("id", "")),
             name=user_data["name"],
@@ -126,24 +127,24 @@ async def update_user(
             update_data["email"] = user.email
         if user.age is not None:
             update_data["age"] = user.age
-        
+
         if not update_data:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No fields to update",
             )
-        
+
         result = await db.merge(user_id, update_data)
-        
+
         if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"User {user_id} not found",
             )
-        
+
         # Handle both list and dict responses
         user_data = result[0] if isinstance(result, list) else result
-        
+
         return UserResponse(
             id=str(user_data.get("id", "")),
             name=user_data["name"],
@@ -167,7 +168,7 @@ async def delete_user(
     """Delete a user."""
     try:
         result = await db.delete(user_id)
-        
+
         if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -180,4 +181,3 @@ async def delete_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database error: {str(e)}",
         )
-

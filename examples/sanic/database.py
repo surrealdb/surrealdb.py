@@ -1,4 +1,5 @@
 """Database connection management."""
+
 from surrealdb import AsyncSurreal
 from config import config
 
@@ -13,10 +14,12 @@ class DatabaseManager:
         """Initialize database connection."""
         self.db = AsyncSurreal(config.SURREALDB_URL)
         await self.db.connect()
-        await self.db.signin({
-            "username": config.SURREALDB_USERNAME,
-            "password": config.SURREALDB_PASSWORD,
-        })
+        await self.db.signin(
+            {
+                "username": config.SURREALDB_USERNAME,
+                "password": config.SURREALDB_PASSWORD,
+            }
+        )
         await self.db.use(config.SURREALDB_NAMESPACE, config.SURREALDB_DATABASE)
 
     async def disconnect(self) -> None:
@@ -34,4 +37,3 @@ class DatabaseManager:
 
 # Global database manager instance
 db_manager = DatabaseManager()
-

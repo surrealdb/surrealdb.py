@@ -1,4 +1,5 @@
 """Authentication endpoints."""
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from surrealdb import AsyncSurreal
 
@@ -15,14 +16,16 @@ async def signup(
 ) -> AuthResponse:
     """Register a new user account."""
     try:
-        token = await db.signup({
-            "namespace": request.namespace,
-            "database": request.database,
-            "access": request.access,
-            "email": request.email,
-            "password": request.password,
-        })
-        
+        token = await db.signup(
+            {
+                "namespace": request.namespace,
+                "database": request.database,
+                "access": request.access,
+                "email": request.email,
+                "password": request.password,
+            }
+        )
+
         return AuthResponse(
             token=token,
             message="User registered successfully",
@@ -41,11 +44,13 @@ async def signin(
 ) -> AuthResponse:
     """Sign in to an account."""
     try:
-        token = await db.signin({
-            "username": request.username,
-            "password": request.password,
-        })
-        
+        token = await db.signin(
+            {
+                "username": request.username,
+                "password": request.password,
+            }
+        )
+
         return AuthResponse(
             token=token,
             message="Signed in successfully",
@@ -70,4 +75,3 @@ async def invalidate(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Invalidation failed: {str(e)}",
         )
-

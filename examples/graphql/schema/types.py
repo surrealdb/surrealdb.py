@@ -1,4 +1,5 @@
 """GraphQL type definitions."""
+
 from typing import Optional
 import strawberry
 
@@ -19,4 +20,3 @@ class AuthResponse:
 
     token: str
     message: str
-

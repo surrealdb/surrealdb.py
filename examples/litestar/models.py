@@ -1,4 +1,5 @@
 """DTOs and data models."""
+
 from typing import Optional
 from dataclasses import dataclass
 from litestar.dto import DataclassDTO
@@ -84,4 +85,3 @@ class UserResponseDTO(DataclassDTO[UserResponse]):
     """DTO for UserResponse."""
 
     config = DTOConfig()
-

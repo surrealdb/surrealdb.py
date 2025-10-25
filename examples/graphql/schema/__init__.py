@@ -1,4 +1,5 @@
 """GraphQL schema."""
+
 import strawberry
 from .queries import Query
 from .mutations import Mutation
@@ -10,4 +11,3 @@ schema = strawberry.Schema(
     mutation=Mutation,
     subscription=Subscription,
 )
-

@@ -1,10 +1,11 @@
 """MCP resource handlers for SurrealDB."""
+
 from config import settings
 
 
 async def get_db_config() -> dict:
     """Get database configuration information.
-    
+
     Returns:
         Database connection configuration
     """
@@ -18,7 +19,7 @@ async def get_db_config() -> dict:
 
 async def get_db_schema() -> dict:
     """Get database schema information.
-    
+
     Returns:
         Database schema details
     """
@@ -36,4 +37,3 @@ async def get_db_schema() -> dict:
             }
         ],
     }
-

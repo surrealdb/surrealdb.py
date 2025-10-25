@@ -1,4 +1,5 @@
 """URL configuration for surrealdb_example project."""
+
 from django.contrib import admin
 from django.urls import path, include
 from django.http import JsonResponse
@@ -10,8 +11,7 @@ async def health(request):
 
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('health/', health),
-    path('api/', include('api.urls')),
+    path("admin/", admin.site.urls),
+    path("health/", health),
+    path("api/", include("api.urls")),
 ]
-

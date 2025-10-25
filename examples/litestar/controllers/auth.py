@@ -1,4 +1,5 @@
 """Authentication endpoints."""
+
 from litestar import Controller, post
 from litestar.di import Provide
 from litestar.status_codes import HTTP_201_CREATED
@@ -19,14 +20,16 @@ class AuthController(Controller):
     async def signup(self, data: SignupRequest, db: AsyncSurreal) -> AuthResponse:
         """Register a new user account."""
         try:
-            token = await db.signup({
-                "namespace": data.namespace,
-                "database": data.database,
-                "access": data.access,
-                "email": data.email,
-                "password": data.password,
-            })
-            
+            token = await db.signup(
+                {
+                    "namespace": data.namespace,
+                    "database": data.database,
+                    "access": data.access,
+                    "email": data.email,
+                    "password": data.password,
+                }
+            )
+
             return AuthResponse(
                 token=token,
                 message="User registered successfully",
@@ -38,11 +41,13 @@ class AuthController(Controller):
     async def signin(self, data: SigninRequest, db: AsyncSurreal) -> AuthResponse:
         """Sign in to an account."""
         try:
-            token = await db.signin({
-                "username": data.username,
-                "password": data.password,
-            })
-            
+            token = await db.signin(
+                {
+                    "username": data.username,
+                    "password": data.password,
+                }
+            )
+
             return AuthResponse(
                 token=token,
                 message="Signed in successfully",
@@ -58,4 +63,3 @@ class AuthController(Controller):
             return MessageResponse(message="Session invalidated successfully")
         except Exception as e:
             raise InternalServerException(f"Invalidation failed: {str(e)}")
-

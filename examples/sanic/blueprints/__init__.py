@@ -1,2 +1,1 @@
 """Blueprint handlers."""
-

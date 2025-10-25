@@ -1,4 +1,5 @@
 """User CRUD endpoints."""
+
 from typing import List
 from litestar import Controller, get, post, put, delete
 from litestar.di import Provide
@@ -7,7 +8,14 @@ from litestar.exceptions import NotFoundException, InternalServerException
 from surrealdb import AsyncSurreal
 
 from database import provide_db
-from models import UserCreate, UserUpdate, UserResponse, UserCreateDTO, UserUpdateDTO, UserResponseDTO
+from models import (
+    UserCreate,
+    UserUpdate,
+    UserResponse,
+    UserCreateDTO,
+    UserUpdateDTO,
+    UserResponseDTO,
+)
 
 
 class UserController(Controller):
@@ -28,13 +36,13 @@ class UserController(Controller):
                     "age": data.age,
                 },
             )
-            
+
             if not result:
                 raise InternalServerException("Failed to create user")
-            
+
             # Handle both list and dict responses
             user_data = result[0] if isinstance(result, list) else result
-            
+
             return UserResponse(
                 id=str(user_data.get("id", "")),
                 name=user_data["name"],
@@ -49,10 +57,10 @@ class UserController(Controller):
         """Get all users."""
         try:
             result = await db.select("users")
-            
+
             if not result:
                 return []
-            
+
             users = []
             for user_data in result:
                 users.append(
@@ -63,7 +71,7 @@ class UserController(Controller):
                         age=user_data.get("age"),
                     )
                 )
-            
+
             return users
         except Exception as e:
             raise InternalServerException(f"Database error: {str(e)}")
@@ -73,13 +81,13 @@ class UserController(Controller):
         """Get a user by ID."""
         try:
             result = await db.select(user_id)
-            
+
             if not result:
                 raise NotFoundException(f"User {user_id} not found")
-            
+
             # Handle both list and dict responses
             user_data = result[0] if isinstance(result, list) else result
-            
+
             return UserResponse(
                 id=str(user_data.get("id", "")),
                 name=user_data["name"],
@@ -108,18 +116,18 @@ class UserController(Controller):
                 update_data["email"] = data.email
             if data.age is not None:
                 update_data["age"] = data.age
-            
+
             if not update_data:
                 raise InternalServerException("No fields to update")
-            
+
             result = await db.merge(user_id, update_data)
-            
+
             if not result:
                 raise NotFoundException(f"User {user_id} not found")
-            
+
             # Handle both list and dict responses
             user_data = result[0] if isinstance(result, list) else result
-            
+
             return UserResponse(
                 id=str(user_data.get("id", "")),
                 name=user_data["name"],
@@ -136,11 +144,10 @@ class UserController(Controller):
         """Delete a user."""
         try:
             result = await db.delete(user_id)
-            
+
             if not result:
                 raise NotFoundException(f"User {user_id} not found")
         except NotFoundException:
             raise
         except Exception as e:
             raise InternalServerException(f"Database error: {str(e)}")
-

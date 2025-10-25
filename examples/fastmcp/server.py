@@ -3,6 +3,7 @@
 This MCP server provides tools and resources for interacting with SurrealDB,
 allowing AI assistants like Claude to perform database operations.
 """
+
 import asyncio
 from fastmcp import FastMCP
 
@@ -93,4 +94,3 @@ async def db_schema():
 if __name__ == "__main__":
     # Run with stdio transport (for Claude Desktop)
     mcp.run()
-

@@ -1,4 +1,5 @@
 """Configuration for Jupyter notebooks."""
+
 import os
 from dotenv import load_dotenv
 
@@ -16,4 +17,3 @@ class Settings:
 
 
 settings = Settings()
-
