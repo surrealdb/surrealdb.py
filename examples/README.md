@@ -114,6 +114,22 @@ This directory contains comprehensive examples demonstrating how to integrate Su
 
 ---
 
+### Data & Exploration
+
+#### [Jupyter Notebooks](./jupyter/)
+**Interactive data exploration and analysis**
+
+- 6 comprehensive notebooks
+- CRUD operations tutorials
+- Pandas DataFrame integration
+- Data visualization (Matplotlib, Plotly)
+- Live queries demonstrations
+- Sample datasets included
+
+**Best for:** Data exploration, learning, prototyping, analysis, teaching
+
+---
+
 ### API Patterns
 
 #### [GraphQL](./graphql/)
