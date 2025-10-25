@@ -128,9 +128,7 @@ class AsyncTemplate:
         raise NotImplementedError(f"unset not implemented for: {self}")
 
     # TODO: Query can return any Value type depending on the query
-    async def query(
-        self, query: str, vars: Optional[dict[str, Value]] = None
-    ) -> Union[Value, list[Value], list[dict[str, Value]]]:
+    async def query(self, query: str, vars: Optional[dict[str, Value]] = None) -> Value:
         """Run a unset of SurrealQL statements against the database.
 
         Args:
@@ -145,9 +143,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"query not implemented for: {self}")
 
-    async def select(
-        self, record: RecordIdType
-    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
+    async def select(self, record: RecordIdType) -> Value:
         """Select all records in a table (or other entity),
         or a specific record, in the database.
 
@@ -166,7 +162,7 @@ class AsyncTemplate:
         self,
         record: RecordIdType,
         data: Optional[Value] = None,
-    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
+    ) -> Value:
         """Create a record in the database.
 
         This function will run the following query in the database:
@@ -181,9 +177,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"create not implemented for: {self}")
 
-    async def update(
-        self, record: RecordIdType, data: Optional[Value] = None
-    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
+    async def update(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
         """Update all records in a table, or a specific record, in the database.
 
         This function replaces the current document / record data with the
@@ -211,9 +205,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"update not implemented for: {self}")
 
-    async def upsert(
-        self, record: RecordIdType, data: Optional[Value] = None
-    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
+    async def upsert(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
         """Insert records into the database, or to update them if they exist.
 
 
@@ -239,9 +231,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"upsert not implemented for: {self}")
 
-    async def merge(
-        self, record: RecordIdType, data: Optional[Value] = None
-    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
+    async def merge(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
         """Modify by deep merging all records in a table, or a specific record, in the database.
 
         This function merges the current document / record data with the
@@ -271,9 +261,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"merge not implemented for: {self}")
 
-    async def patch(
-        self, record: RecordIdType, data: Optional[Value] = None
-    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
+    async def patch(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
         """Apply JSON Patch changes to all records, or a specific record, in the database.
 
         This function patches the current document / record data with
@@ -300,9 +288,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"patch not implemented for: {self}")
 
-    async def delete(
-        self, record: RecordIdType
-    ) -> Union[dict[str, Value], list[dict[str, Value]]]:
+    async def delete(self, record: RecordIdType) -> Value:
         """Delete all records in a table, or a specific record, from the database.
 
         This function will run the following query in the database:
@@ -320,7 +306,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"delete not implemented for: {self}")
 
-    async def info(self) -> dict[str, Value]:
+    async def info(self) -> Value:
         """This returns the record of an authenticated record user.
 
         Example:
@@ -332,7 +318,7 @@ class AsyncTemplate:
         self,
         table: Union[str, Table],
         data: Value,
-    ) -> list[dict[str, Value]]:
+    ) -> Value:
         """
         Inserts one or multiple records in the database.
 
@@ -353,7 +339,7 @@ class AsyncTemplate:
         self,
         table: Union[str, Table],
         data: Value,
-    ) -> list[dict[str, Value]]:
+    ) -> Value:
         """
         Inserts one or multiple relations in the database.
 
