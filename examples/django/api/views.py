@@ -2,6 +2,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+import logging
 from database import get_connection, close_connection
 from .serializers import UserSerializer, SignupSerializer, SigninSerializer
 
@@ -112,8 +113,9 @@ async def signup(request):
             "message": "User registered successfully"
         }, status=status.HTTP_201_CREATED)
     except Exception as e:
+        logging.exception("Exception during signup")
         return Response(
-            {"error": str(e)},
+            {"error": "An internal error occurred. Please try again later."},
             status=status.HTTP_400_BAD_REQUEST
         )
     finally:
@@ -134,9 +136,10 @@ async def signin(request):
             "token": token,
             "message": "Signed in successfully"
         })
+        logging.exception("Exception during signin")
     except Exception as e:
         return Response(
-            {"error": str(e)},
+            {"error": "Invalid credentials or unexpected error."},
             status=status.HTTP_401_UNAUTHORIZED
         )
     finally:
