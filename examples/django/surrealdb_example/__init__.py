@@ -1,0 +1,2 @@
+"""SurrealDB Django Example Project."""
+

@@ -100,6 +100,20 @@ This directory contains comprehensive examples demonstrating how to integrate Su
 
 ---
 
+#### [Django](./django/)
+**Full-stack framework with Django REST Framework**
+
+- Django REST Framework for APIs
+- ViewSets and serializers
+- Custom middleware
+- Async views support
+- DRF validation
+- Admin interface ready
+
+**Best for:** Full-stack applications, enterprise projects, teams familiar with Django
+
+---
+
 ## Common Features
 
 All examples include:
