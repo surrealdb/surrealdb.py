@@ -114,6 +114,22 @@ This directory contains comprehensive examples demonstrating how to integrate Su
 
 ---
 
+### API Patterns
+
+#### [GraphQL](./graphql/)
+**Modern GraphQL server with Strawberry**
+
+- Strawberry GraphQL (type-safe)
+- Queries, mutations, subscriptions
+- DataLoader for optimization
+- WebSocket subscriptions
+- GraphiQL playground
+- Full async support
+
+**Best for:** Modern APIs, mobile backends, flexible querying, real-time apps
+
+---
+
 ## Common Features
 
 All examples include:
