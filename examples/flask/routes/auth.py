@@ -1,8 +1,11 @@
 """Authentication endpoints."""
 from flask import Blueprint, request, jsonify
 from database import get_db
-
+import logging
+import traceback
 bp = Blueprint("auth", __name__, url_prefix="/api/auth")
+
+logger = logging.getLogger(__name__)
 
 
 @bp.route("/signup", methods=["POST"])
@@ -56,7 +59,8 @@ def signin():
         }), 200
     
     except Exception as e:
-        return jsonify({"error": f"Authentication failed: {str(e)}"}), 401
+        logger.error("Exception in signin: %s\n%s", str(e), traceback.format_exc())
+        return jsonify({"error": "Authentication failed. Please try again."}), 401
 
 
 @bp.route("/invalidate", methods=["POST"])
