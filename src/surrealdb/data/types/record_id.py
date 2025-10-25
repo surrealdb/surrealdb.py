@@ -29,7 +29,46 @@ class RecordID:
         self.table_name = table_name
         self.id = identifier
 
+    @staticmethod
+    def _escape_identifier(identifier: str) -> str:
+        """
+        Escapes a string identifier if needed, following SurrealDB's EscapeRid logic.
+
+        Identifiers need escaping if:
+        - Empty string
+        - Contains non-alphanumeric characters (except underscore)
+        - Contains only digits and underscores (no alphabetic characters)
+
+        Args:
+            identifier: The string identifier to potentially escape
+
+        Returns:
+            The escaped identifier with angle brackets if needed, or the original if not
+        """
+        # Empty string needs escaping
+        if not identifier:
+            return f"⟨{identifier}⟩"
+
+        # Check if contains any non-alphanumeric character (excluding underscore)
+        has_special_chars = any(not c.isalnum() and c != "_" for c in identifier)
+
+        # Check if all characters are digits or underscores (no alphabetic characters)
+        # This means it needs escaping to distinguish from numeric IDs
+        has_no_alpha = not any(c.isalpha() for c in identifier)
+
+        # Apply escaping if any condition is met
+        if has_special_chars or has_no_alpha:
+            # Escape any angle brackets in the identifier itself
+            escaped = identifier.replace("⟩", "\\⟩")
+            return f"⟨{escaped}⟩"
+
+        return identifier
+
     def __str__(self) -> str:
+        # Only escape if the identifier is a string
+        if isinstance(self.id, str):
+            escaped_id = self._escape_identifier(self.id)
+            return f"{self.table_name}:{escaped_id}"
         return f"{self.table_name}:{self.id}"
 
     def __repr__(self) -> str:

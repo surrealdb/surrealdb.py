@@ -55,6 +55,72 @@ def test_record_id_str() -> None:
     assert str(record_id) == "users:john"
 
 
+def test_record_id_str_with_numeric_string() -> None:
+    """Test RecordID string representation with long numeric string (issue #171)."""
+    record_id = RecordID("foo", "125813199042576601589342522460260755")
+    assert str(record_id) == "foo:⟨125813199042576601589342522460260755⟩"
+
+
+def test_record_id_str_with_short_numeric_string() -> None:
+    """Test RecordID string representation with short numeric string."""
+    record_id = RecordID("users", "123")
+    assert str(record_id) == "users:⟨123⟩"
+
+
+def test_record_id_str_with_underscore_only() -> None:
+    """Test RecordID string representation with only underscores."""
+    record_id = RecordID("test", "_")
+    assert str(record_id) == "test:⟨_⟩"
+
+
+def test_record_id_str_with_digits_and_underscores() -> None:
+    """Test RecordID string representation with digits and underscores."""
+    record_id = RecordID("test", "123_456")
+    assert str(record_id) == "test:⟨123_456⟩"
+
+
+def test_record_id_str_with_special_chars() -> None:
+    """Test RecordID string representation with special characters."""
+    record_id = RecordID("users", "john-doe")
+    assert str(record_id) == "users:⟨john-doe⟩"
+
+
+def test_record_id_str_with_spaces() -> None:
+    """Test RecordID string representation with spaces."""
+    record_id = RecordID("users", "john doe")
+    assert str(record_id) == "users:⟨john doe⟩"
+
+
+def test_record_id_str_with_empty_string() -> None:
+    """Test RecordID string representation with empty string."""
+    record_id = RecordID("users", "")
+    assert str(record_id) == "users:⟨⟩"
+
+
+def test_record_id_str_alphanumeric_no_escape() -> None:
+    """Test RecordID string representation with alphanumeric (no escape needed)."""
+    record_id = RecordID("users", "john123")
+    assert str(record_id) == "users:john123"
+
+
+def test_record_id_str_alphanumeric_with_underscore_no_escape() -> None:
+    """Test RecordID string representation with alphanumeric and underscore (no escape needed)."""
+    record_id = RecordID("users", "john_doe_123")
+    assert str(record_id) == "users:john_doe_123"
+
+
+def test_record_id_str_with_integer_id() -> None:
+    """Test RecordID string representation with integer identifier (no escape)."""
+    record_id = RecordID("users", 123)
+    assert str(record_id) == "users:123"
+
+
+def test_record_id_str_with_angle_bracket_escape() -> None:
+    """Test RecordID string representation with angle bracket in identifier."""
+    record_id = RecordID("test", "foo⟩bar")
+    assert str(record_id) == "test:⟨foo\\⟩bar⟩"
+
+
 def test_record_id_equality() -> None:
     """Test RecordID equality."""
     record_id1 = RecordID("users", "john")
