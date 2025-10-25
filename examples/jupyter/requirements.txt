@@ -1,0 +1,9 @@
+jupyter>=1.0.0
+notebook>=7.0.0
+ipykernel>=6.0.0
+surrealdb>=1.0.6
+pandas>=2.0.0
+matplotlib>=3.7.0
+plotly>=5.17.0
+python-dotenv>=1.0.0
+

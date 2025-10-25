@@ -1,0 +1,27 @@
+[project]
+name = "surrealdb-flask-example"
+version = "1.0.0"
+description = "Flask integration example for SurrealDB"
+requires-python = ">=3.10"
+dependencies = [
+    "Flask>=3.0.0",
+    "flask-cors>=4.0.0",
+    "surrealdb>=1.0.6",
+    "python-dotenv>=1.0.0",
+    "gunicorn>=21.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-flask>=1.2.0",
+    "ruff>=0.1.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
