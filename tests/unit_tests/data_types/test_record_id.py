@@ -286,7 +286,9 @@ async def test_record_id_with_object_db_roundtrip(surrealdb_connection: Any) -> 
 async def test_create_with_array_record_id(surrealdb_connection: Any) -> None:
     """Test creating a record using RecordID with array identifier."""
     record_id = RecordID("record_id_tests", ["main", "user", 123])
-    result = await surrealdb_connection.create(record_id, {"name": "Array Test", "active": True})
+    result = await surrealdb_connection.create(
+        record_id, {"name": "Array Test", "active": True}
+    )
     assert result["id"] == record_id
     assert result["name"] == "Array Test"
     assert result["active"] is True
@@ -296,7 +298,7 @@ async def test_create_with_array_record_id(surrealdb_connection: Any) -> None:
 async def test_create_with_object_record_id(surrealdb_connection: Any) -> None:
     """Test creating a record using RecordID with object/dict identifier."""
     record_id = RecordID("person", {"name": "Tobie", "location": "London"})
-    
+
     # Try creating the record
     try:
         result = await surrealdb_connection.create(
@@ -310,11 +312,11 @@ async def test_create_with_object_record_id(surrealdb_connection: Any) -> None:
         )
     except Exception as e:
         pytest.skip(f"Object-based record IDs may not be supported yet: {e}")
-    
+
     # If result is a string (error message), skip the test
     if isinstance(result, str):
         pytest.skip(f"Object-based record IDs returned an error: {result}")
-    
+
     # Verify the record was created with the correct ID
     assert result["id"] == record_id
     assert result["settings"]["active"] is True
