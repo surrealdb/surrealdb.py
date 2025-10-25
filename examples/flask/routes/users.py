@@ -1,6 +1,7 @@
 """User CRUD endpoints."""
 from flask import Blueprint, request, jsonify
 from database import get_db
+import logging
 
 bp = Blueprint("users", __name__, url_prefix="/api/users")
 
@@ -38,7 +39,8 @@ def create_user():
         }), 201
     
     except Exception as e:
-        return jsonify({"error": f"Database error: {str(e)}"}), 500
+        logging.error(f"Database error in create_user: {e}", exc_info=True)
+        return jsonify({"error": "Database error"}), 500
 
 
 @bp.route("", methods=["GET"])
@@ -63,7 +65,8 @@ def list_users():
         return jsonify(users), 200
     
     except Exception as e:
-        return jsonify({"error": f"Database error: {str(e)}"}), 500
+        logging.error(f"Database error in list_users: {e}", exc_info=True)
+        return jsonify({"error": "Database error"}), 500
 
 
 @bp.route("/<user_id>", methods=["GET"])
@@ -87,7 +90,8 @@ def get_user(user_id):
         }), 200
     
     except Exception as e:
-        return jsonify({"error": f"Database error: {str(e)}"}), 500
+        logging.error(f"Database error in get_user: {e}", exc_info=True)
+        return jsonify({"error": "Database error"}), 500
 
 
 @bp.route("/<user_id>", methods=["PUT"])
@@ -144,5 +148,6 @@ def delete_user(user_id):
         return "", 204
     
     except Exception as e:
-        return jsonify({"error": f"Database error: {str(e)}"}), 500
+        logging.error(f"Database error in delete_user: {e}", exc_info=True)
+        return jsonify({"error": "Database error"}), 500
 
