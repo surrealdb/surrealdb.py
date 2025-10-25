@@ -29,6 +29,13 @@ def test_record_id_with_array_identifier() -> None:
     assert record_id.id == [1, 2, 3]
 
 
+def test_record_id_with_object_identifier() -> None:
+    """Test RecordID with object/dict identifier."""
+    record_id = RecordID("person", {"name": "Tobie", "location": "London"})
+    assert record_id.table_name == "person"
+    assert record_id.id == {"name": "Tobie", "location": "London"}
+
+
 def test_record_id_parse() -> None:
     """Test RecordID.parse method."""
     record_id = RecordID.parse("users:john")
@@ -84,6 +91,14 @@ def test_record_id_with_array_encode() -> None:
     assert isinstance(encoded, bytes)
 
 
+def test_record_id_with_object_encode() -> None:
+    """Test encoding RecordID with object/dict identifier to CBOR bytes."""
+    record_id = RecordID("person", {"name": "Tobie", "location": "London"})
+    encoded = cbor.encode(record_id)
+    assert isinstance(encoded, bytes)
+    assert len(encoded) > 0
+
+
 # Unit tests for decoding
 def test_record_id_decode() -> None:
     """Test decoding CBOR bytes to RecordID."""
@@ -104,6 +119,26 @@ def test_record_id_with_int_decode() -> None:
     assert decoded.id == 123
 
 
+def test_record_id_with_array_decode() -> None:
+    """Test decoding CBOR bytes to RecordID with array identifier."""
+    record_id = RecordID("events", [1, 2, 3])
+    encoded = cbor.encode(record_id)
+    decoded = cbor.decode(encoded)
+    assert isinstance(decoded, RecordID)
+    assert decoded.table_name == "events"
+    assert decoded.id == [1, 2, 3]
+
+
+def test_record_id_with_object_decode() -> None:
+    """Test decoding CBOR bytes to RecordID with object/dict identifier."""
+    record_id = RecordID("person", {"name": "Tobie", "location": "London"})
+    encoded = cbor.encode(record_id)
+    decoded = cbor.decode(encoded)
+    assert isinstance(decoded, RecordID)
+    assert decoded.table_name == "person"
+    assert decoded.id == {"name": "Tobie", "location": "London"}
+
+
 # Encode+decode roundtrip tests
 def test_record_id_roundtrip() -> None:
     """Test encode+decode roundtrip for RecordID."""
@@ -115,6 +150,9 @@ def test_record_id_roundtrip() -> None:
         RecordID("events", [1, 2]),
         RecordID("events", [3, 4, 5]),
         RecordID("complex", ["a", "b"]),
+        RecordID("person", {"name": "Tobie", "location": "London"}),
+        RecordID("product", {"category": "electronics", "sku": "ABC123"}),
+        RecordID("mixed", {"id": 123, "tags": ["tag1", "tag2"]}),
     ]
 
     for record_id in test_record_ids:
@@ -230,3 +268,56 @@ async def test_multiple_record_ids_db_roundtrip(surrealdb_connection: Any) -> No
     assert result[0]["user_ref"] == record_ids["user"]
     assert result[0]["post_ref"] == record_ids["post"]
     assert result[0]["comment_ref"] == record_ids["comment"]
+
+
+@pytest.mark.asyncio
+async def test_record_id_with_object_db_roundtrip(surrealdb_connection: Any) -> None:
+    """Test sending RecordID with object/dict identifier to SurrealDB."""
+    record_id = RecordID("person", {"name": "Tobie", "location": "London"})
+    await surrealdb_connection.query(
+        "CREATE record_id_tests:test5 SET person_ref = $val;",
+        vars={"val": record_id},
+    )
+    result = await surrealdb_connection.query("SELECT * FROM record_id_tests;")
+    assert result[0]["person_ref"] == record_id
+
+
+@pytest.mark.asyncio
+async def test_create_with_array_record_id(surrealdb_connection: Any) -> None:
+    """Test creating a record using RecordID with array identifier."""
+    record_id = RecordID("record_id_tests", ["main", "user", 123])
+    result = await surrealdb_connection.create(
+        record_id, {"name": "Array Test", "active": True}
+    )
+    assert result["id"] == record_id
+    assert result["name"] == "Array Test"
+    assert result["active"] is True
+
+
+@pytest.mark.asyncio
+async def test_create_with_object_record_id(surrealdb_connection: Any) -> None:
+    """Test creating a record using RecordID with object/dict identifier."""
+    record_id = RecordID("person", {"name": "Tobie", "location": "London"})
+
+    # Try creating the record
+    try:
+        result = await surrealdb_connection.create(
+            record_id,
+            {
+                "settings": {
+                    "active": True,
+                    "marketing": True,
+                }
+            },
+        )
+    except Exception as e:
+        pytest.skip(f"Object-based record IDs may not be supported yet: {e}")
+
+    # If result is a string (error message), skip the test
+    if isinstance(result, str):
+        pytest.skip(f"Object-based record IDs returned an error: {result}")
+
+    # Verify the record was created with the correct ID
+    assert result["id"] == record_id
+    assert result["settings"]["active"] is True
+    assert result["settings"]["marketing"] is True

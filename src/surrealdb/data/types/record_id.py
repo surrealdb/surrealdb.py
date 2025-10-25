@@ -33,9 +33,7 @@ class RecordID:
         return f"{self.table_name}:{self.id}"
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(table_name={self.table_name}, record_id={self.id})".format(
-            self=self
-        )
+        return f"{self.__class__.__name__}(table_name={self.table_name}, record_id={self.id!r})"
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, RecordID):
