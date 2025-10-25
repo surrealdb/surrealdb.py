@@ -90,10 +90,14 @@ def test_geometry_line_roundtrip() -> None:
 # Unit tests for encoding - GeometryPolygon
 def test_geometry_polygon_encode() -> None:
     """Test encoding GeometryPolygon to CBOR bytes."""
-    polygon = GeometryPolygon(
-        GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
-        GeometryLine(GeometryPoint(1.0, 1.0), GeometryPoint(0.0, 0.0)),
+    # Create a valid closed ring (triangle)
+    exterior = GeometryLine(
+        GeometryPoint(0.0, 0.0),
+        GeometryPoint(1.0, 0.0),
+        GeometryPoint(1.0, 1.0),
+        GeometryPoint(0.0, 0.0),  # Close the ring
     )
+    polygon = GeometryPolygon(exterior)
     encoded = cbor.encode(polygon)
     assert isinstance(encoded, bytes)
 
@@ -101,10 +105,14 @@ def test_geometry_polygon_encode() -> None:
 # Unit tests for decoding - GeometryPolygon
 def test_geometry_polygon_decode() -> None:
     """Test decoding CBOR bytes to GeometryPolygon."""
-    polygon = GeometryPolygon(
-        GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
-        GeometryLine(GeometryPoint(1.0, 1.0), GeometryPoint(0.0, 0.0)),
+    # Create a valid closed ring (triangle)
+    exterior = GeometryLine(
+        GeometryPoint(0.0, 0.0),
+        GeometryPoint(1.0, 0.0),
+        GeometryPoint(1.0, 1.0),
+        GeometryPoint(0.0, 0.0),  # Close the ring
     )
+    polygon = GeometryPolygon(exterior)
     encoded = cbor.encode(polygon)
     decoded = cbor.decode(encoded)
     assert isinstance(decoded, GeometryPolygon)
@@ -114,10 +122,15 @@ def test_geometry_polygon_decode() -> None:
 # Encode+decode roundtrip tests - GeometryPolygon
 def test_geometry_polygon_roundtrip() -> None:
     """Test encode+decode roundtrip for GeometryPolygon."""
-    polygon = GeometryPolygon(
-        GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
-        GeometryLine(GeometryPoint(1.0, 1.0), GeometryPoint(2.0, 2.0)),
+    # Create a valid closed ring (square)
+    exterior = GeometryLine(
+        GeometryPoint(0.0, 0.0),
+        GeometryPoint(2.0, 0.0),
+        GeometryPoint(2.0, 2.0),
+        GeometryPoint(0.0, 2.0),
+        GeometryPoint(0.0, 0.0),  # Close the ring
     )
+    polygon = GeometryPolygon(exterior)
     encoded = cbor.encode(polygon)
     decoded = cbor.decode(encoded)
     assert decoded == polygon
@@ -194,12 +207,13 @@ def test_geometry_multiline_roundtrip() -> None:
 # Unit tests for encoding - GeometryMultiPolygon
 def test_geometry_multipolygon_encode() -> None:
     """Test encoding GeometryMultiPolygon to CBOR bytes."""
-    mp = GeometryMultiPolygon(
-        GeometryPolygon(
-            GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
-            GeometryLine(GeometryPoint(1.0, 1.0), GeometryPoint(0.0, 0.0)),
-        )
+    exterior = GeometryLine(
+        GeometryPoint(0.0, 0.0),
+        GeometryPoint(1.0, 0.0),
+        GeometryPoint(1.0, 1.0),
+        GeometryPoint(0.0, 0.0),  # Close the ring
     )
+    mp = GeometryMultiPolygon(GeometryPolygon(exterior))
     encoded = cbor.encode(mp)
     assert isinstance(encoded, bytes)
 
@@ -207,12 +221,13 @@ def test_geometry_multipolygon_encode() -> None:
 # Unit tests for decoding - GeometryMultiPolygon
 def test_geometry_multipolygon_decode() -> None:
     """Test decoding CBOR bytes to GeometryMultiPolygon."""
-    mp = GeometryMultiPolygon(
-        GeometryPolygon(
-            GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
-            GeometryLine(GeometryPoint(1.0, 1.0), GeometryPoint(0.0, 0.0)),
-        )
+    exterior = GeometryLine(
+        GeometryPoint(0.0, 0.0),
+        GeometryPoint(1.0, 0.0),
+        GeometryPoint(1.0, 1.0),
+        GeometryPoint(0.0, 0.0),  # Close the ring
     )
+    mp = GeometryMultiPolygon(GeometryPolygon(exterior))
     encoded = cbor.encode(mp)
     decoded = cbor.decode(encoded)
     assert isinstance(decoded, GeometryMultiPolygon)
@@ -222,15 +237,21 @@ def test_geometry_multipolygon_decode() -> None:
 # Encode+decode roundtrip tests - GeometryMultiPolygon
 def test_geometry_multipolygon_roundtrip() -> None:
     """Test encode+decode roundtrip for GeometryMultiPolygon."""
+    exterior1 = GeometryLine(
+        GeometryPoint(0.0, 0.0),
+        GeometryPoint(1.0, 0.0),
+        GeometryPoint(1.0, 1.0),
+        GeometryPoint(0.0, 0.0),  # Close the ring
+    )
+    exterior2 = GeometryLine(
+        GeometryPoint(5.0, 5.0),
+        GeometryPoint(6.0, 5.0),
+        GeometryPoint(6.0, 6.0),
+        GeometryPoint(5.0, 5.0),  # Close the ring
+    )
     mp = GeometryMultiPolygon(
-        GeometryPolygon(
-            GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
-            GeometryLine(GeometryPoint(1.0, 1.0), GeometryPoint(0.0, 0.0)),
-        ),
-        GeometryPolygon(
-            GeometryLine(GeometryPoint(5.0, 5.0), GeometryPoint(6.0, 6.0)),
-            GeometryLine(GeometryPoint(6.0, 6.0), GeometryPoint(5.0, 5.0)),
-        ),
+        GeometryPolygon(exterior1),
+        GeometryPolygon(exterior2),
     )
     encoded = cbor.encode(mp)
     decoded = cbor.decode(encoded)
@@ -265,13 +286,16 @@ def test_geometry_collection_decode() -> None:
 # Encode+decode roundtrip tests - GeometryCollection
 def test_geometry_collection_roundtrip() -> None:
     """Test encode+decode roundtrip for GeometryCollection."""
+    exterior = GeometryLine(
+        GeometryPoint(0.0, 0.0),
+        GeometryPoint(1.0, 0.0),
+        GeometryPoint(1.0, 1.0),
+        GeometryPoint(0.0, 0.0),  # Close the ring
+    )
     gc = GeometryCollection(
         GeometryPoint(1.1, 2.2),
         GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
-        GeometryPolygon(
-            GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
-            GeometryLine(GeometryPoint(1.0, 1.0), GeometryPoint(0.0, 0.0)),
-        ),
+        GeometryPolygon(exterior),
     )
     encoded = cbor.encode(gc)
     decoded = cbor.decode(encoded)
@@ -419,17 +443,31 @@ async def test_geometry_line_db_insert_and_retrieve_as_python_object(
 # GeometryPolygon tests
 @pytest.mark.asyncio
 async def test_geometry_polygon_class_methods() -> None:
-    line1 = GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0))
-    line2 = GeometryLine(GeometryPoint(1.0, 1.0), GeometryPoint(2.0, 2.0))
-    poly = GeometryPolygon(line1, line2)
-    assert poly.get_coordinates() == [
-        [(0.0, 0.0), (1.0, 1.0)],
-        [(1.0, 1.0), (2.0, 2.0)],
+    # Test with a simple polygon (exterior ring only)
+    exterior = GeometryLine(
+        GeometryPoint(0.0, 0.0),
+        GeometryPoint(1.0, 0.0),
+        GeometryPoint(1.0, 1.0),
+        GeometryPoint(0.0, 0.0),  # Close the ring
+    )
+    poly = GeometryPolygon(exterior)
+    assert poly.get_coordinates() == [[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 0.0)]]
+
+    # Test with polygon with hole
+    hole = GeometryLine(
+        GeometryPoint(0.25, 0.25),
+        GeometryPoint(0.75, 0.25),
+        GeometryPoint(0.75, 0.75),
+        GeometryPoint(0.25, 0.25),  # Close the ring
+    )
+    poly_with_hole = GeometryPolygon(exterior, hole)
+    assert poly_with_hole.get_coordinates() == [
+        [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 0.0)],
+        [(0.25, 0.25), (0.75, 0.25), (0.75, 0.75), (0.25, 0.25)],
     ]
-    coords = [
-        [(0.0, 0.0), (1.0, 1.0)],
-        [(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)],
-    ]
+
+    # Test parse_coordinates
+    coords = [[(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 0.0)]]
     parsed_poly = GeometryPolygon.parse_coordinates(coords)
     assert parsed_poly.get_coordinates() == coords
     assert poly != parsed_poly
@@ -453,6 +491,151 @@ async def test_geometry_polygon_db_insert_and_retrieve(
     assert stored_geo["coordinates"] == [
         [[0.0, 0.0], [1.0, 1.0], [2.0, 2.0], [0.0, 0.0]]
     ]
+
+
+@pytest.mark.asyncio
+async def test_geometry_polygon_db_insert_and_retrieve_as_python_object(
+    surrealdb_connection: Any,
+) -> None:
+    """Test inserting a GeometryPolygon Python object and retrieving it from the database."""
+    # Create a valid polygon with closed ring
+    exterior = GeometryLine(
+        GeometryPoint(0.0, 0.0),
+        GeometryPoint(4.0, 0.0),
+        GeometryPoint(4.0, 4.0),
+        GeometryPoint(0.0, 4.0),
+        GeometryPoint(0.0, 0.0),  # Close the ring
+    )
+    polygon = GeometryPolygon(exterior)
+
+    create_query = """
+        CREATE geometry_tests:obj_polygon1 SET geometry = $geo;
+    """
+    await surrealdb_connection.query(create_query, vars={"geo": polygon})
+    results = await surrealdb_connection.query("SELECT * FROM geometry_tests;")
+    stored_geo_obj = results[0]["geometry"]
+
+    assert isinstance(stored_geo_obj, GeometryPolygon)
+    assert stored_geo_obj == polygon
+
+
+@pytest.mark.asyncio
+async def test_geometry_polygon_with_holes() -> None:
+    """Test creating a polygon with interior rings (holes)."""
+    # Create exterior ring
+    exterior = GeometryLine(
+        GeometryPoint(0.0, 0.0),
+        GeometryPoint(10.0, 0.0),
+        GeometryPoint(10.0, 10.0),
+        GeometryPoint(0.0, 10.0),
+        GeometryPoint(0.0, 0.0),  # Close the ring
+    )
+
+    # Create first hole
+    hole1 = GeometryLine(
+        GeometryPoint(2.0, 2.0),
+        GeometryPoint(4.0, 2.0),
+        GeometryPoint(4.0, 4.0),
+        GeometryPoint(2.0, 4.0),
+        GeometryPoint(2.0, 2.0),  # Close the ring
+    )
+
+    # Create second hole
+    hole2 = GeometryLine(
+        GeometryPoint(6.0, 6.0),
+        GeometryPoint(8.0, 6.0),
+        GeometryPoint(8.0, 8.0),
+        GeometryPoint(6.0, 8.0),
+        GeometryPoint(6.0, 6.0),  # Close the ring
+    )
+
+    # Create polygon with holes
+    polygon_with_holes = GeometryPolygon(exterior, hole1, hole2)
+
+    # Verify it has 3 rings (1 exterior + 2 holes)
+    assert len(polygon_with_holes.geometry_lines) == 3
+    coords = polygon_with_holes.get_coordinates()
+    assert len(coords) == 3
+    assert coords[0] == [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0), (0.0, 0.0)]
+    assert coords[1] == [(2.0, 2.0), (4.0, 2.0), (4.0, 4.0), (2.0, 4.0), (2.0, 2.0)]
+    assert coords[2] == [(6.0, 6.0), (8.0, 6.0), (8.0, 8.0), (6.0, 8.0), (6.0, 6.0)]
+
+
+@pytest.mark.asyncio
+async def test_geometry_polygon_validation() -> None:
+    """Test that polygon validation catches invalid rings."""
+    # Test 1: Ring not closed (first != last point)
+    with pytest.raises(ValueError, match="first point.*must equal last point"):
+        unclosed_ring = GeometryLine(
+            GeometryPoint(0.0, 0.0),
+            GeometryPoint(1.0, 0.0),
+            GeometryPoint(1.0, 1.0),
+            GeometryPoint(0.0, 1.0),  # NOT closed - missing final point
+        )
+        GeometryPolygon(unclosed_ring)
+
+    # Test 2: Ring with too few points (< 4)
+    with pytest.raises(ValueError, match="must have at least 4 points"):
+        invalid_ring = GeometryLine(
+            GeometryPoint(0.0, 0.0),
+            GeometryPoint(1.0, 1.0),
+            GeometryPoint(0.0, 0.0),  # Only 3 points total
+        )
+        GeometryPolygon(invalid_ring)
+
+    # Test 3: Valid exterior but invalid hole
+    valid_exterior = GeometryLine(
+        GeometryPoint(0.0, 0.0),
+        GeometryPoint(10.0, 0.0),
+        GeometryPoint(10.0, 10.0),
+        GeometryPoint(0.0, 10.0),
+        GeometryPoint(0.0, 0.0),
+    )
+
+    with pytest.raises(ValueError, match="Invalid interior.*ring"):
+        invalid_hole = GeometryLine(
+            GeometryPoint(2.0, 2.0),
+            GeometryPoint(4.0, 2.0),
+            GeometryPoint(2.0, 4.0),  # Only 3 points
+        )
+        GeometryPolygon(valid_exterior, invalid_hole)
+
+
+@pytest.mark.asyncio
+async def test_real_world_polygon_from_kml() -> None:
+    """Test creating a polygon from real-world KML data (based on issue #195)."""
+    # Coordinates from the issue (simplified from the KML example)
+    # These form a closed polygon representing a geographic area
+    coords = [
+        (-7.9735981, 37.0497115),
+        (-7.9758082, 37.0457381),
+        (-7.9756148, 37.0383393),
+        (-7.9767212, 37.0314215),
+        (-7.954491, 37.0309418),
+        (-7.9550154, 37.0423815),
+        (-7.964371, 37.0471084),
+        (-7.9735981, 37.0497115),  # Closed - first == last
+    ]
+
+    # Create geometry points
+    points = [GeometryPoint(lon, lat) for lon, lat in coords]
+
+    # Create the closed exterior ring
+    exterior = GeometryLine(*points)
+
+    # Create the polygon
+    polygon = GeometryPolygon(exterior)
+
+    # Verify it's properly created
+    assert len(polygon.geometry_lines) == 1
+    polygon_coords = polygon.get_coordinates()[0]
+    assert len(polygon_coords) == 8  # 7 unique points + 1 closing point
+    assert polygon_coords[0] == polygon_coords[-1]  # Verify closed
+    assert polygon_coords[0] == (-7.9735981, 37.0497115)
+
+    # Verify we can also parse it from coordinates
+    parsed = GeometryPolygon.parse_coordinates([coords])
+    assert parsed == polygon
 
 
 # GeometryMultiPoint tests
@@ -561,19 +744,30 @@ async def test_geometry_multiline_db_insert_and_retrieve_as_python_object(
 # GeometryMultiPolygon tests
 @pytest.mark.asyncio
 async def test_geometry_multipolygon_class_methods() -> None:
-    p1 = GeometryPolygon(
-        GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
-        GeometryLine(GeometryPoint(1.0, 1.0), GeometryPoint(0.0, 2.0)),
+    # Create two valid polygons with closed rings
+    exterior1 = GeometryLine(
+        GeometryPoint(0.0, 0.0),
+        GeometryPoint(1.0, 0.0),
+        GeometryPoint(1.0, 1.0),
+        GeometryPoint(0.0, 0.0),  # Close the ring
     )
-    p2 = GeometryPolygon(
-        GeometryLine(GeometryPoint(5.0, 5.0), GeometryPoint(6.0, 6.0)),
-        GeometryLine(GeometryPoint(6.0, 6.0), GeometryPoint(5.0, 7.0)),
+    p1 = GeometryPolygon(exterior1)
+
+    exterior2 = GeometryLine(
+        GeometryPoint(5.0, 5.0),
+        GeometryPoint(6.0, 5.0),
+        GeometryPoint(6.0, 6.0),
+        GeometryPoint(5.0, 5.0),  # Close the ring
     )
+    p2 = GeometryPolygon(exterior2)
+
     mp = GeometryMultiPolygon(p1, p2)
     assert len(mp.geometry_polygons) == 2
+
+    # Test parse_coordinates
     coords = [
-        [[(0.0, 0.0), (1.0, 1.0)], [(1.0, 1.0), (0.0, 2.0)]],
-        [[(5.0, 5.0), (6.0, 6.0)], [(6.0, 6.0), (5.0, 7.0)]],
+        [[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 0.0)]],
+        [[(5.0, 5.0), (6.0, 5.0), (6.0, 6.0), (5.0, 5.0)]],
     ]
     parsed = GeometryMultiPolygon.parse_coordinates(coords)
     assert mp == parsed
@@ -601,6 +795,46 @@ async def test_geometry_multipolygon_db_insert_and_retrieve(
         [[[0.0, 0.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]]],
         [[[5.0, 5.0], [6.0, 6.0], [6.0, 5.0], [5.0, 5.0]]],
     ]
+
+
+@pytest.mark.asyncio
+async def test_geometry_multipolygon_db_insert_and_retrieve_as_python_object(
+    surrealdb_connection: Any,
+) -> None:
+    """Test inserting a GeometryMultiPolygon Python object and retrieving it from the database."""
+    # Create first polygon
+    exterior1 = GeometryLine(
+        GeometryPoint(0.0, 0.0),
+        GeometryPoint(3.0, 0.0),
+        GeometryPoint(3.0, 3.0),
+        GeometryPoint(0.0, 3.0),
+        GeometryPoint(0.0, 0.0),  # Close the ring
+    )
+    poly1 = GeometryPolygon(exterior1)
+
+    # Create second polygon
+    exterior2 = GeometryLine(
+        GeometryPoint(5.0, 5.0),
+        GeometryPoint(8.0, 5.0),
+        GeometryPoint(8.0, 8.0),
+        GeometryPoint(5.0, 8.0),
+        GeometryPoint(5.0, 5.0),  # Close the ring
+    )
+    poly2 = GeometryPolygon(exterior2)
+
+    # Create multipolygon
+    multipolygon = GeometryMultiPolygon(poly1, poly2)
+
+    create_query = """
+        CREATE geometry_tests:obj_multipolygon1 SET geometry = $geo;
+    """
+    await surrealdb_connection.query(create_query, vars={"geo": multipolygon})
+    results = await surrealdb_connection.query("SELECT * FROM geometry_tests;")
+    stored_geo_obj = results[0]["geometry"]
+
+    assert isinstance(stored_geo_obj, GeometryMultiPolygon)
+    assert stored_geo_obj == multipolygon
+    assert len(stored_geo_obj.geometry_polygons) == 2
 
 
 # GeometryCollection tests
