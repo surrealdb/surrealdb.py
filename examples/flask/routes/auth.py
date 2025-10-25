@@ -73,5 +73,6 @@ def invalidate():
         return jsonify({"message": "Session invalidated successfully"}), 200
     
     except Exception as e:
-        return jsonify({"error": f"Invalidation failed: {str(e)}"}), 500
+        logger.error("Exception in invalidate: %s\n%s", str(e), traceback.format_exc())
+        return jsonify({"error": "Invalidation failed. Please try again later."}), 500
 
