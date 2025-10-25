@@ -35,7 +35,8 @@ def signup():
         }), 201
     
     except Exception as e:
-        return jsonify({"error": f"Signup failed: {str(e)}"}), 400
+        logger.error("Exception in signup: %s\n%s", str(e), traceback.format_exc())
+        return jsonify({"error": "Signup failed. Please try again later."}), 400
 
 
 @bp.route("/signin", methods=["POST"])
