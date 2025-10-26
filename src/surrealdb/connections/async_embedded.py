@@ -6,7 +6,7 @@ import uuid
 from types import TracebackType
 from typing import Any, Optional
 
-from surrealdb._surrealdb_ext import AsyncEmbeddedDB  # type: ignore[import-untyped]
+from surrealdb._surrealdb_ext import AsyncEmbeddedDB
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.url import Url
 from surrealdb.data.cbor import decode
@@ -115,7 +115,7 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         cbor_response_bytes = await self._db.execute(cbor_request)
 
         # Decode CBOR response (reuses existing CBOR decoding)
-        response = decode(cbor_response_bytes)  # type: ignore[arg-type]
+        response = decode(cbor_response_bytes)
 
         # Check for errors (inherited method from UtilsMixin)
         if not bypass:

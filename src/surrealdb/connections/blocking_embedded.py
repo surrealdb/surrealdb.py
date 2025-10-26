@@ -6,7 +6,7 @@ import threading
 import uuid
 from typing import Any, Optional
 
-from surrealdb._surrealdb_ext import SyncEmbeddedDB  # type: ignore[import-untyped]
+from surrealdb._surrealdb_ext import SyncEmbeddedDB
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.connections.url import Url
 from surrealdb.data.cbor import decode
@@ -111,7 +111,7 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
         cbor_response_bytes = self._db.execute(cbor_request)
 
         # Decode CBOR response (reuses existing CBOR decoding)
-        response = decode(cbor_response_bytes)  # type: ignore[arg-type]
+        response = decode(cbor_response_bytes)
 
         # Check for errors (inherited method from UtilsMixin)
         if not bypass:

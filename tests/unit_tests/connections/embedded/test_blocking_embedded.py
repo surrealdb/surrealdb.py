@@ -135,7 +135,7 @@ def test_connection_lifecycle() -> None:
     db = Surreal("mem://")
 
     # Connect
-    db.connect()
+    db.connect("mem://")
     db.use("test", "test")
 
     # Use

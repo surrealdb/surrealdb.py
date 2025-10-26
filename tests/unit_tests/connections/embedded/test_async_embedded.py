@@ -147,7 +147,7 @@ async def test_connection_lifecycle() -> None:
     db = AsyncSurreal("mem://")
 
     # Connect
-    await db.connect()
+    await db.connect("mem://")
     await db.use("test", "test")
 
     # Use
