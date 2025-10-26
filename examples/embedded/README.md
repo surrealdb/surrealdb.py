@@ -7,7 +7,7 @@ This directory contains examples of using SurrealDB embedded directly within Pyt
 ### `basic_async.py`
 
 Demonstrates basic async operations with an in-memory embedded database:
-- Creating an in-memory database with `mem://`
+- Creating an in-memory database with `mem://` (or `memory`)
 - Basic CRUD operations (Create, Read, Update, Delete)
 - Running SurrealQL queries
 - Using context managers for automatic cleanup
@@ -32,7 +32,7 @@ python examples/embedded/basic_sync.py
 ### `persistence.py`
 
 Demonstrates file-based persistent storage:
-- Using `file://` URLs for persistent databases
+- Using `file://` (or `surrealkv://`) URLs for persistent databases
 - Data persisting across multiple connections
 - Updating persisted data
 - Using temporary directories for testing
@@ -44,7 +44,7 @@ python examples/embedded/persistence.py
 
 ## When to Use Embedded vs Remote
 
-### Use Embedded Database (`mem://` or `file://`) when:
+### Use Embedded Database (`memory`, `mem://`, `file://`, or `surrealkv://`) when:
 
 - **Desktop Applications**: No server setup required
 - **Testing**: In-memory databases are extremely fast for tests
@@ -62,12 +62,12 @@ python examples/embedded/persistence.py
 
 ## Performance Considerations
 
-### In-Memory (`mem://`)
+### In-Memory (`memory` or `mem://`)
 - **Fastest**: All data in RAM
 - **Non-persistent**: Data lost when connection closes
 - **Best for**: Tests, caches, temporary data
 
-### File-Based (`file://`)
+### File-Based (`file://` or `surrealkv://`)
 - **Persistent**: Data saved to disk
 - **Good performance**: SurrealKV storage engine
 - **Best for**: Local apps, development, single-node deployments

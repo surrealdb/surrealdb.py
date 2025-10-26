@@ -16,7 +16,7 @@ from surrealdb.request_message.message import RequestMessage
 class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
     """
     A blocking embedded SurrealDB connection using the Rust extension.
-    
+
     This class inherits all methods from BlockingWsSurrealConnection and only
     overrides the connection management and message sending to use the embedded
     database instead of WebSocket.
@@ -39,10 +39,10 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
         self.port: Optional[int] = self.url.port
         self.id: str = str(uuid.uuid4())
         self.token: Optional[str] = None
-        
+
         # Embedded database handle
         self._db: SyncEmbeddedDB = SyncEmbeddedDB(url)
-        
+
         # Not used for embedded, but needed for compatibility
         self.socket = None
         self._lock: threading.Lock = threading.Lock()
@@ -74,7 +74,7 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
             self.url = Url(url)
             self.raw_url = url
             self._db = SyncEmbeddedDB(url)
-        
+
         self._db.connect()
 
     def close(self) -> None:
@@ -91,7 +91,7 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
     ) -> dict[str, Any]:
         """
         Send a message to the embedded database using CBOR encoding.
-        
+
         This method overrides the WebSocket _send to use the Rust extension
         instead of a network connection, while maintaining the same CBOR
         message format for perfect compatibility.
@@ -106,22 +106,22 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
         """
         # Encode message to CBOR (reuses existing WebSocket CBOR encoding)
         cbor_request = message.WS_CBOR_DESCRIPTOR
-        
+
         # Execute via Rust extension
         cbor_response_bytes = self._db.execute(cbor_request)
-        
+
         # Decode CBOR response (reuses existing CBOR decoding)
         response = decode(cbor_response_bytes)  # type: ignore[arg-type]
-        
+
         # Check for errors (inherited method from UtilsMixin)
         if not bypass:
             self.check_response_for_error(response, process)
-        
+
         # Ensure response is a dict
         if not isinstance(response, dict):
             return {}
-        
+
         return response
 
-    # All other methods (query, select, create, update, delete, merge, patch, etc.) 
+    # All other methods (query, select, create, update, delete, merge, patch, etc.)
     # are inherited from BlockingWsSurrealConnection and work automatically via _send()!

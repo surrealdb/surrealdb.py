@@ -16,7 +16,7 @@ from surrealdb.request_message.message import RequestMessage
 class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
     """
     An async embedded SurrealDB connection using the Rust extension.
-    
+
     This class inherits all methods from AsyncWsSurrealConnection and only
     overrides the connection management and message sending to use the embedded
     database instead of WebSocket.
@@ -42,10 +42,10 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         self.namespace: Optional[str] = None
         self.database: Optional[str] = None
         self.vars: dict[str, Any] = dict()
-        
+
         # Embedded database handle
         self._db: AsyncEmbeddedDB = AsyncEmbeddedDB(url)
-        
+
         # Not used for embedded, but needed for compatibility
         self.socket = None
         self.loop = None
@@ -79,7 +79,7 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
             self.url = Url(url)
             self.raw_url = url
             self._db = AsyncEmbeddedDB(url)
-        
+
         await self._db.connect()
 
     async def close(self) -> None:
@@ -95,7 +95,7 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
     ) -> dict[str, Any]:
         """
         Send a message to the embedded database using CBOR encoding.
-        
+
         This method overrides the WebSocket _send to use the Rust extension
         instead of a network connection, while maintaining the same CBOR
         message format for perfect compatibility.
@@ -110,22 +110,22 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         """
         # Encode message to CBOR (reuses existing WebSocket CBOR encoding)
         cbor_request = message.WS_CBOR_DESCRIPTOR
-        
+
         # Execute via Rust extension
         cbor_response_bytes = await self._db.execute(cbor_request)
-        
+
         # Decode CBOR response (reuses existing CBOR decoding)
         response = decode(cbor_response_bytes)  # type: ignore[arg-type]
-        
+
         # Check for errors (inherited method from UtilsMixin)
         if not bypass:
             self.check_response_for_error(response, process)
-        
+
         # Ensure response is a dict
         if not isinstance(response, dict):
             return {}
-        
+
         return response
 
-    # All other methods (query, select, create, update, delete, merge, patch, etc.) 
+    # All other methods (query, select, create, update, delete, merge, patch, etc.)
     # are inherited from AsyncWsSurrealConnection and work automatically via _send()!
