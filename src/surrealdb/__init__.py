@@ -91,7 +91,7 @@ class AsyncSurrealDBMeta(type):
 
         constructed_url = Url(url)
 
-        if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.FILE):
+        if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV):
             return AsyncEmbeddedSurrealConnection(url=url)
         elif (
             constructed_url.scheme == UrlScheme.HTTP
@@ -105,7 +105,7 @@ class AsyncSurrealDBMeta(type):
             return AsyncWsSurrealConnection(url=url)
         else:
             raise ValueError(
-                f"Unsupported protocol in URL: {url}. Use 'mem://', 'file://', 'ws://', or 'http://'."
+                f"Unsupported protocol in URL: {url}. Use 'memory', 'mem://', 'file://', 'surrealkv://', 'ws://', or 'http://'."
             )
 
 
@@ -123,7 +123,7 @@ class BlockingSurrealDBMeta(type):
 
         constructed_url = Url(url)
 
-        if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.FILE):
+        if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV):
             return BlockingEmbeddedSurrealConnection(url=url)
         elif (
             constructed_url.scheme == UrlScheme.HTTP
@@ -137,7 +137,7 @@ class BlockingSurrealDBMeta(type):
             return BlockingWsSurrealConnection(url=url)
         else:
             raise ValueError(
-                f"Unsupported protocol in URL: {url}. Use 'mem://', 'file://', 'ws://', or 'http://'."
+                f"Unsupported protocol in URL: {url}. Use 'memory', 'mem://', 'file://', 'surrealkv://', 'ws://', or 'http://'."
             )
 
 
@@ -145,7 +145,7 @@ def Surreal(
     url: str,
 ) -> Union[BlockingEmbeddedSurrealConnection, BlockingWsSurrealConnection, BlockingHttpSurrealConnection]:
     constructed_url = Url(url)
-    if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.FILE):
+    if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.MEMORY,UrlScheme.FILE, UrlScheme.SURREALKV):
         return BlockingEmbeddedSurrealConnection(url=url)
     elif (
         constructed_url.scheme == UrlScheme.HTTP
@@ -159,7 +159,7 @@ def Surreal(
         return BlockingWsSurrealConnection(url=url)
     else:
         raise ValueError(
-            f"Unsupported protocol in URL: {url}. Use 'mem://', 'file://', 'ws://', or 'http://'."
+            f"Unsupported protocol in URL: {url}. Use 'memory', 'mem://', 'file://', 'surrealkv://', 'ws://', or 'http://'."
         )
 
 
@@ -167,7 +167,7 @@ def AsyncSurreal(
     url: str,
 ) -> Union[AsyncEmbeddedSurrealConnection, AsyncWsSurrealConnection, AsyncHttpSurrealConnection]:
     constructed_url = Url(url)
-    if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.FILE):
+    if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV):
         return AsyncEmbeddedSurrealConnection(url=url)
     elif (
         constructed_url.scheme == UrlScheme.HTTP
@@ -181,5 +181,5 @@ def AsyncSurreal(
         return AsyncWsSurrealConnection(url=url)
     else:
         raise ValueError(
-            f"Unsupported protocol in URL: {url}. Use 'mem://', 'file://', 'ws://', or 'http://'."
+            f"Unsupported protocol in URL: {url}. Use 'memory', 'mem://', 'file://', 'surrealkv://', 'ws://', or 'http://'."
         )

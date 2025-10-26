@@ -25,6 +25,8 @@ impl SyncEmbeddedDB {
         // Determine endpoint
         let endpoint = if url.starts_with("mem://") {
             "memory".to_string()
+        } else if url.starts_with("memory") {
+            "memory".to_string()
         } else if url.starts_with("surrealkv://") {
             url
         } else if url.starts_with("file://") {
