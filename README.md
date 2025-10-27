@@ -126,7 +126,11 @@ View the SDK documentation [here](https://surrealdb.com/docs/integration/librari
 ## How to install
 
 ```sh
+# Using pip
 pip install surrealdb
+
+# Using uv
+uv add surrealdb
 ```
 
 # Quick start
@@ -208,6 +212,119 @@ with Surreal("ws://localhost:8000/rpc") as db:
     # Delete
     print(db.query("delete person"))
 ```
+
+## Embedded Database
+
+SurrealDB can also run embedded directly within your Python application natively. This provides a fully-featured database without needing a separate server process.
+
+### Installation
+
+The embedded database is included when you install surrealdb:
+
+```sh
+pip install surrealdb
+```
+
+For source builds, you'll need Rust toolchain and maturin:
+
+```sh
+uv run maturin develop --release
+```
+
+### In-Memory Database
+
+Perfect for embedded applications, development, testing, caching, or temporary data.
+
+```python
+import asyncio
+from surrealdb import AsyncSurreal
+
+async def main():
+    # Create an in-memory database (can use "mem://" or "memory")
+    async with AsyncSurreal("memory") as db:
+        await db.use("test", "test")
+        await db.signin({"username": "root", "password": "root"})
+        
+        # Use like any other SurrealDB connection
+        person = await db.create("person", {
+            "name": "John Doe",
+            "age": 30
+        })
+        print(person)
+        
+        people = await db.select("person")
+        print(people)
+
+asyncio.run(main())
+```
+
+### File-Based Persistent Database
+
+For persistent local storage:
+
+```python
+import asyncio
+from surrealdb import AsyncSurreal
+
+async def main():
+    # Create a file-based database (can use "file://" or "surrealkv://")
+    async with AsyncSurreal("file://mydb") as db:
+        await db.use("test", "test")
+        await db.signin({"username": "root", "password": "root"})
+        
+        # Data persists across connections
+        await db.create("company", {
+            "name": "Acme Corp",
+            "employees": 100
+        })
+        
+        companies = await db.select("company")
+        print(companies)
+
+asyncio.run(main())
+```
+
+### Blocking (Sync) API
+
+The embedded database also supports the blocking API:
+
+```python
+from surrealdb import Surreal
+
+# In-memory (can use "mem://" or "memory")
+with Surreal("memory") as db:
+    db.use("test", "test")
+    db.signin({"username": "root", "password": "root"})
+    
+    person = db.create("person", {"name": "Jane"})
+    print(person)
+
+# File-based
+with Surreal("file://mydb") as db:
+    db.use("test", "test")
+    db.signin({"username": "root", "password": "root"})
+    
+    company = db.create("company", {"name": "TechStart"})
+    print(company)
+```
+
+### When to Use Embedded vs Remote
+
+**Use Embedded (`memory`, `mem://`, `file://`, or `surrealkv://`) when:**
+- Building desktop applications
+- Running tests (in-memory is very fast)
+- Local development without server setup
+- Embedded systems or edge computing
+- Single-application data storage
+
+**Use Remote (`ws://` or `http://`) when:**
+- Multiple applications share data
+- Distributed systems
+- Cloud deployments
+- Need horizontal scaling
+- Centralized data management
+
+For more examples, see the [`examples/embedded/`](examples/embedded/) directory.
 
 ## Next steps
 
@@ -358,16 +475,23 @@ The official SurrealDB Python SDK.
 
 ## Requirements
 
-- **Python**: 3.10 or greater
-- **SurrealDB**: v2.0.0 to v2.3.6
+- **Python**: 3.9 or greater
+- **SurrealDB**: v2.0.0 to v2.3.6 (for remote connections)
+- **Rust toolchain**: Only required if building from source
 
-> **Note**: This SDK works seamlessly with SurrealDB versions v2.0.0 to v2.3.6, ensuring compatibility with the latest features.
+> **Note**: This SDK works seamlessly with SurrealDB versions v2.0.0 to v2.3.6, ensuring compatibility with the latest features. The embedded database functionality is included in pre-built wheels on PyPI.
 
 ## Quick Start
 
 1. **Install the SDK**:
    ```bash
+   # Using pip
    pip install surrealdb
+   ```
+
+   ```bash
+   # Using uv
+   uv add surrealdb
    ```
 
 2. **Start SurrealDB** (using Docker):
