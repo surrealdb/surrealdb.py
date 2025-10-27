@@ -8,6 +8,9 @@ class UrlScheme(Enum):
     WS = "ws"
     WSS = "wss"
     MEM = "mem"
+    FILE = "file"
+    MEMORY = "memory"
+    SURREALKV = "surrealkv"
 
 
 class Url:

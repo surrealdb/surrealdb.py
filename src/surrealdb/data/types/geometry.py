@@ -125,25 +125,100 @@ class GeometryLine(Geometry):
 @dataclass
 class GeometryPolygon(Geometry):
     """
-    Represents a polygon defined by multiple lines.
+    Represents a polygon defined by linear rings according to the GeoJSON specification.
+
+    A polygon consists of one or more linear rings. Each ring is a closed sequence of points
+    represented by a GeometryLine where the first and last points must be identical.
+
+    - The first GeometryLine represents the exterior boundary of the polygon.
+    - Any additional GeometryLines represent interior boundaries (holes) within the polygon.
+
+    Example:
+        # Simple polygon (exterior ring only)
+        exterior = GeometryLine(
+            GeometryPoint(0.0, 0.0),
+            GeometryPoint(4.0, 0.0),
+            GeometryPoint(4.0, 4.0),
+            GeometryPoint(0.0, 4.0),
+            GeometryPoint(0.0, 0.0)  # Closes the ring
+        )
+        polygon = GeometryPolygon(exterior)
+
+        # Polygon with a hole
+        hole = GeometryLine(
+            GeometryPoint(1.0, 1.0),
+            GeometryPoint(2.0, 1.0),
+            GeometryPoint(2.0, 2.0),
+            GeometryPoint(1.0, 2.0),
+            GeometryPoint(1.0, 1.0)  # Closes the ring
+        )
+        polygon_with_hole = GeometryPolygon(exterior, hole)
 
     Attributes:
-        geometry_lines: A list of GeometryLine objects defining the polygon.
+        geometry_lines: A list of GeometryLine objects, each representing a closed linear ring.
     """
 
     geometry_lines: list[GeometryLine]
 
-    def __init__(
-        self, line1: GeometryLine, line2: GeometryLine, *other_lines: GeometryLine
-    ):
-        self.geometry_lines = [line1, line2] + list(other_lines)
+    def __init__(self, exterior_ring: GeometryLine, *interior_rings: GeometryLine):
+        """
+        Initialize a GeometryPolygon with one or more linear rings.
+
+        Args:
+            exterior_ring: The exterior boundary of the polygon (required). Must be a closed ring.
+            *interior_rings: Zero or more interior boundaries (holes). Each must be a closed ring.
+
+        Raises:
+            ValueError: If any ring is not properly closed (first point != last point) or has fewer than 4 points.
+        """
+        all_rings = [exterior_ring] + list(interior_rings)
+
+        # Validate all rings
+        for i, ring in enumerate(all_rings):
+            ring_type = "exterior" if i == 0 else f"interior (hole {i})"
+            self._validate_ring(ring, ring_type)
+
+        self.geometry_lines = all_rings
+
+    @staticmethod
+    def _validate_ring(ring: GeometryLine, ring_type: str = "ring") -> None:
+        """
+        Validate that a GeometryLine forms a proper closed linear ring.
+
+        Args:
+            ring: The GeometryLine to validate.
+            ring_type: Description of the ring type for error messages.
+
+        Raises:
+            ValueError: If the ring is not properly closed or has fewer than 4 points.
+        """
+        points = ring.geometry_points
+
+        # A linear ring must have at least 4 points (minimum triangle + closing point)
+        if len(points) < 4:
+            raise ValueError(
+                f"Invalid {ring_type} ring: must have at least 4 points (including closing point), "
+                f"got {len(points)}"
+            )
+
+        # First and last points must be identical (ring must be closed)
+        first_point = points[0]
+        last_point = points[-1]
+        if first_point != last_point:
+            raise ValueError(
+                f"Invalid {ring_type} ring: first point {first_point.get_coordinates()} "
+                f"must equal last point {last_point.get_coordinates()} to close the ring"
+            )
 
     def get_coordinates(self) -> list[list[tuple[float, float]]]:
         """
-        Returns the coordinates of the polygon as a list of lines, each containing a list of coordinate tuples.
+        Returns the coordinates of the polygon as a list of linear rings.
+
+        Each ring is represented as a list of coordinate tuples. The first ring is the
+        exterior boundary, and any subsequent rings are interior boundaries (holes).
 
         Returns:
-            A list of lists of (longitude, latitude) tuples.
+            A list of lists of (longitude, latitude) tuples representing the linear rings.
         """
         return [line.get_coordinates() for line in self.geometry_lines]
 
@@ -155,13 +230,18 @@ class GeometryPolygon(Geometry):
         coordinates: list[list[tuple[float, float]]],
     ) -> "GeometryPolygon":
         """
-        Parses a list of lines, each defined by a list of coordinate tuples, into a GeometryPolygon.
+        Parses GeoJSON-style polygon coordinates into a GeometryPolygon.
 
         Args:
-            coordinates: A list of lists containing longitude and latitude tuples.
+            coordinates: A list of linear rings, where each ring is a list of
+                        (longitude, latitude) tuples. The first ring is the exterior
+                        boundary, and any additional rings are holes.
 
         Returns:
             A GeometryPolygon object.
+
+        Raises:
+            ValueError: If any ring is not properly closed or has fewer than 4 points.
         """
         return GeometryPolygon(
             *[GeometryLine.parse_coordinates(line) for line in coordinates]
