@@ -1,0 +1,28 @@
+[project]
+name = "surrealdb-django-example"
+version = "1.0.0"
+description = "Django integration example for SurrealDB"
+requires-python = ">=3.10"
+dependencies = [
+    "Django>=5.0.0",
+    "djangorestframework>=3.14.0",
+    "django-cors-headers>=4.0.0",
+    "surrealdb>=1.0.6",
+    "python-dotenv>=1.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-django>=4.5.0",
+    "ruff>=0.1.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "surrealdb_example.settings"
+python_files = ["test_*.py"]
+
