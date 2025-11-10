@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from math import floor
 from typing import Union
+import re
 
 UNITS = {
     "ns": 1,
@@ -23,18 +24,21 @@ class Duration:
         if isinstance(value, int):
             return Duration(nanoseconds + value * UNITS["s"])
         else:
-            # Check for multi-character units first
-            for unit in ["ns", "us", "ms"]:
-                if value.endswith(unit):
-                    num = int(value[: -len(unit)])
-                    return Duration(num * UNITS[unit])
-            # Check for single-character units
-            unit = value[-1]
-            num = int(value[:-1])
-            if unit in UNITS:
-                return Duration(num * UNITS[unit])
-            else:
-                raise ValueError(f"Unknown duration unit: {unit}")
+            # Support compound durations: "1h30m", "2d3h15m", etc.
+            pattern = r'(\d+)(ns|µs|us|ms|[smhdwy])'
+            matches = re.findall(pattern, value.lower())
+            
+            if not matches:
+                raise ValueError(f"Invalid duration format: {value}")
+            
+            total_ns = nanoseconds
+            for num_str, unit in matches:
+                num = int(num_str)
+                if unit not in UNITS:
+                    raise ValueError(f"Unknown duration unit: {unit}")
+                total_ns += num * UNITS[unit]
+            
+            return Duration(total_ns)
 
     def get_seconds_and_nano(self) -> tuple[int, int]:
         sec = floor(self.elapsed / UNITS["s"])

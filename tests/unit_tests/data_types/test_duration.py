@@ -62,6 +62,12 @@ def test_duration_parse_str_microseconds() -> None:
     assert duration.elapsed == 100 * 1_000
 
 
+def test_duration_parse_str_compound() -> None:
+    """Test Duration.parse with string input in compound duration."""
+    duration = Duration.parse("1h45m")
+    assert duration.elapsed == 3600 * 1_000_000_000 + 45 * 60 * 1_000_000_000
+
+
 def test_duration_parse_str_nanoseconds() -> None:
     """Test Duration.parse with string input in nanoseconds."""
     duration = Duration.parse("1000ns")
