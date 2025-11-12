@@ -63,15 +63,16 @@ def test_duration_parse_str_milliseconds() -> None:
 
 
 def test_duration_parse_str_microseconds() -> None:
-    """Test Duration.parse with string input in microseconds."""
-    duration = Duration.parse("100us")
-    assert duration.elapsed == 100 * 1_000
-
-
-def test_duration_parse_str_microseconds_mu() -> None:
-    """Test Duration.parse with string input in microseconds using µ symbol."""
-    duration = Duration.parse("100µs")
-    assert duration.elapsed == 100 * 1_000
+    """Test Duration.parse with string input in microseconds (both us and µs variants)."""
+    duration_us = Duration.parse("100us")
+    duration_mu = Duration.parse("100µs")
+    
+    # Both should equal 100 microseconds in nanoseconds
+    assert duration_us.elapsed == 100 * 1_000
+    assert duration_mu.elapsed == 100 * 1_000
+    
+    # Both variants should produce identical results
+    assert duration_us.elapsed == duration_mu.elapsed
 
 
 def test_duration_parse_str_compound() -> None:
