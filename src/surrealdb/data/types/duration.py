@@ -5,13 +5,15 @@ import re
 
 UNITS = {
     "ns": 1,
-    "us": int(1e3),
+    "µs": int(1e3),  # Microsecond (µ symbol)
+    "us": int(1e3),  # Microsecond (us)
     "ms": int(1e6),
     "s": int(1e9),
     "m": int(60 * 1e9),
     "h": int(3600 * 1e9),
     "d": int(86400 * 1e9),
     "w": int(604800 * 1e9),
+    "y": int(365 * 86400 * 1e9),  # Year (365 days)
 }
 
 
@@ -82,8 +84,12 @@ class Duration:
     def weeks(self) -> int:
         return self.elapsed // UNITS["w"]
 
+    @property
+    def years(self) -> int:
+        return self.elapsed // UNITS["y"]
+
     def to_string(self) -> str:
-        for unit in ["w", "d", "h", "m", "s", "ms", "us", "ns"]:
+        for unit in ["y", "w", "d", "h", "m", "s", "ms", "us", "ns"]:
             value = self.elapsed // UNITS[unit]
             if value > 0:
                 return f"{value}{unit}"
