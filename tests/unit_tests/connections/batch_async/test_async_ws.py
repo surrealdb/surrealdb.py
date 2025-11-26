@@ -18,7 +18,7 @@ async def test_batch(async_ws_connection: AsyncWsSurrealConnection) -> None:
     else:
         sleep_fn = "duration::from::millis"
         try:
-            _ = async_ws_connection.query(f"RETURN {sleep_fn}(1000)")
+            _ = await async_ws_connection.query(f"RETURN {sleep_fn}(1000)")
         except Exception as _:
             sleep_fn = "duration::from_millis"
 
