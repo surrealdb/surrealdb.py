@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import lifespan
-from routes import users, auth, websocket
+from routes import auth, users, websocket
 
 # Create FastAPI application
 app = FastAPI(

@@ -1,6 +1,6 @@
 """Database connection management."""
 
-from flask import g, current_app
+from flask import current_app, g
 from surrealdb import Surreal
 
 

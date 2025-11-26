@@ -1,9 +1,10 @@
 from typing import Any, Generator
+
 import pytest
 
+from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
-from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 
 @pytest.fixture

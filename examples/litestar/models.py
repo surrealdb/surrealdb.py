@@ -1,7 +1,8 @@
 """DTOs and data models."""
 
-from typing import Optional
 from dataclasses import dataclass
+from typing import Optional
+
 from litestar.dto import DataclassDTO
 from litestar.dto.config import DTOConfig
 

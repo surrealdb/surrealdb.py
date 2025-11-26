@@ -2,12 +2,12 @@
 
 from litestar import Controller, post
 from litestar.di import Provide
-from litestar.status_codes import HTTP_201_CREATED
 from litestar.exceptions import InternalServerException
+from litestar.status_codes import HTTP_201_CREATED
 from surrealdb import AsyncSurreal
 
 from database import provide_db
-from models import SignupRequest, SigninRequest, AuthResponse, MessageResponse
+from models import AuthResponse, MessageResponse, SigninRequest, SignupRequest
 
 
 class AuthController(Controller):

@@ -9,12 +9,13 @@ This example demonstrates:
 """
 
 import os
+
 from quart import Quart, jsonify
 from quart_cors import cors
 
 from config import config
 from database import init_app
-from routes import users, auth, websocket
+from routes import auth, users, websocket
 
 
 def create_app(config_name=None):

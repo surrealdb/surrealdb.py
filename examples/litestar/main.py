@@ -12,10 +12,10 @@ This example demonstrates:
 from litestar import Litestar, get
 from litestar.config.cors import CORSConfig
 
-from database import db_manager
-from controllers.users import UserController
 from controllers.auth import AuthController
+from controllers.users import UserController
 from controllers.websocket import WebSocketController
+from database import db_manager
 
 
 @get("/")

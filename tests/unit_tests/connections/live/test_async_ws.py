@@ -1,6 +1,7 @@
 from uuid import UUID
 
 import pytest
+
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 
 

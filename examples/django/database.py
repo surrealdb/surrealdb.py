@@ -1,6 +1,7 @@
 """Database connection helpers."""
 
 from surrealdb import AsyncSurreal
+
 from config import settings
 
 

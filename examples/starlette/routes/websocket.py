@@ -2,9 +2,11 @@
 
 import asyncio
 import json
-from starlette.websockets import WebSocket
+
 from starlette.routing import WebSocketRoute
+from starlette.websockets import WebSocket
 from surrealdb import AsyncSurreal
+
 from config import settings
 
 

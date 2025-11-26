@@ -1,5 +1,5 @@
-from typing import Any
 from collections.abc import AsyncGenerator
+from typing import Any
 
 import pytest
 

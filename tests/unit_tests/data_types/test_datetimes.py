@@ -1,7 +1,6 @@
-from typing import Any
-
 import datetime
 import sys
+from typing import Any
 
 import pytest
 

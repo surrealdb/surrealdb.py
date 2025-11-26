@@ -1,11 +1,13 @@
 """GraphQL mutation resolvers."""
 
 from typing import Optional
+
 import strawberry
 from strawberry.types import Info
 
 from database import db_manager
-from .types import User, AuthResponse
+
+from .types import AuthResponse, User
 
 
 @strawberry.type

@@ -1,11 +1,14 @@
 """API views using Django REST Framework."""
 
-from rest_framework import viewsets, status
+import logging
+
+from rest_framework import status, viewsets
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-import logging
-from database import get_connection, close_connection
-from .serializers import UserSerializer, SignupSerializer, SigninSerializer
+
+from database import close_connection, get_connection
+
+from .serializers import SigninSerializer, SignupSerializer, UserSerializer
 
 
 class UserViewSet(viewsets.ViewSet):

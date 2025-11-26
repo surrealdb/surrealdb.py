@@ -1,6 +1,7 @@
 """User CRUD endpoints."""
 
-from quart import Blueprint, request, jsonify
+from quart import Blueprint, jsonify, request
+
 from database import get_db
 
 bp = Blueprint("users", __name__, url_prefix="/api/users")

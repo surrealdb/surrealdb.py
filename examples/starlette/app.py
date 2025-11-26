@@ -9,6 +9,7 @@ This example demonstrates:
 """
 
 from contextlib import asynccontextmanager
+
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
@@ -16,7 +17,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from database import db_manager
-from routes import users, auth, websocket
+from routes import auth, users, websocket
 
 
 @asynccontextmanager

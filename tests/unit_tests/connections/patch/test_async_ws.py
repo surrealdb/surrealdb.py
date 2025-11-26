@@ -1,9 +1,10 @@
 from typing import Any, AsyncGenerator
+
 import pytest
 
+from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
-from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 
 
 @pytest.fixture

@@ -1,9 +1,11 @@
 """WebSocket endpoints for live queries."""
 
 import asyncio
+
 from litestar import websocket_listener
 from litestar.exceptions import WebSocketDisconnect
 from surrealdb import AsyncSurreal
+
 from config import settings
 
 

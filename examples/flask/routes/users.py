@@ -1,8 +1,10 @@
 """User CRUD endpoints."""
 
-from flask import Blueprint, request, jsonify
-from database import get_db
 import logging
+
+from flask import Blueprint, jsonify, request
+
+from database import get_db
 
 bp = Blueprint("users", __name__, url_prefix="/api/users")
 

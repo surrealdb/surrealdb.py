@@ -1,10 +1,11 @@
+from collections.abc import AsyncGenerator
+from typing import Any
+
 import pytest
 
+from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
-from typing import Any
-from collections.abc import AsyncGenerator
-from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 
 
 @pytest.fixture

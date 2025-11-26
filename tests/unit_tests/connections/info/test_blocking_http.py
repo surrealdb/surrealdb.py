@@ -1,6 +1,7 @@
 from typing import Any
 
 import pytest
+
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 
 

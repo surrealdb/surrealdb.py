@@ -1,10 +1,10 @@
-from typing import Any
-
 import asyncio
 import os
 import sys
+from typing import Any
 
 import pytest
+
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 
 

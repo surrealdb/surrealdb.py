@@ -11,8 +11,8 @@ This example demonstrates:
 from sanic import Sanic, response
 from sanic_cors import CORS
 
+from blueprints import auth, users, websocket
 from database import db_manager
-from blueprints import users, auth, websocket
 
 
 def create_app():
