@@ -103,7 +103,7 @@ async def signup(request):
             {"token": token, "message": "User registered successfully"},
             status=status.HTTP_201_CREATED,
         )
-    except Exception as e:
+    except Exception:
         logging.exception("Exception during signup")
         return Response(
             {"error": "An internal error occurred. Please try again later."},
@@ -125,7 +125,7 @@ async def signin(request):
         token = await db.signin(serializer.validated_data)
         return Response({"token": token, "message": "Signed in successfully"})
         logging.exception("Exception during signin")
-    except Exception as e:
+    except Exception:
         return Response(
             {"error": "Invalid credentials or unexpected error."},
             status=status.HTTP_401_UNAUTHORIZED,

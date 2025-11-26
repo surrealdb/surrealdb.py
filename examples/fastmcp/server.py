@@ -4,7 +4,6 @@ This MCP server provides tools and resources for interacting with SurrealDB,
 allowing AI assistants like Claude to perform database operations.
 """
 
-import asyncio
 
 from fastmcp import FastMCP
 

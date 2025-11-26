@@ -1,7 +1,6 @@
 """WebSocket endpoints for live queries."""
 
 import asyncio
-import json
 
 from starlette.routing import WebSocketRoute
 from starlette.websockets import WebSocket
