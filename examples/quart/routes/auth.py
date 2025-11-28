@@ -1,6 +1,7 @@
 """Authentication endpoints."""
 
-from quart import Blueprint, request, jsonify
+from quart import Blueprint, jsonify, request
+
 from database import get_db
 
 bp = Blueprint("auth", __name__, url_prefix="/api/auth")

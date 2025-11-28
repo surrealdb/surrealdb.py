@@ -1,6 +1,6 @@
+import decimal
 from typing import Any
 
-import decimal
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st

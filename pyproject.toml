@@ -43,11 +43,11 @@ documentation = "https://surrealdb.com/docs/sdk/python"
 [dependency-groups]
 dev = [
     { include-group = "test" },
-    "maturin>=1.0.0",
-    "mypy>=1.0.0",
-    "pyright>=1.1.0",
-    "ruff>=0.12.0",
-    "types-requests>=2.25.0",   # Type stubs for requests
+    "maturin>=1.10.0",
+    "mypy>=1.18.2",
+    "pyright>=1.1.407",
+    "ruff>=0.14.6",
+    "types-requests>=2.32.4",   # Type stubs for requests
 ]
 test = [
     "coverage>=7.0.0",
@@ -144,8 +144,8 @@ warn_return_any = false
 strict_optional = false
 # Disable specific error codes that are problematic with Value union type and pytest fixtures
 disable_error_code = [
-    "index", "call-overload", "arg-type", "assignment", "return-value", 
-    "operator", "union-attr", "func-returns-value", "name-defined", 
+    "index", "call-overload", "arg-type", "assignment", "return-value",
+    "operator", "union-attr", "func-returns-value", "name-defined",
     "misc", "var-annotated", "comparison-overlap", "str-bytes-safe",
     "unused-ignore", "no-untyped-def"
 ]

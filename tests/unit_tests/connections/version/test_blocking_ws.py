@@ -1,4 +1,5 @@
 import pytest
+
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 

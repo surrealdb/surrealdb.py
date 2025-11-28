@@ -1,6 +1,7 @@
 """User CRUD endpoints."""
 
 from sanic import Blueprint, response
+
 from database import db_manager
 
 bp = Blueprint("users", url_prefix="/api/users")

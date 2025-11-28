@@ -1,4 +1,5 @@
 from typing import Any
+
 import pytest
 
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection

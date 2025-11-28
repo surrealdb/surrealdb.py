@@ -1,6 +1,7 @@
 """GraphQL type definitions."""
 
 from typing import Optional
+
 import strawberry
 
 

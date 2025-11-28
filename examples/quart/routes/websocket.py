@@ -2,8 +2,10 @@
 
 import asyncio
 import json
+
 from quart import Blueprint, websocket
 from surrealdb import AsyncSurreal
+
 from config import config
 
 bp = Blueprint("websocket", __name__)

@@ -1,8 +1,9 @@
 """GraphQL schema."""
 
 import strawberry
-from .queries import Query
+
 from .mutations import Mutation
+from .queries import Query
 from .subscriptions import Subscription
 
 # Create the complete GraphQL schema

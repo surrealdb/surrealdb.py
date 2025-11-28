@@ -1,6 +1,7 @@
 """Database connection management."""
 
 from surrealdb import AsyncSurreal
+
 from config import config
 
 

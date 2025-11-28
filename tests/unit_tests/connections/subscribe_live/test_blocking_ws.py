@@ -2,8 +2,8 @@ from uuid import UUID
 
 import pytest
 
-from surrealdb.data import RecordID
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+from surrealdb.data import RecordID
 
 
 def test_live_subscription(

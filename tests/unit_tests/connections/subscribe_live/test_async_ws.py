@@ -4,8 +4,8 @@ from uuid import UUID
 
 import pytest
 
-from surrealdb.data import RecordID
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
+from surrealdb.data import RecordID
 
 
 async def test_live_subscription(

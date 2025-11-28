@@ -1,10 +1,12 @@
 """GraphQL query resolvers."""
 
 from typing import List, Optional
+
 import strawberry
 from strawberry.types import Info
 
 from database import db_manager
+
 from .types import User
 
 

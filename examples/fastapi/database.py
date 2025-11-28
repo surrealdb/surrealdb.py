@@ -1,8 +1,10 @@
 """Database connection management."""
 
-from typing import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import AsyncGenerator
+
 from surrealdb import AsyncSurreal
+
 from config import settings
 
 

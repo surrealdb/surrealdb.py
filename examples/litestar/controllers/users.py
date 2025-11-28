@@ -1,20 +1,21 @@
 """User CRUD endpoints."""
 
 from typing import List
-from litestar import Controller, get, post, put, delete
+
+from litestar import Controller, delete, get, post, put
 from litestar.di import Provide
+from litestar.exceptions import InternalServerException, NotFoundException
 from litestar.status_codes import HTTP_201_CREATED, HTTP_204_NO_CONTENT
-from litestar.exceptions import NotFoundException, InternalServerException
 from surrealdb import AsyncSurreal
 
 from database import provide_db
 from models import (
     UserCreate,
-    UserUpdate,
-    UserResponse,
     UserCreateDTO,
-    UserUpdateDTO,
+    UserResponse,
     UserResponseDTO,
+    UserUpdate,
+    UserUpdateDTO,
 )
 
 

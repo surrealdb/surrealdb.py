@@ -590,7 +590,10 @@ uv run ruff check
 
 # Type checking
 uv run mypy src/
+uv run pyright src/
 ```
+
+TODO: migrate to basedpyright. Try it with `uvx run basedpyright src/`
 
 ### Release
 
@@ -638,19 +641,13 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 To run all tests with coverage reporting:
 
 ```bash
-uv run scripts/run_tests.sh
+uv run pytest --cov=src/surrealdb --cov-report=term-missing --cov-report=html
 ```
 
 This will:
 - Run all tests using pytest
 - Show a coverage summary in the terminal
 - Generate an HTML coverage report in the `htmlcov/` directory
-
-You can also run tests directly with:
-
-```bash
-uv run pytest --cov=src/surrealdb --cov-report=term-missing --cov-report=html
-```
 
 To test a specific file:
 

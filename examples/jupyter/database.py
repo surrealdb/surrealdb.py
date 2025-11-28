@@ -1,6 +1,7 @@
 """Database connection helper for notebooks."""
 
 from surrealdb import AsyncSurreal
+
 from config import settings
 
 

@@ -1,6 +1,7 @@
 """Authentication endpoints."""
 
 from sanic import Blueprint, response
+
 from database import db_manager
 
 bp = Blueprint("auth", url_prefix="/api/auth")

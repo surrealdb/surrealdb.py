@@ -9,12 +9,13 @@ This example demonstrates:
 """
 
 import os
+
 from flask import Flask, jsonify
 from flask_cors import CORS
 
 from config import config
 from database import init_app
-from routes import users, auth
+from routes import auth, users
 
 
 def create_app(config_name=None):

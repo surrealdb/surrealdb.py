@@ -1,9 +1,12 @@
 """WebSocket endpoints for live queries."""
 
 import asyncio
-from litestar import websocket_listener
+
+from litestar import WebSocket, websocket, websocket_listener
+from litestar.controller import Controller
 from litestar.exceptions import WebSocketDisconnect
 from surrealdb import AsyncSurreal
+
 from config import settings
 
 
@@ -17,8 +20,6 @@ async def users_live_query(data: str) -> str:
 
 
 # Alternative approach using the WebSocket class directly
-from litestar import WebSocket, websocket
-from litestar.controller import Controller
 
 
 class WebSocketController(Controller):
