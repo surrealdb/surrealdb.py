@@ -37,6 +37,7 @@ class Duration:
             for num_str, unit in matches:
                 num = int(num_str)
                 if unit not in UNITS:
+                    # this will never happen because the regex only matches valid units
                     raise ValueError(f"Unknown duration unit: {unit}")
                 total_ns += num * UNITS[unit]
 

@@ -66,11 +66,11 @@ def test_duration_parse_str_microseconds() -> None:
     """Test Duration.parse with string input in microseconds (both us and µs variants)."""
     duration_us = Duration.parse("100us")
     duration_mu = Duration.parse("100µs")
-    
+
     # Both should equal 100 microseconds in nanoseconds
     assert duration_us.elapsed == 100 * 1_000
     assert duration_mu.elapsed == 100 * 1_000
-    
+
     # Both variants should produce identical results
     assert duration_us.elapsed == duration_mu.elapsed
 
@@ -78,15 +78,18 @@ def test_duration_parse_str_microseconds() -> None:
 def test_duration_parse_str_compound() -> None:
     """Test Duration.parse with comprehensive compound duration including all units."""
     duration = Duration.parse("1y2w3d4h5m6s7ms8us9ns")
-    assert duration.elapsed == (1 * 365 * 86400 * 1_000_000_000) \
-        + (2 * 604800 * 1_000_000_000) \
-        + (3 * 86400 * 1_000_000_000) \
-        + (4 * 3600 * 1_000_000_000) \
-        + (5 * 60 * 1_000_000_000) \
-        + (6 * 1_000_000_000) \
-        + (7 * 1_000_000) \
-        + (8 * 1_000) \
+    assert (
+        duration.elapsed
+        == (1 * 365 * 86400 * 1_000_000_000)
+        + (2 * 604800 * 1_000_000_000)
+        + (3 * 86400 * 1_000_000_000)
+        + (4 * 3600 * 1_000_000_000)
+        + (5 * 60 * 1_000_000_000)
+        + (6 * 1_000_000_000)
+        + (7 * 1_000_000)
+        + (8 * 1_000)
         + 9
+    )
 
 
 def test_duration_parse_str_nanoseconds() -> None:
@@ -97,7 +100,9 @@ def test_duration_parse_str_nanoseconds() -> None:
 
 def test_duration_parse_invalid_unit() -> None:
     """Test Duration.parse with invalid unit raises ValueError."""
-    with pytest.raises(ValueError, match="Unknown duration unit: x"):
+    # it fails when checking the format, before checking if the unit is valid,
+    # which is ok.
+    with pytest.raises(ValueError, match="Invalid duration format: 10x"):
         Duration.parse("10x")
 
 
