@@ -1,9 +1,11 @@
 """Authentication endpoints."""
 
-from flask import Blueprint, request, jsonify
-from database import get_db
 import logging
 import traceback
+
+from flask import Blueprint, jsonify, request
+
+from database import get_db
 
 bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 

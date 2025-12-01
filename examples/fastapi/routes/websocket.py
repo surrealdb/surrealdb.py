@@ -1,10 +1,10 @@
 """WebSocket endpoints for live queries."""
 
 import asyncio
-import json
-from typing import Any
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from surrealdb import AsyncSurreal
+
 from config import settings
 
 router = APIRouter(tags=["websocket"])

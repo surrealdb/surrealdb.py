@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from surrealdb import AsyncSurreal
 
 from database import get_db
-from models import SignupRequest, SigninRequest, AuthResponse, MessageResponse
+from models import AuthResponse, MessageResponse, SigninRequest, SignupRequest
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 

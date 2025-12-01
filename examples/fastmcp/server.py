@@ -4,19 +4,19 @@ This MCP server provides tools and resources for interacting with SurrealDB,
 allowing AI assistants like Claude to perform database operations.
 """
 
-import asyncio
+
 from fastmcp import FastMCP
 
 from database import db_manager
+from resources import get_db_config, get_db_schema
 from tools import (
     create_user,
-    list_users,
-    get_user,
-    update_user,
     delete_user,
     execute_query,
+    get_user,
+    list_users,
+    update_user,
 )
-from resources import get_db_config, get_db_schema
 
 # Create MCP server
 mcp = FastMCP("SurrealDB MCP Server")

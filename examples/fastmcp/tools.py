@@ -1,6 +1,7 @@
 """MCP tool definitions for SurrealDB operations."""
 
 from typing import Optional
+
 from database import db_manager
 
 

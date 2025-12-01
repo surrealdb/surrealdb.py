@@ -1,11 +1,12 @@
 """User CRUD endpoints."""
 
 from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from surrealdb import AsyncSurreal
 
 from database import get_db
-from models import UserCreate, UserUpdate, UserResponse
+from models import UserCreate, UserResponse, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
 

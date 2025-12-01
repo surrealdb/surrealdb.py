@@ -1,10 +1,11 @@
+from collections.abc import Generator
+from typing import Any
+
 import pytest
 
+from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
-from typing import Any
-from collections.abc import Generator
-from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 
 
 @pytest.fixture

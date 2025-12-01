@@ -1,6 +1,6 @@
 """Database connection management."""
 
-from quart import g, current_app
+from quart import current_app, g
 from surrealdb import AsyncSurreal
 
 

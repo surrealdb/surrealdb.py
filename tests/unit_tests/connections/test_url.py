@@ -1,7 +1,8 @@
+from typing import Any
+
 import pytest
 
 from surrealdb.connections.url import Url
-from typing import Any
 
 
 @pytest.fixture

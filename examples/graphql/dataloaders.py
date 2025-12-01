@@ -1,6 +1,7 @@
 """DataLoader implementation for batching and caching."""
 
 from typing import List, Optional
+
 from strawberry.dataloader import DataLoader
 from surrealdb import AsyncSurreal
 

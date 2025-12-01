@@ -1,6 +1,5 @@
-from typing import Any
-
 import decimal
+from typing import Any
 
 import pytest
 

@@ -5,15 +5,14 @@ These tests verify that the fix for the race condition works correctly,
 ensuring responses are not mixed up when multiple threads share a connection.
 """
 
-from typing import Any
-
 import concurrent.futures
+from collections.abc import Generator
+from typing import Any
 
 import pytest
 
-from surrealdb.data.types.record_id import RecordID
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
-from collections.abc import Generator
+from surrealdb.data.types.record_id import RecordID
 
 
 @pytest.fixture

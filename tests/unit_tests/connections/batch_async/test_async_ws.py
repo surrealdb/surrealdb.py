@@ -1,10 +1,7 @@
-from typing import Any
-
 import asyncio
 import os
 import sys
 
-import pytest
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 
 
@@ -19,9 +16,10 @@ async def test_batch(async_ws_connection: AsyncWsSurrealConnection) -> None:
             "async batching is being bypassed due to python versions 3.9 and 3.10 not supporting async task group"
         )
     else:
-        if surrealdb_version and surrealdb_version.startswith("v2"):
-            sleep_fn = "duration::from::millis"
-        else:
+        sleep_fn = "duration::from::millis"
+        try:
+            _ = await async_ws_connection.query(f"RETURN {sleep_fn}(1000)")
+        except Exception as _:
             sleep_fn = "duration::from_millis"
 
         async with asyncio.TaskGroup() as tg:
