@@ -7,7 +7,7 @@ dependencies = [
     "Django>=5.0.0",
     "djangorestframework>=3.14.0",
     "django-cors-headers>=4.0.0",
-    "surrealdb>=1.0.6",
+    "surrealdb>=1.0.7",
     "python-dotenv>=1.0.0",
 ]
 
@@ -25,4 +25,3 @@ target-version = "py310"
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "surrealdb_example.settings"
 python_files = ["test_*.py"]
-
