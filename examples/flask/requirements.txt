@@ -1,6 +1,5 @@
 Flask>=3.0.0
 flask-cors>=4.0.0
-surrealdb>=1.0.6
+surrealdb>=1.0.7
 python-dotenv>=1.0.0
 gunicorn>=21.0.0
-

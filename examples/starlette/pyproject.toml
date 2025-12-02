@@ -6,7 +6,7 @@ requires-python = ">=3.10"
 dependencies = [
     "starlette>=0.37.0",
     "uvicorn[standard]>=0.32.0",
-    "surrealdb>=1.0.6",
+    "surrealdb>=1.0.7",
     "python-dotenv>=1.0.0",
 ]
 
@@ -24,4 +24,3 @@ target-version = "py310"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-

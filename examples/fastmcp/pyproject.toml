@@ -5,7 +5,7 @@ description = "FastMCP integration example for SurrealDB"
 requires-python = ">=3.10"
 dependencies = [
     "fastmcp>=0.5.0",
-    "surrealdb>=1.0.6",
+    "surrealdb>=1.0.7",
     "python-dotenv>=1.0.0",
 ]
 
@@ -22,4 +22,3 @@ target-version = "py310"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-
