@@ -147,7 +147,7 @@ jobs:
     name: Release to PyPI
     runs-on: ubuntu-latest
     if: github.event_name == 'release' && github.event.action == 'published'
-    needs: [linux, macos, windows, sdist]
+    needs: [linux, linux-aarch64, macos, windows, sdist]
     environment:
       name: pypi
       url: https://pypi.org/p/surrealdb
