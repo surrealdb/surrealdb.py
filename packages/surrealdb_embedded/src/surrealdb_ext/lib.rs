@@ -9,3 +9,5 @@ fn _surrealdb_ext(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<sync_db::SyncEmbeddedDB>()?;
     Ok(())
 }
+
+

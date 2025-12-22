@@ -4,6 +4,8 @@ import pytest
 
 from surrealdb import AsyncSurreal
 
+pytest.importorskip("surrealdb_embedded")
+
 
 @pytest.mark.asyncio
 async def test_mem_connection() -> None:

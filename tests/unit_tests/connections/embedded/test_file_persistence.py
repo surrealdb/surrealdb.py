@@ -7,6 +7,8 @@ import pytest
 
 from surrealdb import AsyncSurreal, Surreal
 
+pytest.importorskip("surrealdb_embedded")
+
 
 @pytest.mark.asyncio
 async def test_async_file_persistence() -> None:

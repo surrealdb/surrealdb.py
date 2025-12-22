@@ -4,6 +4,8 @@ import pytest
 
 from surrealdb import Surreal
 
+pytest.importorskip("surrealdb_embedded")
+
 
 def test_mem_connection() -> None:
     """Test in-memory database connection."""

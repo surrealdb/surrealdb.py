@@ -1,10 +1,10 @@
 [package]
-name = "surrealdb-py"
+name = "surrealdb-embedded"
 version = "1.0.7"
 edition = "2021"
 
 [lib]
-name = "surrealdb_ext"
+name = "surrealdb_embedded_ext"
 path = "src/surrealdb_ext/lib.rs"
 crate-type = ["cdylib"]
 
@@ -22,3 +22,5 @@ strip = true
 opt-level = 'z'
 panic = 'abort'
 codegen-units = 1
+
+

@@ -162,3 +162,5 @@ impl RpcContext for SyncEmbeddedDBInner {
 
 impl RpcProtocolV1 for SyncEmbeddedDBInner {}
 impl RpcProtocolV2 for SyncEmbeddedDBInner {}
+
+

@@ -8,15 +8,17 @@ echo "========================================="
 echo ""
 echo "This build includes:"
 echo "  • Pure Python code (HTTP/WebSocket)"
-echo "  • Embedded database (mem://, file://)"
+echo "  • Embedded database (mem://, file://) [opt-in]"
 echo ""
 
 # Install dependencies
 uv sync --group dev
 
-# Build with maturin
-echo "Building wheel (this may take several minutes)..."
-uv run maturin build --release --out dist/
+echo "Building wheels..."
+echo "  - surrealdb (pure-Python)"
+uv build --out-dir dist/
+echo "  - surrealdb-embedded (Rust extension)"
+(cd packages/surrealdb_embedded && uv run maturin build --release --out ../../dist/)
 
 echo ""
 echo "✓ Build successful!"
@@ -29,5 +31,4 @@ echo "Wheel size:"
 du -h dist/*.whl | tail -1
 
 echo ""
-echo "To install: uv pip install dist/$(ls dist/*.whl | head -1 | xargs basename)"
-echo "Or for development: maturin develop --release"
+echo "To install (local wheels): uv pip install dist/$(ls dist/*.whl | head -1 | xargs basename)"
