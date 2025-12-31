@@ -522,7 +522,7 @@ The official SurrealDB Python SDK.
 
 ## Development
 
-This project uses **uv** for fast dependency management and **hatch** for building.
+This project uses **uv** for fast dependency management and **maturin** for building.
 
 ### Setup
 
