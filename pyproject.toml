@@ -29,7 +29,7 @@ classifiers = [
 ]
 dependencies = [
     "aiohttp>=3.8.0",
-    "pydantic-core>=2.41.5,<2.42.0",
+    "pydantic-core>=2.0.1",
     "requests>=2.25.0",
     "typing_extensions>=4.0.0; python_version<'3.12'",
     "websockets>=10.0",
