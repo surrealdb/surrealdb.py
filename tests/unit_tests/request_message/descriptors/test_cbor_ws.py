@@ -17,14 +17,14 @@ def test_use_fail() -> None:
     with pytest.raises(ValueError) as context:
         message.WS_CBOR_DESCRIPTOR
     assert (
-        "Invalid schema for Cbor WS encoding for use: {'params': [{1: ['must be of string type']}]}"
+        "Invalid schema for Cbor WS encoding for use: params.1: Input should be a valid string"
         == str(context.value)
     )
     message = RequestMessage(RequestMethod.USE, namespace="ns")
     with pytest.raises(ValueError) as context:
         message.WS_CBOR_DESCRIPTOR
     assert (
-        "Invalid schema for Cbor WS encoding for use: {'params': [{1: ['null value not allowed']}]}"
+        "Invalid schema for Cbor WS encoding for use: params.1: Input should be a valid string"
         == str(context.value)
     )
 
