@@ -40,6 +40,11 @@ homepage = "https://github.com/surrealdb/surrealdb.py"
 repository = "https://github.com/surrealdb/surrealdb.py"
 documentation = "https://surrealdb.com/docs/sdk/python"
 
+[project.optional-dependencies]
+pydantic = [
+    "pydantic>=2.12.5",
+]
+
 [dependency-groups]
 dev = [
     { include-group = "test" },
