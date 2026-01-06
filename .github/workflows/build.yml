@@ -30,7 +30,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           args: --release --out dist --interpreter 3.9 3.10 3.11 3.12 3.13
-          sccache: 'true'
+          sccache: "true"
           manylinux: auto
 
       - name: Upload wheels
@@ -60,7 +60,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           args: --release --out dist --interpreter 3.9 3.10 3.11 3.12 3.13
-          sccache: 'true'
+          sccache: "true"
           manylinux: auto
 
       - name: Upload wheels
@@ -87,7 +87,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           args: --release --out dist --interpreter 3.9 3.10 3.11 3.12 3.13
-          sccache: 'true'
+          sccache: "true"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -113,7 +113,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           args: --release --out dist --interpreter 3.9 3.10 3.11 3.12 3.13
-          sccache: 'true'
+          sccache: "true"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -147,7 +147,7 @@ jobs:
     name: Release to PyPI
     runs-on: ubuntu-latest
     if: github.event_name == 'release' && github.event.action == 'published'
-    needs: [linux, macos, windows, sdist]
+    needs: [linux, linux-aarch64, macos, windows, sdist]
     environment:
       name: pypi
       url: https://pypi.org/p/surrealdb
@@ -165,4 +165,3 @@ jobs:
         with:
           command: upload
           args: --skip-existing dist/*
-
