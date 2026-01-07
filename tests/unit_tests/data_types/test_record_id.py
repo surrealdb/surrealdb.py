@@ -43,6 +43,61 @@ def test_record_id_parse() -> None:
     assert record_id.id == "john"
 
 
+def test_record_id_pydantic_model_validate_from_dict() -> None:
+    """RecordID should be parsed from string on model_validate (python dict input)."""
+    pydantic = pytest.importorskip("pydantic")
+
+    class Person(pydantic.BaseModel):
+        id: RecordID | None = None
+        name: str
+
+    person = Person.model_validate({"id": "person:abc", "name": "Martin"})
+    assert isinstance(person.id, RecordID)
+    assert person.id.table_name == "person"
+    assert person.id.id == "abc"
+
+
+def test_record_id_pydantic_model_validate_json() -> None:
+    """RecordID should be parsed from string on model_validate_json (JSON input)."""
+    pydantic = pytest.importorskip("pydantic")
+
+    class Person(pydantic.BaseModel):
+        id: RecordID | None = None
+        name: str
+
+    person = Person.model_validate_json('{"id":"person:abc","name":"Martin"}')
+    assert isinstance(person.id, RecordID)
+    assert person.id.table_name == "person"
+    assert person.id.id == "abc"
+
+
+def test_record_id_pydantic_model_dump_python_keeps_instance() -> None:
+    """model_dump() should keep RecordID instances in python mode."""
+    pydantic = pytest.importorskip("pydantic")
+
+    class Person(pydantic.BaseModel):
+        id: RecordID | None = None
+        name: str
+
+    person = Person.model_validate({"id": "person:abc", "name": "Martin"})
+    dumped = person.model_dump()
+    assert isinstance(dumped["id"], RecordID)
+    assert dumped["id"] == RecordID("person", "abc")
+
+
+def test_record_id_pydantic_model_dump_json_stringifies() -> None:
+    """model_dump(mode='json') should serialize RecordID to its string form."""
+    pydantic = pytest.importorskip("pydantic")
+
+    class Person(pydantic.BaseModel):
+        id: RecordID | None = None
+        name: str
+
+    person = Person.model_validate({"id": "person:abc", "name": "Martin"})
+    dumped = person.model_dump(mode="json")
+    assert dumped["id"] == "person:abc"
+
+
 def test_record_id_parse_invalid() -> None:
     """Test RecordID.parse with invalid string."""
     with pytest.raises(ValueError, match="invalid string provided for parse"):
