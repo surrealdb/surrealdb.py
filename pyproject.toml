@@ -1,6 +1,6 @@
 [build-system]
-requires = ["maturin>=1.0,<2.0"]
-build-backend = "maturin"
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
 
 [project]
 name = "surrealdb"
@@ -35,6 +35,10 @@ dependencies = [
     "websockets>=10.0",
 ]
 
+[project.optional-dependencies]
+# Opt-in embedded engine (Rust extension) to avoid slow source builds by default.
+embedded = ["surrealdb-embedded>=1.0.7,<2.0.0"]
+
 [project.urls]
 homepage = "https://github.com/surrealdb/surrealdb.py"
 repository = "https://github.com/surrealdb/surrealdb.py"
@@ -64,13 +68,19 @@ test = [
 ]
 
 # --------------------------------------------------
-# maturin
+# hatchling (pure-Python build)
 # --------------------------------------------------
 
-[tool.maturin]
-python-source = "src"
-module-name = "surrealdb._surrealdb_ext"
-features = ["pyo3/extension-module"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/surrealdb"]
+
+[tool.hatch.build]
+# Ensure we never ship local compiled artifacts in the default distribution.
+exclude = [
+    "/src/surrealdb/_surrealdb_ext*.so",
+    "/src/surrealdb/_surrealdb_ext*.pyd",
+    "/src/surrealdb/_surrealdb_ext*.dylib",
+]
 
 # --------------------------------------------------
 # ruff

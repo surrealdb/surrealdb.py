@@ -219,16 +219,21 @@ SurrealDB can also run embedded directly within your Python application natively
 
 ### Installation
 
-The embedded database is included when you install surrealdb:
+The embedded database is **opt-in** to keep the default install fast (no Rust build).
 
 ```sh
-pip install surrealdb
+pip install "surrealdb[embedded]"
 ```
 
-For source builds, you'll need Rust toolchain and maturin:
+```sh
+# Using uv
+uv add "surrealdb[embedded]"
+```
+
+For source builds of the embedded engine, you'll need a Rust toolchain and maturin:
 
 ```sh
-uv run maturin develop --release
+(cd packages/surrealdb_embedded && uv run maturin develop --release)
 ```
 
 ### In-Memory Database

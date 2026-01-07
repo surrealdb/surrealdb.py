@@ -160,3 +160,5 @@ impl RpcContext for AsyncEmbeddedDBInner {
 
 impl RpcProtocolV1 for AsyncEmbeddedDBInner {}
 impl RpcProtocolV2 for AsyncEmbeddedDBInner {}
+
+

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "surrealdb-embedded"
+version = "1.0.7"
+description = "SurrealDB embedded engine (Rust extension) for the surrealdb Python SDK"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.9"
+dependencies = ["surrealdb>=1.0.7,<2.0.0"]
+
+[project.urls]
+homepage = "https://github.com/surrealdb/surrealdb.py"
+repository = "https://github.com/surrealdb/surrealdb.py"
+
+[tool.maturin]
+python-source = "python"
+module-name = "surrealdb_embedded._surrealdb_ext"
+features = ["pyo3/extension-module"]
+
+
