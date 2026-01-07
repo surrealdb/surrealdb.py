@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any, cast
 
 from pydantic_core import SchemaValidator
@@ -147,7 +149,7 @@ def _validate_payload(data: dict[str, Any], method: RequestMethod) -> None:
 
 
 class WsCborDescriptor:
-    def __get__(self, obj: "RequestMessage", type: Any = None) -> bytes:
+    def __get__(self, obj: RequestMessage, type: Any = None) -> bytes:
         if obj.method == RequestMethod.USE:
             return self.prep_use(obj)
         elif obj.method == RequestMethod.INFO:
@@ -193,7 +195,7 @@ class WsCborDescriptor:
 
         raise ValueError(f"Invalid method for Cbor WS encoding: {obj.method}")
 
-    def prep_use(self, obj: "RequestMessage") -> bytes:
+    def prep_use(self, obj: RequestMessage) -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
@@ -202,17 +204,17 @@ class WsCborDescriptor:
         _validate_payload(data, obj.method)
         return encode(data)
 
-    def prep_info(self, obj: "RequestMessage") -> bytes:
+    def prep_info(self, obj: RequestMessage) -> bytes:
         data = {"id": obj.id, "method": obj.method.value}
         _validate_payload(data, obj.method)
         return encode(data)
 
-    def prep_version(self, obj: "RequestMessage") -> bytes:
+    def prep_version(self, obj: RequestMessage) -> bytes:
         data = {"id": obj.id, "method": obj.method.value}
         _validate_payload(data, obj.method)
         return encode(data)
 
-    def prep_signup(self, obj: "RequestMessage") -> bytes:
+    def prep_signup(self, obj: RequestMessage) -> bytes:
         passed_params = cast(dict[str, Any], obj.kwargs.get("data"))
         params_dict: dict[str, Any] = {
             "NS": passed_params.get("namespace"),
@@ -248,7 +250,7 @@ class WsCborDescriptor:
         # }
         return encode(data)
 
-    def prep_signin(self, obj: "RequestMessage") -> bytes:
+    def prep_signin(self, obj: RequestMessage) -> bytes:
         """
         - user+pass -> done
         - user+pass+ac -> done
@@ -371,7 +373,7 @@ class WsCborDescriptor:
             raise ValueError(f"Invalid data for signin: {obj.kwargs}")
         return encode(data)
 
-    def prep_authenticate(self, obj: "RequestMessage") -> bytes:
+    def prep_authenticate(self, obj: RequestMessage) -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
@@ -380,12 +382,12 @@ class WsCborDescriptor:
         _validate_payload(data, obj.method)
         return encode(data)
 
-    def prep_invalidate(self, obj: "RequestMessage") -> bytes:
+    def prep_invalidate(self, obj: RequestMessage) -> bytes:
         data = {"id": obj.id, "method": obj.method.value}
         _validate_payload(data, obj.method)
         return encode(data)
 
-    def prep_let(self, obj: "RequestMessage") -> bytes:
+    def prep_let(self, obj: RequestMessage) -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
@@ -394,7 +396,7 @@ class WsCborDescriptor:
         _validate_payload(data, obj.method)
         return encode(data)
 
-    def prep_unset(self, obj: "RequestMessage") -> bytes:
+    def prep_unset(self, obj: RequestMessage) -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
@@ -403,7 +405,7 @@ class WsCborDescriptor:
         _validate_payload(data, obj.method)
         return encode(data)
 
-    def prep_live(self, obj: "RequestMessage") -> bytes:
+    def prep_live(self, obj: RequestMessage) -> bytes:
         table = obj.kwargs.get("table")
         if isinstance(table, str):
             table = Table(table)
@@ -411,7 +413,7 @@ class WsCborDescriptor:
         _validate_payload(data, obj.method)
         return encode(data)
 
-    def prep_kill(self, obj: "RequestMessage") -> bytes:
+    def prep_kill(self, obj: RequestMessage) -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
@@ -420,7 +422,7 @@ class WsCborDescriptor:
         _validate_payload(data, obj.method)
         return encode(data)
 
-    def prep_query(self, obj: "RequestMessage") -> bytes:
+    def prep_query(self, obj: RequestMessage) -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
@@ -429,7 +431,7 @@ class WsCborDescriptor:
         _validate_payload(data, obj.method)
         return encode(data)
 
-    def prep_insert(self, obj: "RequestMessage") -> bytes:
+    def prep_insert(self, obj: RequestMessage) -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
@@ -441,7 +443,7 @@ class WsCborDescriptor:
         _validate_payload(data, obj.method)
         return encode(data)
 
-    def prep_patch(self, obj: "RequestMessage") -> bytes:
+    def prep_patch(self, obj: RequestMessage) -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
@@ -455,7 +457,7 @@ class WsCborDescriptor:
         _validate_payload(data, obj.method)
         return encode(data)
 
-    def prep_select(self, obj: "RequestMessage") -> bytes:
+    def prep_select(self, obj: RequestMessage) -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
@@ -464,7 +466,7 @@ class WsCborDescriptor:
         _validate_payload(data, obj.method)
         return encode(data)
 
-    def prep_create(self, obj: "RequestMessage") -> bytes:
+    def prep_create(self, obj: RequestMessage) -> bytes:
         params: list[Any] = [
             process_record(cast(RecordIdType, obj.kwargs.get("collection")))
         ]
@@ -479,7 +481,7 @@ class WsCborDescriptor:
         _validate_payload(data, obj.method)
         return encode(data)
 
-    def prep_update(self, obj: "RequestMessage") -> bytes:
+    def prep_update(self, obj: RequestMessage) -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
@@ -491,7 +493,7 @@ class WsCborDescriptor:
         _validate_payload(data, obj.method)
         return encode(data)
 
-    def prep_merge(self, obj: "RequestMessage") -> bytes:
+    def prep_merge(self, obj: RequestMessage) -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
@@ -503,7 +505,7 @@ class WsCborDescriptor:
         _validate_payload(data, obj.method)
         return encode(data)
 
-    def prep_delete(self, obj: "RequestMessage") -> bytes:
+    def prep_delete(self, obj: RequestMessage) -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
@@ -512,7 +514,7 @@ class WsCborDescriptor:
         _validate_payload(data, obj.method)
         return encode(data)
 
-    def prep_insert_relation(self, obj: "RequestMessage") -> bytes:
+    def prep_insert_relation(self, obj: RequestMessage) -> bytes:
         params_list: list[Any] = [Table(cast(str, obj.kwargs.get("table")))]
         data = {
             "id": obj.id,
@@ -525,7 +527,7 @@ class WsCborDescriptor:
         _validate_payload(data, obj.method)
         return encode(data)
 
-    def prep_upsert(self, obj: "RequestMessage") -> bytes:
+    def prep_upsert(self, obj: RequestMessage) -> bytes:
         data = {
             "id": obj.id,
             "method": obj.method.value,
