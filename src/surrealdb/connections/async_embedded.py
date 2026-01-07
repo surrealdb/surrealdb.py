@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import uuid
 from types import TracebackType
-from typing import Any, Optional
+from typing import Any
 
 from surrealdb._surrealdb_ext import AsyncEmbeddedDB
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
@@ -37,12 +37,12 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         # Initialize without calling super().__init__() to avoid WebSocket setup
         self.url: Url = Url(url)
         self.raw_url: str = url
-        self.host: Optional[str] = self.url.hostname
-        self.port: Optional[int] = self.url.port
+        self.host: str | None = self.url.hostname
+        self.port: int | None = self.url.port
         self.id: str = str(uuid.uuid4())
-        self.token: Optional[str] = None
-        self.namespace: Optional[str] = None
-        self.database: Optional[str] = None
+        self.token: str | None = None
+        self.namespace: str | None = None
+        self.database: str | None = None
         self.vars: dict[str, Any] = dict()
 
         # Embedded database handle
@@ -54,7 +54,7 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         self.recv_task = None
         self.qry = {}
 
-    async def __aenter__(self) -> "AsyncEmbeddedSurrealConnection":
+    async def __aenter__(self) -> AsyncEmbeddedSurrealConnection:
         """Context manager entry - connect to the embedded database."""
         await self.connect()
         return self
@@ -68,7 +68,7 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         """Context manager exit - close the connection."""
         await self.close()
 
-    async def connect(self, url: Optional[str] = None) -> None:
+    async def connect(self, url: str | None = None) -> None:
         """Connects to the embedded database endpoint.
 
         Args:
