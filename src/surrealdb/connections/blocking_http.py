@@ -135,17 +135,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.database = database
 
     def query(self, query: str, vars: Optional[dict[str, Value]] = None) -> Value:
-        if vars is None:
-            vars = {}
-        for key, value in self.vars.items():
-            vars[key] = value
-        message = RequestMessage(
-            RequestMethod.QUERY,
-            query=query,
-            params=vars,
-        )
-        self.id = message.id
-        response = self._send(message, "query")
+        response = self.query_raw(query, vars)
+        self.check_response_for_error(response, "query")
         self.check_response_for_result(response, "query")
         return response["result"][0]["result"]
 
