@@ -2,6 +2,8 @@
 Async embedded SurrealDB connection using the Rust extension with CBOR messaging.
 """
 
+from __future__ import annotations
+
 import uuid
 from types import TracebackType
 from typing import Any, Optional

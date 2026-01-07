@@ -2,6 +2,8 @@
 Blocking embedded SurrealDB connection using the Rust extension with CBOR messaging.
 """
 
+from __future__ import annotations
+
 import threading
 import uuid
 from typing import Any, Optional
