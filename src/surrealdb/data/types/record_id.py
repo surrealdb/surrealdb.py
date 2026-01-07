@@ -2,6 +2,8 @@
 Defines the data type for the record ID.
 """
 
+from __future__ import annotations
+
 from typing import Any, Callable, Union, cast
 
 from pydantic_core import core_schema
@@ -29,7 +31,7 @@ class RecordID:
             table_name: The table name associated with the record ID
             identifier: The ID of the row
         """
-        from surrealdb.types import Value
+        from surrealdb.types import Value  # imported here to prevent circular import
 
         self.table_name: str = table_name
         self.id: Value = cast(Value, identifier)
@@ -74,6 +76,9 @@ class RecordID:
         if isinstance(self.id, str):
             escaped_id = self._escape_identifier(self.id)
             return f"{self.table_name}:{escaped_id}"
+        if isinstance(self.id, bytes):
+            escaped_id = self._escape_identifier(self.id.decode())
+            return f"{self.table_name}:{escaped_id}"
         return f"{self.table_name}:{self.id}"
 
     def __repr__(self) -> str:
@@ -85,7 +90,7 @@ class RecordID:
         return False
 
     @staticmethod
-    def parse(record_str: str) -> "RecordID":
+    def parse(record_str: str) -> RecordID:
         """
         Converts a string to a RecordID object.
 
@@ -113,7 +118,7 @@ class RecordID:
             return RecordID.parse(value)
 
         from_str_schema = core_schema.str_schema()
-        from_str_schema = core_schema.chain_schema(
+        from_chain_schema = core_schema.chain_schema(
             [
                 from_str_schema,
                 core_schema.with_info_plain_validator_function(validate_from_str),
@@ -121,11 +126,11 @@ class RecordID:
         )
 
         return core_schema.json_or_python_schema(
-            json_schema=from_str_schema,
+            json_schema=from_chain_schema,
             python_schema=core_schema.union_schema(
                 [
                     core_schema.is_instance_schema(RecordID),
-                    from_str_schema,
+                    from_chain_schema,
                 ]
             ),
             serialization=core_schema.wrap_serializer_function_ser_schema(
