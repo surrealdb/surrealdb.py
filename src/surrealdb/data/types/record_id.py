@@ -141,13 +141,14 @@ class RecordID:
             ),
         )
 
-    # def __get_pydantic_json_schema__(
-    #     cls, _core_schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
-    # ) -> JsonSchemaValue:
     @classmethod
     def __get_pydantic_json_schema__(
         cls, _core_schema: core_schema.CoreSchema, handler: Any
     ) -> Any:
+        # `handler` is a GetJsonSchemaHandler and the return type is a JsonSchemaValue,
+        # but we are keeping them as Any because pydantic is an optional extra
+        # and we can't guarantee that it will be installed and can be imported
+
         # from pydantic import GetJsonSchemaHandle
         # from pydantic.json_schema import JsonSchemaValue
 
