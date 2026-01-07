@@ -4,12 +4,16 @@ Defines the data type for the record ID.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, Union, cast
 
 from pydantic_core import core_schema
 from pydantic_core.core_schema import ValidationInfo
 
 from surrealdb.data.types.table import Table
+
+if TYPE_CHECKING:
+    from pydantic import GetJsonSchemaHandler
+    from pydantic.json_schema import JsonSchemaValue
 
 RecordIdType = Union[str, "RecordID", Table]
 
@@ -143,13 +147,6 @@ class RecordID:
 
     @classmethod
     def __get_pydantic_json_schema__(
-        cls, _core_schema: core_schema.CoreSchema, handler: Any
-    ) -> Any:
-        # `handler` is a GetJsonSchemaHandler and the return type is a JsonSchemaValue,
-        # but we are keeping them as Any because pydantic is an optional extra
-        # and we can't guarantee that it will be installed and can be imported
-
-        # from pydantic import GetJsonSchemaHandle
-        # from pydantic.json_schema import JsonSchemaValue
-
+        cls, _core_schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
         return handler(core_schema.str_schema())

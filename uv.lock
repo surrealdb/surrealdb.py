@@ -1126,6 +1126,7 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "surrealdb", extra = ["pydantic"] },
     { name = "types-requests" },
 ]
 test = [
@@ -1158,6 +1159,7 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=0.21.0" },
     { name = "pytest-cov", specifier = ">=4.0.0" },
     { name = "ruff", specifier = ">=0.14.6" },
+    { name = "surrealdb", extras = ["pydantic"] },
     { name = "types-requests", specifier = ">=2.32.4" },
 ]
 test = [
