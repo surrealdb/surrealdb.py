@@ -181,14 +181,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         await self._send(message, "use")
 
     async def query(self, query: str, vars: Optional[dict[str, Value]] = None) -> Value:
-        if vars is None:
-            vars = {}
-        message = RequestMessage(
-            RequestMethod.QUERY,
-            query=query,
-            params=vars,
-        )
-        response = await self._send(message, "query")
+        response = await self.query_raw(query, vars)
+        self.check_response_for_error(response, "query")
         self.check_response_for_result(response, "query")
         return response["result"][0]["result"]
 
