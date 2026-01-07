@@ -2,9 +2,11 @@
 Blocking embedded SurrealDB connection using the Rust extension with CBOR messaging.
 """
 
+from __future__ import annotations
+
 import threading
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from surrealdb._surrealdb_ext import SyncEmbeddedDB
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
@@ -35,10 +37,10 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
         # Initialize without calling super().__init__() to avoid WebSocket setup
         self.url: Url = Url(url)
         self.raw_url: str = url
-        self.host: Optional[str] = self.url.hostname
-        self.port: Optional[int] = self.url.port
+        self.host: str | None = self.url.hostname
+        self.port: int | None = self.url.port
         self.id: str = str(uuid.uuid4())
-        self.token: Optional[str] = None
+        self.token: str | None = None
 
         # Embedded database handle
         self._db: SyncEmbeddedDB = SyncEmbeddedDB(url)
@@ -47,7 +49,7 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
         self.socket = None
         self._lock: threading.Lock = threading.Lock()
 
-    def __enter__(self) -> "BlockingEmbeddedSurrealConnection":
+    def __enter__(self) -> BlockingEmbeddedSurrealConnection:
         """Context manager entry - connect to the embedded database."""
         self.connect()
         return self
@@ -61,7 +63,7 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
         """Context manager exit - close the connection."""
         self.close()
 
-    def connect(self, url: Optional[str] = None) -> None:
+    def connect(self, url: str | None = None) -> None:
         """Connects to the embedded database endpoint.
 
         Args:

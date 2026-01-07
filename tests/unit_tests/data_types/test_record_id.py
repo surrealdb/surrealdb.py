@@ -1,4 +1,6 @@
-from typing import Any
+from __future__ import annotations
+
+from typing import Any, Optional
 
 import pytest
 
@@ -48,7 +50,7 @@ def test_record_id_pydantic_model_validate_from_dict() -> None:
     pydantic = pytest.importorskip("pydantic")
 
     class Person(pydantic.BaseModel):
-        id: RecordID | None = None
+        id: Optional[RecordID] = None
         name: str
 
     person = Person.model_validate({"id": "person:abc", "name": "Martin"})
@@ -62,7 +64,7 @@ def test_record_id_pydantic_model_validate_json() -> None:
     pydantic = pytest.importorskip("pydantic")
 
     class Person(pydantic.BaseModel):
-        id: RecordID | None = None
+        id: Optional[RecordID] = None
         name: str
 
     person = Person.model_validate_json('{"id":"person:abc","name":"Martin"}')
@@ -76,7 +78,7 @@ def test_record_id_pydantic_model_dump_python_keeps_instance() -> None:
     pydantic = pytest.importorskip("pydantic")
 
     class Person(pydantic.BaseModel):
-        id: RecordID | None = None
+        id: Optional[RecordID] = None
         name: str
 
     person = Person.model_validate({"id": "person:abc", "name": "Martin"})
@@ -90,7 +92,7 @@ def test_record_id_pydantic_model_dump_json_stringifies() -> None:
     pydantic = pytest.importorskip("pydantic")
 
     class Person(pydantic.BaseModel):
-        id: RecordID | None = None
+        id: Optional[RecordID] = None
         name: str
 
     person = Person.model_validate({"id": "person:abc", "name": "Martin"})
