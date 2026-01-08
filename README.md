@@ -219,10 +219,18 @@ SurrealDB can also run embedded directly within your Python application natively
 
 ### Installation
 
-The embedded database is included when you install surrealdb:
+The embedded database is included when you install `surrealdb`.
 
-```sh
+Install the SDK using `pip`:
+
+```bash
 pip install surrealdb
+```
+
+Or install using `uv`:
+
+```bash
+uv add surrealdb
 ```
 
 For source builds, you'll need Rust toolchain and maturin:
@@ -332,10 +340,16 @@ For more examples, see the [`examples/embedded/`](examples/embedded/) directory.
 
 ### Quick Start
 
-Install Logfire:
+Install Logfire using `pip`:
 
 ```bash
 pip install logfire
+```
+
+Or install using `uv`:
+
+```bash
+uv add logfire
 ```
 
 Enable instrumentation:
