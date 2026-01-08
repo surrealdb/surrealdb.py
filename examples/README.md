@@ -130,6 +130,22 @@ This directory contains comprehensive examples demonstrating how to integrate Su
 
 ---
 
+### Observability
+
+#### [Logfire](./logfire/)
+**Automatic observability with Pydantic Logfire**
+
+- Automatic instrumentation
+- OpenTelemetry compatibility
+- Sensitive data scrubbing
+- Console and cloud traces
+- Zero-config local development
+- Performance monitoring
+
+**Best for:** Observability, debugging, performance monitoring, production monitoring
+
+---
+
 ### API Patterns
 
 #### [GraphQL](./graphql/)
