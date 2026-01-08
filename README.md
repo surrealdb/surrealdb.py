@@ -326,6 +326,52 @@ with Surreal("file://mydb") as db:
 
 For more examples, see the [`examples/embedded/`](examples/embedded/) directory.
 
+## Observability with Logfire
+
+[Pydantic Logfire](https://docs.pydantic.dev/logfire/) provides automatic instrumentation for SurrealDB operations, giving you instant observability into your database interactions. Logfire exports standard OpenTelemetry spans, making it compatible with any observability platform.
+
+### Quick Start
+
+Install Logfire:
+
+```bash
+pip install logfire
+```
+
+Enable instrumentation:
+
+```python
+import logfire
+from surrealdb import AsyncSurreal
+
+# Configure Logfire
+logfire.configure()
+
+# Instrument all SurrealDB operations
+logfire.instrument_surrealdb()
+
+# All database operations are now automatically traced
+async with AsyncSurreal("ws://localhost:8000") as db:
+    await db.signin({"username": "root", "password": "root"})
+    await db.use("test", "test")
+    
+    # These operations will appear as spans in your traces
+    await db.create("person", {"name": "Alice"})
+    await db.query("SELECT * FROM person")
+```
+
+### Features
+
+- **Automatic tracing**: All database methods are instrumented automatically
+- **Smart parameter logging**: Sensitive data (tokens, passwords) are automatically scrubbed
+- **OpenTelemetry compatible**: Works with Jaeger, DataDog, Honeycomb, and other OTel platforms
+- **Minimal overhead**: Efficient instrumentation with negligible performance impact
+- **Works with all connection types**: HTTP, WebSocket, and embedded databases
+
+### Learn More
+
+For a complete example with configuration options and best practices, see [`examples/logfire/`](examples/logfire/).
+
 ## Next steps
 
 Now that you have learned the basics of the SurrealDB SDK for Python, you can learn more about the SDK and its methods [in the methods section](https://surrealdb.com/docs/sdk/python/methods) and [data types section](https://surrealdb.com/docs/sdk/python/data-types).
