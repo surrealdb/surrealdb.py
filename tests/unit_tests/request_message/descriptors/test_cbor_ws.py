@@ -42,7 +42,10 @@ def test_version_pass() -> None:
 
 
 def test_signin_pass_root() -> None:
-    message = RequestMessage(RequestMethod.SIGN_IN, username="user", password="pass")
+    message = RequestMessage(
+        RequestMethod.SIGN_IN,
+        params={"username": "user", "password": "pass"},
+    )
     outcome = message.WS_CBOR_DESCRIPTOR
     assert isinstance(outcome, bytes)
 
@@ -50,11 +53,7 @@ def test_signin_pass_root() -> None:
 def test_signin_pass_root_with_none() -> None:
     message = RequestMessage(
         RequestMethod.SIGN_IN,
-        username="username",
-        password="pass",
-        account=None,
-        database=None,
-        namespace=None,
+        params={"username": "username", "password": "pass"},
     )
     outcome = message.WS_CBOR_DESCRIPTOR
     assert isinstance(outcome, bytes)
@@ -63,11 +62,47 @@ def test_signin_pass_root_with_none() -> None:
 def test_signin_pass_account() -> None:
     message = RequestMessage(
         RequestMethod.SIGN_IN,
-        username="username",
-        password="pass",
-        account="account",
-        database="database",
-        namespace="namespace",
+        params={
+            "username": "username",
+            "password": "pass",
+            "access": "account",
+            "database": "database",
+            "namespace": "namespace",
+        },
+    )
+    outcome = message.WS_CBOR_DESCRIPTOR
+    assert isinstance(outcome, bytes)
+
+
+def test_signin_params_required() -> None:
+    message = RequestMessage(RequestMethod.SIGN_IN)
+    with pytest.raises(ValueError, match="params dict"):
+        _ = message.WS_CBOR_DESCRIPTOR
+
+
+def test_signin_params_bearer() -> None:
+    message = RequestMessage(
+        RequestMethod.SIGN_IN,
+        params={
+            "namespace": "ns",
+            "database": "db",
+            "access": "bearer_api",
+            "key": "surreal-bearer-abc123",
+        },
+    )
+    outcome = message.WS_CBOR_DESCRIPTOR
+    assert isinstance(outcome, bytes)
+
+
+def test_signin_params_refresh() -> None:
+    message = RequestMessage(
+        RequestMethod.SIGN_IN,
+        params={
+            "namespace": "ns",
+            "database": "db",
+            "access": "user_access",
+            "refresh": "surreal-refresh-xyz",
+        },
     )
     outcome = message.WS_CBOR_DESCRIPTOR
     assert isinstance(outcome, bytes)

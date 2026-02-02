@@ -78,7 +78,7 @@ This project follows library best practices for dependency management:
    uv run mypy --explicit-package-bases src/
    
    # Run tests (with coverage)
-   uv run scripts/run_tests.sh
+   uv run scripts/tests.sh
    # Or directly:
    uv run pytest --cov=src/surrealdb --cov-report=term-missing --cov-report=html
    ```

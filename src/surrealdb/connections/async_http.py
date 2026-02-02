@@ -12,7 +12,7 @@ from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
-from surrealdb.types import Value
+from surrealdb.types import Tokens, Value, parse_auth_result
 
 
 class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
@@ -113,29 +113,23 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         await self._send(message, "invalidating")
         self.token = None
 
-    async def signup(self, vars: dict[str, Value]) -> str:
+    async def signup(self, vars: dict[str, Value]) -> Tokens:
         message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
         self.id = message.id
         response = await self._send(message, "signup")
         self.check_response_for_result(response, "signup")
-        self.token = response["result"]
-        return response["result"]
+        tokens = parse_auth_result(response["result"])
+        self.token = tokens.access
+        return tokens
 
-    async def signin(self, vars: dict[str, Value]) -> str:
-        message = RequestMessage(
-            RequestMethod.SIGN_IN,
-            username=vars.get("username"),
-            password=vars.get("password"),
-            access=vars.get("access"),
-            database=vars.get("database"),
-            namespace=vars.get("namespace"),
-            variables=vars.get("variables"),
-        )
+    async def signin(self, vars: dict[str, Value]) -> Tokens:
+        message = RequestMessage(RequestMethod.SIGN_IN, params=vars)
         self.id = message.id
         response = await self._send(message, "signing in")
         self.check_response_for_result(response, "signing in")
-        self.token = response["result"]
-        return response["result"]
+        tokens = parse_auth_result(response["result"])
+        self.token = tokens.access
+        return tokens
 
     async def info(self) -> Value:
         message = RequestMessage(RequestMethod.INFO)

@@ -148,6 +148,45 @@ def _validate_payload(data: dict[str, Any], method: RequestMethod) -> None:
         ) from None
 
 
+_AUTH_KEY_MAP = {
+    "namespace": "ns",
+    "NS": "ns",
+    "database": "db",
+    "DB": "db",
+    "access": "ac",
+    "AC": "ac",
+    "username": "user",
+    "password": "pass",
+}
+
+
+def _build_auth_params(vars_dict: dict[str, Any]) -> dict[str, Any]:
+    """Build wire-format auth params from user vars (supports bearer, refresh, record)."""
+    wire: dict[str, Any] = {}
+    for k in (
+        "namespace",
+        "NS",
+        "database",
+        "DB",
+        "access",
+        "AC",
+        "username",
+        "password",
+        "user",
+        "pass",
+        "key",
+        "refresh",
+    ):
+        if k in vars_dict and vars_dict[k] is not None:
+            wire[_AUTH_KEY_MAP.get(k, k)] = vars_dict[k]
+    if "variables" in vars_dict and isinstance(vars_dict.get("variables"), dict):
+        for k, v in vars_dict["variables"].items():
+            if v is None:
+                continue
+            wire[_AUTH_KEY_MAP.get(k, k)] = v
+    return {k: v for k, v in wire.items() if v is not None}
+
+
 class WsCborDescriptor:
     def __get__(self, obj: RequestMessage, type: Any = None) -> bytes:
         if obj.method == RequestMethod.USE:
@@ -216,161 +255,30 @@ class WsCborDescriptor:
 
     def prep_signup(self, obj: RequestMessage) -> bytes:
         passed_params = cast(dict[str, Any], obj.kwargs.get("data"))
-        params_dict: dict[str, Any] = {
-            "NS": passed_params.get("namespace"),
-            "DB": passed_params.get("database"),
-            "AC": passed_params.get("access"),
-        }
-        for key, value in passed_params["variables"].items():
-            params_dict[key] = value
-
+        if not passed_params:
+            raise ValueError(
+                "Signup requires a data dict (namespace, database, access, variables or user/pass)"
+            )
+        params_dict = _build_auth_params(passed_params)
         data = {
             "id": obj.id,
             "method": obj.method.value,
             "params": [params_dict],
         }
-        # Sign-up schema is currently deactivated due to the different types of params passed in
-        # schema = {
-        #     "id": {"required": True},
-        #     "method": {"type": "string", "required": True},  # "method" must be a string
-        #     "params": {
-        #         "type": "list",  # "params" must be a list
-        #         "schema": {
-        #             "type": "dict",  # Each element of the "params" list must be a dictionary
-        #             "schema": {
-        #                 "NS": {"type": "string", "required": True},  # "NS" must be a string
-        #                 "DB": {"type": "string", "required": True},  # "DB" must be a string
-        #                 "AC": {"type": "string", "required": True},  # "AC" must be a string
-        #                 "username": {"type": "string", "required": True},  # "username" must be a string
-        #                 "password": {"type": "string", "required": True},  # "password" must be a string
-        #             },
-        #         },
-        #         "required": True,
-        #     },
-        # }
         return encode(data)
 
     def prep_signin(self, obj: RequestMessage) -> bytes:
-        """
-        - user+pass -> done
-        - user+pass+ac -> done
-        - user+pass+ns -> done
-        - user+pass+ns+ac -> done
-        - user+pass+ns+db
-        - user+pass+ns+db+ac
-        - ns+db+ac+any other vars
-        """
-        if obj.kwargs.get("namespace") is None:
-            # root user signing in
-            data = {
-                "id": obj.id,
-                "method": obj.method.value,
-                "params": [
-                    {
-                        "user": obj.kwargs.get("username"),
-                        "pass": obj.kwargs.get("password"),
-                    }
-                ],
-            }
-        elif (
-            obj.kwargs.get("namespace") is None and obj.kwargs.get("access") is not None
-        ):
-            data = {
-                "id": obj.id,
-                "method": obj.method.value,
-                "params": [
-                    {
-                        "ac": obj.kwargs.get("access"),
-                        "user": obj.kwargs.get("username"),
-                        "pass": obj.kwargs.get("password"),
-                    }
-                ],
-            }
-        elif obj.kwargs.get("database") is None and obj.kwargs.get("access") is None:
-            # namespace signin
-            data = {
-                "id": obj.id,
-                "method": obj.method.value,
-                "params": [
-                    {
-                        "ns": obj.kwargs.get("namespace"),
-                        "user": obj.kwargs.get("username"),
-                        "pass": obj.kwargs.get("password"),
-                    }
-                ],
-            }
-        elif (
-            obj.kwargs.get("database") is None and obj.kwargs.get("access") is not None
-        ):
-            # access signin
-            data = {
-                "id": obj.id,
-                "method": obj.method.value,
-                "params": [
-                    {
-                        "ns": obj.kwargs.get("namespace"),
-                        "ac": obj.kwargs.get("access"),
-                        "user": obj.kwargs.get("username"),
-                        "pass": obj.kwargs.get("password"),
-                    }
-                ],
-            }
-        elif (
-            obj.kwargs.get("database") is not None
-            and obj.kwargs.get("namespace") is not None
-            and obj.kwargs.get("access") is not None
-            and obj.kwargs.get("variables") is None
-        ):
-            data = {
-                "id": obj.id,
-                "method": obj.method.value,
-                "params": [
-                    {
-                        "ns": obj.kwargs.get("namespace"),
-                        "db": obj.kwargs.get("database"),
-                        "ac": obj.kwargs.get("access"),
-                        "user": obj.kwargs.get("username"),
-                        "pass": obj.kwargs.get("password"),
-                    }
-                ],
-            }
-
-        elif obj.kwargs.get("username") is None and obj.kwargs.get("password") is None:
-            params_dict_signin: dict[str, Any] = {
-                "ns": obj.kwargs.get("namespace"),
-                "db": obj.kwargs.get("database"),
-                "ac": obj.kwargs.get("access"),
-            }
-            variables = cast(dict[str, Any], obj.kwargs.get("variables", {}))
-            for key, value in variables.items():
-                params_dict_signin[key] = value
-
-            data = {
-                "id": obj.id,
-                "method": obj.method.value,
-                "params": [params_dict_signin],
-            }
-
-        elif (
-            obj.kwargs.get("database") is not None
-            and obj.kwargs.get("namespace") is not None
-            and obj.kwargs.get("access") is None
-        ):
-            data = {
-                "id": obj.id,
-                "method": obj.method.value,
-                "params": [
-                    {
-                        "ns": obj.kwargs.get("namespace"),
-                        "db": obj.kwargs.get("database"),
-                        "user": obj.kwargs.get("username"),
-                        "pass": obj.kwargs.get("password"),
-                    }
-                ],
-            }
-
-        else:
-            raise ValueError(f"Invalid data for signin: {obj.kwargs}")
+        params = obj.kwargs.get("params")
+        if params is None or not isinstance(params, dict):
+            raise ValueError(
+                "Signin requires a params dict (e.g. username/password, key, or refresh)"
+            )
+        params_dict = _build_auth_params(params)
+        data = {
+            "id": obj.id,
+            "method": obj.method.value,
+            "params": [params_dict],
+        }
         return encode(data)
 
     def prep_authenticate(self, obj: RequestMessage) -> bytes:

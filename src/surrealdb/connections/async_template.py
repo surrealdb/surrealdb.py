@@ -4,7 +4,7 @@ from uuid import UUID
 
 from surrealdb.data.types.record_id import RecordIdType
 from surrealdb.data.types.table import Table
-from surrealdb.types import Value
+from surrealdb.types import Tokens, Value
 
 
 class AsyncTemplate:
@@ -60,40 +60,45 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"invalidate not implemented for: {self}")
 
-    async def signup(self, vars: dict[str, Value]) -> str:
+    async def signup(self, vars: dict[str, Value]) -> Tokens:
         """Sign this connection up to a specific authentication scope.
         [See the docs](https://surrealdb.com/docs/sdk/python/methods/signup)
 
         Args:
-            vars: Variables used in a signup query.
+            vars: Variables used in a signup query (namespace, database, access,
+                variables for record auth; or user/pass for system auth).
+                With TYPE RECORD and WITH REFRESH (SurrealDB v3+), the server
+                returns both access and refresh tokens.
+
+        Returns:
+            Tokens with optional access and refresh. Use access with authenticate().
 
         Example:
             await db.signup({
                 namespace: 'surrealdb',
                 database: 'docs',
                 access: 'user',
-
-                # Also pass any properties required by the scope definition
-                variables: {
-                    email: 'info@surrealdb.com',
-                    pass: '123456',
-                },
+                variables: { email: 'info@surrealdb.com', pass: '123456' },
             })
         """
         raise NotImplementedError(f"signup not implemented for: {self}")
 
-    async def signin(self, vars: dict[str, Value]) -> str:
+    async def signin(self, vars: dict[str, Value]) -> Tokens:
         """Sign this connection in to a specific authentication scope.
         [See the docs](https://surrealdb.com/docs/sdk/python/methods/signin)
 
         Args:
-            vars: Variables used in a signin query.
+            vars: Variables for signin: username/password (system), or
+                namespace, database, access, variables (record), or
+                namespace, database, access, key (bearer), or
+                namespace, database, access, refresh (refresh token).
+
+        Returns:
+            Tokens with optional access and refresh. Use access with authenticate().
 
         Example:
-            await db.signin({
-                username: 'root',
-                password: 'surrealdb',
-            })
+            await db.signin({ username: 'root', password: 'surrealdb' })
+            await db.signin({ namespace: 'ns', database: 'db', access: 'api', key: bearer_key })
         """
         raise NotImplementedError(f"signin not implemented for: {self}")
 

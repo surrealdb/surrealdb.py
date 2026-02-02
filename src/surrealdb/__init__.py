@@ -36,7 +36,7 @@ from surrealdb.data.types.range import Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.datetime import Datetime
 
-from surrealdb.types import Value
+from surrealdb.types import Tokens, Value
 
 __all__ = [
     "AsyncSurreal",
@@ -53,6 +53,7 @@ __all__ = [
     "Range",
     "RecordID",
     "Datetime",
+    "Tokens",
     "Value",
     # Constants
     "TAG_BOUND_EXCLUDED",
