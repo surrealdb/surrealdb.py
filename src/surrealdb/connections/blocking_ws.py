@@ -82,9 +82,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 self.check_response_for_error(response, process)
             return response
 
-    def authenticate(
-        self, token: str, session_id: Optional[UUID] = None
-    ) -> None:
+    def authenticate(self, token: str, session_id: Optional[UUID] = None) -> None:
         kwargs: dict[str, Any] = {"token": token}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -162,9 +160,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         session_id: Optional[UUID] = None,
         txn_id: Optional[UUID] = None,
     ) -> Value:
-        response = self.query_raw(
-            query, vars, session_id=session_id, txn_id=txn_id
-        )
+        response = self.query_raw(query, vars, session_id=session_id, txn_id=txn_id)
         self.check_response_for_error(response, "query")
         self.check_response_for_result(response, "query")
         return response["result"][0]["result"]
@@ -525,9 +521,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             return UUID(result)
         return result
 
-    def commit(
-        self, txn_id: UUID, session_id: Optional[UUID] = None
-    ) -> None:
+    def commit(self, txn_id: UUID, session_id: Optional[UUID] = None) -> None:
         kwargs: dict[str, Any] = {"txn": txn_id}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -535,9 +529,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.id = message.id
         self._send(message, "commit")
 
-    def cancel(
-        self, txn_id: UUID, session_id: Optional[UUID] = None
-    ) -> None:
+    def cancel(self, txn_id: UUID, session_id: Optional[UUID] = None) -> None:
         if session_id is not None:
             message = RequestMessage(
                 RequestMethod.CANCEL, txn=txn_id, session=session_id
@@ -589,101 +581,73 @@ class BlockingSurrealSession:
         self._session_id = session_id
 
     def use(self, namespace: str, database: str) -> None:
-        self._connection.use(
-            namespace, database, session_id=self._session_id
-        )
+        self._connection.use(namespace, database, session_id=self._session_id)
 
     def query(
         self,
         query: str,
         vars: Optional[dict[str, Value]] = None,
     ) -> Value:
-        return self._connection.query(
-            query, vars, session_id=self._session_id
-        )
+        return self._connection.query(query, vars, session_id=self._session_id)
 
     def signin(self, vars: dict[str, Value]) -> Tokens:
-        return self._connection.signin(
-            vars, session_id=self._session_id
-        )
+        return self._connection.signin(vars, session_id=self._session_id)
 
     def signup(self, vars: dict[str, Value]) -> Tokens:
-        return self._connection.signup(
-            vars, session_id=self._session_id
-        )
+        return self._connection.signup(vars, session_id=self._session_id)
 
     def authenticate(self, token: str) -> None:
-        self._connection.authenticate(
-            token, session_id=self._session_id
-        )
+        self._connection.authenticate(token, session_id=self._session_id)
 
     def invalidate(self) -> None:
         self._connection.invalidate(session_id=self._session_id)
 
     def let(self, key: str, value: Value) -> None:
-        self._connection.let(
-            key, value, session_id=self._session_id
-        )
+        self._connection.let(key, value, session_id=self._session_id)
 
     def unset(self, key: str) -> None:
-        self._connection.unset(
-            key, session_id=self._session_id
-        )
+        self._connection.unset(key, session_id=self._session_id)
 
     def select(self, record: RecordIdType) -> Value:
-        return self._connection.select(
-            record, session_id=self._session_id
-        )
+        return self._connection.select(record, session_id=self._session_id)
 
     def create(
         self,
         record: RecordIdType,
         data: Optional[Value] = None,
     ) -> Value:
-        return self._connection.create(
-            record, data, session_id=self._session_id
-        )
+        return self._connection.create(record, data, session_id=self._session_id)
 
     def update(
         self,
         record: RecordIdType,
         data: Optional[Value] = None,
     ) -> Value:
-        return self._connection.update(
-            record, data, session_id=self._session_id
-        )
+        return self._connection.update(record, data, session_id=self._session_id)
 
     def merge(
         self,
         record: RecordIdType,
         data: Optional[Value] = None,
     ) -> Value:
-        return self._connection.merge(
-            record, data, session_id=self._session_id
-        )
+        return self._connection.merge(record, data, session_id=self._session_id)
 
     def patch(
         self,
         record: RecordIdType,
         data: Optional[Value] = None,
     ) -> Value:
-        return self._connection.patch(
-            record, data, session_id=self._session_id
-        )
+        return self._connection.patch(record, data, session_id=self._session_id)
 
     def delete(self, record: RecordIdType) -> Value:
-        return self._connection.delete(
-            record, session_id=self._session_id
-        )
+        return self._connection.delete(record, session_id=self._session_id)
 
     def insert(
         self,
         table: Union[str, Table],
         data: Value,
     ) -> Value:
-        return self._connection.insert(
-            table, data, session_id=self._session_id
-        )
+        return self._connection.insert(table, data, session_id=self._session_id)
 
     def insert_relation(
         self,
@@ -699,29 +663,21 @@ class BlockingSurrealSession:
         record: RecordIdType,
         data: Optional[Value] = None,
     ) -> Value:
-        return self._connection.upsert(
-            record, data, session_id=self._session_id
-        )
+        return self._connection.upsert(record, data, session_id=self._session_id)
 
     def live(
         self,
         table: Union[str, Table],
         diff: bool = False,
     ) -> UUID:
-        return self._connection.live(
-            table, diff, session_id=self._session_id
-        )
+        return self._connection.live(table, diff, session_id=self._session_id)
 
     def kill(self, query_uuid: Union[str, UUID]) -> None:
-        self._connection.kill(
-            query_uuid, session_id=self._session_id
-        )
+        self._connection.kill(query_uuid, session_id=self._session_id)
 
     def begin_transaction(self) -> "BlockingSurrealTransaction":
         txn_id = self._connection.begin(session_id=self._session_id)
-        return BlockingSurrealTransaction(
-            self._connection, self._session_id, txn_id
-        )
+        return BlockingSurrealTransaction(self._connection, self._session_id, txn_id)
 
     def close_session(self) -> None:
         self._connection.detach(self._session_id)
@@ -849,11 +805,7 @@ class BlockingSurrealTransaction:
         )
 
     def commit(self) -> None:
-        self._connection.commit(
-            self._txn_id, session_id=self._session_id
-        )
+        self._connection.commit(self._txn_id, session_id=self._session_id)
 
     def cancel(self) -> None:
-        self._connection.cancel(
-            self._txn_id, session_id=self._session_id
-        )
+        self._connection.cancel(self._txn_id, session_id=self._session_id)

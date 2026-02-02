@@ -135,9 +135,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.loop = asyncio.get_running_loop()
         self.recv_task = asyncio.create_task(self._recv_task())
 
-    async def authenticate(
-        self, token: str, session_id: Optional[UUID] = None
-    ) -> None:
+    async def authenticate(self, token: str, session_id: Optional[UUID] = None) -> None:
         kwargs: dict[str, Any] = {"token": token}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -211,7 +209,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         session_id: Optional[UUID] = None,
         txn_id: Optional[UUID] = None,
     ) -> Value:
-        response = await self.query_raw(query, vars, session_id=session_id, txn_id=txn_id)
+        response = await self.query_raw(
+            query, vars, session_id=session_id, txn_id=txn_id
+        )
         self.check_response_for_error(response, "query")
         self.check_response_for_result(response, "query")
         return response["result"][0]["result"]
@@ -522,18 +522,14 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             return UUID(result)
         return result
 
-    async def commit(
-        self, txn_id: UUID, session_id: Optional[UUID] = None
-    ) -> None:
+    async def commit(self, txn_id: UUID, session_id: Optional[UUID] = None) -> None:
         kwargs: dict[str, Any] = {"txn": txn_id}
         if session_id is not None:
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.COMMIT, **kwargs)
         await self._send(message, "commit")
 
-    async def cancel(
-        self, txn_id: UUID, session_id: Optional[UUID] = None
-    ) -> None:
+    async def cancel(self, txn_id: UUID, session_id: Optional[UUID] = None) -> None:
         if session_id is not None:
             message = RequestMessage(
                 RequestMethod.CANCEL, txn=txn_id, session=session_id
@@ -626,101 +622,73 @@ class AsyncSurrealSession:
         self._session_id = session_id
 
     async def use(self, namespace: str, database: str) -> None:
-        await self._connection.use(
-            namespace, database, session_id=self._session_id
-        )
+        await self._connection.use(namespace, database, session_id=self._session_id)
 
     async def query(
         self,
         query: str,
         vars: Optional[dict[str, Value]] = None,
     ) -> Value:
-        return await self._connection.query(
-            query, vars, session_id=self._session_id
-        )
+        return await self._connection.query(query, vars, session_id=self._session_id)
 
     async def signin(self, vars: dict[str, Value]) -> Tokens:
-        return await self._connection.signin(
-            vars, session_id=self._session_id
-        )
+        return await self._connection.signin(vars, session_id=self._session_id)
 
     async def signup(self, vars: dict[str, Value]) -> Tokens:
-        return await self._connection.signup(
-            vars, session_id=self._session_id
-        )
+        return await self._connection.signup(vars, session_id=self._session_id)
 
     async def authenticate(self, token: str) -> None:
-        await self._connection.authenticate(
-            token, session_id=self._session_id
-        )
+        await self._connection.authenticate(token, session_id=self._session_id)
 
     async def invalidate(self) -> None:
         await self._connection.invalidate(session_id=self._session_id)
 
     async def let(self, key: str, value: Value) -> None:
-        await self._connection.let(
-            key, value, session_id=self._session_id
-        )
+        await self._connection.let(key, value, session_id=self._session_id)
 
     async def unset(self, key: str) -> None:
-        await self._connection.unset(
-            key, session_id=self._session_id
-        )
+        await self._connection.unset(key, session_id=self._session_id)
 
     async def select(self, record: RecordIdType) -> Value:
-        return await self._connection.select(
-            record, session_id=self._session_id
-        )
+        return await self._connection.select(record, session_id=self._session_id)
 
     async def create(
         self,
         record: RecordIdType,
         data: Optional[Value] = None,
     ) -> Value:
-        return await self._connection.create(
-            record, data, session_id=self._session_id
-        )
+        return await self._connection.create(record, data, session_id=self._session_id)
 
     async def update(
         self,
         record: RecordIdType,
         data: Optional[Value] = None,
     ) -> Value:
-        return await self._connection.update(
-            record, data, session_id=self._session_id
-        )
+        return await self._connection.update(record, data, session_id=self._session_id)
 
     async def merge(
         self,
         record: RecordIdType,
         data: Optional[Value] = None,
     ) -> Value:
-        return await self._connection.merge(
-            record, data, session_id=self._session_id
-        )
+        return await self._connection.merge(record, data, session_id=self._session_id)
 
     async def patch(
         self,
         record: RecordIdType,
         data: Optional[Value] = None,
     ) -> Value:
-        return await self._connection.patch(
-            record, data, session_id=self._session_id
-        )
+        return await self._connection.patch(record, data, session_id=self._session_id)
 
     async def delete(self, record: RecordIdType) -> Value:
-        return await self._connection.delete(
-            record, session_id=self._session_id
-        )
+        return await self._connection.delete(record, session_id=self._session_id)
 
     async def insert(
         self,
         table: Union[str, Table],
         data: Value,
     ) -> Value:
-        return await self._connection.insert(
-            table, data, session_id=self._session_id
-        )
+        return await self._connection.insert(table, data, session_id=self._session_id)
 
     async def insert_relation(
         self,
@@ -736,29 +704,21 @@ class AsyncSurrealSession:
         record: RecordIdType,
         data: Optional[Value] = None,
     ) -> Value:
-        return await self._connection.upsert(
-            record, data, session_id=self._session_id
-        )
+        return await self._connection.upsert(record, data, session_id=self._session_id)
 
     async def live(
         self,
         table: Union[str, Table],
         diff: bool = False,
     ) -> UUID:
-        return await self._connection.live(
-            table, diff, session_id=self._session_id
-        )
+        return await self._connection.live(table, diff, session_id=self._session_id)
 
     async def kill(self, query_uuid: Union[str, UUID]) -> None:
-        await self._connection.kill(
-            query_uuid, session_id=self._session_id
-        )
+        await self._connection.kill(query_uuid, session_id=self._session_id)
 
     async def begin_transaction(self) -> "AsyncSurrealTransaction":
         txn_id = await self._connection.begin(session_id=self._session_id)
-        return AsyncSurrealTransaction(
-            self._connection, self._session_id, txn_id
-        )
+        return AsyncSurrealTransaction(self._connection, self._session_id, txn_id)
 
     async def close_session(self) -> None:
         await self._connection.detach(self._session_id)
@@ -886,11 +846,7 @@ class AsyncSurrealTransaction:
         )
 
     async def commit(self) -> None:
-        await self._connection.commit(
-            self._txn_id, session_id=self._session_id
-        )
+        await self._connection.commit(self._txn_id, session_id=self._session_id)
 
     async def cancel(self) -> None:
-        await self._connection.cancel(
-            self._txn_id, session_id=self._session_id
-        )
+        await self._connection.cancel(self._txn_id, session_id=self._session_id)
