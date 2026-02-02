@@ -7,9 +7,13 @@ from __future__ import annotations
 import threading
 import uuid
 from typing import Any
+from uuid import UUID
 
 from surrealdb._surrealdb_ext import SyncEmbeddedDB
-from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+from surrealdb.connections.blocking_ws import (
+    BlockingSurrealSession,
+    BlockingWsSurrealConnection,
+)
 from surrealdb.connections.url import Url
 from surrealdb.data.cbor import decode
 from surrealdb.request_message.message import RequestMessage
@@ -125,7 +129,7 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
 
         return response
 
-    def attach(self) -> None:
+    def attach(self) -> UUID:
         raise NotImplementedError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
@@ -135,7 +139,7 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
-    def begin(self, session_id: Any = None) -> None:
+    def begin(self, session_id: Any = None) -> UUID:
         raise NotImplementedError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
@@ -150,7 +154,7 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
-    def new_session(self) -> None:
+    def new_session(self) -> BlockingSurrealSession:
         raise NotImplementedError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )

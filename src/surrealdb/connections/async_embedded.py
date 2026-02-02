@@ -7,9 +7,10 @@ from __future__ import annotations
 import uuid
 from types import TracebackType
 from typing import Any
+from uuid import UUID
 
 from surrealdb._surrealdb_ext import AsyncEmbeddedDB
-from surrealdb.connections.async_ws import AsyncWsSurrealConnection
+from surrealdb.connections.async_ws import AsyncSurrealSession, AsyncWsSurrealConnection
 from surrealdb.connections.url import Url
 from surrealdb.data.cbor import decode
 from surrealdb.request_message.message import RequestMessage
@@ -129,7 +130,7 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
 
         return response
 
-    async def attach(self) -> None:
+    async def attach(self) -> UUID:
         raise NotImplementedError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
@@ -139,7 +140,7 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
-    async def begin(self, session_id: Any = None) -> None:
+    async def begin(self, session_id: Any = None) -> UUID:
         raise NotImplementedError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
@@ -154,7 +155,7 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
-    async def new_session(self) -> None:
+    async def new_session(self) -> AsyncSurrealSession:
         raise NotImplementedError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )

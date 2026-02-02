@@ -3,11 +3,11 @@ A basic async connection to a SurrealDB instance.
 """
 
 import asyncio
+import uuid
 from asyncio import AbstractEventLoop, Future, Queue, Task
 from collections.abc import AsyncGenerator
 from types import TracebackType
 from typing import Any, Optional, Union
-import uuid
 from uuid import UUID
 
 import websockets
