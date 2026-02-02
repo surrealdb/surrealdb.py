@@ -522,7 +522,7 @@ class WsCborDescriptor:
         data = {
             "id": obj.id,
             "method": obj.method.value,
-            "params": [str(txn) if isinstance(txn, UUID) else txn],
+            "params": [txn],
         }
         session = obj.kwargs.get("session")
         if session is not None:
@@ -536,7 +536,7 @@ class WsCborDescriptor:
         data = {
             "id": obj.id,
             "method": obj.method.value,
-            "params": [str(txn) if isinstance(txn, UUID) else txn],
+            "params": [txn],
         }
         session = obj.kwargs.get("session")
         if session is not None:

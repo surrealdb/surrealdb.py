@@ -520,7 +520,15 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         result = response["result"]
         if isinstance(result, str):
             return UUID(result)
-        return result
+        if isinstance(result, list) and len(result) == 1:
+            return UUID(str(result[0]))
+        if isinstance(result, dict):
+            txn_val = result.get("id") or result.get("txn")
+            if txn_val is not None:
+                return UUID(str(txn_val))
+        raise ValueError(
+            f"begin() expected transaction UUID from server, got: {type(result).__name__}"
+        )
 
     async def commit(self, txn_id: UUID, session_id: UUID | None = None) -> None:
         kwargs: dict[str, Any] = {"txn": txn_id}

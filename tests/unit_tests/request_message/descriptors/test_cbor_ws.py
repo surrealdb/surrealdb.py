@@ -322,7 +322,7 @@ def test_commit_pass() -> None:
     assert isinstance(outcome, bytes)
     payload = decode(outcome)
     assert payload.get("method") == "commit"
-    assert payload.get("params") == [str(txn_id)]
+    assert payload.get("params") == [txn_id]
 
 
 def test_commit_with_session() -> None:
@@ -335,7 +335,7 @@ def test_commit_with_session() -> None:
     assert isinstance(outcome, bytes)
     payload = decode(outcome)
     assert payload.get("method") == "commit"
-    assert payload.get("params") == [str(txn_id)]
+    assert payload.get("params") == [txn_id]
     assert payload.get("session") == str(session_id)
 
 
@@ -352,7 +352,7 @@ def test_cancel_pass() -> None:
     assert isinstance(outcome, bytes)
     payload = decode(outcome)
     assert payload.get("method") == "cancel"
-    assert payload.get("params") == [str(txn_id)]
+    assert payload.get("params") == [txn_id]
 
 
 def test_cancel_requires_txn() -> None:
