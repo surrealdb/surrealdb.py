@@ -193,7 +193,7 @@ def _build_auth_params(vars_dict: dict[str, Any]) -> dict[str, Any]:
         for k, v in vars_dict["variables"].items():
             if v is None:
                 continue
-            wire[_AUTH_KEY_MAP.get(k, k)] = v
+            wire[k] = v
     return {k: v for k, v in wire.items() if v is not None}
 
 
