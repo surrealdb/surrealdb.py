@@ -355,3 +355,33 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         """
         if self._session is not None:
             await self._session.close()
+
+    async def attach(self) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def detach(self, session_id: Any) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def begin(self, session_id: Any = None) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def commit(self, txn_id: Any, session_id: Any = None) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def cancel(self, txn_id: Any, session_id: Any = None) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def new_session(self) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )

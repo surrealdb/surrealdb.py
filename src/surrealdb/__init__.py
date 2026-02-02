@@ -2,10 +2,18 @@ from typing import Any, Union
 
 from surrealdb.connections.async_embedded import AsyncEmbeddedSurrealConnection
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
-from surrealdb.connections.async_ws import AsyncWsSurrealConnection
+from surrealdb.connections.async_ws import (
+    AsyncSurrealSession,
+    AsyncSurrealTransaction,
+    AsyncWsSurrealConnection,
+)
 from surrealdb.connections.blocking_embedded import BlockingEmbeddedSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
-from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+from surrealdb.connections.blocking_ws import (
+    BlockingSurrealSession,
+    BlockingSurrealTransaction,
+    BlockingWsSurrealConnection,
+)
 from surrealdb.connections.url import Url, UrlScheme
 
 from surrealdb.data.types.table import Table
@@ -43,9 +51,13 @@ __all__ = [
     "Surreal",
     "AsyncEmbeddedSurrealConnection",
     "AsyncHttpSurrealConnection",
+    "AsyncSurrealSession",
+    "AsyncSurrealTransaction",
     "AsyncWsSurrealConnection",
     "BlockingEmbeddedSurrealConnection",
     "BlockingHttpSurrealConnection",
+    "BlockingSurrealSession",
+    "BlockingSurrealTransaction",
     "BlockingWsSurrealConnection",
     "Table",
     "Duration",

@@ -82,19 +82,32 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 self.check_response_for_error(response, process)
             return response
 
-    def authenticate(self, token: str) -> None:
-        message = RequestMessage(RequestMethod.AUTHENTICATE, token=token)
+    def authenticate(
+        self, token: str, session_id: Optional[UUID] = None
+    ) -> None:
+        kwargs: dict[str, Any] = {"token": token}
+        if session_id is not None:
+            kwargs["session"] = session_id
+        message = RequestMessage(RequestMethod.AUTHENTICATE, **kwargs)
         self.id = message.id
         self._send(message, "authenticating")
 
-    def invalidate(self) -> None:
-        message = RequestMessage(RequestMethod.INVALIDATE)
+    def invalidate(self, session_id: Optional[UUID] = None) -> None:
+        kwargs: dict[str, Any] = {}
+        if session_id is not None:
+            kwargs["session"] = session_id
+        message = RequestMessage(RequestMethod.INVALIDATE, **kwargs)
         self.id = message.id
         self._send(message, "invalidating")
         self.token = None
 
-    def signup(self, vars: dict[str, Value]) -> Tokens:
-        message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
+    def signup(
+        self, vars: dict[str, Value], session_id: Optional[UUID] = None
+    ) -> Tokens:
+        kwargs: dict[str, Any] = {"data": vars}
+        if session_id is not None:
+            kwargs["session"] = session_id
+        message = RequestMessage(RequestMethod.SIGN_UP, **kwargs)
         self.id = message.id
         response = self._send(message, "signup")
         self.check_response_for_result(response, "signup")
@@ -102,8 +115,13 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.token = tokens.access
         return tokens
 
-    def signin(self, vars: dict[str, Value]) -> Tokens:
-        message = RequestMessage(RequestMethod.SIGN_IN, params=vars)
+    def signin(
+        self, vars: dict[str, Value], session_id: Optional[UUID] = None
+    ) -> Tokens:
+        kwargs: dict[str, Any] = {"params": vars}
+        if session_id is not None:
+            kwargs["session"] = session_id
+        message = RequestMessage(RequestMethod.SIGN_IN, **kwargs)
         self.id = message.id
         response = self._send(message, "signing in")
         self.check_response_for_result(response, "signing in")
@@ -111,65 +129,119 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.token = tokens.access
         return tokens
 
-    def info(self) -> Value:
-        message = RequestMessage(RequestMethod.INFO)
+    def info(self, session_id: Optional[UUID] = None) -> Value:
+        kwargs: dict[str, Any] = {}
+        if session_id is not None:
+            kwargs["session"] = session_id
+        message = RequestMessage(RequestMethod.INFO, **kwargs)
         self.id = message.id
         response = self._send(message, "getting database information", bypass=True)
         self.check_response_for_result(response, "getting database information")
         return response["result"]
 
-    def use(self, namespace: str, database: str) -> None:
-        message = RequestMessage(
-            RequestMethod.USE,
-            namespace=namespace,
-            database=database,
-        )
+    def use(
+        self,
+        namespace: str,
+        database: str,
+        session_id: Optional[UUID] = None,
+    ) -> None:
+        kwargs: dict[str, Any] = {
+            "namespace": namespace,
+            "database": database,
+        }
+        if session_id is not None:
+            kwargs["session"] = session_id
+        message = RequestMessage(RequestMethod.USE, **kwargs)
         self.id = message.id
         self._send(message, "use")
 
-    def query(self, query: str, vars: Optional[dict[str, Value]] = None) -> Value:
-        response = self.query_raw(query, vars)
+    def query(
+        self,
+        query: str,
+        vars: Optional[dict[str, Value]] = None,
+        session_id: Optional[UUID] = None,
+        txn_id: Optional[UUID] = None,
+    ) -> Value:
+        response = self.query_raw(
+            query, vars, session_id=session_id, txn_id=txn_id
+        )
         self.check_response_for_error(response, "query")
         self.check_response_for_result(response, "query")
         return response["result"][0]["result"]
 
     def query_raw(
-        self, query: str, params: Optional[dict[str, Value]] = None
+        self,
+        query: str,
+        params: Optional[dict[str, Value]] = None,
+        session_id: Optional[UUID] = None,
+        txn_id: Optional[UUID] = None,
     ) -> dict[str, Any]:
         if params is None:
             params = {}
-        message = RequestMessage(
-            RequestMethod.QUERY,
-            query=query,
-            params=params,
-        )
+        kwargs: dict[str, Any] = {"query": query, "params": params}
+        if session_id is not None:
+            kwargs["session"] = session_id
+        if txn_id is not None:
+            kwargs["txn"] = txn_id
+        message = RequestMessage(RequestMethod.QUERY, **kwargs)
         self.id = message.id
         response = self._send(message, "query", bypass=True)
         return response
 
-    def version(self) -> str:
-        message = RequestMessage(RequestMethod.VERSION)
+    def version(self, session_id: Optional[UUID] = None) -> str:
+        kwargs: dict[str, Any] = {}
+        if session_id is not None:
+            kwargs["session"] = session_id
+        message = RequestMessage(RequestMethod.VERSION, **kwargs)
         self.id = message.id
         response = self._send(message, "getting database version")
         self.check_response_for_result(response, "getting database version")
         return response["result"]
 
-    def let(self, key: str, value: Value) -> None:
-        message = RequestMessage(RequestMethod.LET, key=key, value=value)
+    def let(
+        self,
+        key: str,
+        value: Value,
+        session_id: Optional[UUID] = None,
+        txn_id: Optional[UUID] = None,
+    ) -> None:
+        kwargs: dict[str, Any] = {"key": key, "value": value}
+        if session_id is not None:
+            kwargs["session"] = session_id
+        if txn_id is not None:
+            kwargs["txn"] = txn_id
+        message = RequestMessage(RequestMethod.LET, **kwargs)
         self.id = message.id
         self._send(message, "letting")
 
-    def unset(self, key: str) -> None:
-        message = RequestMessage(RequestMethod.UNSET, params=[key])
+    def unset(
+        self,
+        key: str,
+        session_id: Optional[UUID] = None,
+        txn_id: Optional[UUID] = None,
+    ) -> None:
+        kwargs: dict[str, Any] = {"params": [key]}
+        if session_id is not None:
+            kwargs["session"] = session_id
+        if txn_id is not None:
+            kwargs["txn"] = txn_id
+        message = RequestMessage(RequestMethod.UNSET, **kwargs)
         self.id = message.id
         self._send(message, "unsetting")
 
-    def select(self, record: RecordIdType) -> Value:
+    def select(
+        self,
+        record: RecordIdType,
+        session_id: Optional[UUID] = None,
+        txn_id: Optional[UUID] = None,
+    ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"SELECT * FROM {resource_ref}"
 
-        response = self.query_raw(query, variables)
+        response = self.query_raw(
+            query, variables, session_id=session_id, txn_id=txn_id
+        )
         self.check_response_for_error(response, "select")
         return response["result"][0]["result"]
 
@@ -177,6 +249,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self,
         record: RecordIdType,
         data: Optional[Value] = None,
+        session_id: Optional[UUID] = None,
+        txn_id: Optional[UUID] = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -187,33 +261,54 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             variables["_content"] = data
             query = f"CREATE {resource_ref} CONTENT $_content"
 
-        response = self.query_raw(query, variables)
+        response = self.query_raw(
+            query, variables, session_id=session_id, txn_id=txn_id
+        )
         self.check_response_for_error(response, "create")
         result = response["result"][0]["result"]
         # CREATE always creates a single record, so always unwrap
         return self._unwrap_result(result, unwrap=True)
 
-    def live(self, table: Union[str, Table], diff: bool = False) -> UUID:
-        message = RequestMessage(
-            RequestMethod.LIVE,
-            table=table,
-        )
+    def live(
+        self,
+        table: Union[str, Table],
+        diff: bool = False,
+        session_id: Optional[UUID] = None,
+    ) -> UUID:
+        kwargs: dict[str, Any] = {"table": table}
+        if session_id is not None:
+            kwargs["session"] = session_id
+        message = RequestMessage(RequestMethod.LIVE, **kwargs)
         self.id = message.id
         response = self._send(message, "live")
         self.check_response_for_result(response, "live")
         return response["result"]
 
-    def kill(self, query_uuid: Union[str, UUID]) -> None:
-        message = RequestMessage(RequestMethod.KILL, uuid=query_uuid)
+    def kill(
+        self,
+        query_uuid: Union[str, UUID],
+        session_id: Optional[UUID] = None,
+    ) -> None:
+        kwargs: dict[str, Any] = {"uuid": query_uuid}
+        if session_id is not None:
+            kwargs["session"] = session_id
+        message = RequestMessage(RequestMethod.KILL, **kwargs)
         self.id = message.id
         self._send(message, "kill")
 
-    def delete(self, record: RecordIdType) -> Value:
+    def delete(
+        self,
+        record: RecordIdType,
+        session_id: Optional[UUID] = None,
+        txn_id: Optional[UUID] = None,
+    ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"DELETE {resource_ref} RETURN BEFORE"
 
-        response = self.query_raw(query, variables)
+        response = self.query_raw(
+            query, variables, session_id=session_id, txn_id=txn_id
+        )
         self.check_response_for_error(response, "delete")
         result = response["result"][0]["result"]
         # DELETE on a specific record returns a single dict, on a table returns a list
@@ -225,6 +320,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self,
         table: Union[str, Table],
         data: Value,
+        session_id: Optional[UUID] = None,
+        txn_id: Optional[UUID] = None,
     ) -> Value:
         # Validate that table is not a RecordID
         if isinstance(table, RecordID):
@@ -237,7 +334,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         variables["_data"] = data
         query = f"INSERT INTO {table_ref} $_data"
 
-        response = self.query_raw(query, variables)
+        response = self.query_raw(
+            query, variables, session_id=session_id, txn_id=txn_id
+        )
         self.check_response_for_error(response, "insert")
         return response["result"][0]["result"]
 
@@ -245,17 +344,27 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self,
         table: Union[str, Table],
         data: Value,
+        session_id: Optional[UUID] = None,
+        txn_id: Optional[UUID] = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         table_ref = self._resource_to_variable(table, variables, "_table")
         variables["_data"] = data
         query = f"INSERT RELATION INTO {table_ref} $_data"
 
-        response = self.query_raw(query, variables)
+        response = self.query_raw(
+            query, variables, session_id=session_id, txn_id=txn_id
+        )
         self.check_response_for_error(response, "insert_relation")
         return response["result"][0]["result"]
 
-    def merge(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    def merge(
+        self,
+        record: RecordIdType,
+        data: Optional[Value] = None,
+        session_id: Optional[UUID] = None,
+        txn_id: Optional[UUID] = None,
+    ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -265,7 +374,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             variables["_data"] = data
             query = f"UPDATE {resource_ref} MERGE $_data"
 
-        response = self.query_raw(query, variables)
+        response = self.query_raw(
+            query, variables, session_id=session_id, txn_id=txn_id
+        )
         self.check_response_for_error(response, "merge")
         result = response["result"][0]["result"]
         # MERGE on a specific record returns a single dict, on a table returns a list
@@ -277,6 +388,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self,
         record: RecordIdType,
         data: Optional[Value] = None,
+        session_id: Optional[UUID] = None,
+        txn_id: Optional[UUID] = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -287,7 +400,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             variables["_patches"] = data
             query = f"UPDATE {resource_ref} PATCH $_patches"
 
-        response = self.query_raw(query, variables)
+        response = self.query_raw(
+            query, variables, session_id=session_id, txn_id=txn_id
+        )
         self.check_response_for_error(response, "patch")
         result = response["result"][0]["result"]
         # PATCH on a specific record returns a single dict, on a table returns a list
@@ -333,7 +448,13 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             # Handle generator exit gracefully if needed
             pass
 
-    def update(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    def update(
+        self,
+        record: RecordIdType,
+        data: Optional[Value] = None,
+        session_id: Optional[UUID] = None,
+        txn_id: Optional[UUID] = None,
+    ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -343,7 +464,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             variables["_content"] = data
             query = f"UPDATE {resource_ref} CONTENT $_content"
 
-        response = self.query_raw(query, variables)
+        response = self.query_raw(
+            query, variables, session_id=session_id, txn_id=txn_id
+        )
         self.check_response_for_error(response, "update")
         result = response["result"][0]["result"]
         # UPDATE on a specific record returns a single dict, on a table returns a list
@@ -351,7 +474,13 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             result, unwrap=self._is_single_record_operation(record)
         )
 
-    def upsert(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    def upsert(
+        self,
+        record: RecordIdType,
+        data: Optional[Value] = None,
+        session_id: Optional[UUID] = None,
+        txn_id: Optional[UUID] = None,
+    ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -361,13 +490,66 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             variables["_content"] = data
             query = f"UPSERT {resource_ref} CONTENT $_content"
 
-        response = self.query_raw(query, variables)
+        response = self.query_raw(
+            query, variables, session_id=session_id, txn_id=txn_id
+        )
         self.check_response_for_error(response, "upsert")
         result = response["result"][0]["result"]
         # UPSERT on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
             result, unwrap=self._is_single_record_operation(record)
         )
+
+    def attach(self) -> UUID:
+        session_id = UUID(str(uuid.uuid4()))
+        message = RequestMessage(RequestMethod.ATTACH, session=session_id)
+        self.id = message.id
+        self._send(message, "attach")
+        return session_id
+
+    def detach(self, session_id: UUID) -> None:
+        message = RequestMessage(RequestMethod.DETACH, session=session_id)
+        self.id = message.id
+        self._send(message, "detach")
+
+    def begin(self, session_id: Optional[UUID] = None) -> UUID:
+        kwargs: dict[str, Any] = {}
+        if session_id is not None:
+            kwargs["session"] = session_id
+        message = RequestMessage(RequestMethod.BEGIN, **kwargs)
+        self.id = message.id
+        response = self._send(message, "begin")
+        self.check_response_for_result(response, "begin")
+        result = response["result"]
+        if isinstance(result, str):
+            return UUID(result)
+        return result
+
+    def commit(
+        self, txn_id: UUID, session_id: Optional[UUID] = None
+    ) -> None:
+        kwargs: dict[str, Any] = {"txn": txn_id}
+        if session_id is not None:
+            kwargs["session"] = session_id
+        message = RequestMessage(RequestMethod.COMMIT, **kwargs)
+        self.id = message.id
+        self._send(message, "commit")
+
+    def cancel(
+        self, txn_id: UUID, session_id: Optional[UUID] = None
+    ) -> None:
+        if session_id is not None:
+            message = RequestMessage(
+                RequestMethod.CANCEL, txn=txn_id, session=session_id
+            )
+        else:
+            message = RequestMessage(RequestMethod.CANCEL, txn=txn_id)
+        self.id = message.id
+        self._send(message, "cancel")
+
+    def new_session(self) -> "BlockingSurrealSession":
+        session_id = self.attach()
+        return BlockingSurrealSession(self, session_id)
 
     def close(self) -> None:
         if self.socket is not None:
@@ -395,3 +577,283 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         """
         if self.socket is not None:
             self.socket.close()
+
+
+class BlockingSurrealSession:
+    def __init__(
+        self,
+        connection: BlockingWsSurrealConnection,
+        session_id: UUID,
+    ) -> None:
+        self._connection = connection
+        self._session_id = session_id
+
+    def use(self, namespace: str, database: str) -> None:
+        self._connection.use(
+            namespace, database, session_id=self._session_id
+        )
+
+    def query(
+        self,
+        query: str,
+        vars: Optional[dict[str, Value]] = None,
+    ) -> Value:
+        return self._connection.query(
+            query, vars, session_id=self._session_id
+        )
+
+    def signin(self, vars: dict[str, Value]) -> Tokens:
+        return self._connection.signin(
+            vars, session_id=self._session_id
+        )
+
+    def signup(self, vars: dict[str, Value]) -> Tokens:
+        return self._connection.signup(
+            vars, session_id=self._session_id
+        )
+
+    def authenticate(self, token: str) -> None:
+        self._connection.authenticate(
+            token, session_id=self._session_id
+        )
+
+    def invalidate(self) -> None:
+        self._connection.invalidate(session_id=self._session_id)
+
+    def let(self, key: str, value: Value) -> None:
+        self._connection.let(
+            key, value, session_id=self._session_id
+        )
+
+    def unset(self, key: str) -> None:
+        self._connection.unset(
+            key, session_id=self._session_id
+        )
+
+    def select(self, record: RecordIdType) -> Value:
+        return self._connection.select(
+            record, session_id=self._session_id
+        )
+
+    def create(
+        self,
+        record: RecordIdType,
+        data: Optional[Value] = None,
+    ) -> Value:
+        return self._connection.create(
+            record, data, session_id=self._session_id
+        )
+
+    def update(
+        self,
+        record: RecordIdType,
+        data: Optional[Value] = None,
+    ) -> Value:
+        return self._connection.update(
+            record, data, session_id=self._session_id
+        )
+
+    def merge(
+        self,
+        record: RecordIdType,
+        data: Optional[Value] = None,
+    ) -> Value:
+        return self._connection.merge(
+            record, data, session_id=self._session_id
+        )
+
+    def patch(
+        self,
+        record: RecordIdType,
+        data: Optional[Value] = None,
+    ) -> Value:
+        return self._connection.patch(
+            record, data, session_id=self._session_id
+        )
+
+    def delete(self, record: RecordIdType) -> Value:
+        return self._connection.delete(
+            record, session_id=self._session_id
+        )
+
+    def insert(
+        self,
+        table: Union[str, Table],
+        data: Value,
+    ) -> Value:
+        return self._connection.insert(
+            table, data, session_id=self._session_id
+        )
+
+    def insert_relation(
+        self,
+        table: Union[str, Table],
+        data: Value,
+    ) -> Value:
+        return self._connection.insert_relation(
+            table, data, session_id=self._session_id
+        )
+
+    def upsert(
+        self,
+        record: RecordIdType,
+        data: Optional[Value] = None,
+    ) -> Value:
+        return self._connection.upsert(
+            record, data, session_id=self._session_id
+        )
+
+    def live(
+        self,
+        table: Union[str, Table],
+        diff: bool = False,
+    ) -> UUID:
+        return self._connection.live(
+            table, diff, session_id=self._session_id
+        )
+
+    def kill(self, query_uuid: Union[str, UUID]) -> None:
+        self._connection.kill(
+            query_uuid, session_id=self._session_id
+        )
+
+    def begin_transaction(self) -> "BlockingSurrealTransaction":
+        txn_id = self._connection.begin(session_id=self._session_id)
+        return BlockingSurrealTransaction(
+            self._connection, self._session_id, txn_id
+        )
+
+    def close_session(self) -> None:
+        self._connection.detach(self._session_id)
+
+
+class BlockingSurrealTransaction:
+    def __init__(
+        self,
+        connection: BlockingWsSurrealConnection,
+        session_id: UUID,
+        txn_id: UUID,
+    ) -> None:
+        self._connection = connection
+        self._session_id = session_id
+        self._txn_id = txn_id
+
+    def query(
+        self,
+        query: str,
+        vars: Optional[dict[str, Value]] = None,
+    ) -> Value:
+        return self._connection.query(
+            query,
+            vars,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+        )
+
+    def select(self, record: RecordIdType) -> Value:
+        return self._connection.select(
+            record,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+        )
+
+    def create(
+        self,
+        record: RecordIdType,
+        data: Optional[Value] = None,
+    ) -> Value:
+        return self._connection.create(
+            record,
+            data,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+        )
+
+    def update(
+        self,
+        record: RecordIdType,
+        data: Optional[Value] = None,
+    ) -> Value:
+        return self._connection.update(
+            record,
+            data,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+        )
+
+    def merge(
+        self,
+        record: RecordIdType,
+        data: Optional[Value] = None,
+    ) -> Value:
+        return self._connection.merge(
+            record,
+            data,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+        )
+
+    def patch(
+        self,
+        record: RecordIdType,
+        data: Optional[Value] = None,
+    ) -> Value:
+        return self._connection.patch(
+            record,
+            data,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+        )
+
+    def delete(self, record: RecordIdType) -> Value:
+        return self._connection.delete(
+            record,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+        )
+
+    def insert(
+        self,
+        table: Union[str, Table],
+        data: Value,
+    ) -> Value:
+        return self._connection.insert(
+            table,
+            data,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+        )
+
+    def insert_relation(
+        self,
+        table: Union[str, Table],
+        data: Value,
+    ) -> Value:
+        return self._connection.insert_relation(
+            table,
+            data,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+        )
+
+    def upsert(
+        self,
+        record: RecordIdType,
+        data: Optional[Value] = None,
+    ) -> Value:
+        return self._connection.upsert(
+            record,
+            data,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+        )
+
+    def commit(self) -> None:
+        self._connection.commit(
+            self._txn_id, session_id=self._session_id
+        )
+
+    def cancel(self) -> None:
+        self._connection.cancel(
+            self._txn_id, session_id=self._session_id
+        )

@@ -331,3 +331,33 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         """
         if self.session is not None:
             self.session.close()
+
+    def attach(self) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    def detach(self, session_id: Any) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    def begin(self, session_id: Any = None) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    def commit(self, txn_id: Any, session_id: Any = None) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    def cancel(self, txn_id: Any, session_id: Any = None) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    def new_session(self) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )

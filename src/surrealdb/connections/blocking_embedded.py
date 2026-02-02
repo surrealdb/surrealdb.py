@@ -125,5 +125,35 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
 
         return response
 
+    def attach(self) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    def detach(self, session_id: Any) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    def begin(self, session_id: Any = None) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    def commit(self, txn_id: Any, session_id: Any = None) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    def cancel(self, txn_id: Any, session_id: Any = None) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    def new_session(self) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
     # All other methods (query, select, create, update, delete, merge, patch, etc.)
     # are inherited from BlockingWsSurrealConnection and work automatically via _send()!

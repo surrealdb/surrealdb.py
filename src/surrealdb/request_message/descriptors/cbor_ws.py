@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from uuid import UUID
 from typing import TYPE_CHECKING, Any, cast
 
 from pydantic_core import SchemaValidator
@@ -58,6 +59,15 @@ def _format_errors(exc: PydanticValidationError) -> str:
         f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}"
         for error in exc.errors()
     )
+
+
+def _inject_session_txn(data: dict[str, Any], obj: RequestMessage) -> None:
+    session = obj.kwargs.get("session")
+    if session is not None:
+        data["session"] = str(session) if isinstance(session, UUID) else session
+    txn = obj.kwargs.get("txn")
+    if txn is not None:
+        data["txn"] = str(txn) if isinstance(txn, UUID) else txn
 
 
 USE_VALIDATOR = _build_validator(
@@ -231,6 +241,16 @@ class WsCborDescriptor:
             return self.prep_insert_relation(obj)
         elif obj.method == RequestMethod.UPSERT:
             return self.prep_upsert(obj)
+        elif obj.method == RequestMethod.ATTACH:
+            return self.prep_attach(obj)
+        elif obj.method == RequestMethod.DETACH:
+            return self.prep_detach(obj)
+        elif obj.method == RequestMethod.BEGIN:
+            return self.prep_begin(obj)
+        elif obj.method == RequestMethod.COMMIT:
+            return self.prep_commit(obj)
+        elif obj.method == RequestMethod.CANCEL:
+            return self.prep_cancel(obj)
 
         raise ValueError(f"Invalid method for Cbor WS encoding: {obj.method}")
 
@@ -240,16 +260,19 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [obj.kwargs.get("namespace"), obj.kwargs.get("database")],
         }
+        _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
         return encode(data)
 
     def prep_info(self, obj: RequestMessage) -> bytes:
         data = {"id": obj.id, "method": obj.method.value}
+        _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
         return encode(data)
 
     def prep_version(self, obj: RequestMessage) -> bytes:
         data = {"id": obj.id, "method": obj.method.value}
+        _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
         return encode(data)
 
@@ -265,6 +288,7 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [params_dict],
         }
+        _inject_session_txn(data, obj)
         return encode(data)
 
     def prep_signin(self, obj: RequestMessage) -> bytes:
@@ -279,6 +303,7 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [params_dict],
         }
+        _inject_session_txn(data, obj)
         return encode(data)
 
     def prep_authenticate(self, obj: RequestMessage) -> bytes:
@@ -287,11 +312,13 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [obj.kwargs.get("token")],
         }
+        _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
         return encode(data)
 
     def prep_invalidate(self, obj: RequestMessage) -> bytes:
         data = {"id": obj.id, "method": obj.method.value}
+        _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
         return encode(data)
 
@@ -301,6 +328,7 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [obj.kwargs.get("key"), obj.kwargs.get("value")],
         }
+        _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
         return encode(data)
 
@@ -310,6 +338,7 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": obj.kwargs.get("params"),
         }
+        _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
         return encode(data)
 
@@ -318,6 +347,7 @@ class WsCborDescriptor:
         if isinstance(table, str):
             table = Table(table)
         data = {"id": obj.id, "method": obj.method.value, "params": [table]}
+        _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
         return encode(data)
 
@@ -327,6 +357,7 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [obj.kwargs.get("uuid")],
         }
+        _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
         return encode(data)
 
@@ -336,6 +367,7 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [obj.kwargs.get("query"), obj.kwargs.get("params", dict())],
         }
+        _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
         return encode(data)
 
@@ -348,6 +380,7 @@ class WsCborDescriptor:
                 obj.kwargs.get("params"),
             ],
         }
+        _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
         return encode(data)
 
@@ -362,6 +395,7 @@ class WsCborDescriptor:
         }
         if obj.kwargs.get("params") is None:
             raise ValueError("parameters cannot be None for a patch method")
+        _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
         return encode(data)
 
@@ -371,6 +405,7 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": obj.kwargs.get("params"),
         }
+        _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
         return encode(data)
 
@@ -386,6 +421,7 @@ class WsCborDescriptor:
         if obj.kwargs.get("data"):
             params.append(obj.kwargs.get("data"))
 
+        _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
         return encode(data)
 
@@ -398,6 +434,7 @@ class WsCborDescriptor:
                 obj.kwargs.get("data", dict()),
             ],
         }
+        _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
         return encode(data)
 
@@ -410,6 +447,7 @@ class WsCborDescriptor:
                 obj.kwargs.get("data", dict()),
             ],
         }
+        _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
         return encode(data)
 
@@ -419,6 +457,7 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [process_record(cast(RecordIdType, obj.kwargs.get("record_id")))],
         }
+        _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
         return encode(data)
 
@@ -432,6 +471,7 @@ class WsCborDescriptor:
         params = obj.kwargs.get("params", [])
         params_list.append(params)
 
+        _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
         return encode(data)
 
@@ -444,5 +484,61 @@ class WsCborDescriptor:
                 obj.kwargs.get("data", dict()),
             ],
         }
+        _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
+        return encode(data)
+
+    def prep_attach(self, obj: RequestMessage) -> bytes:
+        session = obj.kwargs.get("session")
+        if session is None:
+            raise ValueError("attach requires session (uuid.UUID)")
+        data = {
+            "id": obj.id,
+            "method": obj.method.value,
+            "session": str(session) if isinstance(session, UUID) else session,
+        }
+        return encode(data)
+
+    def prep_detach(self, obj: RequestMessage) -> bytes:
+        session = obj.kwargs.get("session")
+        if session is None:
+            raise ValueError("detach requires session (uuid.UUID)")
+        data = {
+            "id": obj.id,
+            "method": obj.method.value,
+            "session": str(session) if isinstance(session, UUID) else session,
+        }
+        return encode(data)
+
+    def prep_begin(self, obj: RequestMessage) -> bytes:
+        data = {"id": obj.id, "method": obj.method.value}
+        _inject_session_txn(data, obj)
+        return encode(data)
+
+    def prep_commit(self, obj: RequestMessage) -> bytes:
+        txn = obj.kwargs.get("txn")
+        if txn is None:
+            raise ValueError("commit requires txn (uuid.UUID)")
+        data = {
+            "id": obj.id,
+            "method": obj.method.value,
+            "params": [str(txn) if isinstance(txn, UUID) else txn],
+        }
+        session = obj.kwargs.get("session")
+        if session is not None:
+            data["session"] = str(session) if isinstance(session, UUID) else session
+        return encode(data)
+
+    def prep_cancel(self, obj: RequestMessage) -> bytes:
+        txn = obj.kwargs.get("txn")
+        if txn is None:
+            raise ValueError("cancel requires txn (uuid.UUID)")
+        data = {
+            "id": obj.id,
+            "method": obj.method.value,
+            "params": [str(txn) if isinstance(txn, UUID) else txn],
+        }
+        session = obj.kwargs.get("session")
+        if session is not None:
+            data["session"] = str(session) if isinstance(session, UUID) else session
         return encode(data)

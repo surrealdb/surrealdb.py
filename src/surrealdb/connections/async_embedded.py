@@ -129,5 +129,35 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
 
         return response
 
+    async def attach(self) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def detach(self, session_id: Any) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def begin(self, session_id: Any = None) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def commit(self, txn_id: Any, session_id: Any = None) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def cancel(self, txn_id: Any, session_id: Any = None) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def new_session(self) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
     # All other methods (query, select, create, update, delete, merge, patch, etc.)
     # are inherited from AsyncWsSurrealConnection and work automatically via _send()!

@@ -24,6 +24,11 @@ class RequestMethod(Enum):
     LIVE = "live"
     KILL = "kill"
     POST = "post"
+    ATTACH = "attach"
+    DETACH = "detach"
+    BEGIN = "begin"
+    COMMIT = "commit"
+    CANCEL = "cancel"
 
     @staticmethod
     def from_string(method: str) -> "RequestMethod":
