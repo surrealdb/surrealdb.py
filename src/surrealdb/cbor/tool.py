@@ -15,9 +15,7 @@ import uuid
 from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
 from datetime import datetime
 from functools import partial
-from typing import TYPE_CHECKING, Any, TypeVar
-
-from typing_extensions import TypeAlias
+from typing import TYPE_CHECKING, Any, TypeAlias, TypeVar
 
 from . import CBORDecoder, CBORSimpleValue, CBORTag, FrozenDict, load, undefined
 

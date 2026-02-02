@@ -1,6 +1,6 @@
 import decimal
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any
 
 from surrealdb.cbor import (
     CBORDecoder,
@@ -84,7 +84,7 @@ def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
 
 
 def tag_decoder(
-    decoder: CBORDecoder, tag: CBORTag, shareable_index: Optional[int] = None
+    decoder: CBORDecoder, tag: CBORTag, shareable_index: int | None = None
 ) -> Any:
     if tag.tag == constants.TAG_GEOMETRY_POINT:
         return GeometryPoint.parse_coordinates(tag.value)

@@ -1,6 +1,6 @@
 import uuid
 from types import TracebackType
-from typing import Any, Optional, Union, cast
+from typing import Any, cast
 
 import requests
 
@@ -19,14 +19,14 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     def __init__(self, url: str) -> None:
         self.url: Url = Url(url)
         self.raw_url: str = url.rstrip("/")
-        self.host: Optional[str] = self.url.hostname
-        self.port: Optional[int] = self.url.port
-        self.token: Optional[str] = None
+        self.host: str | None = self.url.hostname
+        self.port: int | None = self.url.port
+        self.token: str | None = None
         self.id: str = str(uuid.uuid4())
-        self.namespace: Optional[str] = None
-        self.database: Optional[str] = None
+        self.namespace: str | None = None
+        self.database: str | None = None
         self.vars: dict[str, Value] = dict()
-        self.session: Optional[requests.Session] = None
+        self.session: requests.Session | None = None
 
     def _send(
         self, message: RequestMessage, operation: str, bypass: bool = False
@@ -128,14 +128,14 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.namespace = namespace
         self.database = database
 
-    def query(self, query: str, vars: Optional[dict[str, Value]] = None) -> Value:
+    def query(self, query: str, vars: dict[str, Value] | None = None) -> Value:
         response = self.query_raw(query, vars)
         self.check_response_for_error(response, "query")
         self.check_response_for_result(response, "query")
         return response["result"][0]["result"]
 
     def query_raw(
-        self, query: str, params: Optional[dict[str, Value]] = None
+        self, query: str, params: dict[str, Value] | None = None
     ) -> dict[str, Any]:
         if params is None:
             params = {}
@@ -153,7 +153,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     def create(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -185,7 +185,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
 
     def insert(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
     ) -> Value:
         # Validate that table is not a RecordID
@@ -205,7 +205,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
 
     def insert_relation(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
     ) -> Value:
         variables: dict[str, Any] = {}
@@ -223,7 +223,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     def unset(self, key: str) -> None:
         self.vars.pop(key)
 
-    def merge(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    def merge(self, record: RecordIdType, data: Value | None = None) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -241,7 +241,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
             result, unwrap=self._is_single_record_operation(record)
         )
 
-    def patch(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    def patch(self, record: RecordIdType, data: Value | None = None) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -268,7 +268,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.check_response_for_error(response, "select")
         return response["result"][0]["result"]
 
-    def update(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    def update(self, record: RecordIdType, data: Value | None = None) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -293,7 +293,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "getting database version")
         return response["result"]
 
-    def upsert(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    def upsert(self, record: RecordIdType, data: Value | None = None) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -321,9 +321,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_value: Optional[BaseException],
-        traceback: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
     ) -> None:
         """
         Synchronous context manager exit.

@@ -9,7 +9,7 @@ responses (access and refresh tokens).
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Union
+from typing import Any
 from uuid import UUID
 
 from surrealdb.data.types.datetime import Datetime
@@ -28,34 +28,30 @@ from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
 # Define recursive Value type that represents all possible SurrealDB values
-Value = Union[
-    # Primitives
-    str,
-    int,
-    float,
-    bool,
-    None,
-    bytes,
-    # Standard library types
-    UUID,
-    Decimal,
-    # SurrealDB types
-    Table,
-    Range,
-    RecordID,
-    Duration,
-    Datetime,
-    GeometryPoint,
-    GeometryLine,
-    GeometryPolygon,
-    GeometryMultiPoint,
-    GeometryMultiLine,
-    GeometryMultiPolygon,
-    GeometryCollection,
-    # Recursive containers (using forward references for recursion)
-    dict[str, "Value"],
-    list["Value"],
-]
+Value = (
+    str
+    | int
+    | float
+    | bool
+    | None
+    | bytes
+    | UUID
+    | Decimal
+    | Table
+    | Range
+    | RecordID
+    | Duration
+    | Datetime
+    | GeometryPoint
+    | GeometryLine
+    | GeometryPolygon
+    | GeometryMultiPoint
+    | GeometryMultiLine
+    | GeometryMultiPolygon
+    | GeometryCollection
+    | dict[str, "Value"]
+    | list["Value"]
+)
 
 
 @dataclass(frozen=True)

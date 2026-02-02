@@ -6,7 +6,7 @@ import threading
 import uuid
 from collections.abc import Generator
 from types import TracebackType
-from typing import Any, Optional, Union
+from typing import Any
 from uuid import UUID
 
 import websockets
@@ -45,11 +45,11 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         """
         self.url: Url = Url(url)
         self.raw_url: str = f"{self.url.raw_url}/rpc"
-        self.host: Optional[str] = self.url.hostname
-        self.port: Optional[int] = self.url.port
+        self.host: str | None = self.url.hostname
+        self.port: int | None = self.url.port
         self.id: str = str(uuid.uuid4())
-        self.token: Optional[str] = None
-        self.socket: Optional[ClientConnection] = None
+        self.token: str | None = None
+        self.socket: ClientConnection | None = None
         self._lock: threading.Lock = threading.Lock()
 
     def _send(
@@ -82,7 +82,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 self.check_response_for_error(response, process)
             return response
 
-    def authenticate(self, token: str, session_id: Optional[UUID] = None) -> None:
+    def authenticate(self, token: str, session_id: UUID | None = None) -> None:
         kwargs: dict[str, Any] = {"token": token}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -90,7 +90,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.id = message.id
         self._send(message, "authenticating")
 
-    def invalidate(self, session_id: Optional[UUID] = None) -> None:
+    def invalidate(self, session_id: UUID | None = None) -> None:
         kwargs: dict[str, Any] = {}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -99,9 +99,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self._send(message, "invalidating")
         self.token = None
 
-    def signup(
-        self, vars: dict[str, Value], session_id: Optional[UUID] = None
-    ) -> Tokens:
+    def signup(self, vars: dict[str, Value], session_id: UUID | None = None) -> Tokens:
         kwargs: dict[str, Any] = {"data": vars}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -113,9 +111,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.token = tokens.access
         return tokens
 
-    def signin(
-        self, vars: dict[str, Value], session_id: Optional[UUID] = None
-    ) -> Tokens:
+    def signin(self, vars: dict[str, Value], session_id: UUID | None = None) -> Tokens:
         kwargs: dict[str, Any] = {"params": vars}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -127,7 +123,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.token = tokens.access
         return tokens
 
-    def info(self, session_id: Optional[UUID] = None) -> Value:
+    def info(self, session_id: UUID | None = None) -> Value:
         kwargs: dict[str, Any] = {}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -141,7 +137,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self,
         namespace: str,
         database: str,
-        session_id: Optional[UUID] = None,
+        session_id: UUID | None = None,
     ) -> None:
         kwargs: dict[str, Any] = {
             "namespace": namespace,
@@ -156,9 +152,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def query(
         self,
         query: str,
-        vars: Optional[dict[str, Value]] = None,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        vars: dict[str, Value] | None = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         response = self.query_raw(query, vars, session_id=session_id, txn_id=txn_id)
         self.check_response_for_error(response, "query")
@@ -168,9 +164,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def query_raw(
         self,
         query: str,
-        params: Optional[dict[str, Value]] = None,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        params: dict[str, Value] | None = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> dict[str, Any]:
         if params is None:
             params = {}
@@ -184,7 +180,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         response = self._send(message, "query", bypass=True)
         return response
 
-    def version(self, session_id: Optional[UUID] = None) -> str:
+    def version(self, session_id: UUID | None = None) -> str:
         kwargs: dict[str, Any] = {}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -198,8 +194,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self,
         key: str,
         value: Value,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> None:
         kwargs: dict[str, Any] = {"key": key, "value": value}
         if session_id is not None:
@@ -213,8 +209,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def unset(
         self,
         key: str,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> None:
         kwargs: dict[str, Any] = {"params": [key]}
         if session_id is not None:
@@ -228,8 +224,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def select(
         self,
         record: RecordIdType,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -244,9 +240,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def create(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        data: Value | None = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -267,9 +263,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
 
     def live(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         diff: bool = False,
-        session_id: Optional[UUID] = None,
+        session_id: UUID | None = None,
     ) -> UUID:
         kwargs: dict[str, Any] = {"table": table}
         if session_id is not None:
@@ -282,8 +278,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
 
     def kill(
         self,
-        query_uuid: Union[str, UUID],
-        session_id: Optional[UUID] = None,
+        query_uuid: str | UUID,
+        session_id: UUID | None = None,
     ) -> None:
         kwargs: dict[str, Any] = {"uuid": query_uuid}
         if session_id is not None:
@@ -295,8 +291,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def delete(
         self,
         record: RecordIdType,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -314,10 +310,10 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
 
     def insert(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         # Validate that table is not a RecordID
         if isinstance(table, RecordID):
@@ -338,10 +334,10 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
 
     def insert_relation(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         table_ref = self._resource_to_variable(table, variables, "_table")
@@ -357,9 +353,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def merge(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        data: Value | None = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -383,9 +379,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def patch(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        data: Value | None = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -408,7 +404,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
 
     def subscribe_live(
         self,
-        query_uuid: Union[str, UUID],
+        query_uuid: str | UUID,
     ) -> Generator[dict[str, Value], None, None]:
         """
         Subscribe to live updates for a given query UUID.
@@ -447,9 +443,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def update(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        data: Value | None = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -473,9 +469,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def upsert(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        data: Value | None = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -508,7 +504,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.id = message.id
         self._send(message, "detach")
 
-    def begin(self, session_id: Optional[UUID] = None) -> UUID:
+    def begin(self, session_id: UUID | None = None) -> UUID:
         kwargs: dict[str, Any] = {}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -521,7 +517,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             return UUID(result)
         return result
 
-    def commit(self, txn_id: UUID, session_id: Optional[UUID] = None) -> None:
+    def commit(self, txn_id: UUID, session_id: UUID | None = None) -> None:
         kwargs: dict[str, Any] = {"txn": txn_id}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -529,7 +525,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.id = message.id
         self._send(message, "commit")
 
-    def cancel(self, txn_id: UUID, session_id: Optional[UUID] = None) -> None:
+    def cancel(self, txn_id: UUID, session_id: UUID | None = None) -> None:
         if session_id is not None:
             message = RequestMessage(
                 RequestMethod.CANCEL, txn=txn_id, session=session_id
@@ -559,9 +555,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_value: Optional[BaseException],
-        traceback: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
     ) -> None:
         """
         Synchronous context manager exit.
@@ -586,7 +582,7 @@ class BlockingSurrealSession:
     def query(
         self,
         query: str,
-        vars: Optional[dict[str, Value]] = None,
+        vars: dict[str, Value] | None = None,
     ) -> Value:
         return self._connection.query(query, vars, session_id=self._session_id)
 
@@ -614,28 +610,28 @@ class BlockingSurrealSession:
     def create(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return self._connection.create(record, data, session_id=self._session_id)
 
     def update(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return self._connection.update(record, data, session_id=self._session_id)
 
     def merge(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return self._connection.merge(record, data, session_id=self._session_id)
 
     def patch(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return self._connection.patch(record, data, session_id=self._session_id)
 
@@ -644,14 +640,14 @@ class BlockingSurrealSession:
 
     def insert(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
     ) -> Value:
         return self._connection.insert(table, data, session_id=self._session_id)
 
     def insert_relation(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
     ) -> Value:
         return self._connection.insert_relation(
@@ -661,18 +657,18 @@ class BlockingSurrealSession:
     def upsert(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return self._connection.upsert(record, data, session_id=self._session_id)
 
     def live(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         diff: bool = False,
     ) -> UUID:
         return self._connection.live(table, diff, session_id=self._session_id)
 
-    def kill(self, query_uuid: Union[str, UUID]) -> None:
+    def kill(self, query_uuid: str | UUID) -> None:
         self._connection.kill(query_uuid, session_id=self._session_id)
 
     def begin_transaction(self) -> "BlockingSurrealTransaction":
@@ -697,7 +693,7 @@ class BlockingSurrealTransaction:
     def query(
         self,
         query: str,
-        vars: Optional[dict[str, Value]] = None,
+        vars: dict[str, Value] | None = None,
     ) -> Value:
         return self._connection.query(
             query,
@@ -716,7 +712,7 @@ class BlockingSurrealTransaction:
     def create(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return self._connection.create(
             record,
@@ -728,7 +724,7 @@ class BlockingSurrealTransaction:
     def update(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return self._connection.update(
             record,
@@ -740,7 +736,7 @@ class BlockingSurrealTransaction:
     def merge(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return self._connection.merge(
             record,
@@ -752,7 +748,7 @@ class BlockingSurrealTransaction:
     def patch(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return self._connection.patch(
             record,
@@ -770,7 +766,7 @@ class BlockingSurrealTransaction:
 
     def insert(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
     ) -> Value:
         return self._connection.insert(
@@ -782,7 +778,7 @@ class BlockingSurrealTransaction:
 
     def insert_relation(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
     ) -> Value:
         return self._connection.insert_relation(
@@ -795,7 +791,7 @@ class BlockingSurrealTransaction:
     def upsert(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return self._connection.upsert(
             record,

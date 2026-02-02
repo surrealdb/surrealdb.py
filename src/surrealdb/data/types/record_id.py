@@ -4,7 +4,8 @@ Defines the data type for the record ID.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Union, cast
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Union, cast
 
 from pydantic_core import core_schema
 from pydantic_core.core_schema import ValidationInfo

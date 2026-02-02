@@ -1,5 +1,4 @@
 from collections.abc import AsyncGenerator
-from typing import Optional, Union
 from uuid import UUID
 
 from surrealdb.data.types.record_id import RecordIdType
@@ -133,7 +132,7 @@ class AsyncTemplate:
         raise NotImplementedError(f"unset not implemented for: {self}")
 
     # TODO: Query can return any Value type depending on the query
-    async def query(self, query: str, vars: Optional[dict[str, Value]] = None) -> Value:
+    async def query(self, query: str, vars: dict[str, Value] | None = None) -> Value:
         """Run a unset of SurrealQL statements against the database.
 
         Args:
@@ -166,7 +165,7 @@ class AsyncTemplate:
     async def create(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         """Create a record in the database.
 
@@ -182,7 +181,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"create not implemented for: {self}")
 
-    async def update(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    async def update(self, record: RecordIdType, data: Value | None = None) -> Value:
         """Update all records in a table, or a specific record, in the database.
 
         This function replaces the current document / record data with the
@@ -210,7 +209,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"update not implemented for: {self}")
 
-    async def upsert(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    async def upsert(self, record: RecordIdType, data: Value | None = None) -> Value:
         """Insert records into the database, or to update them if they exist.
 
 
@@ -236,7 +235,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"upsert not implemented for: {self}")
 
-    async def merge(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    async def merge(self, record: RecordIdType, data: Value | None = None) -> Value:
         """Modify by deep merging all records in a table, or a specific record, in the database.
 
         This function merges the current document / record data with the
@@ -266,7 +265,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"merge not implemented for: {self}")
 
-    async def patch(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    async def patch(self, record: RecordIdType, data: Value | None = None) -> Value:
         """Apply JSON Patch changes to all records, or a specific record, in the database.
 
         This function patches the current document / record data with
@@ -321,7 +320,7 @@ class AsyncTemplate:
 
     async def insert(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
     ) -> Value:
         """
@@ -342,7 +341,7 @@ class AsyncTemplate:
 
     async def insert_relation(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
     ) -> Value:
         """
@@ -361,7 +360,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"insert_relation not implemented for: {self}")
 
-    async def live(self, table: Union[str, Table], diff: bool = False) -> UUID:
+    async def live(self, table: str | Table, diff: bool = False) -> UUID:
         """Initiates a live query for a specified table name.
 
         Args:
@@ -379,7 +378,7 @@ class AsyncTemplate:
         raise NotImplementedError(f"live not implemented for: {self}")
 
     async def subscribe_live(
-        self, query_uuid: Union[str, UUID]
+        self, query_uuid: str | UUID
     ) -> AsyncGenerator[dict[str, Value], None]:
         """Returns a queue that receives notification messages from a running live query.
 
@@ -394,7 +393,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"subscribe_live not implemented for: {self}")
 
-    async def kill(self, query_uuid: Union[str, UUID]) -> None:
+    async def kill(self, query_uuid: str | UUID) -> None:
         """Kills a running live query by it's UUID.
 
         Args:

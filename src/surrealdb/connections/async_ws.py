@@ -7,7 +7,7 @@ import uuid
 from asyncio import AbstractEventLoop, Future, Queue, Task
 from collections.abc import AsyncGenerator
 from types import TracebackType
-from typing import Any, Optional, Union
+from typing import Any
 from uuid import UUID
 
 import websockets
@@ -43,13 +43,13 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         """
         self.url: Url = Url(url)
         self.raw_url: str = f"{self.url.raw_url}/rpc"
-        self.host: Optional[str] = self.url.hostname
-        self.port: Optional[int] = self.url.port
-        self.token: Optional[str] = None
+        self.host: str | None = self.url.hostname
+        self.port: int | None = self.url.port
+        self.token: str | None = None
         self.socket: Any = None  # WebSocket connection
-        self.loop: Optional[AbstractEventLoop] = None
+        self.loop: AbstractEventLoop | None = None
         self.qry: dict[str, Future[dict[str, Any]]] = {}
-        self.recv_task: Optional[Task[None]] = None
+        self.recv_task: Task[None] | None = None
         self.live_queues: dict[str, list[Queue[dict[str, Any]]]] = {}
 
     async def _recv_task(self) -> None:
@@ -116,7 +116,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         # Cannot be more specific without runtime schema validation
         return response
 
-    async def connect(self, url: Optional[str] = None) -> None:
+    async def connect(self, url: str | None = None) -> None:
         if self.socket:
             return
 
@@ -135,14 +135,14 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.loop = asyncio.get_running_loop()
         self.recv_task = asyncio.create_task(self._recv_task())
 
-    async def authenticate(self, token: str, session_id: Optional[UUID] = None) -> None:
+    async def authenticate(self, token: str, session_id: UUID | None = None) -> None:
         kwargs: dict[str, Any] = {"token": token}
         if session_id is not None:
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.AUTHENTICATE, **kwargs)
         await self._send(message, "authenticating")
 
-    async def invalidate(self, session_id: Optional[UUID] = None) -> None:
+    async def invalidate(self, session_id: UUID | None = None) -> None:
         kwargs: dict[str, Any] = {}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -151,7 +151,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.token = None
 
     async def signup(
-        self, vars: dict[str, Value], session_id: Optional[UUID] = None
+        self, vars: dict[str, Value], session_id: UUID | None = None
     ) -> Tokens:
         kwargs: dict[str, Any] = {"data": vars}
         if session_id is not None:
@@ -164,7 +164,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         return tokens
 
     async def signin(
-        self, vars: dict[str, Value], session_id: Optional[UUID] = None
+        self, vars: dict[str, Value], session_id: UUID | None = None
     ) -> Tokens:
         kwargs: dict[str, Any] = {"params": vars}
         if session_id is not None:
@@ -176,7 +176,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.token = tokens.access
         return tokens
 
-    async def info(self, session_id: Optional[UUID] = None) -> Value:
+    async def info(self, session_id: UUID | None = None) -> Value:
         kwargs: dict[str, Any] = {}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -191,7 +191,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self,
         namespace: str,
         database: str,
-        session_id: Optional[UUID] = None,
+        session_id: UUID | None = None,
     ) -> None:
         kwargs: dict[str, Any] = {
             "namespace": namespace,
@@ -205,9 +205,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def query(
         self,
         query: str,
-        vars: Optional[dict[str, Value]] = None,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        vars: dict[str, Value] | None = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         response = await self.query_raw(
             query, vars, session_id=session_id, txn_id=txn_id
@@ -219,9 +219,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def query_raw(
         self,
         query: str,
-        params: Optional[dict[str, Value]] = None,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        params: dict[str, Value] | None = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> dict[str, Any]:
         if params is None:
             params = {}
@@ -234,7 +234,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         response = await self._send(message, "query", bypass=True)
         return response
 
-    async def version(self, session_id: Optional[UUID] = None) -> str:
+    async def version(self, session_id: UUID | None = None) -> str:
         kwargs: dict[str, Any] = {}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -247,8 +247,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self,
         key: str,
         value: Value,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> None:
         kwargs: dict[str, Any] = {"key": key, "value": value}
         if session_id is not None:
@@ -261,8 +261,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def unset(
         self,
         key: str,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> None:
         kwargs: dict[str, Any] = {"params": [key]}
         if session_id is not None:
@@ -275,8 +275,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def select(
         self,
         record: RecordIdType,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -291,9 +291,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def create(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        data: Value | None = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -315,9 +315,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def update(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        data: Value | None = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -341,9 +341,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def merge(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        data: Value | None = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -367,9 +367,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def patch(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        data: Value | None = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -393,8 +393,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def delete(
         self,
         record: RecordIdType,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -412,10 +412,10 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def insert(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         # Validate that table is not a RecordID
         if isinstance(table, RecordID):
@@ -436,10 +436,10 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def insert_relation(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         table_ref = self._resource_to_variable(table, variables, "_table")
@@ -454,9 +454,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def live(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         diff: bool = False,
-        session_id: Optional[UUID] = None,
+        session_id: UUID | None = None,
     ) -> UUID:
         kwargs: dict[str, Any] = {"table": table}
         if session_id is not None:
@@ -470,7 +470,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         return uuid
 
     async def subscribe_live(
-        self, query_uuid: Union[str, UUID]
+        self, query_uuid: str | UUID
     ) -> AsyncGenerator[dict[str, Value], None]:
         result_queue: Queue[dict[str, Any]] = Queue()
         suid = str(query_uuid)
@@ -490,8 +490,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def kill(
         self,
-        query_uuid: Union[str, UUID],
-        session_id: Optional[UUID] = None,
+        query_uuid: str | UUID,
+        session_id: UUID | None = None,
     ) -> None:
         kwargs: dict[str, Any] = {"uuid": query_uuid}
         if session_id is not None:
@@ -510,7 +510,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         message = RequestMessage(RequestMethod.DETACH, session=session_id)
         await self._send(message, "detach")
 
-    async def begin(self, session_id: Optional[UUID] = None) -> UUID:
+    async def begin(self, session_id: UUID | None = None) -> UUID:
         kwargs: dict[str, Any] = {}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -522,14 +522,14 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             return UUID(result)
         return result
 
-    async def commit(self, txn_id: UUID, session_id: Optional[UUID] = None) -> None:
+    async def commit(self, txn_id: UUID, session_id: UUID | None = None) -> None:
         kwargs: dict[str, Any] = {"txn": txn_id}
         if session_id is not None:
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.COMMIT, **kwargs)
         await self._send(message, "commit")
 
-    async def cancel(self, txn_id: UUID, session_id: Optional[UUID] = None) -> None:
+    async def cancel(self, txn_id: UUID, session_id: UUID | None = None) -> None:
         if session_id is not None:
             message = RequestMessage(
                 RequestMethod.CANCEL, txn=txn_id, session=session_id
@@ -545,9 +545,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def upsert(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
-        session_id: Optional[UUID] = None,
-        txn_id: Optional[UUID] = None,
+        data: Value | None = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -601,9 +601,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def __aexit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_value: Optional[BaseException],
-        traceback: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
     ) -> None:
         """
         Asynchronous context manager exit.
@@ -627,7 +627,7 @@ class AsyncSurrealSession:
     async def query(
         self,
         query: str,
-        vars: Optional[dict[str, Value]] = None,
+        vars: dict[str, Value] | None = None,
     ) -> Value:
         return await self._connection.query(query, vars, session_id=self._session_id)
 
@@ -655,28 +655,28 @@ class AsyncSurrealSession:
     async def create(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return await self._connection.create(record, data, session_id=self._session_id)
 
     async def update(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return await self._connection.update(record, data, session_id=self._session_id)
 
     async def merge(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return await self._connection.merge(record, data, session_id=self._session_id)
 
     async def patch(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return await self._connection.patch(record, data, session_id=self._session_id)
 
@@ -685,14 +685,14 @@ class AsyncSurrealSession:
 
     async def insert(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
     ) -> Value:
         return await self._connection.insert(table, data, session_id=self._session_id)
 
     async def insert_relation(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
     ) -> Value:
         return await self._connection.insert_relation(
@@ -702,18 +702,18 @@ class AsyncSurrealSession:
     async def upsert(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return await self._connection.upsert(record, data, session_id=self._session_id)
 
     async def live(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         diff: bool = False,
     ) -> UUID:
         return await self._connection.live(table, diff, session_id=self._session_id)
 
-    async def kill(self, query_uuid: Union[str, UUID]) -> None:
+    async def kill(self, query_uuid: str | UUID) -> None:
         await self._connection.kill(query_uuid, session_id=self._session_id)
 
     async def begin_transaction(self) -> "AsyncSurrealTransaction":
@@ -738,7 +738,7 @@ class AsyncSurrealTransaction:
     async def query(
         self,
         query: str,
-        vars: Optional[dict[str, Value]] = None,
+        vars: dict[str, Value] | None = None,
     ) -> Value:
         return await self._connection.query(
             query,
@@ -757,7 +757,7 @@ class AsyncSurrealTransaction:
     async def create(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return await self._connection.create(
             record,
@@ -769,7 +769,7 @@ class AsyncSurrealTransaction:
     async def update(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return await self._connection.update(
             record,
@@ -781,7 +781,7 @@ class AsyncSurrealTransaction:
     async def merge(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return await self._connection.merge(
             record,
@@ -793,7 +793,7 @@ class AsyncSurrealTransaction:
     async def patch(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return await self._connection.patch(
             record,
@@ -811,7 +811,7 @@ class AsyncSurrealTransaction:
 
     async def insert(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
     ) -> Value:
         return await self._connection.insert(
@@ -823,7 +823,7 @@ class AsyncSurrealTransaction:
 
     async def insert_relation(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
     ) -> Value:
         return await self._connection.insert_relation(
@@ -836,7 +836,7 @@ class AsyncSurrealTransaction:
     async def upsert(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         return await self._connection.upsert(
             record,

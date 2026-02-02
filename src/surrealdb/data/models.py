@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Union
+from typing import Any
 
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
@@ -51,7 +51,7 @@ class GraphQLOptions:
     format: str = field(default="json")
 
 
-def table_or_record_id(resource_str: str) -> Union[Table, RecordID]:
+def table_or_record_id(resource_str: str) -> Table | RecordID:
     if ":" in resource_str:
         table, record_id = resource_str.split(":")
         if len(table) == 0 or len(record_id) == 0:

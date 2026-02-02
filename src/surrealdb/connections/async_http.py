@@ -1,6 +1,6 @@
 import uuid
 from types import TracebackType
-from typing import Any, Optional, Union, cast
+from typing import Any, cast
 
 import aiohttp
 
@@ -38,14 +38,14 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         """
         self.url: Url = Url(url)
         self.raw_url: str = self.url.raw_url
-        self.host: Optional[str] = self.url.hostname
-        self.port: Optional[int] = self.url.port
-        self.token: Optional[str] = None
+        self.host: str | None = self.url.hostname
+        self.port: int | None = self.url.port
+        self.token: str | None = None
         self.id: str = str(uuid.uuid4())
-        self.namespace: Optional[str] = None
-        self.database: Optional[str] = None
+        self.namespace: str | None = None
+        self.database: str | None = None
         self.vars: dict[str, Value] = dict()
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
 
     async def _send(
         self,
@@ -152,14 +152,14 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.namespace = namespace
         self.database = database
 
-    async def query(self, query: str, vars: Optional[dict[str, Value]] = None) -> Value:
+    async def query(self, query: str, vars: dict[str, Value] | None = None) -> Value:
         response = await self.query_raw(query, vars)
         self.check_response_for_error(response, "query")
         self.check_response_for_result(response, "query")
         return response["result"][0]["result"]
 
     async def query_raw(
-        self, query: str, params: Optional[dict[str, Value]] = None
+        self, query: str, params: dict[str, Value] | None = None
     ) -> dict[str, Any]:
         if params is None:
             params = {}
@@ -177,7 +177,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     async def create(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -209,7 +209,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def insert(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
     ) -> Value:
         # Validate that table is not a RecordID
@@ -229,7 +229,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def insert_relation(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
     ) -> Value:
         variables: dict[str, Any] = {}
@@ -247,7 +247,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     async def unset(self, key: str) -> None:
         self.vars.pop(key)
 
-    async def merge(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    async def merge(self, record: RecordIdType, data: Value | None = None) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -265,7 +265,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
             result, unwrap=self._is_single_record_operation(record)
         )
 
-    async def patch(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    async def patch(self, record: RecordIdType, data: Value | None = None) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -292,7 +292,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.check_response_for_error(response, "select")
         return response["result"][0]["result"]
 
-    async def update(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    async def update(self, record: RecordIdType, data: Value | None = None) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -317,7 +317,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "getting database version")
         return response["result"]
 
-    async def upsert(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    async def upsert(self, record: RecordIdType, data: Value | None = None) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -345,9 +345,9 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def __aexit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_value: Optional[BaseException],
-        traceback: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
     ) -> None:
         """
         Asynchronous context manager exit.
