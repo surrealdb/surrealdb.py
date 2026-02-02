@@ -564,7 +564,7 @@ The official SurrealDB Python SDK.
 
 ## Requirements
 
-- **Python**: 3.9 or greater
+- **Python**: 3.10 or greater
 - **SurrealDB**: v2.0.0 to v2.3.6 (for remote connections)
 - **Rust toolchain**: Only required if building from source
 

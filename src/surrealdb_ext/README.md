@@ -31,7 +31,7 @@ The embedded database feature allows SurrealDB to run directly within your Pytho
 - **Full API compatibility**: Works with all SDK methods (query, select, create, update, etc.)
 - **Async and sync support**: Both `AsyncSurreal` and `Surreal` APIs available
 - **Cross-platform**: Pre-built wheels for Linux, macOS, and Windows
-- **Python 3.9+**: Supports Python 3.9, 3.10, 3.11, 3.12, and 3.13
+- **Python 3.10+**: Supports Python 3.10, 3.11, 3.12, and 3.13
 
 ## Architecture
 
@@ -269,7 +269,7 @@ The embedded database supports two storage backends, configured via the Cargo.to
 ### Requirements
 
 **For using pre-built wheels (recommended):**
-- Python 3.9 or later
+- Python 3.10 or later
 - pip or uv package manager
 - Compatible platform (Linux x86_64/aarch64, macOS x86_64/arm64, Windows x64)
 
@@ -303,7 +303,7 @@ uv run maturin develop --release
 maturin build --release
 
 # Build for specific Python versions
-maturin build --release --interpreter python3.9 python3.10 python3.11 python3.12 python3.13
+maturin build --release --interpreter python3.10 python3.11 python3.12 python3.13
 ```
 
 ### CI/CD
@@ -321,7 +321,7 @@ The `.github/workflows/build.yml` workflow automatically builds wheels on releas
 **Windows:**
 - x64
 
-**Python versions:** 3.9, 3.10, 3.11, 3.12, and 3.13
+**Python versions:** 3.10, 3.11, 3.12, and 3.13
 
 Wheels use **ABI3** (stable ABI), meaning a single wheel works across all supported Python versions on the same platform.
 
@@ -454,7 +454,7 @@ pip install --force-reinstall surrealdb
 
 **Problem**: `ModuleNotFoundError: No module named 'surrealdb._surrealdb_ext'`
 - The native extension wasn't installed properly
-- Check you're using the right Python version (3.9+)
+- Check you're using the right Python version (3.10+)
 - Verify platform compatibility (wheels available for Linux, macOS, Windows)
 
 **Problem**: Database connection errors with embedded database
@@ -602,7 +602,7 @@ A: Yes! Use `maturin develop` (without `--release`) for debug builds with symbol
 
 **Q: What Python versions are supported?**
 
-A: Python 3.9, 3.10, 3.11, 3.12, and 3.13. Wheels use the stable ABI (ABI3) so one wheel works for all versions.
+A: Python 3.10, 3.11, 3.12, and 3.13. Wheels use the stable ABI (ABI3) so one wheel works for all versions.
 
 **Q: What platforms are supported?**
 

@@ -11,9 +11,9 @@ async def test_batch(async_ws_connection: AsyncWsSurrealConnection) -> None:
     surrealdb_version = os.environ.get("SURREALDB_VERSION")
     if surrealdb_version == "v2.1.0":
         pass
-    elif python_version == "3.9" or python_version == "3.10":
+    elif python_version == "3.10":
         print(
-            "async batching is being bypassed due to python versions 3.9 and 3.10 not supporting async task group"
+            "async batching is being bypassed due to python version 3.10 not supporting async task group"
         )
     else:
         sleep_fn = "duration::from::millis"
