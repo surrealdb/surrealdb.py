@@ -78,7 +78,7 @@ This project follows library best practices for dependency management:
    uv run mypy --explicit-package-bases src/
    
    # Run tests (with coverage)
-   uv run scripts/run_tests.sh
+   uv run scripts/tests.sh
    # Or directly:
    uv run pytest --cov=src/surrealdb --cov-report=term-missing --cov-report=html
    ```
@@ -334,6 +334,35 @@ with Surreal("file://mydb") as db:
 
 For more examples, see the [`examples/embedded/`](examples/embedded/) directory.
 
+## Sessions and transactions
+
+Multi-session and client-side transactions are supported **only for WebSocket connections** (`ws://` or `wss://`). They are not available for HTTP or embedded connections.
+
+- **Sessions**: Call `attach()` on a WS connection to create a new session (returns a `UUID`). Use `new_session()` to get an `AsyncSurrealSession` or `BlockingSurrealSession` that scopes all operations to that session. Call `close_session()` on the session (or `detach(session_id)` on the connection) to drop it.
+- **Transactions**: On a session (or the default connection), call `begin_transaction()` to start a transaction (returns `AsyncSurrealTransaction` or `BlockingSurrealTransaction`). Run queries on the transaction object; then call `commit()` or `cancel()` to finish.
+
+Example (async WS):
+
+```python
+from surrealdb import AsyncSurreal
+
+async with AsyncSurreal("ws://localhost:8000/rpc") as db:
+    await db.signin({"username": "root", "password": "root"})
+    await db.use("test", "test")
+
+    session = await db.new_session()
+    await session.use("test", "test")
+    result = await session.query("SELECT 1")
+
+    txn = await session.begin_transaction()
+    await txn.query("CREATE person SET name = 'x'")
+    await txn.commit()
+
+    await session.close_session()
+```
+
+On HTTP or embedded connections, `attach()`, `detach()`, `begin()`, `commit()`, `cancel()`, and `new_session()` raise `NotImplementedError` with a message that sessions/transactions are only supported for WebSocket connections.
+
 ## Observability with Logfire
 
 [Pydantic Logfire](https://docs.pydantic.dev/logfire/) provides automatic instrumentation for SurrealDB operations, giving you instant observability into your database interactions. Logfire exports standard OpenTelemetry spans, making it compatible with any observability platform.
@@ -535,7 +564,7 @@ The official SurrealDB Python SDK.
 
 ## Requirements
 
-- **Python**: 3.9 or greater
+- **Python**: 3.10 or greater
 - **SurrealDB**: v2.0.0 to v2.3.6 (for remote connections)
 - **Rust toolchain**: Only required if building from source
 

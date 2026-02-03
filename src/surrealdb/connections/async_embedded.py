@@ -7,9 +7,10 @@ from __future__ import annotations
 import uuid
 from types import TracebackType
 from typing import Any
+from uuid import UUID
 
 from surrealdb._surrealdb_ext import AsyncEmbeddedDB
-from surrealdb.connections.async_ws import AsyncWsSurrealConnection
+from surrealdb.connections.async_ws import AsyncSurrealSession, AsyncWsSurrealConnection
 from surrealdb.connections.url import Url
 from surrealdb.data.cbor import decode
 from surrealdb.request_message.message import RequestMessage
@@ -128,6 +129,36 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
             return {}
 
         return response
+
+    async def attach(self) -> UUID:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def detach(self, session_id: Any) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def begin(self, session_id: Any = None) -> UUID:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def commit(self, txn_id: Any, session_id: Any = None) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def cancel(self, txn_id: Any, session_id: Any = None) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def new_session(self) -> AsyncSurrealSession:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
 
     # All other methods (query, select, create, update, delete, merge, patch, etc.)
     # are inherited from AsyncWsSurrealConnection and work automatically via _send()!

@@ -24,7 +24,7 @@ A comprehensive example demonstrating automatic observability for SurrealDB oper
 
 ## Prerequisites
 
-- Python 3.9+
+- Python 3.10+
 - Docker (for running SurrealDB)
 
 ## Installation

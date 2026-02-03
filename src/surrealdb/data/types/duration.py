@@ -1,7 +1,6 @@
 import re
 from dataclasses import dataclass
 from math import floor
-from typing import Union
 
 UNITS = {
     "ns": 1,
@@ -22,7 +21,7 @@ class Duration:
     elapsed: int = 0  # nanoseconds
 
     @staticmethod
-    def parse(value: Union[str, int], nanoseconds: int = 0) -> "Duration":
+    def parse(value: str | int, nanoseconds: int = 0) -> "Duration":
         if isinstance(value, int):
             return Duration(nanoseconds + value * UNITS["s"])
         else:

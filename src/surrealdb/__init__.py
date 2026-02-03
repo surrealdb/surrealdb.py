@@ -2,10 +2,18 @@ from typing import Any, Union
 
 from surrealdb.connections.async_embedded import AsyncEmbeddedSurrealConnection
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
-from surrealdb.connections.async_ws import AsyncWsSurrealConnection
+from surrealdb.connections.async_ws import (
+    AsyncSurrealSession,
+    AsyncSurrealTransaction,
+    AsyncWsSurrealConnection,
+)
 from surrealdb.connections.blocking_embedded import BlockingEmbeddedSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
-from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+from surrealdb.connections.blocking_ws import (
+    BlockingSurrealSession,
+    BlockingSurrealTransaction,
+    BlockingWsSurrealConnection,
+)
 from surrealdb.connections.url import Url, UrlScheme
 
 from surrealdb.data.types.table import Table
@@ -36,16 +44,20 @@ from surrealdb.data.types.range import Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.datetime import Datetime
 
-from surrealdb.types import Value
+from surrealdb.types import Tokens, Value
 
 __all__ = [
     "AsyncSurreal",
     "Surreal",
     "AsyncEmbeddedSurrealConnection",
     "AsyncHttpSurrealConnection",
+    "AsyncSurrealSession",
+    "AsyncSurrealTransaction",
     "AsyncWsSurrealConnection",
     "BlockingEmbeddedSurrealConnection",
     "BlockingHttpSurrealConnection",
+    "BlockingSurrealSession",
+    "BlockingSurrealTransaction",
     "BlockingWsSurrealConnection",
     "Table",
     "Duration",
@@ -53,6 +65,7 @@ __all__ = [
     "Range",
     "RecordID",
     "Datetime",
+    "Tokens",
     "Value",
     # Constants
     "TAG_BOUND_EXCLUDED",

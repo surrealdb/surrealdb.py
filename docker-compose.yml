@@ -79,3 +79,17 @@ services:
       - "8023:8000"
     profiles:
       - v2-3
+
+  # SurrealDB 3.x (bearer access tests)
+  surrealdb-v3:
+    image: surrealdb/surrealdb:v3.0.0-beta.2
+    command: "start --allow-all"
+    environment:
+      - SURREAL_USER=root
+      - SURREAL_PASS=root
+      - SURREAL_INSECURE_FORWARD_ACCESS_ERRORS=true
+      - SURREAL_LOG=debug
+    ports:
+      - "8030:8000"
+    profiles:
+      - v3

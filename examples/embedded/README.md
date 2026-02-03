@@ -85,5 +85,5 @@ Pre-built wheels are available for:
 - macOS (x86_64, ARM64)
 - Windows (x64)
 
-For Python 3.9, 3.10, 3.11, 3.12, and 3.13.
+For Python 3.10, 3.11, 3.12, and 3.13.
 

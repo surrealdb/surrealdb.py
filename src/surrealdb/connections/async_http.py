@@ -1,6 +1,6 @@
 import uuid
 from types import TracebackType
-from typing import Any, Optional, Union, cast
+from typing import Any, cast
 
 import aiohttp
 
@@ -12,7 +12,7 @@ from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
-from surrealdb.types import Value
+from surrealdb.types import Tokens, Value, parse_auth_result
 
 
 class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
@@ -38,14 +38,14 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         """
         self.url: Url = Url(url)
         self.raw_url: str = self.url.raw_url
-        self.host: Optional[str] = self.url.hostname
-        self.port: Optional[int] = self.url.port
-        self.token: Optional[str] = None
+        self.host: str | None = self.url.hostname
+        self.port: int | None = self.url.port
+        self.token: str | None = None
         self.id: str = str(uuid.uuid4())
-        self.namespace: Optional[str] = None
-        self.database: Optional[str] = None
+        self.namespace: str | None = None
+        self.database: str | None = None
         self.vars: dict[str, Value] = dict()
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
 
     async def _send(
         self,
@@ -113,29 +113,23 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         await self._send(message, "invalidating")
         self.token = None
 
-    async def signup(self, vars: dict[str, Value]) -> str:
+    async def signup(self, vars: dict[str, Value]) -> Tokens:
         message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
         self.id = message.id
         response = await self._send(message, "signup")
         self.check_response_for_result(response, "signup")
-        self.token = response["result"]
-        return response["result"]
+        tokens = parse_auth_result(response["result"])
+        self.token = tokens.access
+        return tokens
 
-    async def signin(self, vars: dict[str, Value]) -> str:
-        message = RequestMessage(
-            RequestMethod.SIGN_IN,
-            username=vars.get("username"),
-            password=vars.get("password"),
-            access=vars.get("access"),
-            database=vars.get("database"),
-            namespace=vars.get("namespace"),
-            variables=vars.get("variables"),
-        )
+    async def signin(self, vars: dict[str, Value]) -> Tokens:
+        message = RequestMessage(RequestMethod.SIGN_IN, params=vars)
         self.id = message.id
         response = await self._send(message, "signing in")
         self.check_response_for_result(response, "signing in")
-        self.token = response["result"]
-        return response["result"]
+        tokens = parse_auth_result(response["result"])
+        self.token = tokens.access
+        return tokens
 
     async def info(self) -> Value:
         message = RequestMessage(RequestMethod.INFO)
@@ -158,14 +152,14 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.namespace = namespace
         self.database = database
 
-    async def query(self, query: str, vars: Optional[dict[str, Value]] = None) -> Value:
+    async def query(self, query: str, vars: dict[str, Value] | None = None) -> Value:
         response = await self.query_raw(query, vars)
         self.check_response_for_error(response, "query")
         self.check_response_for_result(response, "query")
         return response["result"][0]["result"]
 
     async def query_raw(
-        self, query: str, params: Optional[dict[str, Value]] = None
+        self, query: str, params: dict[str, Value] | None = None
     ) -> dict[str, Any]:
         if params is None:
             params = {}
@@ -183,7 +177,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     async def create(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -215,7 +209,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def insert(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
     ) -> Value:
         # Validate that table is not a RecordID
@@ -235,7 +229,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def insert_relation(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
     ) -> Value:
         variables: dict[str, Any] = {}
@@ -253,7 +247,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     async def unset(self, key: str) -> None:
         self.vars.pop(key)
 
-    async def merge(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    async def merge(self, record: RecordIdType, data: Value | None = None) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -271,7 +265,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
             result, unwrap=self._is_single_record_operation(record)
         )
 
-    async def patch(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    async def patch(self, record: RecordIdType, data: Value | None = None) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -298,7 +292,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.check_response_for_error(response, "select")
         return response["result"][0]["result"]
 
-    async def update(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    async def update(self, record: RecordIdType, data: Value | None = None) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -323,7 +317,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "getting database version")
         return response["result"]
 
-    async def upsert(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    async def upsert(self, record: RecordIdType, data: Value | None = None) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
 
@@ -351,9 +345,9 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     async def __aexit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_value: Optional[BaseException],
-        traceback: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
     ) -> None:
         """
         Asynchronous context manager exit.
@@ -361,3 +355,33 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         """
         if self._session is not None:
             await self._session.close()
+
+    async def attach(self) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def detach(self, session_id: Any) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def begin(self, session_id: Any = None) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def commit(self, txn_id: Any, session_id: Any = None) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def cancel(self, txn_id: Any, session_id: Any = None) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def new_session(self) -> None:
+        raise NotImplementedError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )

@@ -1,10 +1,9 @@
 from collections.abc import Generator
-from typing import Optional, Union
 from uuid import UUID
 
 from surrealdb.data.types.record_id import RecordIdType
 from surrealdb.data.types.table import Table
-from surrealdb.types import Value
+from surrealdb.types import Tokens, Value
 
 
 class SyncTemplate:
@@ -66,40 +65,45 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"invalidate not implemented for: {self}")
 
-    def signup(self, vars: dict[str, Value]) -> str:
+    def signup(self, vars: dict[str, Value]) -> Tokens:
         """Sign this connection up to a specific authentication scope.
         [See the docs](https://surrealdb.com/docs/sdk/python/methods/signup)
 
         Args:
-            vars: Variables used in a signup query.
+            vars: Variables used in a signup query (namespace, database, access,
+                variables for record auth; or user/pass for system auth).
+                With TYPE RECORD and WITH REFRESH (SurrealDB v3+), the server
+                returns both access and refresh tokens.
+
+        Returns:
+            Tokens with optional access and refresh. Use access with authenticate().
 
         Example:
             db.signup({
                 namespace: 'surrealdb',
                 database: 'docs',
                 access: 'user',
-
-                # Also pass any properties required by the scope definition
-                variables: {
-                    email: 'info@surrealdb.com',
-                    pass: '123456',
-                },
+                variables: { email: 'info@surrealdb.com', pass: '123456' },
             })
         """
         raise NotImplementedError(f"signup not implemented for: {self}")
 
-    def signin(self, vars: dict[str, Value]) -> str:
+    def signin(self, vars: dict[str, Value]) -> Tokens:
         """Sign this connection in to a specific authentication scope.
         [See the docs](https://surrealdb.com/docs/sdk/python/methods/signin)
 
         Args:
-            vars: Variables used in a signin query.
+            vars: Variables for signin: username/password (system), or
+                namespace, database, access, variables (record), or
+                namespace, database, access, key (bearer), or
+                namespace, database, access, refresh (refresh token).
+
+        Returns:
+            Tokens with optional access and refresh. Use access with authenticate().
 
         Example:
-            db.signin({
-                username: 'root',
-                password: 'surrealdb',
-            })
+            db.signin({ username: 'root', password: 'surrealdb' })
+            db.signin({ namespace: 'ns', database: 'db', access: 'api', key: bearer_key })
         """
         raise NotImplementedError(f"signin not implemented for: {self}")
 
@@ -134,7 +138,7 @@ class SyncTemplate:
         raise NotImplementedError(f"let not implemented for: {self}")
 
     # TODO: Query can return any Value type depending on the query
-    def query(self, query: str, vars: Optional[dict[str, Value]] = None) -> Value:
+    def query(self, query: str, vars: dict[str, Value] | None = None) -> Value:
         """Run a set of SurrealQL statements against the database.
 
         Args:
@@ -167,7 +171,7 @@ class SyncTemplate:
     def create(
         self,
         record: RecordIdType,
-        data: Optional[Value] = None,
+        data: Value | None = None,
     ) -> Value:
         """Create a record in the database.
 
@@ -183,7 +187,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"create not implemented for: {self}")
 
-    def update(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    def update(self, record: RecordIdType, data: Value | None = None) -> Value:
         """Update all records in a table, or a specific record, in the database.
 
         This function replaces the current document / record data with the
@@ -211,7 +215,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"update not implemented for: {self}")
 
-    def upsert(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    def upsert(self, record: RecordIdType, data: Value | None = None) -> Value:
         """Insert records into the database, or to update them if they exist.
 
 
@@ -237,7 +241,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"upsert not implemented for: {self}")
 
-    def merge(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    def merge(self, record: RecordIdType, data: Value | None = None) -> Value:
         """Modify by deep merging all records in a table, or a specific record, in the database.
 
         This function merges the current document / record data with the
@@ -267,7 +271,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"merge not implemented for: {self}")
 
-    def patch(self, record: RecordIdType, data: Optional[Value] = None) -> Value:
+    def patch(self, record: RecordIdType, data: Value | None = None) -> Value:
         """Apply JSON Patch changes to all records, or a specific record, in the database.
 
         This function patches the current document / record data with
@@ -322,7 +326,7 @@ class SyncTemplate:
 
     def insert(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
     ) -> Value:
         """
@@ -343,7 +347,7 @@ class SyncTemplate:
 
     def insert_relation(
         self,
-        table: Union[str, Table],
+        table: str | Table,
         data: Value,
     ) -> Value:
         """
@@ -362,7 +366,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"insert_relation not implemented for: {self}")
 
-    def live(self, table: Union[str, Table], diff: bool = False) -> UUID:
+    def live(self, table: str | Table, diff: bool = False) -> UUID:
         """Initiates a live query for a specified table name.
 
         Args:
@@ -380,7 +384,7 @@ class SyncTemplate:
         raise NotImplementedError(f"live not implemented for: {self}")
 
     def subscribe_live(
-        self, query_uuid: Union[str, UUID]
+        self, query_uuid: str | UUID
     ) -> Generator[dict[str, Value], None, None]:
         """Live notification returns a queue that receives notification messages from the back end.
 
@@ -395,7 +399,7 @@ class SyncTemplate:
         """
         raise NotImplementedError(f"subscribe_live not implemented for: {self}")
 
-    def kill(self, query_uuid: Union[str, UUID]) -> None:
+    def kill(self, query_uuid: str | UUID) -> None:
         """Kills a running live query by it's UUID.
 
         Args:

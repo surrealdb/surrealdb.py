@@ -10,13 +10,12 @@ readme = "README.md"
 authors = [{ name = "SurrealDB" }]
 license = "Apache-2.0"
 keywords = ["SurrealDB", "Database"]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -243,6 +242,9 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
+markers = [
+    "surrealdb_v3: tests that require a running SurrealDB 3.x server (skipped otherwise)",
+]
 addopts = [
     "--strict-markers",
     "--strict-config",
