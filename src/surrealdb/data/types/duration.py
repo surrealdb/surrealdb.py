@@ -2,6 +2,8 @@ import re
 from dataclasses import dataclass
 from math import floor
 
+from surrealdb.errors import InvalidDurationError
+
 UNITS = {
     "ns": 1,
     "µs": int(1e3),  # Microsecond (µ symbol)
@@ -30,14 +32,14 @@ class Duration:
             matches = re.findall(pattern, value.lower())
 
             if not matches:
-                raise ValueError(f"Invalid duration format: {value}")
+                raise InvalidDurationError(f"Invalid duration format: {value}")
 
             total_ns = nanoseconds
             for num_str, unit in matches:
                 num = int(num_str)
                 if unit not in UNITS:
                     # this will never happen because the regex only matches valid units
-                    raise ValueError(f"Unknown duration unit: {unit}")
+                    raise InvalidDurationError(f"Unknown duration unit: {unit}")
                 total_ns += num * UNITS[unit]
 
             return Duration(total_ns)

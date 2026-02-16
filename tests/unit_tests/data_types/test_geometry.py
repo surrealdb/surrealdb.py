@@ -13,6 +13,7 @@ from surrealdb.data.types.geometry import (
     GeometryPoint,
     GeometryPolygon,
 )
+from surrealdb.errors import InvalidGeometryError
 
 
 # Unit tests for encoding - GeometryPoint
@@ -565,7 +566,9 @@ async def test_geometry_polygon_with_holes() -> None:
 async def test_geometry_polygon_validation() -> None:
     """Test that polygon validation catches invalid rings."""
     # Test 1: Ring not closed (first != last point)
-    with pytest.raises(ValueError, match="first point.*must equal last point"):
+    with pytest.raises(
+        InvalidGeometryError, match="first point.*must equal last point"
+    ):
         unclosed_ring = GeometryLine(
             GeometryPoint(0.0, 0.0),
             GeometryPoint(1.0, 0.0),
@@ -575,7 +578,7 @@ async def test_geometry_polygon_validation() -> None:
         GeometryPolygon(unclosed_ring)
 
     # Test 2: Ring with too few points (< 4)
-    with pytest.raises(ValueError, match="must have at least 4 points"):
+    with pytest.raises(InvalidGeometryError, match="must have at least 4 points"):
         invalid_ring = GeometryLine(
             GeometryPoint(0.0, 0.0),
             GeometryPoint(1.0, 1.0),
@@ -592,7 +595,7 @@ async def test_geometry_polygon_validation() -> None:
         GeometryPoint(0.0, 0.0),
     )
 
-    with pytest.raises(ValueError, match="Invalid interior.*ring"):
+    with pytest.raises(InvalidGeometryError, match="Invalid interior.*ring"):
         invalid_hole = GeometryLine(
             GeometryPoint(2.0, 2.0),
             GeometryPoint(4.0, 2.0),
