@@ -1,11 +1,9 @@
 """MCP tool definitions for SurrealDB operations."""
 
-from typing import Optional
-
 from database import db_manager
 
 
-async def create_user(name: str, email: str, age: Optional[int] = None) -> dict:
+async def create_user(name: str, email: str, age: int | None = None) -> dict:
     """Create a new user in the database.
 
     Args:
@@ -103,9 +101,9 @@ async def get_user(user_id: str) -> dict:
 
 async def update_user(
     user_id: str,
-    name: Optional[str] = None,
-    email: Optional[str] = None,
-    age: Optional[int] = None,
+    name: str | None = None,
+    email: str | None = None,
+    age: int | None = None,
 ) -> dict:
     """Update a user's information.
 

@@ -20,7 +20,7 @@ class Mutation:
         info: Info,
         name: str,
         email: str,
-        age: Optional[int] = None,
+        age: int | None = None,
     ) -> User:
         """Create a new user.
 
@@ -63,9 +63,9 @@ class Mutation:
         self,
         info: Info,
         id: str,
-        name: Optional[str] = None,
-        email: Optional[str] = None,
-        age: Optional[int] = None,
+        name: str | None = None,
+        email: str | None = None,
+        age: int | None = None,
     ) -> User:
         """Update an existing user.
 
