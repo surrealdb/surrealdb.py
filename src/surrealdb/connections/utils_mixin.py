@@ -12,7 +12,7 @@ class UtilsMixin:
 
     @staticmethod
     def check_response_for_result(response: dict[str, Any], process: str) -> None:
-        if "result" not in response.keys():
+        if "result" not in response:
             raise Exception(f"no result {process}: {response}")
 
     @staticmethod
