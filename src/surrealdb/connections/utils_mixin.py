@@ -2,18 +2,26 @@ from typing import Any
 
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
+from surrealdb.errors import SurrealError, parse_query_error, parse_rpc_error
 
 
 class UtilsMixin:
     @staticmethod
     def check_response_for_error(response: dict[str, Any], process: str) -> None:
-        if response.get("error") is not None:
-            raise Exception(response.get("error"))
+        error = response.get("error")
+        if error is not None:
+            raise parse_rpc_error(error)
 
     @staticmethod
     def check_response_for_result(response: dict[str, Any], process: str) -> None:
         if "result" not in response.keys():
-            raise Exception(f"no result {process}: {response}")
+            raise SurrealError(f"no result {process}: {response}")
+
+    @staticmethod
+    def _check_query_result(stmt: dict[str, Any]) -> None:
+        """Raise if a query statement result has ``status: "ERR"``."""
+        if stmt.get("status") == "ERR":
+            raise parse_query_error(stmt)
 
     @staticmethod
     def _is_single_record_operation(resource: RecordIdType) -> bool:

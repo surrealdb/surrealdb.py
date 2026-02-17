@@ -26,6 +26,15 @@ def connection_params() -> dict[str, Any]:
     }
 
 
+_DEFINE_TABLES = """
+    DEFINE TABLE IF NOT EXISTS user SCHEMALESS;
+    DEFINE TABLE IF NOT EXISTS users SCHEMALESS;
+    DEFINE TABLE IF NOT EXISTS person SCHEMALESS;
+    DEFINE TABLE IF NOT EXISTS likes SCHEMALESS;
+    DEFINE TABLE IF NOT EXISTS document SCHEMALESS;
+"""
+
+
 @pytest.fixture
 async def async_http_connection(
     connection_params: dict[str, Any],
@@ -37,6 +46,7 @@ async def async_http_connection(
         namespace=connection_params["namespace"],
         database=connection_params["database_name"],
     )
+    await connection.query(_DEFINE_TABLES)
     yield connection
 
 
@@ -52,6 +62,7 @@ async def async_ws_connection(
             namespace=connection_params["namespace"],
             database=connection_params["database_name"],
         )
+        await connection.query(_DEFINE_TABLES)
         yield connection
     finally:
         # Ensure connection is always closed
@@ -73,6 +84,7 @@ def blocking_http_connection(
         namespace=connection_params["namespace"],
         database=connection_params["database_name"],
     )
+    connection.query(_DEFINE_TABLES)
     yield connection
 
 
@@ -87,6 +99,7 @@ def blocking_ws_connection(
         namespace=connection_params["namespace"],
         database=connection_params["database_name"],
     )
+    connection.query(_DEFINE_TABLES)
     yield connection
     if connection.socket:
         connection.socket.close()

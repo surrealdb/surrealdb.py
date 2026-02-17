@@ -6,6 +6,7 @@ from surrealdb.cbor import CBORTag
 from surrealdb.data import cbor
 from surrealdb.data.types import constants
 from surrealdb.data.types.duration import Duration
+from surrealdb.errors import InvalidDurationError
 
 
 def test_duration_init() -> None:
@@ -102,7 +103,7 @@ def test_duration_parse_invalid_unit() -> None:
     """Test Duration.parse with invalid unit raises ValueError."""
     # it fails when checking the format, before checking if the unit is valid,
     # which is ok.
-    with pytest.raises(ValueError, match="Invalid duration format: 10x"):
+    with pytest.raises(InvalidDurationError, match="Invalid duration format: 10x"):
         Duration.parse("10x")
 
 

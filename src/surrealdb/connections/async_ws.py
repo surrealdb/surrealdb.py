@@ -19,6 +19,7 @@ from surrealdb.connections.utils_mixin import UtilsMixin
 from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
+from surrealdb.errors import SurrealError, UnexpectedResponseError
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 from surrealdb.types import Tokens, Value, parse_auth_result
@@ -214,6 +215,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         )
         self.check_response_for_error(response, "query")
         self.check_response_for_result(response, "query")
+        self._check_query_result(response["result"][0])
         return response["result"][0]["result"]
 
     async def query_raw(
@@ -286,6 +288,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             query, variables, session_id=session_id, txn_id=txn_id
         )
         self.check_response_for_error(response, "select")
+        self._check_query_result(response["result"][0])
         return response["result"][0]["result"]
 
     async def create(
@@ -308,6 +311,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             query, variables, session_id=session_id, txn_id=txn_id
         )
         self.check_response_for_error(response, "create")
+        self._check_query_result(response["result"][0])
         result = response["result"][0]["result"]
         # CREATE always creates a single record, so always unwrap
         return self._unwrap_result(result, unwrap=True)
@@ -332,6 +336,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             query, variables, session_id=session_id, txn_id=txn_id
         )
         self.check_response_for_error(response, "update")
+        self._check_query_result(response["result"][0])
         result = response["result"][0]["result"]
         # UPDATE on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
@@ -358,6 +363,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             query, variables, session_id=session_id, txn_id=txn_id
         )
         self.check_response_for_error(response, "merge")
+        self._check_query_result(response["result"][0])
         result = response["result"][0]["result"]
         # MERGE on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
@@ -384,6 +390,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             query, variables, session_id=session_id, txn_id=txn_id
         )
         self.check_response_for_error(response, "patch")
+        self._check_query_result(response["result"][0])
         result = response["result"][0]["result"]
         # PATCH on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
@@ -404,6 +411,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             query, variables, session_id=session_id, txn_id=txn_id
         )
         self.check_response_for_error(response, "delete")
+        self._check_query_result(response["result"][0])
         result = response["result"][0]["result"]
         # DELETE on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
@@ -419,7 +427,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     ) -> Value:
         # Validate that table is not a RecordID
         if isinstance(table, RecordID):
-            raise Exception(
+            raise SurrealError(
                 f"There was a problem with the database: Can not execute INSERT statement using value '{table}'"
             )
 
@@ -432,6 +440,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             query, variables, session_id=session_id, txn_id=txn_id
         )
         self.check_response_for_error(response, "insert")
+        self._check_query_result(response["result"][0])
         return response["result"][0]["result"]
 
     async def insert_relation(
@@ -450,6 +459,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             query, variables, session_id=session_id, txn_id=txn_id
         )
         self.check_response_for_error(response, "insert_relation")
+        self._check_query_result(response["result"][0])
         return response["result"][0]["result"]
 
     async def live(
@@ -526,7 +536,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             txn_val = result.get("id") or result.get("txn")
             if txn_val is not None:
                 return UUID(str(txn_val))
-        raise ValueError(
+        raise UnexpectedResponseError(
             f"begin() expected transaction UUID from server, got: {type(result).__name__}"
         )
 
@@ -570,6 +580,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             query, variables, session_id=session_id, txn_id=txn_id
         )
         self.check_response_for_error(response, "upsert")
+        self._check_query_result(response["result"][0])
         result = response["result"][0]["result"]
         # UPSERT on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(

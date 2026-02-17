@@ -328,9 +328,7 @@ def test_commit_pass() -> None:
 def test_commit_with_session() -> None:
     txn_id = UUID("0189d6e3-8eac-703a-9a48-d9faa78b44b9")
     session_id = UUID("0189d6e3-8eac-703a-9a48-d9faa78b44ba")
-    message = RequestMessage(
-        RequestMethod.COMMIT, txn=txn_id, session=session_id
-    )
+    message = RequestMessage(RequestMethod.COMMIT, txn=txn_id, session=session_id)
     outcome = message.WS_CBOR_DESCRIPTOR
     assert isinstance(outcome, bytes)
     payload = decode(outcome)
