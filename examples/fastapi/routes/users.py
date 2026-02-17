@@ -1,7 +1,5 @@
 """User CRUD endpoints."""
 
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from surrealdb import AsyncSurreal
 
@@ -45,14 +43,14 @@ async def create_user(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}",
+            detail=f"Database error: {e}",
         )
 
 
-@router.get("", response_model=List[UserResponse])
+@router.get("", response_model=list[UserResponse])
 async def list_users(
     db: AsyncSurreal = Depends(get_db),
-) -> List[UserResponse]:
+) -> list[UserResponse]:
     """Get all users."""
     try:
         result = await db.select("users")
@@ -68,14 +66,14 @@ async def list_users(
                     name=user_data["name"],
                     email=user_data["email"],
                     age=user_data.get("age"),
-                )
+                ),
             )
 
         return users
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}",
+            detail=f"Database error: {e}",
         )
 
 
@@ -108,7 +106,7 @@ async def get_user(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}",
+            detail=f"Database error: {e}",
         )
 
 
@@ -157,7 +155,7 @@ async def update_user(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}",
+            detail=f"Database error: {e}",
         )
 
 
@@ -180,5 +178,5 @@ async def delete_user(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}",
+            detail=f"Database error: {e}",
         )

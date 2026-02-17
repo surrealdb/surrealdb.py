@@ -94,7 +94,10 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         await self._db.close()
 
     async def _send(
-        self, message: RequestMessage, process: str, bypass: bool = False
+        self,
+        message: RequestMessage,
+        process: str,
+        bypass: bool = False,
     ) -> dict[str, Any]:
         """
         Send a message to the embedded database using CBOR encoding.
@@ -132,32 +135,32 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
 
     async def attach(self) -> UUID:
         raise NotImplementedError(
-            "Multi-session and client-side transactions are only supported for WebSocket connections"
+            "Multi-session and client-side transactions are only supported for WebSocket connections",
         )
 
     async def detach(self, session_id: Any) -> None:
         raise NotImplementedError(
-            "Multi-session and client-side transactions are only supported for WebSocket connections"
+            "Multi-session and client-side transactions are only supported for WebSocket connections",
         )
 
     async def begin(self, session_id: Any = None) -> UUID:
         raise NotImplementedError(
-            "Multi-session and client-side transactions are only supported for WebSocket connections"
+            "Multi-session and client-side transactions are only supported for WebSocket connections",
         )
 
     async def commit(self, txn_id: Any, session_id: Any = None) -> None:
         raise NotImplementedError(
-            "Multi-session and client-side transactions are only supported for WebSocket connections"
+            "Multi-session and client-side transactions are only supported for WebSocket connections",
         )
 
     async def cancel(self, txn_id: Any, session_id: Any = None) -> None:
         raise NotImplementedError(
-            "Multi-session and client-side transactions are only supported for WebSocket connections"
+            "Multi-session and client-side transactions are only supported for WebSocket connections",
         )
 
     async def new_session(self) -> AsyncSurrealSession:
         raise NotImplementedError(
-            "Multi-session and client-side transactions are only supported for WebSocket connections"
+            "Multi-session and client-side transactions are only supported for WebSocket connections",
         )
 
     # All other methods (query, select, create, update, delete, merge, patch, etc.)

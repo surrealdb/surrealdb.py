@@ -1,7 +1,6 @@
 """DTOs and data models."""
 
 from dataclasses import dataclass
-from typing import Optional
 
 from litestar.dto import DataclassDTO
 from litestar.dto.config import DTOConfig
@@ -13,16 +12,16 @@ class UserCreate:
 
     name: str
     email: str
-    age: Optional[int] = None
+    age: int | None = None
 
 
 @dataclass
 class UserUpdate:
     """DTO for updating a user."""
 
-    name: Optional[str] = None
-    email: Optional[str] = None
-    age: Optional[int] = None
+    name: str | None = None
+    email: str | None = None
+    age: int | None = None
 
 
 @dataclass
@@ -32,7 +31,7 @@ class UserResponse:
     id: str
     name: str
     email: str
-    age: Optional[int] = None
+    age: int | None = None
 
 
 @dataclass

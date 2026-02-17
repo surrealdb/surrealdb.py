@@ -14,10 +14,10 @@ async def setup_data(
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query("DELETE likes;")
     await async_ws_connection.query(
-        "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', password = 'password123', enabled = true;"
+        "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', password = 'password123', enabled = true;",
     )
     await async_ws_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password456', enabled = true;"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password456', enabled = true;",
     )
     yield
     await async_ws_connection.query("DELETE user;")
@@ -32,7 +32,8 @@ def check_outcome(outcome: list[Any]) -> None:
 
 
 async def test_insert_relation_record_ids(
-    async_ws_connection: AsyncWsSurrealConnection, setup_data: None
+    async_ws_connection: AsyncWsSurrealConnection,
+    setup_data: None,
 ) -> None:
     data = [
         {
@@ -52,7 +53,8 @@ async def test_insert_relation_record_ids(
 
 
 async def test_insert_relation_record_id(
-    async_ws_connection: AsyncWsSurrealConnection, setup_data: None
+    async_ws_connection: AsyncWsSurrealConnection,
+    setup_data: None,
 ) -> None:
     data = {
         "in": RecordID("user", "tobie"),

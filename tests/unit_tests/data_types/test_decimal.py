@@ -117,7 +117,7 @@ async def surrealdb_connection():  # type: ignore[misc]
 @pytest.mark.asyncio
 async def test_dec_literal(surrealdb_connection: Any) -> None:
     await surrealdb_connection.query(
-        "CREATE numeric_tests:literal_test SET value = 99.99dec;"
+        "CREATE numeric_tests:literal_test SET value = 99.99dec;",
     )
     result = await surrealdb_connection.query("SELECT * FROM numeric_tests;")
     stored_value = result[0]["value"]

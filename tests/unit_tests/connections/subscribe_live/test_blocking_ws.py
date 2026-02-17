@@ -19,7 +19,7 @@ def test_live_subscription(
 
     # Push an update
     blocking_ws_connection.query(
-        "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', password = 'password456', enabled = true;"
+        "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', password = 'password456', enabled = true;",
     )
 
     # Wait for the live subscription update

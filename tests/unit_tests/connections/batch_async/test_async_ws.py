@@ -13,7 +13,7 @@ async def test_batch(async_ws_connection: AsyncWsSurrealConnection) -> None:
         pass
     elif python_version == "3.10":
         print(
-            "async batching is being bypassed due to python version 3.10 not supporting async task group"
+            "async batching is being bypassed due to python version 3.10 not supporting async task group",
         )
     else:
         sleep_fn = "duration::from::millis"
@@ -28,7 +28,7 @@ async def test_batch(async_ws_connection: AsyncWsSurrealConnection) -> None:
                     async_ws_connection.query(
                         f"RETURN sleep({sleep_fn}($d)) or $p**2",
                         dict(d=10 if num % 2 else 0, p=num),
-                    )
+                    ),
                 )
                 for num in range(5)
             ]

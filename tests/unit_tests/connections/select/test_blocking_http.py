@@ -9,10 +9,10 @@ def test_select(blocking_http_connection: BlockingHttpSurrealConnection) -> None
 
     # Create users with required fields
     blocking_http_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';",
     )
     blocking_http_connection.query(
-        "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', enabled = true, password = 'root';"
+        "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', enabled = true, password = 'root';",
     )
 
     blocking_http_connection.query("CREATE users:one SET name = 'one';")

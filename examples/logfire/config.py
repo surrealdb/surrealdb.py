@@ -2,7 +2,6 @@
 
 import os
 from dataclasses import dataclass
-from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -22,7 +21,7 @@ class Config:
     surrealdb_password: str
 
     # Logfire settings
-    logfire_token: Optional[str] = None
+    logfire_token: str | None = None
 
     @classmethod
     def from_env(cls) -> "Config":

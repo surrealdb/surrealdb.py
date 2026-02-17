@@ -34,7 +34,7 @@ async def test_transaction_commit(
     )
 
     before_commit = await session.query(
-        "SELECT * FROM session_txn_test WHERE id = session_txn_test:committed;"
+        "SELECT * FROM session_txn_test WHERE id = session_txn_test:committed;",
     )
     assert isinstance(before_commit, list)
     assert len(before_commit) == 0
@@ -42,7 +42,7 @@ async def test_transaction_commit(
     await txn.commit()
 
     after_commit = await session.query(
-        "SELECT * FROM session_txn_test WHERE id = session_txn_test:committed;"
+        "SELECT * FROM session_txn_test WHERE id = session_txn_test:committed;",
     )
     assert isinstance(after_commit, list)
     assert len(after_commit) == 1
@@ -73,7 +73,7 @@ async def test_transaction_cancel(
     await txn.cancel()
 
     after_cancel = await session.query(
-        "SELECT * FROM session_txn_test WHERE id = session_txn_test:cancelled;"
+        "SELECT * FROM session_txn_test WHERE id = session_txn_test:cancelled;",
     )
     assert isinstance(after_cancel, list)
     assert len(after_cancel) == 0

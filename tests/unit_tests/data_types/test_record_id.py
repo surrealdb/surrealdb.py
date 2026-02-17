@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 
@@ -50,7 +50,7 @@ def test_record_id_pydantic_model_validate_from_dict() -> None:
     pydantic = pytest.importorskip("pydantic")
 
     class Person(pydantic.BaseModel):
-        id: Optional[RecordID] = None
+        id: RecordID | None = None
         name: str
 
     person = Person.model_validate({"id": "person:abc", "name": "Martin"})
@@ -64,7 +64,7 @@ def test_record_id_pydantic_model_validate_json() -> None:
     pydantic = pytest.importorskip("pydantic")
 
     class Person(pydantic.BaseModel):
-        id: Optional[RecordID] = None
+        id: RecordID | None = None
         name: str
 
     person = Person.model_validate_json('{"id":"person:abc","name":"Martin"}')
@@ -78,7 +78,7 @@ def test_record_id_pydantic_model_dump_python_keeps_instance() -> None:
     pydantic = pytest.importorskip("pydantic")
 
     class Person(pydantic.BaseModel):
-        id: Optional[RecordID] = None
+        id: RecordID | None = None
         name: str
 
     person = Person.model_validate({"id": "person:abc", "name": "Martin"})
@@ -92,7 +92,7 @@ def test_record_id_pydantic_model_dump_json_stringifies() -> None:
     pydantic = pytest.importorskip("pydantic")
 
     class Person(pydantic.BaseModel):
-        id: Optional[RecordID] = None
+        id: RecordID | None = None
         name: str
 
     person = Person.model_validate({"id": "person:abc", "name": "Martin"})
@@ -410,7 +410,8 @@ async def test_create_with_array_record_id(surrealdb_connection: Any) -> None:
     """Test creating a record using RecordID with array identifier."""
     record_id = RecordID("record_id_tests", ["main", "user", 123])
     result = await surrealdb_connection.create(
-        record_id, {"name": "Array Test", "active": True}
+        record_id,
+        {"name": "Array Test", "active": True},
     )
     assert result["id"] == record_id
     assert result["name"] == "Array Test"
@@ -430,7 +431,7 @@ async def test_create_with_object_record_id(surrealdb_connection: Any) -> None:
                 "settings": {
                     "active": True,
                     "marketing": True,
-                }
+                },
             },
         )
     except Exception as e:

@@ -51,7 +51,7 @@ dev = [
     "maturin>=1.10.0",
     "mypy>=1.18.2",
     "pyright>=1.1.407",
-    "ruff>=0.14.6",
+    "ruff>=0.15.1",
     "types-requests>=2.32.4",   # Type stubs for requests
 ]
 test = [
@@ -76,13 +76,22 @@ features = ["pyo3/extension-module"]
 # --------------------------------------------------
 
 [tool.ruff]
+target-version = "py310"
 exclude = ["src/surrealdb/__init__.py"]
 
 [tool.ruff.lint]
 select = [
-    "I",  # isort
-    "UP", # pyupgrade
+    "COM", # flake8-commas
+    "I",   # isort
+    "PIE", # flake8-pie
+    "UP",  # pyupgrade
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["surrealdb"]
 
 # --------------------------------------------------
 # mypy

@@ -16,7 +16,7 @@ async def get_db() -> AsyncSurreal:
             {
                 "username": current_app.config["SURREALDB_USERNAME"],
                 "password": current_app.config["SURREALDB_PASSWORD"],
-            }
+            },
         )
         await db.use(
             current_app.config["SURREALDB_NAMESPACE"],

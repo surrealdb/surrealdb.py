@@ -23,7 +23,7 @@ def setup_user(
 ) -> Generator[None, None, None]:
     blocking_http_connection.query("DELETE user;")
     blocking_http_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;",
     )
     yield
     blocking_http_connection.query("DELETE user;")

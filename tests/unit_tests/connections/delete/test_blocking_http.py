@@ -38,7 +38,8 @@ def test_debug_delete(blocking_http_connection: BlockingHttpSurrealConnection) -
 
 
 def test_delete_string(
-    blocking_http_connection: BlockingHttpSurrealConnection, record_id: RecordID
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    record_id: RecordID,
 ) -> None:
     blocking_http_connection.query("DELETE user;")
     blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';")
@@ -55,7 +56,8 @@ def test_delete_string(
 
 
 def test_delete_record_id(
-    blocking_http_connection: BlockingHttpSurrealConnection, record_id: RecordID
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    record_id: RecordID,
 ) -> None:
     blocking_http_connection.query("DELETE user;")
     blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';")

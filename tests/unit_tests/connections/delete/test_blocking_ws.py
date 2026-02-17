@@ -13,7 +13,8 @@ def record_id() -> RecordID:
 
 
 def test_delete_string(
-    blocking_ws_connection: BlockingWsSurrealConnection, record_id
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    record_id,
 ) -> None:
     blocking_ws_connection.query("DELETE user;")
     blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';")
@@ -30,7 +31,8 @@ def test_delete_string(
 
 
 def test_delete_record_id(
-    blocking_ws_connection: BlockingWsSurrealConnection, record_id
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    record_id,
 ) -> None:
     blocking_ws_connection.query("DELETE user;")
     blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';")

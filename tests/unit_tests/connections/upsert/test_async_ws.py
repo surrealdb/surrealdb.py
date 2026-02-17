@@ -34,7 +34,7 @@ async def setup_user(
 ) -> AsyncGenerator[None, None]:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;",
     )
     yield
     await async_ws_connection.query("DELETE user;")
@@ -42,7 +42,9 @@ async def setup_user(
 
 @pytest.mark.asyncio
 async def test_upsert_string(
-    async_ws_connection: AsyncWsSurrealConnection, setup_user: None, existing_data
+    async_ws_connection: AsyncWsSurrealConnection,
+    setup_user: None,
+    existing_data,
 ) -> None:
     record_id = RecordID("user", "tobie")
     outcome = await async_ws_connection.upsert("user:tobie", existing_data)
@@ -78,7 +80,9 @@ async def test_upsert_string_with_data(
 
 @pytest.mark.asyncio
 async def test_upsert_record_id(
-    async_ws_connection: AsyncWsSurrealConnection, setup_user: None, existing_data
+    async_ws_connection: AsyncWsSurrealConnection,
+    setup_user: None,
+    existing_data,
 ) -> None:
     record_id = RecordID("user", "tobie")
     first_outcome = await async_ws_connection.upsert(record_id, existing_data)
@@ -114,7 +118,9 @@ async def test_upsert_record_id_with_data(
 
 @pytest.mark.asyncio
 async def test_upsert_table(
-    async_ws_connection: AsyncWsSurrealConnection, setup_user: None, existing_data
+    async_ws_connection: AsyncWsSurrealConnection,
+    setup_user: None,
+    existing_data,
 ) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")

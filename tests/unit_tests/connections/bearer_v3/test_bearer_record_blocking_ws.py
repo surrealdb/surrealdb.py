@@ -30,7 +30,7 @@ def test_bearer_access_record_user(bearer_v3_root_ws: dict) -> None:
     root.query("DEFINE ACCESS bearer_record_api ON DATABASE TYPE BEARER FOR RECORD")
 
     grant_result = root.query(
-        "ACCESS bearer_record_api GRANT FOR RECORD users:testrecord"
+        "ACCESS bearer_record_api GRANT FOR RECORD users:testrecord",
     )
     assert grant_result is not None
     assert isinstance(grant_result, dict)
@@ -50,7 +50,7 @@ def test_bearer_access_record_user(bearer_v3_root_ws: dict) -> None:
                 "database": database_name,
                 "access": "bearer_record_api",
                 "key": bearer_key,
-            }
+            },
         )
         assert isinstance(tokens, Tokens)
         assert tokens.access is not None
@@ -80,7 +80,7 @@ def test_bearer_record_signin_token_not_usable_with_authenticate(
     root.query("CREATE auth_records:auth_test SET name = 'Auth Test Record'")
     root.query("DEFINE ACCESS bearer_record_auth ON DATABASE TYPE BEARER FOR RECORD")
     grant_result = root.query(
-        "ACCESS bearer_record_auth GRANT FOR RECORD auth_records:auth_test"
+        "ACCESS bearer_record_auth GRANT FOR RECORD auth_records:auth_test",
     )
     bearer_key = grant_result["grant"]["key"]
 
@@ -92,7 +92,7 @@ def test_bearer_record_signin_token_not_usable_with_authenticate(
                 "database": database_name,
                 "access": "bearer_record_auth",
                 "key": bearer_key,
-            }
+            },
         )
         assert tokens.access is not None
 

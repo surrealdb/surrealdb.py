@@ -19,7 +19,7 @@ class DatabaseManager:
             {
                 "username": config.SURREALDB_USERNAME,
                 "password": config.SURREALDB_PASSWORD,
-            }
+            },
         )
         await self.db.use(config.SURREALDB_NAMESPACE, config.SURREALDB_DATABASE)
 

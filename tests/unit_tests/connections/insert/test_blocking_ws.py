@@ -37,7 +37,8 @@ def insert_data() -> dict[str, Any]:
 
 
 def test_insert_string_with_data(
-    blocking_ws_connection: BlockingWsSurrealConnection, insert_bulk_data
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    insert_bulk_data,
 ) -> None:
     blocking_ws_connection.query("DELETE user;")
     outcome = blocking_ws_connection.insert("user", insert_bulk_data)
@@ -46,7 +47,8 @@ def test_insert_string_with_data(
 
 
 def test_insert_record_id_result_error(
-    blocking_ws_connection: BlockingWsSurrealConnection, insert_data
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    insert_data,
 ) -> None:
     blocking_ws_connection.query("DELETE user;")
     record_id = RecordID("user", "tobie")

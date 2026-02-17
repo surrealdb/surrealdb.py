@@ -25,7 +25,7 @@ def test_simple_object_encode() -> None:
 def test_nested_object_encode() -> None:
     """Test encoding nested object to CBOR bytes."""
     test_obj = {
-        "user": {"name": "John", "address": {"city": "New York", "zip": "10001"}}
+        "user": {"name": "John", "address": {"city": "New York", "zip": "10001"}},
     }
     encoded = cbor.encode(test_obj)
     assert isinstance(encoded, bytes)
@@ -100,7 +100,7 @@ def test_nested_object_roundtrip() -> None:
             "user": {
                 "name": "Alice",
                 "contact": {"email": "alice@example.com", "phone": "123-456-7890"},
-            }
+            },
         },
     ]
 

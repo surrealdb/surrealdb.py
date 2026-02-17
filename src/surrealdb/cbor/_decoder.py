@@ -31,7 +31,7 @@ T = TypeVar("T")
 
 timestamp_re = re.compile(
     r"^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)"
-    r"(?:\.(\d{1,6})\d*)?(?:Z|([+-])(\d\d):(\d\d))$"
+    r"(?:\.(\d{1,6})\d*)?(?:Z|([+-])(\d\d):(\d\d))$",
 )
 incremental_utf8_decoder = getincrementaldecoder("utf-8")
 
@@ -51,15 +51,15 @@ class CBORDecoder:
     """
 
     __slots__ = (
-        "_tag_hook",
-        "_object_hook",
-        "_share_index",
-        "_shareables",
         "_fp",
         "_fp_read",
         "_immutable",
+        "_object_hook",
+        "_share_index",
+        "_shareables",
         "_str_errors",
         "_stringref_namespace",
+        "_tag_hook",
     )
 
     _fp: IO[bytes]  # pyright: ignore[reportUninitializedInstanceVariable]
@@ -146,7 +146,8 @@ class CBORDecoder:
 
     @object_hook.setter
     def object_hook(
-        self, value: Callable[[CBORDecoder, Mapping[Any, Any]], Any] | None
+        self,
+        value: Callable[[CBORDecoder, Mapping[Any, Any]], Any] | None,
     ) -> None:
         if value is None or callable(value):
             self._object_hook = value
@@ -164,7 +165,7 @@ class CBORDecoder:
         else:
             raise ValueError(
                 f"invalid str_errors value {value!r} (must be one of 'strict', "
-                "'error', or 'replace')"
+                "'error', or 'replace')",
             )
 
     def set_shareable(self, value: T) -> T:
@@ -207,7 +208,7 @@ class CBORDecoder:
         if len(data) < amount:
             raise CBORDecodeEOF(
                 f"premature end of stream (expected to read {amount} bytes, got {len(data)} "
-                "instead)"
+                "instead)",
             )
 
         return data
@@ -262,11 +263,15 @@ class CBORDecoder:
 
     @overload
     def _decode_length(
-        self, subtype: int, allow_indefinite: Literal[True]
+        self,
+        subtype: int,
+        allow_indefinite: Literal[True],
     ) -> int | None: ...
 
     def _decode_length(
-        self, subtype: int, allow_indefinite: bool = False
+        self,
+        subtype: int,
+        allow_indefinite: bool = False,
     ) -> int | None:
         if subtype < 24:
             return subtype
@@ -282,7 +287,7 @@ class CBORDecoder:
             return None
         else:
             raise CBORDecodeValueError(
-                f"unknown unsigned integer subtype 0x{subtype:x}"
+                f"unknown unsigned integer subtype 0x{subtype:x}",
             )
 
     def decode_uint(self, subtype: int) -> int:
@@ -308,18 +313,18 @@ class CBORDecoder:
                     length = self._decode_length(initial_byte & 0x1F)
                     if length > sys.maxsize:
                         raise CBORDecodeValueError(
-                            f"invalid length for indefinite bytestring chunk 0x{length:x}"
+                            f"invalid length for indefinite bytestring chunk 0x{length:x}",
                         )
                     value = self.read(length)
                     buf.append(value)
                 else:
                     raise CBORDecodeValueError(
-                        "non-bytestring found in indefinite length bytestring"
+                        "non-bytestring found in indefinite length bytestring",
                     )
         else:
             if length > sys.maxsize:
                 raise CBORDecodeValueError(
-                    f"invalid length for bytestring 0x{length:x}"
+                    f"invalid length for bytestring 0x{length:x}",
                 )
             elif length <= 65536:
                 result = self.read(length)
@@ -366,20 +371,20 @@ class CBORDecoder:
                     length = self._decode_length(initial_byte & 0x1F)
                     if length > sys.maxsize:
                         raise CBORDecodeValueError(
-                            f"invalid length for indefinite string chunk 0x{length:x}"
+                            f"invalid length for indefinite string chunk 0x{length:x}",
                         )
 
                     try:
                         value = self.read(length).decode("utf-8", self._str_errors)
                     except UnicodeDecodeError as exc:
                         raise CBORDecodeValueError(
-                            "error decoding unicode string"
+                            "error decoding unicode string",
                         ) from exc
 
                     buf.append(value)
                 else:
                     raise CBORDecodeValueError(
-                        "non-string found in indefinite length string"
+                        "non-string found in indefinite length string",
                     )
         else:
             if length > sys.maxsize:
@@ -402,7 +407,7 @@ class CBORDecoder:
                         result += codec.decode(self.read(chunk_size), final)
                     except UnicodeDecodeError as exc:
                         raise CBORDecodeValueError(
-                            "error decoding unicode string"
+                            "error decoding unicode string",
                         ) from exc
 
                     left -= chunk_size
@@ -498,7 +503,7 @@ class CBORDecoder:
             return special_decoders[subtype](self)
         except KeyError as e:
             raise CBORDecodeValueError(
-                f"Undefined Reserved major type 7 subtype 0x{subtype:x}"
+                f"Undefined Reserved major type 7 subtype 0x{subtype:x}",
             ) from e
 
     #
@@ -557,7 +562,7 @@ class CBORDecoder:
                     int(second),
                     microsecond,
                     tz,
-                )
+                ),
             )
         else:
             raise CBORDecodeValueError(f"invalid datetime string: {value!r}")
@@ -663,7 +668,7 @@ class CBORDecoder:
         except (TypeError, ZeroDivisionError) as exc:
             if not isinstance(inputval, tuple):
                 raise CBORDecodeValueError(
-                    "error decoding rational: input value was not a tuple"
+                    "error decoding rational: input value was not a tuple",
                 ) from None
 
             raise CBORDecodeValueError("error decoding rational") from exc
@@ -849,7 +854,10 @@ def loads(
     """
     with BytesIO(s) as fp:
         return CBORDecoder(
-            fp, tag_hook=tag_hook, object_hook=object_hook, str_errors=str_errors
+            fp,
+            tag_hook=tag_hook,
+            object_hook=object_hook,
+            str_errors=str_errors,
         ).decode()
 
 
@@ -883,5 +891,8 @@ def load(
 
     """
     return CBORDecoder(
-        fp, tag_hook=tag_hook, object_hook=object_hook, str_errors=str_errors
+        fp,
+        tag_hook=tag_hook,
+        object_hook=object_hook,
+        str_errors=str_errors,
     ).decode()

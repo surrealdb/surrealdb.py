@@ -48,7 +48,7 @@ async def create_user(request):
 
     except Exception as e:
         return JSONResponse(
-            {"error": f"Database error: {str(e)}"},
+            {"error": f"Database error: {e}"},
             status_code=500,
         )
 
@@ -70,14 +70,14 @@ async def list_users(request):
                     "name": user_data["name"],
                     "email": user_data["email"],
                     "age": user_data.get("age"),
-                }
+                },
             )
 
         return JSONResponse(users, status_code=200)
 
     except Exception as e:
         return JSONResponse(
-            {"error": f"Database error: {str(e)}"},
+            {"error": f"Database error: {e}"},
             status_code=500,
         )
 
@@ -111,7 +111,7 @@ async def get_user(request):
 
     except Exception as e:
         return JSONResponse(
-            {"error": f"Database error: {str(e)}"},
+            {"error": f"Database error: {e}"},
             status_code=500,
         )
 
@@ -167,7 +167,7 @@ async def update_user(request):
 
     except Exception as e:
         return JSONResponse(
-            {"error": f"Database error: {str(e)}"},
+            {"error": f"Database error: {e}"},
             status_code=500,
         )
 
@@ -190,7 +190,7 @@ async def delete_user(request):
 
     except Exception as e:
         return JSONResponse(
-            {"error": f"Database error: {str(e)}"},
+            {"error": f"Database error: {e}"},
             status_code=500,
         )
 

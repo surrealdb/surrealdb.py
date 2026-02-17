@@ -1,6 +1,7 @@
 """WebSocket endpoints for live queries."""
 
 import asyncio
+import contextlib
 
 from starlette.routing import WebSocketRoute
 from starlette.websockets import WebSocket
@@ -22,7 +23,7 @@ async def users_live_query(websocket: WebSocket):
             {
                 "username": settings.surrealdb_username,
                 "password": settings.surrealdb_password,
-            }
+            },
         )
         await db.use(settings.surrealdb_namespace, settings.surrealdb_database)
 
@@ -34,7 +35,7 @@ async def users_live_query(websocket: WebSocket):
                 "type": "connected",
                 "message": "Subscribed to user updates",
                 "live_query_id": str(live_query_id),
-            }
+            },
         )
 
         # Process live query results
@@ -46,14 +47,14 @@ async def users_live_query(websocket: WebSocket):
                         {
                             "type": "update",
                             "data": result,
-                        }
+                        },
                     )
             except Exception as e:
                 await websocket.send_json(
                     {
                         "type": "error",
-                        "message": f"Live query error: {str(e)}",
-                    }
+                        "message": f"Live query error: {e}",
+                    },
                 )
 
         # Create task for processing live results
@@ -68,28 +69,24 @@ async def users_live_query(websocket: WebSocket):
                     {
                         "type": "echo",
                         "message": f"Received: {data}",
-                    }
+                    },
                 )
         finally:
             # Clean up
             live_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await live_task
-            except asyncio.CancelledError:
-                pass
 
             # Kill the live query
-            try:
+            with contextlib.suppress(Exception):
                 await db.kill(live_query_id)
-            except Exception:
-                pass
 
     except Exception as e:
         await websocket.send_json(
             {
                 "type": "error",
-                "message": f"Connection error: {str(e)}",
-            }
+                "message": f"Connection error: {e}",
+            },
         )
     finally:
         await db.close()

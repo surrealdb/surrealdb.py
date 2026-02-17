@@ -19,7 +19,7 @@ def test_parse_auth_result_dict_access_only() -> None:
 
 def test_parse_auth_result_dict_access_and_refresh() -> None:
     result = parse_auth_result(
-        {"access": "jwt-token", "refresh": "surreal-refresh-abc"}
+        {"access": "jwt-token", "refresh": "surreal-refresh-abc"},
     )
     assert isinstance(result, Tokens)
     assert result.access == "jwt-token"

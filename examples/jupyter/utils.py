@@ -1,7 +1,7 @@
 """Utility functions for Jupyter notebooks."""
 
 import json
-from typing import Any, List
+from typing import Any
 
 import pandas as pd
 from surrealdb import AsyncSurreal
@@ -16,7 +16,7 @@ def pretty_print(data: Any) -> None:
     print(json.dumps(data, indent=2, default=str))
 
 
-def to_dataframe(data: List[dict]) -> pd.DataFrame:
+def to_dataframe(data: list[dict]) -> pd.DataFrame:
     """Convert SurrealDB results to Pandas DataFrame.
 
     Args:
@@ -41,7 +41,8 @@ def to_dataframe(data: List[dict]) -> pd.DataFrame:
         cleaned_record = {}
         for key, value in record.items():
             if hasattr(value, "__str__") and not isinstance(
-                value, (str, int, float, bool, type(None))
+                value,
+                (str, int, float, bool, type(None)),
             ):
                 cleaned_record[key] = str(value)
             else:
@@ -83,7 +84,7 @@ async def clear_table(db: AsyncSurreal, table: str) -> None:
     print(f"✅ Cleared table: {table}")
 
 
-def display_schema(data: List[dict]) -> None:
+def display_schema(data: list[dict]) -> None:
     """Display the schema of the data.
 
     Args:

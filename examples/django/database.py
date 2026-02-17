@@ -17,7 +17,7 @@ async def get_connection() -> AsyncSurreal:
         {
             "username": settings.surrealdb_username,
             "password": settings.surrealdb_password,
-        }
+        },
     )
     await db.use(settings.surrealdb_namespace, settings.surrealdb_database)
     return db

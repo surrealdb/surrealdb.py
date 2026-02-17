@@ -36,7 +36,7 @@ async def homepage(request):
         {
             "status": "healthy",
             "message": "SurrealDB Starlette Example API",
-        }
+        },
     )
 
 
@@ -46,7 +46,7 @@ async def health(request):
         {
             "status": "ok",
             "database": "connected",
-        }
+        },
     )
 
 
@@ -58,7 +58,7 @@ middleware = [
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
-    )
+    ),
 ]
 
 # Create application

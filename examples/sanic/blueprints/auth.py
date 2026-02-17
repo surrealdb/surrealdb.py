@@ -28,7 +28,7 @@ async def signup(request):
                 "access": data["access"],
                 "email": data["email"],
                 "password": data["password"],
-            }
+            },
         )
 
         return response.json(
@@ -41,7 +41,7 @@ async def signup(request):
 
     except Exception as e:
         return response.json(
-            {"error": f"Signup failed: {str(e)}"},
+            {"error": f"Signup failed: {e}"},
             status=400,
         )
 
@@ -63,7 +63,7 @@ async def signin(request):
             {
                 "username": data["username"],
                 "password": data["password"],
-            }
+            },
         )
 
         return response.json(
@@ -76,7 +76,7 @@ async def signin(request):
 
     except Exception as e:
         return response.json(
-            {"error": f"Authentication failed: {str(e)}"},
+            {"error": f"Authentication failed: {e}"},
             status=401,
         )
 
@@ -95,6 +95,6 @@ async def invalidate(request):
 
     except Exception as e:
         return response.json(
-            {"error": f"Invalidation failed: {str(e)}"},
+            {"error": f"Invalidation failed: {e}"},
             status=500,
         )

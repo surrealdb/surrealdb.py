@@ -53,7 +53,10 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self._lock: threading.Lock = threading.Lock()
 
     def _send(
-        self, message: RequestMessage, process: str, bypass: bool = False
+        self,
+        message: RequestMessage,
+        process: str,
+        bypass: bool = False,
     ) -> dict[str, Any]:
         # Use a lock to ensure thread-safe send/recv operations
         # This prevents race conditions when multiple threads share the same connection
@@ -75,7 +78,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             if response_id is not None and response_id != message.id:
                 raise RuntimeError(
                     f"Response ID mismatch: expected {message.id}, got {response_id}. "
-                    "This should not happen with proper locking."
+                    "This should not happen with proper locking.",
                 )
 
             if bypass is False:
@@ -232,7 +235,10 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         query = f"SELECT * FROM {resource_ref}"
 
         response = self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+            query,
+            variables,
+            session_id=session_id,
+            txn_id=txn_id,
         )
         self.check_response_for_error(response, "select")
         return response["result"][0]["result"]
@@ -254,7 +260,10 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             query = f"CREATE {resource_ref} CONTENT $_content"
 
         response = self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+            query,
+            variables,
+            session_id=session_id,
+            txn_id=txn_id,
         )
         self.check_response_for_error(response, "create")
         result = response["result"][0]["result"]
@@ -299,13 +308,17 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         query = f"DELETE {resource_ref} RETURN BEFORE"
 
         response = self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+            query,
+            variables,
+            session_id=session_id,
+            txn_id=txn_id,
         )
         self.check_response_for_error(response, "delete")
         result = response["result"][0]["result"]
         # DELETE on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
+            result,
+            unwrap=self._is_single_record_operation(record),
         )
 
     def insert(
@@ -318,7 +331,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         # Validate that table is not a RecordID
         if isinstance(table, RecordID):
             raise Exception(
-                f"There was a problem with the database: Can not execute INSERT statement using value '{table}'"
+                f"There was a problem with the database: Can not execute INSERT statement using value '{table}'",
             )
 
         variables: dict[str, Any] = {}
@@ -327,7 +340,10 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         query = f"INSERT INTO {table_ref} $_data"
 
         response = self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+            query,
+            variables,
+            session_id=session_id,
+            txn_id=txn_id,
         )
         self.check_response_for_error(response, "insert")
         return response["result"][0]["result"]
@@ -345,7 +361,10 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         query = f"INSERT RELATION INTO {table_ref} $_data"
 
         response = self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+            query,
+            variables,
+            session_id=session_id,
+            txn_id=txn_id,
         )
         self.check_response_for_error(response, "insert_relation")
         return response["result"][0]["result"]
@@ -367,13 +386,17 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             query = f"UPDATE {resource_ref} MERGE $_data"
 
         response = self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+            query,
+            variables,
+            session_id=session_id,
+            txn_id=txn_id,
         )
         self.check_response_for_error(response, "merge")
         result = response["result"][0]["result"]
         # MERGE on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
+            result,
+            unwrap=self._is_single_record_operation(record),
         )
 
     def patch(
@@ -393,13 +416,17 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             query = f"UPDATE {resource_ref} PATCH $_patches"
 
         response = self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+            query,
+            variables,
+            session_id=session_id,
+            txn_id=txn_id,
         )
         self.check_response_for_error(response, "patch")
         result = response["result"][0]["result"]
         # PATCH on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
+            result,
+            unwrap=self._is_single_record_operation(record),
         )
 
     def subscribe_live(
@@ -420,13 +447,13 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 try:
                     if self.socket is None:
                         raise ConnectionError(
-                            "WebSocket connection is not established."
+                            "WebSocket connection is not established.",
                         )
 
                     # Receive a message from the WebSocket
                     data = self.socket.recv()
                     response = decode(
-                        data if isinstance(data, bytes) else data.encode()
+                        data if isinstance(data, bytes) else data.encode(),
                     )
 
                     # Check if the response matches the query UUID
@@ -457,13 +484,17 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             query = f"UPDATE {resource_ref} CONTENT $_content"
 
         response = self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+            query,
+            variables,
+            session_id=session_id,
+            txn_id=txn_id,
         )
         self.check_response_for_error(response, "update")
         result = response["result"][0]["result"]
         # UPDATE on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
+            result,
+            unwrap=self._is_single_record_operation(record),
         )
 
     def upsert(
@@ -483,13 +514,17 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             query = f"UPSERT {resource_ref} CONTENT $_content"
 
         response = self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+            query,
+            variables,
+            session_id=session_id,
+            txn_id=txn_id,
         )
         self.check_response_for_error(response, "upsert")
         result = response["result"][0]["result"]
         # UPSERT on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
+            result,
+            unwrap=self._is_single_record_operation(record),
         )
 
     def attach(self) -> UUID:
@@ -522,7 +557,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             if txn_val is not None:
                 return UUID(str(txn_val))
         raise ValueError(
-            f"begin() expected transaction UUID from server, got: {type(result).__name__}"
+            f"begin() expected transaction UUID from server, got: {type(result).__name__}",
         )
 
     def commit(self, txn_id: UUID, session_id: UUID | None = None) -> None:
@@ -536,7 +571,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def cancel(self, txn_id: UUID, session_id: UUID | None = None) -> None:
         if session_id is not None:
             message = RequestMessage(
-                RequestMethod.CANCEL, txn=txn_id, session=session_id
+                RequestMethod.CANCEL,
+                txn=txn_id,
+                session=session_id,
             )
         else:
             message = RequestMessage(RequestMethod.CANCEL, txn=txn_id)
@@ -557,7 +594,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         Initializes a websocket connection and returns the connection instance.
         """
         self.socket = ws_sync.connect(
-            self.raw_url, max_size=None, subprotocols=[websockets.Subprotocol("cbor")]
+            self.raw_url,
+            max_size=None,
+            subprotocols=[websockets.Subprotocol("cbor")],
         )
         return self
 
@@ -659,7 +698,9 @@ class BlockingSurrealSession:
         data: Value,
     ) -> Value:
         return self._connection.insert_relation(
-            table, data, session_id=self._session_id
+            table,
+            data,
+            session_id=self._session_id,
         )
 
     def upsert(

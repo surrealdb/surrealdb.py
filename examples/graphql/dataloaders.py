@@ -1,7 +1,5 @@
 """DataLoader implementation for batching and caching."""
 
-from typing import List, Optional
-
 from strawberry.dataloader import DataLoader
 from surrealdb import AsyncSurreal
 
@@ -13,7 +11,7 @@ class UserDataLoader(DataLoader):
         super().__init__(load_fn=self.load_users)
         self.db = db
 
-    async def load_users(self, keys: List[str]) -> List[Optional[dict]]:
+    async def load_users(self, keys: list[str]) -> list[dict | None]:
         """Batch load users by IDs.
 
         This prevents N+1 query problems by loading multiple users

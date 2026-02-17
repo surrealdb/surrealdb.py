@@ -1,7 +1,5 @@
 """Pydantic models for request/response validation."""
 
-from typing import Optional
-
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -10,15 +8,15 @@ class UserCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=100)
     email: EmailStr
-    age: Optional[int] = Field(None, ge=0, le=150)
+    age: int | None = Field(None, ge=0, le=150)
 
 
 class UserUpdate(BaseModel):
     """Model for updating a user."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=100)
-    email: Optional[EmailStr] = None
-    age: Optional[int] = Field(None, ge=0, le=150)
+    name: str | None = Field(None, min_length=1, max_length=100)
+    email: EmailStr | None = None
+    age: int | None = Field(None, ge=0, le=150)
 
 
 class UserResponse(BaseModel):
@@ -27,7 +25,7 @@ class UserResponse(BaseModel):
     id: str
     name: str
     email: str
-    age: Optional[int] = None
+    age: int | None = None
 
     model_config = {"from_attributes": True}
 

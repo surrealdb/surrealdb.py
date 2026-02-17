@@ -384,7 +384,8 @@ class SyncTemplate:
         raise NotImplementedError(f"live not implemented for: {self}")
 
     def subscribe_live(
-        self, query_uuid: str | UUID
+        self,
+        query_uuid: str | UUID,
     ) -> Generator[dict[str, Value], None, None]:
         """Live notification returns a queue that receives notification messages from the back end.
 

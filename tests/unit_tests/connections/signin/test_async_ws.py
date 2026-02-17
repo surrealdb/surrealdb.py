@@ -26,19 +26,19 @@ async def setup_async_ws_signin() -> None:
         "DEFINE FIELD email ON user TYPE string;"
         "DEFINE FIELD password ON user TYPE string;"
         "DEFINE FIELD enabled ON user TYPE bool;"
-        "DEFINE INDEX email ON user FIELDS email UNIQUE;"
+        "DEFINE INDEX email ON user FIELDS email UNIQUE;",
     )
     _ = await connection.query(
         "DEFINE ACCESS user ON DATABASE TYPE RECORD "
         "SIGNUP ( CREATE user SET name = $name, email = $email, password = crypto::argon2::generate($password), enabled = true ) "
-        "SIGNIN ( SELECT * FROM user WHERE email = $email AND crypto::argon2::compare(password, $password) );"
+        "SIGNIN ( SELECT * FROM user WHERE email = $email AND crypto::argon2::compare(password, $password) );",
     )
     _ = await connection.query(
         'DEFINE USER test ON NAMESPACE PASSWORD "test" ROLES OWNER; '
-        'DEFINE USER test ON DATABASE PASSWORD "test" ROLES OWNER;'
+        'DEFINE USER test ON DATABASE PASSWORD "test" ROLES OWNER;',
     )
     _ = await connection.query(
-        "CREATE user SET name = 'test', email = 'test@gmail.com', password = crypto::argon2::generate('test'), enabled = true"
+        "CREATE user SET name = 'test', email = 'test@gmail.com', password = crypto::argon2::generate('test'), enabled = true",
     )
 
     yield {

@@ -12,15 +12,15 @@ from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
 __all__ = (
-    "GeometryPoint",
-    "GeometryLine",
-    "GeometryPolygon",
-    "GeometryMultiPoint",
-    "GeometryMultiLine",
-    "GeometryMultiPolygon",
     "GeometryCollection",
-    "Table",
-    "RecordID",
+    "GeometryLine",
+    "GeometryMultiLine",
+    "GeometryMultiPoint",
+    "GeometryMultiPolygon",
+    "GeometryPoint",
+    "GeometryPolygon",
     "Patch",
     "QueryResponse",
+    "RecordID",
+    "Table",
 )

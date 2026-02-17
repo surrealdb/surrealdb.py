@@ -16,7 +16,12 @@ async def main() -> None:
 
         # Create a person
         person = await db.create(
-            "person", {"name": "John Doe", "age": 30, "email": "john@example.com"}
+            "person",
+            {
+                "name": "John Doe",
+                "age": 30,
+                "email": "john@example.com",
+            },
         )
         print(f"Created person: {person}")
 
@@ -26,7 +31,12 @@ async def main() -> None:
 
         # Update the person
         updated = await db.update(
-            "person", {"name": "John Doe", "age": 31, "email": "john@example.com"}
+            "person",
+            {
+                "name": "John Doe",
+                "age": 31,
+                "email": "john@example.com",
+            },
         )
         print(f"Updated person: {updated}")
 

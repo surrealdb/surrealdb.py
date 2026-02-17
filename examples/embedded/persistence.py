@@ -23,11 +23,13 @@ async def main() -> None:
 
             # Create some records
             await db.create(
-                "company", {"name": "Acme Corp", "founded": 2020, "employees": 100}
+                "company",
+                {"name": "Acme Corp", "founded": 2020, "employees": 100},
             )
 
             await db.create(
-                "company", {"name": "TechStart Inc", "founded": 2021, "employees": 50}
+                "company",
+                {"name": "TechStart Inc", "founded": 2021, "employees": 50},
             )
 
             companies = await db.select("company")

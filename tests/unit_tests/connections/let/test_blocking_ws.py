@@ -15,7 +15,7 @@ def test_let(blocking_ws_connection: BlockingWsSurrealConnection) -> None:
     assert outcome is None
     blocking_ws_connection.query("CREATE person SET name = $name")
     outcome = blocking_ws_connection.query(
-        "SELECT * FROM person WHERE name.first = $name.first"
+        "SELECT * FROM person WHERE name.first = $name.first",
     )
     assert outcome[0]["name"] == {"first": "Tobie", "last": "Morgan Hitchcock"}
 

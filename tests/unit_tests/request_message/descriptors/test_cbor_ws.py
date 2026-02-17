@@ -144,7 +144,8 @@ def test_live_pass() -> None:
 
 def test_kill_pass() -> None:
     message = RequestMessage(
-        RequestMethod.KILL, uuid="0189d6e3-8eac-703a-9a48-d9faa78b44b9"
+        RequestMethod.KILL,
+        uuid="0189d6e3-8eac-703a-9a48-d9faa78b44b9",
     )
     outcome = message.WS_CBOR_DESCRIPTOR
     assert isinstance(outcome, bytes)
@@ -158,7 +159,9 @@ def test_query_pass() -> None:
 
 def test_create_pass_params() -> None:
     message = RequestMessage(
-        RequestMethod.CREATE, collection="person", data={"table": "table"}
+        RequestMethod.CREATE,
+        collection="person",
+        data={"table": "table"},
     )
     outcome = message.WS_CBOR_DESCRIPTOR
     assert isinstance(outcome, bytes)
@@ -166,7 +169,9 @@ def test_create_pass_params() -> None:
 
 def test_insert_pass_dict() -> None:
     message = RequestMessage(
-        RequestMethod.INSERT, collection="table", params={"key": "value"}
+        RequestMethod.INSERT,
+        collection="table",
+        params={"key": "value"},
     )
     outcome = message.WS_CBOR_DESCRIPTOR
     assert isinstance(outcome, bytes)
@@ -203,7 +208,9 @@ def test_select_pass() -> None:
 
 def test_update_pass() -> None:
     message = RequestMessage(
-        RequestMethod.UPDATE, record_id="test", data={"table": "table"}
+        RequestMethod.UPDATE,
+        record_id="test",
+        data={"table": "table"},
     )
     outcome = message.WS_CBOR_DESCRIPTOR
     assert isinstance(outcome, bytes)
@@ -211,7 +218,9 @@ def test_update_pass() -> None:
 
 def test_upsert_pass() -> None:
     message = RequestMessage(
-        RequestMethod.UPSERT, record_id="test", data={"table": "table"}
+        RequestMethod.UPSERT,
+        record_id="test",
+        data={"table": "table"},
     )
     outcome = message.WS_CBOR_DESCRIPTOR
     assert isinstance(outcome, bytes)
@@ -219,7 +228,9 @@ def test_upsert_pass() -> None:
 
 def test_merge_pass() -> None:
     message = RequestMessage(
-        RequestMethod.MERGE, record_id="test", data={"table": "table"}
+        RequestMethod.MERGE,
+        record_id="test",
+        data={"table": "table"},
     )
     outcome = message.WS_CBOR_DESCRIPTOR
     assert isinstance(outcome, bytes)
@@ -328,9 +339,7 @@ def test_commit_pass() -> None:
 def test_commit_with_session() -> None:
     txn_id = UUID("0189d6e3-8eac-703a-9a48-d9faa78b44b9")
     session_id = UUID("0189d6e3-8eac-703a-9a48-d9faa78b44ba")
-    message = RequestMessage(
-        RequestMethod.COMMIT, txn=txn_id, session=session_id
-    )
+    message = RequestMessage(RequestMethod.COMMIT, txn=txn_id, session=session_id)
     outcome = message.WS_CBOR_DESCRIPTOR
     assert isinstance(outcome, bytes)
     payload = decode(outcome)

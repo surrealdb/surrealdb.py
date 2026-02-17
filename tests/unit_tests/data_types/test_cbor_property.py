@@ -51,7 +51,7 @@ def test_cbor_roundtrip_dict(val) -> None:
         st.integers() | st.text() | st.booleans() | st.none(),
         lambda children: st.lists(children) | st.dictionaries(st.text(), children),
         max_leaves=10,
-    )
+    ),
 )
 def test_cbor_roundtrip_nested(val) -> None:
     assert decode(encode(val)) == val
@@ -76,7 +76,7 @@ def test_cbor_roundtrip_empty_dict(val) -> None:
         places=2,
         min_value=decimal.Decimal("-999999.99"),
         max_value=decimal.Decimal("999999.99"),
-    )
+    ),
 )
 def test_cbor_roundtrip_decimal(val) -> None:
     """Test that Decimal values can be encoded and decoded via CBOR."""

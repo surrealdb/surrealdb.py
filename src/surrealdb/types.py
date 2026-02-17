@@ -89,4 +89,4 @@ def parse_auth_result(result: Any) -> Tokens:
     return Tokens(access=None, refresh=None)
 
 
-__all__ = ["Value", "Tokens", "parse_auth_result"]
+__all__ = ["Tokens", "Value", "parse_auth_result"]

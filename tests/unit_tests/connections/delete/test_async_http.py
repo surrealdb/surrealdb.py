@@ -14,7 +14,8 @@ def record_id() -> RecordID:
 
 @pytest.mark.asyncio
 async def test_delete_string(
-    async_http_connection: AsyncHttpSurrealConnection, record_id
+    async_http_connection: AsyncHttpSurrealConnection,
+    record_id,
 ) -> None:
     await async_http_connection.query("DELETE user;")
     await async_http_connection.query("CREATE user:tobie SET name = 'Tobie';")
@@ -32,7 +33,8 @@ async def test_delete_string(
 
 @pytest.mark.asyncio
 async def test_delete_record_id(
-    async_http_connection: AsyncHttpSurrealConnection, record_id
+    async_http_connection: AsyncHttpSurrealConnection,
+    record_id,
 ) -> None:
     await async_http_connection.query("DELETE user;")
     await async_http_connection.query("CREATE user:tobie SET name = 'Tobie';")

@@ -14,7 +14,8 @@ def main() -> None:
 
         # Create a person
         person = db.create(
-            "person", {"name": "Jane Smith", "age": 28, "email": "jane@example.com"}
+            "person",
+            {"name": "Jane Smith", "age": 28, "email": "jane@example.com"},
         )
         print(f"Created person: {person}")
 
@@ -24,7 +25,8 @@ def main() -> None:
 
         # Update the person
         updated = db.update(
-            "person", {"name": "Jane Smith", "age": 29, "email": "jane@example.com"}
+            "person",
+            {"name": "Jane Smith", "age": 29, "email": "jane@example.com"},
         )
         print(f"Updated person: {updated}")
 

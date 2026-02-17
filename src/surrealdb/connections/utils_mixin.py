@@ -12,7 +12,7 @@ class UtilsMixin:
 
     @staticmethod
     def check_response_for_result(response: dict[str, Any], process: str) -> None:
-        if "result" not in response.keys():
+        if "result" not in response:
             raise Exception(f"no result {process}: {response}")
 
     @staticmethod
@@ -61,7 +61,9 @@ class UtilsMixin:
 
     @staticmethod
     def _resource_to_variable(
-        resource: RecordIdType, variables: dict[str, Any], var_name: str
+        resource: RecordIdType,
+        variables: dict[str, Any],
+        var_name: str,
     ) -> str:
         """
         Converts a resource (Table, RecordID, or string) into a variable reference for SQL queries.

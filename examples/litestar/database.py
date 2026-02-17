@@ -1,6 +1,6 @@
 """Database connection management."""
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from surrealdb import AsyncSurreal
 
@@ -21,7 +21,7 @@ class DatabaseManager:
             {
                 "username": settings.surrealdb_username,
                 "password": settings.surrealdb_password,
-            }
+            },
         )
         await self.db.use(settings.surrealdb_namespace, settings.surrealdb_database)
 

@@ -1,7 +1,5 @@
 """GraphQL mutation resolvers."""
 
-from typing import Optional
-
 import strawberry
 from strawberry.types import Info
 
@@ -20,7 +18,7 @@ class Mutation:
         info: Info,
         name: str,
         email: str,
-        age: Optional[int] = None,
+        age: int | None = None,
     ) -> User:
         """Create a new user.
 
@@ -56,16 +54,16 @@ class Mutation:
                 age=user_data.get("age"),
             )
         except Exception as e:
-            raise Exception(f"Failed to create user: {str(e)}")
+            raise Exception(f"Failed to create user: {e}")
 
     @strawberry.mutation
     async def update_user(
         self,
         info: Info,
         id: str,
-        name: Optional[str] = None,
-        email: Optional[str] = None,
-        age: Optional[int] = None,
+        name: str | None = None,
+        email: str | None = None,
+        age: int | None = None,
     ) -> User:
         """Update an existing user.
 
@@ -107,7 +105,7 @@ class Mutation:
                 age=user_data.get("age"),
             )
         except Exception as e:
-            raise Exception(f"Failed to update user: {str(e)}")
+            raise Exception(f"Failed to update user: {e}")
 
     @strawberry.mutation
     async def delete_user(self, info: Info, id: str) -> bool:
@@ -129,7 +127,7 @@ class Mutation:
 
             return True
         except Exception as e:
-            raise Exception(f"Failed to delete user: {str(e)}")
+            raise Exception(f"Failed to delete user: {e}")
 
     @strawberry.mutation
     async def signup(
@@ -163,7 +161,7 @@ class Mutation:
                     "access": access,
                     "email": email,
                     "password": password,
-                }
+                },
             )
 
             return AuthResponse(
@@ -171,7 +169,7 @@ class Mutation:
                 message="User registered successfully",
             )
         except Exception as e:
-            raise Exception(f"Signup failed: {str(e)}")
+            raise Exception(f"Signup failed: {e}")
 
     @strawberry.mutation
     async def signin(
@@ -196,7 +194,7 @@ class Mutation:
                 {
                     "username": username,
                     "password": password,
-                }
+                },
             )
 
             return AuthResponse(
@@ -204,4 +202,4 @@ class Mutation:
                 message="Signed in successfully",
             )
         except Exception as e:
-            raise Exception(f"Authentication failed: {str(e)}")
+            raise Exception(f"Authentication failed: {e}")

@@ -29,7 +29,8 @@ async def setup_user(
 
 @pytest.mark.asyncio
 async def test_create_string(
-    async_ws_connection: AsyncWsSurrealConnection, setup_user: None
+    async_ws_connection: AsyncWsSurrealConnection,
+    setup_user: None,
 ) -> None:
     outcome = await async_ws_connection.create("user")
     assert "user" == outcome["id"].table_name
@@ -81,7 +82,8 @@ async def test_create_string_with_data_and_id(
 
 @pytest.mark.asyncio
 async def test_create_record_id(
-    async_ws_connection: AsyncWsSurrealConnection, setup_user: None
+    async_ws_connection: AsyncWsSurrealConnection,
+    setup_user: None,
 ) -> None:
     record_id = RecordID("user", 1)
     outcome = await async_ws_connection.create(record_id)
@@ -115,7 +117,8 @@ async def test_create_record_id_with_data(
 
 @pytest.mark.asyncio
 async def test_create_table(
-    async_ws_connection: AsyncWsSurrealConnection, setup_user: None
+    async_ws_connection: AsyncWsSurrealConnection,
+    setup_user: None,
 ) -> None:
     table = Table("user")
     outcome = await async_ws_connection.create(table)
