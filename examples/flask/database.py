@@ -16,7 +16,7 @@ def get_db() -> Surreal:
             {
                 "username": current_app.config["SURREALDB_USERNAME"],
                 "password": current_app.config["SURREALDB_PASSWORD"],
-            }
+            },
         )
         db.use(
             current_app.config["SURREALDB_NAMESPACE"],

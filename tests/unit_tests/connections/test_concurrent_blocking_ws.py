@@ -32,7 +32,8 @@ def setup_data(
 
 
 def test_concurrent_insert_relation(
-    blocking_ws_connection: BlockingWsSurrealConnection, setup_data: None
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    setup_data: None,
 ) -> None:
     """
     Test that concurrent insert_relation calls don't get mixed up responses.
@@ -60,7 +61,7 @@ def test_concurrent_insert_relation(
 
             if actual_out != expected_out:
                 errors.append(
-                    f"Task {task_id}: Expected out={expected_out}, got {actual_out}"
+                    f"Task {task_id}: Expected out={expected_out}, got {actual_out}",
                 )
 
             return result
@@ -78,7 +79,8 @@ def test_concurrent_insert_relation(
 
 
 def test_concurrent_create(
-    blocking_ws_connection: BlockingWsSurrealConnection, setup_data: None
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    setup_data: None,
 ) -> None:
     """
     Test that concurrent create calls don't get mixed up responses.
@@ -89,7 +91,8 @@ def test_concurrent_create(
         """Execute a create and verify the response."""
         try:
             result = blocking_ws_connection.create(
-                RecordID("document", task_id), {"content": f"Document {task_id}"}
+                RecordID("document", task_id),
+                {"content": f"Document {task_id}"},
             )
 
             # Verify we got the correct response
@@ -98,7 +101,7 @@ def test_concurrent_create(
 
             if actual_id != expected_id:
                 errors.append(
-                    f"Task {task_id}: Expected id={expected_id}, got {actual_id}"
+                    f"Task {task_id}: Expected id={expected_id}, got {actual_id}",
                 )
 
             if result["content"] != f"Document {task_id}":
@@ -119,7 +122,8 @@ def test_concurrent_create(
 
 
 def test_concurrent_mixed_operations(
-    blocking_ws_connection: BlockingWsSurrealConnection, setup_data: None
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    setup_data: None,
 ) -> None:
     """
     Test that mixing different operation types concurrently works correctly.
@@ -140,7 +144,7 @@ def test_concurrent_mixed_operations(
             expected_out = RecordID("likes", task_id)
             if result[0]["out"] != expected_out:
                 errors.append(
-                    f"insert_relation {task_id}: Wrong response {result[0]['out']}"
+                    f"insert_relation {task_id}: Wrong response {result[0]['out']}",
                 )
 
             return result
@@ -152,7 +156,8 @@ def test_concurrent_mixed_operations(
         """Execute a create."""
         try:
             result = blocking_ws_connection.create(
-                RecordID("document", task_id), {"content": f"Document {task_id}"}
+                RecordID("document", task_id),
+                {"content": f"Document {task_id}"},
             )
 
             expected_id = RecordID("document", task_id)
@@ -180,7 +185,8 @@ def test_concurrent_mixed_operations(
 
 
 def test_sequential_operations_still_work(
-    blocking_ws_connection: BlockingWsSurrealConnection, setup_data: None
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    setup_data: None,
 ) -> None:
     """
     Ensure the thread-safety fix doesn't break normal sequential usage.
@@ -194,14 +200,15 @@ def test_sequential_operations_still_work(
 
     # Create a relation
     relation = blocking_ws_connection.insert_relation(
-        "likes", {"in": RecordID("user", "1"), "out": RecordID("document", 100)}
+        "likes",
+        {"in": RecordID("user", "1"), "out": RecordID("document", 100)},
     )
     assert relation[0]["in"] == RecordID("user", "1")
     assert relation[0]["out"] == RecordID("document", 100)
 
     # Query to verify
     result = blocking_ws_connection.query(
-        "SELECT * FROM document WHERE id = document:100;"
+        "SELECT * FROM document WHERE id = document:100;",
     )
     assert len(result) == 1
     assert result[0]["content"] == "Test"

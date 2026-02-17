@@ -73,7 +73,7 @@ async def list_users(request):
                     "name": user_data["name"],
                     "email": user_data["email"],
                     "age": user_data.get("age"),
-                }
+                },
             )
 
         return response.json(users, status=200)

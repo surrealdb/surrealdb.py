@@ -76,7 +76,9 @@ def test_geometry_line_roundtrip() -> None:
     test_lines = [
         GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
         GeometryLine(
-            GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0), GeometryPoint(2.0, 2.0)
+            GeometryPoint(0.0, 0.0),
+            GeometryPoint(1.0, 1.0),
+            GeometryPoint(2.0, 2.0),
         ),
     ]
 
@@ -159,7 +161,9 @@ def test_geometry_multipoint_decode() -> None:
 def test_geometry_multipoint_roundtrip() -> None:
     """Test encode+decode roundtrip for GeometryMultiPoint."""
     mp = GeometryMultiPoint(
-        GeometryPoint(1.0, 2.0), GeometryPoint(3.0, 4.0), GeometryPoint(5.0, 6.0)
+        GeometryPoint(1.0, 2.0),
+        GeometryPoint(3.0, 4.0),
+        GeometryPoint(5.0, 6.0),
     )
     encoded = cbor.encode(mp)
     decoded = cbor.decode(encoded)
@@ -341,7 +345,8 @@ async def test_geometry_point_db_insert_and_retrieve(surrealdb_connection: Any) 
         CREATE geometry_tests:point1 SET geometry = $geo;
     """
     initial_result = await surrealdb_connection.query(
-        create_query, vars={"geo": geometry_dict}
+        create_query,
+        vars={"geo": geometry_dict},
     )
     assert "geometry" in initial_result[0]
     select_result = await surrealdb_connection.query("SELECT * FROM geometry_tests;")
@@ -385,7 +390,8 @@ async def test_geometry_point_mixed_coordinates(surrealdb_connection: Any) -> No
         CREATE geometry_tests:issue_5204 SET geometry = $geo;
     """
     results = await surrealdb_connection.query(
-        create_query, vars={"geo": geometry_dict}
+        create_query,
+        vars={"geo": geometry_dict},
     )
     stored_geo_obj = results[0]["geometry"]
     assert stored_geo_obj == geometry_dict
@@ -428,7 +434,9 @@ async def test_geometry_line_db_insert_and_retrieve_as_python_object(
     surrealdb_connection,
 ):
     line = GeometryLine(
-        GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0), GeometryPoint(2.0, 2.0)
+        GeometryPoint(0.0, 0.0),
+        GeometryPoint(1.0, 1.0),
+        GeometryPoint(2.0, 2.0),
     )
     create_query = """
         CREATE geometry_tests:obj_line1 SET geometry = $geo;
@@ -489,7 +497,7 @@ async def test_geometry_polygon_db_insert_and_retrieve(
     stored_geo = select_result[0]["geometry"]
     assert stored_geo["type"] == "Polygon"
     assert stored_geo["coordinates"] == [
-        [[0.0, 0.0], [1.0, 1.0], [2.0, 2.0], [0.0, 0.0]]
+        [[0.0, 0.0], [1.0, 1.0], [2.0, 2.0], [0.0, 0.0]],
     ]
 
 

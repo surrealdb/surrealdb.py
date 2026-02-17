@@ -34,7 +34,7 @@ async def setup_user(
 ) -> AsyncGenerator[None, None]:
     await async_http_connection.query("DELETE user;")
     await async_http_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;",
     )
     yield
     await async_http_connection.query("DELETE user;")
@@ -42,7 +42,9 @@ async def setup_user(
 
 @pytest.mark.asyncio
 async def test_upsert_string(
-    async_http_connection: AsyncHttpSurrealConnection, setup_user: None, existing_data
+    async_http_connection: AsyncHttpSurrealConnection,
+    setup_user: None,
+    existing_data,
 ) -> None:
     record_id = RecordID("user", "tobie")
     outcome = await async_http_connection.upsert("user:tobie", existing_data)
@@ -78,7 +80,9 @@ async def test_upsert_string_with_data(
 
 @pytest.mark.asyncio
 async def test_upsert_record_id(
-    async_http_connection: AsyncHttpSurrealConnection, setup_user: None, existing_data
+    async_http_connection: AsyncHttpSurrealConnection,
+    setup_user: None,
+    existing_data,
 ) -> None:
     record_id = RecordID("user", "tobie")
     first_outcome = await async_http_connection.upsert(record_id, existing_data)
@@ -95,7 +99,9 @@ async def test_upsert_record_id(
 
 @pytest.mark.asyncio
 async def test_upsert_record_id_with_data(
-    async_http_connection, upsert_data: dict[str, Any], setup_user
+    async_http_connection,
+    upsert_data: dict[str, Any],
+    setup_user,
 ) -> None:
     record_id = RecordID("user", "tobie")
     outcome = await async_http_connection.upsert(record_id, upsert_data)
@@ -112,7 +118,9 @@ async def test_upsert_record_id_with_data(
 
 @pytest.mark.asyncio
 async def test_upsert_table(
-    async_http_connection: AsyncHttpSurrealConnection, setup_user: None, existing_data
+    async_http_connection: AsyncHttpSurrealConnection,
+    setup_user: None,
+    existing_data,
 ) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")

@@ -27,7 +27,7 @@ class AuthController(Controller):
                     "access": data.access,
                     "email": data.email,
                     "password": data.password,
-                }
+                },
             )
 
             return AuthResponse(
@@ -45,7 +45,7 @@ class AuthController(Controller):
                 {
                     "username": data.username,
                     "password": data.password,
-                }
+                },
             )
 
             return AuthResponse(

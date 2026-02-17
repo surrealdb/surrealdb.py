@@ -21,7 +21,7 @@ class DatabaseManager:
             {
                 "username": settings.surrealdb_username,
                 "password": settings.surrealdb_password,
-            }
+            },
         )
         await self.db.use(settings.surrealdb_namespace, settings.surrealdb_database)
 

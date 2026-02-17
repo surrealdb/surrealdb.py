@@ -121,7 +121,7 @@ async def test_native_datetime(surrealdb_connection: Any) -> None:
         vars={"compact_datetime": now},
     )
     compact_test_outcome = await surrealdb_connection.query(
-        "SELECT * FROM datetime_tests;"
+        "SELECT * FROM datetime_tests;",
     )
     assert compact_test_outcome[0]["datetime"] == now
     outcome = compact_test_outcome[0]["datetime"]
@@ -140,7 +140,7 @@ async def test_datetime_iso_format(surrealdb_connection: Any) -> None:
         vars={"iso_datetime": date},
     )
     compact_test_outcome = await surrealdb_connection.query(
-        "SELECT * FROM datetime_tests;"
+        "SELECT * FROM datetime_tests;",
     )
     assert str(compact_test_outcome[0]["datetime"]) == str(iso_datetime_obj)
     date_str = compact_test_outcome[0]["datetime"].isoformat()

@@ -45,7 +45,7 @@ def create_app():
             {
                 "status": "healthy",
                 "message": "SurrealDB Sanic Example API",
-            }
+            },
         )
 
     @app.get("/health")
@@ -54,7 +54,7 @@ def create_app():
             {
                 "status": "ok",
                 "database": "connected",
-            }
+            },
         )
 
     # Error handlers

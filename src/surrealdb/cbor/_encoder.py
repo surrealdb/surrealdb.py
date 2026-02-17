@@ -182,17 +182,20 @@ class CBOREncoder:
         self.default = default
         self._canonical = canonical
         self._shared_containers: dict[
-            int, tuple[object, int | None]
+            int,
+            tuple[object, int | None],
         ] = {}  # indexes used for value sharing
         self._string_references: dict[
-            str | bytes, int
+            str | bytes,
+            int,
         ] = {}  # indexes used for string references
         self._encoders = default_encoders.copy()
         if canonical:
             self._encoders.update(canonical_encoders)
 
     def _find_encoder(
-        self, obj_type: type
+        self,
+        obj_type: type,
     ) -> Callable[[CBOREncoder, Any], None] | None:
         for type_or_tuple, enc in list(self._encoders.items()):
             if type(type_or_tuple) is tuple:
@@ -202,7 +205,7 @@ class CBOREncoder:
                     raise CBOREncodeValueError(
                         f"invalid deferred encoder type {type_or_tuple!r} (must be a "
                         "2-tuple of module name and type name, e.g. "
-                        "('collections', 'defaultdict'))"
+                        "('collections', 'defaultdict'))",
                     )
 
                 imported_type = getattr(modules.get(modname), typename, None)
@@ -336,7 +339,9 @@ class CBOREncoder:
             return fp.getvalue()
 
     def encode_container(
-        self, encoder: Callable[[CBOREncoder, Any], Any], value: Any
+        self,
+        encoder: Callable[[CBOREncoder, Any], Any],
+        value: Any,
     ) -> None:
         if self.string_namespacing:
             # Create a new string reference domain
@@ -346,7 +351,9 @@ class CBOREncoder:
             self.encode_shared(encoder, value)
 
     def encode_shared(
-        self, encoder: Callable[[CBOREncoder, Any], Any], value: Any
+        self,
+        encoder: Callable[[CBOREncoder, Any], Any],
+        value: Any,
     ) -> None:
         value_id = id(value)
         try:
@@ -374,7 +381,7 @@ class CBOREncoder:
                 self.encode_int(cast(int, index))
             else:
                 raise CBOREncodeValueError(
-                    "cyclic data structure detected but value sharing is disabled"
+                    "cyclic data structure detected but value sharing is disabled",
                 )
 
     def _stringref(self, value: str | bytes) -> bool:
@@ -520,7 +527,7 @@ class CBOREncoder:
             else:
                 raise CBOREncodeValueError(
                     f"naive datetime {value!r} encountered and no default timezone "
-                    "has been set"
+                    "has been set",
                 )
 
         if self.datetime_as_timestamp:
@@ -601,7 +608,7 @@ class CBOREncoder:
     def encode_ipnetwork(self, value: IPv4Network | IPv6Network) -> None:
         # Semantic tag 261
         self.encode_semantic(
-            CBORTag(261, {value.network_address.packed: value.prefixlen})
+            CBORTag(261, {value.network_address.packed: value.prefixlen}),
         )
 
     #

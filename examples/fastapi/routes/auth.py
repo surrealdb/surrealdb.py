@@ -23,7 +23,7 @@ async def signup(
                 "access": request.access,
                 "email": request.email,
                 "password": request.password,
-            }
+            },
         )
 
         return AuthResponse(
@@ -48,7 +48,7 @@ async def signin(
             {
                 "username": request.username,
                 "password": request.password,
-            }
+            },
         )
 
         return AuthResponse(

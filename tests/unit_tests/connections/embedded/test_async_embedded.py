@@ -75,7 +75,8 @@ async def test_query_operation() -> None:
 
         # Query with variables
         result = await db.query(
-            "SELECT * FROM person WHERE age > $min_age", {"min_age": 20}
+            "SELECT * FROM person WHERE age > $min_age",
+            {"min_age": 20},
         )
         assert result is not None
 

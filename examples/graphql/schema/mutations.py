@@ -161,7 +161,7 @@ class Mutation:
                     "access": access,
                     "email": email,
                     "password": password,
-                }
+                },
             )
 
             return AuthResponse(
@@ -194,7 +194,7 @@ class Mutation:
                 {
                     "username": username,
                     "password": password,
-                }
+                },
             )
 
             return AuthResponse(

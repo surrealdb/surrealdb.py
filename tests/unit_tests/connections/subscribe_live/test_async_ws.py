@@ -21,7 +21,7 @@ async def test_live_subscription(
 
     # Push an update
     await async_ws_connection.query(
-        "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', password = 'password456', enabled = true;"
+        "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', password = 'password456', enabled = true;",
     )
 
     try:
@@ -38,7 +38,8 @@ async def test_live_subscription(
 
 
 async def test_live_subscription_via_query(
-    async_ws_connection_with_user, async_ws_connection: AsyncWsSurrealConnection
+    async_ws_connection_with_user,
+    async_ws_connection: AsyncWsSurrealConnection,
 ) -> None:
     # Start the live query using query() method
     query_uuid = await async_ws_connection_with_user.query("LIVE SELECT * FROM user;")
@@ -49,7 +50,7 @@ async def test_live_subscription_via_query(
 
     # Push an update
     await async_ws_connection.query(
-        "CREATE user:john SET name = 'John', email = 'john@example.com', password = 'password123', enabled = true;"
+        "CREATE user:john SET name = 'John', email = 'john@example.com', password = 'password123', enabled = true;",
     )
 
     try:

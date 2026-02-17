@@ -83,7 +83,7 @@ class CBORTag:
 
         if self_id in running_hashes:
             raise RuntimeError(
-                "This CBORTag is not hashable because it contains a reference to itself"
+                "This CBORTag is not hashable because it contains a reference to itself",
             )
 
         running_hashes.add(self_id)

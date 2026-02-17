@@ -45,7 +45,7 @@ def test_bearer_access_system_user(bearer_v3_root_ws: dict) -> None:
                 "database": database_name,
                 "access": "bearer_api",
                 "key": bearer_key,
-            }
+            },
         )
         assert isinstance(tokens, Tokens)
         assert tokens.access is not None
@@ -83,7 +83,7 @@ def test_bearer_signin_token_not_usable_with_authenticate(
                 "database": database_name,
                 "access": "bearer_auth_test",
                 "key": bearer_key,
-            }
+            },
         )
         assert tokens.access is not None
 

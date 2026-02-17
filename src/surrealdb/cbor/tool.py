@@ -47,7 +47,9 @@ default_encoders: dict[type, Callable[[Any], Any]] = {
 
 
 def tag_hook(
-    decoder: CBORDecoder, tag: CBORTag, ignore_tags: Collection[int] = ()
+    decoder: CBORDecoder,
+    tag: CBORTag,
+    ignore_tags: Collection[int] = (),
 ) -> object:
     if tag.tag in ignore_tags:
         return tag.value
@@ -78,7 +80,10 @@ def iterdecode(
     str_errors: Literal["strict", "error", "replace"] = "strict",
 ) -> Iterator[Any]:
     decoder = CBORDecoder(
-        f, tag_hook=tag_hook, object_hook=object_hook, str_errors=str_errors
+        f,
+        tag_hook=tag_hook,
+        object_hook=object_hook,
+        str_errors=str_errors,
     )
     while True:
         try:
@@ -88,7 +93,8 @@ def iterdecode(
 
 
 def key_to_str(
-    d: T, dict_ids: set[int] | None = None
+    d: T,
+    dict_ids: set[int] | None = None,
 ) -> str | list[Any] | dict[str, Any] | T:
     """
     Recursively convert CBOR data to JSON-serializable format.
@@ -214,7 +220,11 @@ def main() -> None:
     my_hook = partial(tag_hook, ignore_tags=droptags)
 
     with open(
-        outfile, mode="w", encoding="utf-8", errors="backslashreplace", closefd=closefd
+        outfile,
+        mode="w",
+        encoding="utf-8",
+        errors="backslashreplace",
+        closefd=closefd,
     ) as outfile:
         for infile in infiles:
             if hasattr(infile, "buffer") and not decode:

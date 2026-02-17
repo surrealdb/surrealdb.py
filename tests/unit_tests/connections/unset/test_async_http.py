@@ -16,7 +16,7 @@ async def test_unset(async_http_connection: AsyncHttpSurrealConnection) -> None:
     assert outcome is None
     await async_http_connection.query("CREATE person SET name = $name")
     outcome = await async_http_connection.query(
-        "SELECT * FROM person WHERE name.first = $name.first"
+        "SELECT * FROM person WHERE name.first = $name.first",
     )
     assert len(outcome) == 1
     assert outcome[0]["name"] == {"first": "Tobie", "last": "Morgan Hitchcock"}
@@ -25,7 +25,7 @@ async def test_unset(async_http_connection: AsyncHttpSurrealConnection) -> None:
 
     # because the key was unset then $name.first is None returning []
     outcome = await async_http_connection.query(
-        "SELECT * FROM person WHERE name.first = $name.first"
+        "SELECT * FROM person WHERE name.first = $name.first",
     )
     assert outcome == []
 

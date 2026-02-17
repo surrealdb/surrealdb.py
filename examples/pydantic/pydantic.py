@@ -25,7 +25,7 @@ def main():
 
         # Person from JSON
         person_json = json.dumps(
-            {"id": "person:abc", "name": "Martin", "team": "team:xyz"}
+            {"id": "person:abc", "name": "Martin", "team": "team:xyz"},
         )
         person_loaded = Person.model_validate_json(person_json)
         print(f"Loaded person ({type(person_loaded)}): {person_loaded}")

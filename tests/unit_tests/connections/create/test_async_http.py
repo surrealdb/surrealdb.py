@@ -29,7 +29,8 @@ async def setup_user(
 
 @pytest.mark.asyncio
 async def test_create_string(
-    async_http_connection: AsyncHttpSurrealConnection, setup_user: None
+    async_http_connection: AsyncHttpSurrealConnection,
+    setup_user: None,
 ) -> None:
     outcome = await async_http_connection.create("user")
     assert "user" == outcome["id"].table_name
@@ -59,7 +60,9 @@ async def test_create_string_with_data(
 
 @pytest.mark.asyncio
 async def test_create_string_with_data_and_id(
-    async_http_connection, create_data: dict[str, Any], setup_user
+    async_http_connection,
+    create_data: dict[str, Any],
+    setup_user,
 ) -> None:
     first_outcome = await async_http_connection.create("user:tobie", create_data)
     assert "user" == first_outcome["id"].table_name
@@ -79,7 +82,8 @@ async def test_create_string_with_data_and_id(
 
 @pytest.mark.asyncio
 async def test_create_record_id(
-    async_http_connection: AsyncHttpSurrealConnection, setup_user: None
+    async_http_connection: AsyncHttpSurrealConnection,
+    setup_user: None,
 ) -> None:
     record_id = RecordID("user", 1)
     outcome = await async_http_connection.create(record_id)
@@ -91,7 +95,9 @@ async def test_create_record_id(
 
 @pytest.mark.asyncio
 async def test_create_record_id_with_data(
-    async_http_connection, create_data: dict[str, Any], setup_user
+    async_http_connection,
+    create_data: dict[str, Any],
+    setup_user,
 ) -> None:
     record_id = RecordID("user", 1)
     outcome = await async_http_connection.create(record_id, create_data)
@@ -111,7 +117,8 @@ async def test_create_record_id_with_data(
 
 @pytest.mark.asyncio
 async def test_create_table(
-    async_http_connection: AsyncHttpSurrealConnection, setup_user: None
+    async_http_connection: AsyncHttpSurrealConnection,
+    setup_user: None,
 ) -> None:
     table = Table("user")
     outcome = await async_http_connection.create(table)

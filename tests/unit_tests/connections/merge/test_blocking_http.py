@@ -24,14 +24,15 @@ def setup_user(
 ) -> Generator[None, None, None]:
     blocking_http_connection.query("DELETE user;")
     blocking_http_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;",
     )
     yield
     blocking_http_connection.query("DELETE user;")
 
 
 def test_merge_string(
-    blocking_http_connection: BlockingHttpSurrealConnection, setup_user: None
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    setup_user: None,
 ) -> None:
     record_id = RecordID("user", "tobie")
     outcome = blocking_http_connection.merge("user:tobie")
@@ -61,7 +62,8 @@ def test_merge_string_with_data(
 
 
 def test_merge_record_id(
-    blocking_http_connection: BlockingHttpSurrealConnection, setup_user: None
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    setup_user: None,
 ) -> None:
     record_id = RecordID("user", "tobie")
     first_outcome = blocking_http_connection.merge(record_id)
@@ -91,7 +93,8 @@ def test_merge_record_id_with_data(
 
 
 def test_merge_table(
-    blocking_http_connection: BlockingHttpSurrealConnection, setup_user: None
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    setup_user: None,
 ) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")

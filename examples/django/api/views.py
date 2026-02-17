@@ -42,7 +42,8 @@ class UserViewSet(viewsets.ViewSet):
                 user_data = result[0] if isinstance(result, list) else result
                 return Response(UserSerializer(user_data).data, status=status.HTTP_201_CREATED)
             return Response(
-                {"error": "Failed to create user"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Failed to create user"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         finally:
             await close_connection(db)

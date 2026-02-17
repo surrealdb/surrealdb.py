@@ -58,7 +58,7 @@ async def get_database() -> AsyncSurreal:
         {
             "username": config.surrealdb_username,
             "password": config.surrealdb_password,
-        }
+        },
     )
 
     # Select namespace and database

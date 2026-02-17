@@ -14,7 +14,10 @@ class AsyncEmbeddedDB:
 
     async def __aenter__(self) -> AsyncEmbeddedDB: ...
     async def __aexit__(
-        self, exc_type: Any, exc_value: Any, traceback: Any
+        self,
+        exc_type: Any,
+        exc_value: Any,
+        traceback: Any,
     ) -> None: ...
     async def connect(self) -> None:
         """Connect to the database."""

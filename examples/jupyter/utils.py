@@ -41,7 +41,8 @@ def to_dataframe(data: list[dict]) -> pd.DataFrame:
         cleaned_record = {}
         for key, value in record.items():
             if hasattr(value, "__str__") and not isinstance(
-                value, (str, int, float, bool, type(None))
+                value,
+                (str, int, float, bool, type(None)),
             ):
                 cleaned_record[key] = str(value)
             else:

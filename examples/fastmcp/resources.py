@@ -34,6 +34,6 @@ async def get_db_schema() -> dict:
                     {"name": "email", "type": "string"},
                     {"name": "age", "type": "int"},
                 ],
-            }
+            },
         ],
     }

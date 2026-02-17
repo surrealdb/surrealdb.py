@@ -378,7 +378,8 @@ class AsyncTemplate:
         raise NotImplementedError(f"live not implemented for: {self}")
 
     async def subscribe_live(
-        self, query_uuid: str | UUID
+        self,
+        query_uuid: str | UUID,
     ) -> AsyncGenerator[dict[str, Value], None]:
         """Returns a queue that receives notification messages from a running live query.
 

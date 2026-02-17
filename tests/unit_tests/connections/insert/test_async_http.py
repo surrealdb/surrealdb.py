@@ -38,7 +38,8 @@ def insert_data() -> dict[str, Any]:
 
 @pytest.mark.asyncio
 async def test_insert_string_with_data(
-    async_http_connection: AsyncHttpSurrealConnection, insert_bulk_data
+    async_http_connection: AsyncHttpSurrealConnection,
+    insert_bulk_data,
 ) -> None:
     await async_http_connection.query("DELETE user;")
     outcome = await async_http_connection.insert("user", insert_bulk_data)
@@ -49,7 +50,8 @@ async def test_insert_string_with_data(
 
 @pytest.mark.asyncio
 async def test_insert_record_id_result_error(
-    async_http_connection: AsyncHttpSurrealConnection, insert_data
+    async_http_connection: AsyncHttpSurrealConnection,
+    insert_data,
 ) -> None:
     await async_http_connection.query("DELETE user;")
     record_id = RecordID("user", "tobie")

@@ -34,14 +34,16 @@ def setup_user(
 ) -> Generator[None, None, None]:
     blocking_ws_connection.query("DELETE user;")
     blocking_ws_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;",
     )
     yield
     blocking_ws_connection.query("DELETE user;")
 
 
 def test_upsert_string(
-    blocking_ws_connection: BlockingWsSurrealConnection, setup_user: None, existing_data
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    setup_user: None,
+    existing_data,
 ) -> None:
     record_id = RecordID("user", "tobie")
     outcome = blocking_ws_connection.upsert("user:tobie", existing_data)
@@ -75,7 +77,9 @@ def test_upsert_string_with_data(
 
 
 def test_upsert_record_id(
-    blocking_ws_connection: BlockingWsSurrealConnection, setup_user: None, existing_data
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    setup_user: None,
+    existing_data,
 ) -> None:
     record_id = RecordID("user", "tobie")
     first_outcome = blocking_ws_connection.upsert(record_id, existing_data)
@@ -109,7 +113,9 @@ def test_upsert_record_id_with_data(
 
 
 def test_upsert_table(
-    blocking_ws_connection: BlockingWsSurrealConnection, setup_user: None, existing_data
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    setup_user: None,
+    existing_data,
 ) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")

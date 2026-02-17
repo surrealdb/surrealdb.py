@@ -24,7 +24,7 @@ async def users_live_query(request, ws):
             {
                 "username": config.SURREALDB_USERNAME,
                 "password": config.SURREALDB_PASSWORD,
-            }
+            },
         )
         await db.use(config.SURREALDB_NAMESPACE, config.SURREALDB_DATABASE)
 
@@ -37,8 +37,8 @@ async def users_live_query(request, ws):
                     "type": "connected",
                     "message": "Subscribed to user updates",
                     "live_query_id": str(live_query_id),
-                }
-            )
+                },
+            ),
         )
 
         # Process live query results
@@ -51,8 +51,8 @@ async def users_live_query(request, ws):
                             {
                                 "type": "update",
                                 "data": result,
-                            }
-                        )
+                            },
+                        ),
                     )
             except Exception as e:
                 await ws.send(
@@ -60,8 +60,8 @@ async def users_live_query(request, ws):
                         {
                             "type": "error",
                             "message": f"Live query error: {e}",
-                        }
-                    )
+                        },
+                    ),
                 )
 
         # Create task for processing live results
@@ -76,8 +76,8 @@ async def users_live_query(request, ws):
                         {
                             "type": "echo",
                             "message": f"Received: {data}",
-                        }
-                    )
+                        },
+                    ),
                 )
         finally:
             # Clean up
@@ -95,8 +95,8 @@ async def users_live_query(request, ws):
                 {
                     "type": "error",
                     "message": f"Connection error: {e}",
-                }
-            )
+                },
+            ),
         )
     finally:
         await db.close()

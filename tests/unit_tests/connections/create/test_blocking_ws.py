@@ -28,7 +28,8 @@ def setup_user(
 
 
 def test_create_string(
-    blocking_ws_connection: BlockingWsSurrealConnection, setup_user: None
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    setup_user: None,
 ) -> None:
     outcome = blocking_ws_connection.create("user")
     assert "user" == outcome["id"].table_name
@@ -56,7 +57,9 @@ def test_create_string_with_data(
 
 
 def test_create_string_with_data_and_id(
-    blocking_ws_connection, create_data: dict[str, Any], setup_user
+    blocking_ws_connection,
+    create_data: dict[str, Any],
+    setup_user,
 ):
     first_outcome = blocking_ws_connection.create("user:tobie", create_data)
     assert "user" == first_outcome["id"].table_name
@@ -75,7 +78,8 @@ def test_create_string_with_data_and_id(
 
 
 def test_create_record_id(
-    blocking_ws_connection: BlockingWsSurrealConnection, setup_user: None
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    setup_user: None,
 ) -> None:
     record_id = RecordID("user", 1)
     outcome = blocking_ws_connection.create(record_id)
@@ -107,7 +111,8 @@ def test_create_record_id_with_data(
 
 
 def test_create_table(
-    blocking_ws_connection: BlockingWsSurrealConnection, setup_user: None
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    setup_user: None,
 ) -> None:
     table = Table("user")
     outcome = blocking_ws_connection.create(table)

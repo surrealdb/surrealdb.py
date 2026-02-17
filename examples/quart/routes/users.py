@@ -38,7 +38,7 @@ async def create_user():
                 "name": user_data["name"],
                 "email": user_data["email"],
                 "age": user_data.get("age"),
-            }
+            },
         ), 201
 
     except Exception as e:
@@ -63,7 +63,7 @@ async def list_users():
                     "name": user_data["name"],
                     "email": user_data["email"],
                     "age": user_data.get("age"),
-                }
+                },
             )
 
         return jsonify(users), 200
@@ -91,7 +91,7 @@ async def get_user(user_id):
                 "name": user_data["name"],
                 "email": user_data["email"],
                 "age": user_data.get("age"),
-            }
+            },
         ), 200
 
     except Exception as e:
@@ -134,7 +134,7 @@ async def update_user(user_id):
                 "name": user_data["name"],
                 "email": user_data["email"],
                 "age": user_data.get("age"),
-            }
+            },
         ), 200
 
     except Exception as e:

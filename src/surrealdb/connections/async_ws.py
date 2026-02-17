@@ -83,7 +83,10 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             self.qry.clear()
 
     async def _send(
-        self, message: RequestMessage, process: str, bypass: bool = False
+        self,
+        message: RequestMessage,
+        process: str,
+        bypass: bool = False,
     ) -> dict[str, Any]:
         await self.connect()
         assert (
@@ -151,7 +154,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.token = None
 
     async def signup(
-        self, vars: dict[str, Value], session_id: UUID | None = None
+        self,
+        vars: dict[str, Value],
+        session_id: UUID | None = None,
     ) -> Tokens:
         kwargs: dict[str, Any] = {"data": vars}
         if session_id is not None:
@@ -164,7 +169,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         return tokens
 
     async def signin(
-        self, vars: dict[str, Value], session_id: UUID | None = None
+        self,
+        vars: dict[str, Value],
+        session_id: UUID | None = None,
     ) -> Tokens:
         kwargs: dict[str, Any] = {"params": vars}
         if session_id is not None:
@@ -182,7 +189,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.INFO, **kwargs)
         response = await self._send(
-            message, "getting database information", bypass=True
+            message,
+            "getting database information",
+            bypass=True,
         )
         self.check_response_for_result(response, "getting auth information")
         return response["result"]
@@ -210,7 +219,10 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         txn_id: UUID | None = None,
     ) -> Value:
         response = await self.query_raw(
-            query, vars, session_id=session_id, txn_id=txn_id
+            query,
+            vars,
+            session_id=session_id,
+            txn_id=txn_id,
         )
         self.check_response_for_error(response, "query")
         self.check_response_for_result(response, "query")
@@ -283,7 +295,10 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         query = f"SELECT * FROM {resource_ref}"
 
         response = await self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+            query,
+            variables,
+            session_id=session_id,
+            txn_id=txn_id,
         )
         self.check_response_for_error(response, "select")
         return response["result"][0]["result"]
@@ -305,7 +320,10 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             query = f"CREATE {resource_ref} CONTENT $_content"
 
         response = await self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+            query,
+            variables,
+            session_id=session_id,
+            txn_id=txn_id,
         )
         self.check_response_for_error(response, "create")
         result = response["result"][0]["result"]
@@ -329,13 +347,17 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             query = f"UPDATE {resource_ref} CONTENT $_content"
 
         response = await self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+            query,
+            variables,
+            session_id=session_id,
+            txn_id=txn_id,
         )
         self.check_response_for_error(response, "update")
         result = response["result"][0]["result"]
         # UPDATE on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
+            result,
+            unwrap=self._is_single_record_operation(record),
         )
 
     async def merge(
@@ -355,13 +377,17 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             query = f"UPDATE {resource_ref} MERGE $_data"
 
         response = await self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+            query,
+            variables,
+            session_id=session_id,
+            txn_id=txn_id,
         )
         self.check_response_for_error(response, "merge")
         result = response["result"][0]["result"]
         # MERGE on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
+            result,
+            unwrap=self._is_single_record_operation(record),
         )
 
     async def patch(
@@ -381,13 +407,17 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             query = f"UPDATE {resource_ref} PATCH $_patches"
 
         response = await self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+            query,
+            variables,
+            session_id=session_id,
+            txn_id=txn_id,
         )
         self.check_response_for_error(response, "patch")
         result = response["result"][0]["result"]
         # PATCH on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
+            result,
+            unwrap=self._is_single_record_operation(record),
         )
 
     async def delete(
@@ -401,13 +431,17 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         query = f"DELETE {resource_ref} RETURN BEFORE"
 
         response = await self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+            query,
+            variables,
+            session_id=session_id,
+            txn_id=txn_id,
         )
         self.check_response_for_error(response, "delete")
         result = response["result"][0]["result"]
         # DELETE on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
+            result,
+            unwrap=self._is_single_record_operation(record),
         )
 
     async def insert(
@@ -420,7 +454,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         # Validate that table is not a RecordID
         if isinstance(table, RecordID):
             raise Exception(
-                f"There was a problem with the database: Can not execute INSERT statement using value '{table}'"
+                f"There was a problem with the database: Can not execute INSERT statement using value '{table}'",
             )
 
         variables: dict[str, Any] = {}
@@ -429,7 +463,10 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         query = f"INSERT INTO {table_ref} $_data"
 
         response = await self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+            query,
+            variables,
+            session_id=session_id,
+            txn_id=txn_id,
         )
         self.check_response_for_error(response, "insert")
         return response["result"][0]["result"]
@@ -447,7 +484,10 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         query = f"INSERT RELATION INTO {table_ref} $_data"
 
         response = await self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+            query,
+            variables,
+            session_id=session_id,
+            txn_id=txn_id,
         )
         self.check_response_for_error(response, "insert_relation")
         return response["result"][0]["result"]
@@ -470,7 +510,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         return uuid
 
     async def subscribe_live(
-        self, query_uuid: str | UUID
+        self,
+        query_uuid: str | UUID,
     ) -> AsyncGenerator[dict[str, Value], None]:
         result_queue: Queue[dict[str, Any]] = Queue()
         suid = str(query_uuid)
@@ -527,7 +568,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             if txn_val is not None:
                 return UUID(str(txn_val))
         raise ValueError(
-            f"begin() expected transaction UUID from server, got: {type(result).__name__}"
+            f"begin() expected transaction UUID from server, got: {type(result).__name__}",
         )
 
     async def commit(self, txn_id: UUID, session_id: UUID | None = None) -> None:
@@ -540,7 +581,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def cancel(self, txn_id: UUID, session_id: UUID | None = None) -> None:
         if session_id is not None:
             message = RequestMessage(
-                RequestMethod.CANCEL, txn=txn_id, session=session_id
+                RequestMethod.CANCEL,
+                txn=txn_id,
+                session=session_id,
             )
         else:
             message = RequestMessage(RequestMethod.CANCEL, txn=txn_id)
@@ -567,13 +610,17 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             query = f"UPSERT {resource_ref} CONTENT $_content"
 
         response = await self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+            query,
+            variables,
+            session_id=session_id,
+            txn_id=txn_id,
         )
         self.check_response_for_error(response, "upsert")
         result = response["result"][0]["result"]
         # UPSERT on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
+            result,
+            unwrap=self._is_single_record_operation(record),
         )
 
     async def close(self) -> None:
@@ -704,7 +751,9 @@ class AsyncSurrealSession:
         data: Value,
     ) -> Value:
         return await self._connection.insert_relation(
-            table, data, session_id=self._session_id
+            table,
+            data,
+            session_id=self._session_id,
         )
 
     async def upsert(

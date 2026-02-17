@@ -41,7 +41,7 @@ async def test_update_string(
 ) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';",
     )
 
     outcome = await async_ws_connection.update("user:tobie")
@@ -59,7 +59,7 @@ async def test_update_string_with_data(
 ) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';",
     )
 
     first_outcome = await async_ws_connection.update("user:tobie", update_data)
@@ -76,7 +76,7 @@ async def test_update_record_id(
 ) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';",
     )
 
     first_outcome = await async_ws_connection.update(record_id)
@@ -93,7 +93,7 @@ async def test_update_record_id_with_data(
 ) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';",
     )
 
     outcome = await async_ws_connection.update(record_id, update_data)
@@ -110,7 +110,7 @@ async def test_update_table(
 ) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';",
     )
 
     table = Table("user")
@@ -128,7 +128,7 @@ async def test_update_table_with_data(
 ) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';",
     )
 
     table = Table("user")

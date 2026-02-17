@@ -43,7 +43,8 @@ def _list_schema(
 
 
 def _build_validator(
-    expected_method: str | None, params_schema: dict[str, Any] | None = None
+    expected_method: str | None,
+    params_schema: dict[str, Any] | None = None,
 ) -> SchemaValidator:
     fields: dict[str, dict[str, Any]] = {
         "id": {"schema": _string_field(), "required": True},
@@ -94,32 +95,41 @@ UNSET_VALIDATOR = _build_validator(RequestMethod.UNSET.value, _list_schema())
 LIVE_VALIDATOR = _build_validator(RequestMethod.LIVE.value, _list_schema())
 KILL_VALIDATOR = _build_validator(RequestMethod.KILL.value, _list_schema())
 QUERY_VALIDATOR = _build_validator(
-    RequestMethod.QUERY.value, _list_schema(min_length=2, max_length=2)
+    RequestMethod.QUERY.value,
+    _list_schema(min_length=2, max_length=2),
 )
 INSERT_VALIDATOR = _build_validator(
-    RequestMethod.INSERT.value, _list_schema(min_length=2, max_length=2)
+    RequestMethod.INSERT.value,
+    _list_schema(min_length=2, max_length=2),
 )
 PATCH_VALIDATOR = _build_validator(
-    RequestMethod.PATCH.value, _list_schema(min_length=2, max_length=2)
+    RequestMethod.PATCH.value,
+    _list_schema(min_length=2, max_length=2),
 )
 SELECT_VALIDATOR = _build_validator(RequestMethod.SELECT.value, _list_schema())
 CREATE_VALIDATOR = _build_validator(
-    RequestMethod.CREATE.value, _list_schema(min_length=1, max_length=2)
+    RequestMethod.CREATE.value,
+    _list_schema(min_length=1, max_length=2),
 )
 UPDATE_VALIDATOR = _build_validator(
-    RequestMethod.UPDATE.value, _list_schema(min_length=1, max_length=2)
+    RequestMethod.UPDATE.value,
+    _list_schema(min_length=1, max_length=2),
 )
 MERGE_VALIDATOR = _build_validator(
-    RequestMethod.MERGE.value, _list_schema(min_length=1, max_length=2)
+    RequestMethod.MERGE.value,
+    _list_schema(min_length=1, max_length=2),
 )
 DELETE_VALIDATOR = _build_validator(
-    RequestMethod.DELETE.value, _list_schema(min_length=1, max_length=1)
+    RequestMethod.DELETE.value,
+    _list_schema(min_length=1, max_length=1),
 )
 INSERT_RELATION_VALIDATOR = _build_validator(
-    RequestMethod.INSERT_RELATION.value, _list_schema(min_length=2, max_length=2)
+    RequestMethod.INSERT_RELATION.value,
+    _list_schema(min_length=2, max_length=2),
 )
 UPSERT_VALIDATOR = _build_validator(
-    RequestMethod.UPSERT.value, _list_schema(min_length=1, max_length=2)
+    RequestMethod.UPSERT.value,
+    _list_schema(min_length=1, max_length=2),
 )
 
 _VALIDATORS: dict[RequestMethod, SchemaValidator] = {
@@ -154,7 +164,7 @@ def _validate_payload(data: dict[str, Any], method: RequestMethod) -> None:
     except PydanticValidationError as exc:
         errors = _format_errors(exc)
         raise ValueError(
-            f"Invalid schema for Cbor WS encoding for {method.value}: {errors}"
+            f"Invalid schema for Cbor WS encoding for {method.value}: {errors}",
         ) from None
 
 
@@ -280,7 +290,7 @@ class WsCborDescriptor:
         passed_params = cast(dict[str, Any], obj.kwargs.get("data"))
         if not passed_params:
             raise ValueError(
-                "Signup requires a data dict (namespace, database, access, variables or user/pass)"
+                "Signup requires a data dict (namespace, database, access, variables or user/pass)",
             )
         params_dict = _build_auth_params(passed_params)
         data = {
@@ -295,7 +305,7 @@ class WsCborDescriptor:
         params = obj.kwargs.get("params")
         if params is None or not isinstance(params, dict):
             raise ValueError(
-                "Signin requires a params dict (e.g. username/password, key, or refresh)"
+                "Signin requires a params dict (e.g. username/password, key, or refresh)",
             )
         params_dict = _build_auth_params(params)
         data = {
@@ -411,7 +421,7 @@ class WsCborDescriptor:
 
     def prep_create(self, obj: RequestMessage) -> bytes:
         params: list[Any] = [
-            process_record(cast(RecordIdType, obj.kwargs.get("collection")))
+            process_record(cast(RecordIdType, obj.kwargs.get("collection"))),
         ]
         data = {
             "id": obj.id,

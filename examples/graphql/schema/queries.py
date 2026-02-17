@@ -35,7 +35,7 @@ class Query:
                         name=user_data["name"],
                         email=user_data["email"],
                         age=user_data.get("age"),
-                    )
+                    ),
                 )
 
             return users

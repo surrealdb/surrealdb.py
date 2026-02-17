@@ -107,7 +107,7 @@ class RecordID:
         """
         if ":" not in record_str:
             raise ValueError(
-                'invalid string provided for parse. the expected string format is "table_name:record_id"'
+                'invalid string provided for parse. the expected string format is "table_name:record_id"',
             )
 
         table, record_id = record_str.split(":")
@@ -127,7 +127,7 @@ class RecordID:
             [
                 from_str_schema,
                 core_schema.with_info_plain_validator_function(validate_from_str),
-            ]
+            ],
         )
 
         return core_schema.json_or_python_schema(
@@ -136,7 +136,7 @@ class RecordID:
                 [
                     core_schema.is_instance_schema(RecordID),
                     from_chain_schema,
-                ]
+                ],
             ),
             serialization=core_schema.wrap_serializer_function_ser_schema(
                 lambda value, _handler, info: value
@@ -148,6 +148,8 @@ class RecordID:
 
     @classmethod
     def __get_pydantic_json_schema__(
-        cls, _core_schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
+        cls,
+        _core_schema: core_schema.CoreSchema,
+        handler: GetJsonSchemaHandler,
     ) -> JsonSchemaValue:
         return handler(core_schema.str_schema())

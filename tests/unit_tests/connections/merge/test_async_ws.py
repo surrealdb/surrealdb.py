@@ -24,7 +24,7 @@ async def setup_user(
 ) -> AsyncGenerator[None, None]:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;",
     )
     yield
     await async_ws_connection.query("DELETE user;")
@@ -32,7 +32,8 @@ async def setup_user(
 
 @pytest.mark.asyncio
 async def test_merge_string(
-    async_ws_connection: AsyncWsSurrealConnection, setup_user: None
+    async_ws_connection: AsyncWsSurrealConnection,
+    setup_user: None,
 ) -> None:
     record_id = RecordID("user", "tobie")
     outcome = await async_ws_connection.merge("user:tobie")
@@ -64,7 +65,8 @@ async def test_merge_string_with_data(
 
 @pytest.mark.asyncio
 async def test_merge_record_id(
-    async_ws_connection: AsyncWsSurrealConnection, setup_user: None
+    async_ws_connection: AsyncWsSurrealConnection,
+    setup_user: None,
 ) -> None:
     record_id = RecordID("user", "tobie")
     first_outcome = await async_ws_connection.merge(record_id)
@@ -96,7 +98,8 @@ async def test_merge_record_id_with_data(
 
 @pytest.mark.asyncio
 async def test_merge_table(
-    async_ws_connection: AsyncWsSurrealConnection, setup_user: None
+    async_ws_connection: AsyncWsSurrealConnection,
+    setup_user: None,
 ) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")

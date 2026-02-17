@@ -41,7 +41,7 @@ def create_app(config_name=None):
             {
                 "status": "healthy",
                 "message": "SurrealDB Flask Example API",
-            }
+            },
         )
 
     @app.route("/health")
@@ -50,7 +50,7 @@ def create_app(config_name=None):
             {
                 "status": "ok",
                 "database": "connected",
-            }
+            },
         )
 
     # Error handlers

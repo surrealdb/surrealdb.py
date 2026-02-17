@@ -80,7 +80,10 @@ class GeometryLine(Geometry):
     geometry_points: list[GeometryPoint]
 
     def __init__(
-        self, point1: GeometryPoint, point2: GeometryPoint, *other_points: GeometryPoint
+        self,
+        point1: GeometryPoint,
+        point2: GeometryPoint,
+        *other_points: GeometryPoint,
     ) -> None:
         """
         The constructor for the GeometryLine class.
@@ -111,7 +114,7 @@ class GeometryLine(Geometry):
             A GeometryLine object.
         """
         return GeometryLine(
-            *[GeometryPoint.parse_coordinates(point) for point in coordinates]
+            *[GeometryPoint.parse_coordinates(point) for point in coordinates],
         )
 
     def __eq__(self, other: object) -> bool:
@@ -196,7 +199,7 @@ class GeometryPolygon(Geometry):
         if len(points) < 4:
             raise ValueError(
                 f"Invalid {ring_type} ring: must have at least 4 points (including closing point), "
-                f"got {len(points)}"
+                f"got {len(points)}",
             )
 
         # First and last points must be identical (ring must be closed)
@@ -205,7 +208,7 @@ class GeometryPolygon(Geometry):
         if first_point != last_point:
             raise ValueError(
                 f"Invalid {ring_type} ring: first point {first_point.get_coordinates()} "
-                f"must equal last point {last_point.get_coordinates()} to close the ring"
+                f"must equal last point {last_point.get_coordinates()} to close the ring",
             )
 
     def get_coordinates(self) -> list[list[tuple[float, float]]]:
@@ -242,7 +245,7 @@ class GeometryPolygon(Geometry):
             ValueError: If any ring is not properly closed or has fewer than 4 points.
         """
         return GeometryPolygon(
-            *[GeometryLine.parse_coordinates(line) for line in coordinates]
+            *[GeometryLine.parse_coordinates(line) for line in coordinates],
         )
 
     def __eq__(self, other: object) -> bool:
@@ -291,7 +294,7 @@ class GeometryMultiPoint(Geometry):
             A GeometryMultiPoint object.
         """
         return GeometryMultiPoint(
-            *[GeometryPoint.parse_coordinates(point) for point in coordinates]
+            *[GeometryPoint.parse_coordinates(point) for point in coordinates],
         )
 
     def __eq__(self, other: object) -> bool:
@@ -340,7 +343,7 @@ class GeometryMultiLine(Geometry):
             A GeometryMultiLine object.
         """
         return GeometryMultiLine(
-            *[GeometryLine.parse_coordinates(line) for line in coordinates]
+            *[GeometryLine.parse_coordinates(line) for line in coordinates],
         )
 
     def __eq__(self, other: object) -> bool:
@@ -389,7 +392,7 @@ class GeometryMultiPolygon(Geometry):
             A GeometryMultiPolygon object.
         """
         return GeometryMultiPolygon(
-            *[GeometryPolygon.parse_coordinates(polygon) for polygon in coordinates]
+            *[GeometryPolygon.parse_coordinates(polygon) for polygon in coordinates],
         )
 
     def __eq__(self, other: object) -> bool:

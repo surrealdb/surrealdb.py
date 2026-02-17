@@ -97,7 +97,7 @@ async def async_http_connection_with_user(
     """Async HTTP connection with a test user created"""
     await async_http_connection.query("DELETE user;")
     await async_http_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;",
     )
     yield async_http_connection
 
@@ -109,7 +109,7 @@ async def async_ws_connection_with_user(
     """Async WebSocket connection with a test user created"""
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;",
     )
     yield async_ws_connection
 
@@ -121,7 +121,7 @@ def blocking_http_connection_with_user(
     """Blocking HTTP connection with a test user created"""
     blocking_http_connection.query("DELETE user;")
     blocking_http_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;",
     )
     yield blocking_http_connection
 
@@ -133,6 +133,6 @@ def blocking_ws_connection_with_user(
     """Blocking WebSocket connection with a test user created"""
     blocking_ws_connection.query("DELETE user;")
     blocking_ws_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;",
     )
     yield blocking_ws_connection

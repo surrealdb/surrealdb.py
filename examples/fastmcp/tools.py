@@ -62,7 +62,7 @@ async def list_users() -> dict:
                     "name": user_data["name"],
                     "email": user_data["email"],
                     "age": user_data.get("age"),
-                }
+                },
             )
 
         return {"users": users, "count": len(users)}

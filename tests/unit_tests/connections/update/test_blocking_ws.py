@@ -40,7 +40,7 @@ def test_update_string(
 ) -> None:
     blocking_ws_connection.query("DELETE user;")
     blocking_ws_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';",
     )
 
     outcome = blocking_ws_connection.update("user:tobie")
@@ -57,7 +57,7 @@ def test_update_string_with_data(
 ) -> None:
     blocking_ws_connection.query("DELETE user;")
     blocking_ws_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';",
     )
 
     first_outcome = blocking_ws_connection.update("user:tobie", update_data)
@@ -73,7 +73,7 @@ def test_update_record_id(
 ) -> None:
     blocking_ws_connection.query("DELETE user;")
     blocking_ws_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';",
     )
 
     first_outcome = blocking_ws_connection.update(record_id)
@@ -89,7 +89,7 @@ def test_update_record_id_with_data(
 ) -> None:
     blocking_ws_connection.query("DELETE user;")
     blocking_ws_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';",
     )
 
     outcome = blocking_ws_connection.update(record_id, update_data)
@@ -105,7 +105,7 @@ def test_update_table(
 ) -> None:
     blocking_ws_connection.query("DELETE user;")
     blocking_ws_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';",
     )
 
     table = Table("user")
@@ -122,7 +122,7 @@ def test_update_table_with_data(
 ) -> None:
     blocking_ws_connection.query("DELETE user;")
     blocking_ws_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';",
     )
 
     table = Table("user")

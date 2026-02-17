@@ -84,7 +84,9 @@ def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
 
 
 def tag_decoder(
-    decoder: CBORDecoder, tag: CBORTag, shareable_index: int | None = None
+    decoder: CBORDecoder,
+    tag: CBORTag,
+    shareable_index: int | None = None,
 ) -> Any:
     if tag.tag == constants.TAG_GEOMETRY_POINT:
         return GeometryPoint.parse_coordinates(tag.value)
@@ -147,7 +149,7 @@ def tag_decoder(
         nanoseconds = tag.value[1]
         microseconds = nanoseconds // 1000  # Convert nanoseconds to microseconds
         return datetime.fromtimestamp(seconds, timezone.utc) + timedelta(
-            microseconds=microseconds
+            microseconds=microseconds,
         )
 
     elif tag.tag == constants.TAG_DECIMAL_STRING:

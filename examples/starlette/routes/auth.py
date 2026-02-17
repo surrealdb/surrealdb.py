@@ -26,7 +26,7 @@ async def signup(request):
                 "access": data["access"],
                 "email": data["email"],
                 "password": data["password"],
-            }
+            },
         )
 
         return JSONResponse(
@@ -60,7 +60,7 @@ async def signin(request):
             {
                 "username": data["username"],
                 "password": data["password"],
-            }
+            },
         )
 
         return JSONResponse(

@@ -25,7 +25,7 @@ async def users_live_query():
             {
                 "username": cfg.SURREALDB_USERNAME,
                 "password": cfg.SURREALDB_PASSWORD,
-            }
+            },
         )
         await db.use(cfg.SURREALDB_NAMESPACE, cfg.SURREALDB_DATABASE)
 
@@ -38,8 +38,8 @@ async def users_live_query():
                     "type": "connected",
                     "message": "Subscribed to user updates",
                     "live_query_id": str(live_query_id),
-                }
-            )
+                },
+            ),
         )
 
         # Process live query results
@@ -52,8 +52,8 @@ async def users_live_query():
                             {
                                 "type": "update",
                                 "data": result,
-                            }
-                        )
+                            },
+                        ),
                     )
             except Exception as e:
                 await websocket.send(
@@ -61,8 +61,8 @@ async def users_live_query():
                         {
                             "type": "error",
                             "message": f"Live query error: {e}",
-                        }
-                    )
+                        },
+                    ),
                 )
 
         # Create task for processing live results
@@ -78,8 +78,8 @@ async def users_live_query():
                         {
                             "type": "echo",
                             "message": f"Received: {data}",
-                        }
-                    )
+                        },
+                    ),
                 )
         finally:
             # Clean up
@@ -97,8 +97,8 @@ async def users_live_query():
                 {
                     "type": "error",
                     "message": f"Connection error: {e}",
-                }
-            )
+                },
+            ),
         )
     finally:
         await db.close()

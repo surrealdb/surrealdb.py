@@ -410,7 +410,8 @@ async def test_create_with_array_record_id(surrealdb_connection: Any) -> None:
     """Test creating a record using RecordID with array identifier."""
     record_id = RecordID("record_id_tests", ["main", "user", 123])
     result = await surrealdb_connection.create(
-        record_id, {"name": "Array Test", "active": True}
+        record_id,
+        {"name": "Array Test", "active": True},
     )
     assert result["id"] == record_id
     assert result["name"] == "Array Test"
@@ -430,7 +431,7 @@ async def test_create_with_object_record_id(surrealdb_connection: Any) -> None:
                 "settings": {
                     "active": True,
                     "marketing": True,
-                }
+                },
             },
         )
     except Exception as e:

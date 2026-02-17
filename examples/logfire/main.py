@@ -79,7 +79,8 @@ async def demonstrate_crud_operations(db: Any) -> None:
     # Span: "surrealdb query"
     print("🔍 Querying users with SurrealQL...")
     query_result = await db.query(
-        "SELECT * FROM user WHERE age > $min_age ORDER BY age", {"min_age": 30}
+        "SELECT * FROM user WHERE age > $min_age ORDER BY age",
+        {"min_age": 30},
     )
     print(f"   Found {len(query_result)} users over 30 years old\n")
 

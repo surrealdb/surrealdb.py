@@ -14,10 +14,10 @@ def setup_data(
     blocking_ws_connection.query("DELETE user;")
     blocking_ws_connection.query("DELETE likes;")
     blocking_ws_connection.query(
-        "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', password = 'password123', enabled = true;"
+        "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', password = 'password123', enabled = true;",
     )
     blocking_ws_connection.query(
-        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password456', enabled = true;"
+        "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password456', enabled = true;",
     )
     yield
     blocking_ws_connection.query("DELETE user;")
@@ -32,7 +32,8 @@ def check_outcome(outcome: list[Any]) -> None:
 
 
 def test_insert_relation_record_ids(
-    blocking_ws_connection: BlockingWsSurrealConnection, setup_data: None
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    setup_data: None,
 ) -> None:
     data = [
         {
@@ -52,7 +53,8 @@ def test_insert_relation_record_ids(
 
 
 def test_insert_relation_record_id(
-    blocking_ws_connection: BlockingWsSurrealConnection, setup_data: None
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    setup_data: None,
 ) -> None:
     data = {
         "in": RecordID("user", "tobie"),

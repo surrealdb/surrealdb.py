@@ -17,12 +17,12 @@ async def setup_schema(
         "DEFINE FIELD email ON user TYPE string;"
         "DEFINE FIELD password ON user TYPE string;"
         "DEFINE FIELD enabled ON user TYPE bool;"
-        "DEFINE INDEX email ON user FIELDS email UNIQUE;"
+        "DEFINE INDEX email ON user FIELDS email UNIQUE;",
     )
     await async_ws_connection.query(
         "DEFINE ACCESS user ON DATABASE TYPE RECORD "
         "SIGNUP ( CREATE user SET name = $name, email = $email, password = crypto::argon2::generate($password), enabled = true ) "
-        "SIGNIN ( SELECT * FROM user WHERE email = $email AND crypto::argon2::compare(password, $password) );"
+        "SIGNIN ( SELECT * FROM user WHERE email = $email AND crypto::argon2::compare(password, $password) );",
     )
     yield
     await async_ws_connection.query("DELETE user;")
