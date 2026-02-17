@@ -110,19 +110,19 @@ class CBOREncoder:
     """
 
     __slots__ = (
-        "datetime_as_timestamp",
-        "date_as_datetime",
-        "_timezone",
+        "_canonical",
         "_default",
-        "value_sharing",
+        "_encoders",
         "_fp",
         "_fp_write",
         "_shared_containers",
-        "_encoders",
-        "_canonical",
-        "string_referencing",
-        "string_namespacing",
         "_string_references",
+        "_timezone",
+        "date_as_datetime",
+        "datetime_as_timestamp",
+        "string_namespacing",
+        "string_referencing",
+        "value_sharing",
     )
 
     _fp: IO[bytes]  # pyright: ignore[reportUninitializedInstanceVariable]

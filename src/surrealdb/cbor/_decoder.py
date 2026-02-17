@@ -51,15 +51,15 @@ class CBORDecoder:
     """
 
     __slots__ = (
-        "_tag_hook",
-        "_object_hook",
-        "_share_index",
-        "_shareables",
         "_fp",
         "_fp_read",
         "_immutable",
+        "_object_hook",
+        "_share_index",
+        "_shareables",
         "_str_errors",
         "_stringref_namespace",
+        "_tag_hook",
     )
 
     _fp: IO[bytes]  # pyright: ignore[reportUninitializedInstanceVariable]
