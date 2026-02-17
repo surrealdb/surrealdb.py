@@ -437,9 +437,8 @@ class CBOREncoder:
             self.encode_length(1, -(value + 1))
 
     def encode_bytestring(self, value: bytes) -> None:
-        if self.string_referencing:
-            if self._stringref(value):
-                return
+        if self.string_referencing and self._stringref(value):
+            return
 
         self.encode_length(2, len(value))
         self._fp_write(value)
@@ -448,9 +447,8 @@ class CBOREncoder:
         self.encode_bytestring(bytes(value))
 
     def encode_string(self, value: str) -> None:
-        if self.string_referencing:
-            if self._stringref(value):
-                return
+        if self.string_referencing and self._stringref(value):
+            return
 
         encoded = value.encode("utf-8")
         self.encode_length(3, len(encoded))
