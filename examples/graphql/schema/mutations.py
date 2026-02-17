@@ -54,7 +54,7 @@ class Mutation:
                 age=user_data.get("age"),
             )
         except Exception as e:
-            raise Exception(f"Failed to create user: {str(e)}")
+            raise Exception(f"Failed to create user: {e}")
 
     @strawberry.mutation
     async def update_user(
@@ -105,7 +105,7 @@ class Mutation:
                 age=user_data.get("age"),
             )
         except Exception as e:
-            raise Exception(f"Failed to update user: {str(e)}")
+            raise Exception(f"Failed to update user: {e}")
 
     @strawberry.mutation
     async def delete_user(self, info: Info, id: str) -> bool:
@@ -127,7 +127,7 @@ class Mutation:
 
             return True
         except Exception as e:
-            raise Exception(f"Failed to delete user: {str(e)}")
+            raise Exception(f"Failed to delete user: {e}")
 
     @strawberry.mutation
     async def signup(
@@ -169,7 +169,7 @@ class Mutation:
                 message="User registered successfully",
             )
         except Exception as e:
-            raise Exception(f"Signup failed: {str(e)}")
+            raise Exception(f"Signup failed: {e}")
 
     @strawberry.mutation
     async def signin(
@@ -202,4 +202,4 @@ class Mutation:
                 message="Signed in successfully",
             )
         except Exception as e:
-            raise Exception(f"Authentication failed: {str(e)}")
+            raise Exception(f"Authentication failed: {e}")

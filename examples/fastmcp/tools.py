@@ -38,7 +38,7 @@ async def create_user(name: str, email: str, age: int | None = None) -> dict:
             "age": user_data.get("age"),
         }
     except Exception as e:
-        return {"error": f"Database error: {str(e)}"}
+        return {"error": f"Database error: {e}"}
 
 
 async def list_users() -> dict:
@@ -67,7 +67,7 @@ async def list_users() -> dict:
 
         return {"users": users, "count": len(users)}
     except Exception as e:
-        return {"error": f"Database error: {str(e)}"}
+        return {"error": f"Database error: {e}"}
 
 
 async def get_user(user_id: str) -> dict:
@@ -96,7 +96,7 @@ async def get_user(user_id: str) -> dict:
             "age": user_data.get("age"),
         }
     except Exception as e:
-        return {"error": f"Database error: {str(e)}"}
+        return {"error": f"Database error: {e}"}
 
 
 async def update_user(
@@ -145,7 +145,7 @@ async def update_user(
             "age": user_data.get("age"),
         }
     except Exception as e:
-        return {"error": f"Database error: {str(e)}"}
+        return {"error": f"Database error: {e}"}
 
 
 async def delete_user(user_id: str) -> dict:
@@ -166,7 +166,7 @@ async def delete_user(user_id: str) -> dict:
 
         return {"message": f"User {user_id} deleted successfully"}
     except Exception as e:
-        return {"error": f"Database error: {str(e)}"}
+        return {"error": f"Database error: {e}"}
 
 
 async def execute_query(query: str) -> dict:
@@ -184,4 +184,4 @@ async def execute_query(query: str) -> dict:
 
         return {"result": result}
     except Exception as e:
-        return {"error": f"Query error: {str(e)}"}
+        return {"error": f"Query error: {e}"}

@@ -43,7 +43,7 @@ async def create_user(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}",
+            detail=f"Database error: {e}",
         )
 
 
@@ -73,7 +73,7 @@ async def list_users(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}",
+            detail=f"Database error: {e}",
         )
 
 
@@ -106,7 +106,7 @@ async def get_user(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}",
+            detail=f"Database error: {e}",
         )
 
 
@@ -155,7 +155,7 @@ async def update_user(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}",
+            detail=f"Database error: {e}",
         )
 
 
@@ -178,5 +178,5 @@ async def delete_user(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}",
+            detail=f"Database error: {e}",
         )

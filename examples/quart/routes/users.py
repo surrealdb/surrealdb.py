@@ -42,7 +42,7 @@ async def create_user():
         ), 201
 
     except Exception as e:
-        return jsonify({"error": f"Database error: {str(e)}"}), 500
+        return jsonify({"error": f"Database error: {e}"}), 500
 
 
 @bp.route("", methods=["GET"])
@@ -69,7 +69,7 @@ async def list_users():
         return jsonify(users), 200
 
     except Exception as e:
-        return jsonify({"error": f"Database error: {str(e)}"}), 500
+        return jsonify({"error": f"Database error: {e}"}), 500
 
 
 @bp.route("/<user_id>", methods=["GET"])
@@ -95,7 +95,7 @@ async def get_user(user_id):
         ), 200
 
     except Exception as e:
-        return jsonify({"error": f"Database error: {str(e)}"}), 500
+        return jsonify({"error": f"Database error: {e}"}), 500
 
 
 @bp.route("/<user_id>", methods=["PUT"])
@@ -138,7 +138,7 @@ async def update_user(user_id):
         ), 200
 
     except Exception as e:
-        return jsonify({"error": f"Database error: {str(e)}"}), 500
+        return jsonify({"error": f"Database error: {e}"}), 500
 
 
 @bp.route("/<user_id>", methods=["DELETE"])
@@ -154,4 +154,4 @@ async def delete_user(user_id):
         return "", 204
 
     except Exception as e:
-        return jsonify({"error": f"Database error: {str(e)}"}), 500
+        return jsonify({"error": f"Database error: {e}"}), 500

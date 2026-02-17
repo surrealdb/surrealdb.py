@@ -33,7 +33,7 @@ async def signup(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Signup failed: {str(e)}",
+            detail=f"Signup failed: {e}",
         )
 
 
@@ -58,7 +58,7 @@ async def signin(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Authentication failed: {str(e)}",
+            detail=f"Authentication failed: {e}",
         )
 
 
@@ -73,5 +73,5 @@ async def invalidate(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Invalidation failed: {str(e)}",
+            detail=f"Invalidation failed: {e}",
         )

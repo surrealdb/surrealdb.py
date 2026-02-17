@@ -39,7 +39,7 @@ async def signup(request):
 
     except Exception as e:
         return JSONResponse(
-            {"error": f"Signup failed: {str(e)}"},
+            {"error": f"Signup failed: {e}"},
             status_code=400,
         )
 
@@ -73,7 +73,7 @@ async def signin(request):
 
     except Exception as e:
         return JSONResponse(
-            {"error": f"Authentication failed: {str(e)}"},
+            {"error": f"Authentication failed: {e}"},
             status_code=401,
         )
 
@@ -91,7 +91,7 @@ async def invalidate(request):
 
     except Exception as e:
         return JSONResponse(
-            {"error": f"Invalidation failed: {str(e)}"},
+            {"error": f"Invalidation failed: {e}"},
             status_code=500,
         )
 

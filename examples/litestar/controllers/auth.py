@@ -35,7 +35,7 @@ class AuthController(Controller):
                 message="User registered successfully",
             )
         except Exception as e:
-            raise InternalServerException(f"Signup failed: {str(e)}")
+            raise InternalServerException(f"Signup failed: {e}")
 
     @post("/signin")
     async def signin(self, data: SigninRequest, db: AsyncSurreal) -> AuthResponse:
@@ -53,7 +53,7 @@ class AuthController(Controller):
                 message="Signed in successfully",
             )
         except Exception as e:
-            raise InternalServerException(f"Authentication failed: {str(e)}")
+            raise InternalServerException(f"Authentication failed: {e}")
 
     @post("/invalidate")
     async def invalidate(self, db: AsyncSurreal) -> MessageResponse:
@@ -62,4 +62,4 @@ class AuthController(Controller):
             await db.invalidate()
             return MessageResponse(message="Session invalidated successfully")
         except Exception as e:
-            raise InternalServerException(f"Invalidation failed: {str(e)}")
+            raise InternalServerException(f"Invalidation failed: {e}")
