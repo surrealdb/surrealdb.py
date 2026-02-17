@@ -51,7 +51,7 @@ dev = [
     "maturin>=1.10.0",
     "mypy>=1.18.2",
     "pyright>=1.1.407",
-    "ruff>=0.14.6",
+    "ruff>=0.15.1",
     "types-requests>=2.32.4",   # Type stubs for requests
 ]
 test = [
