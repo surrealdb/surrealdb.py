@@ -16,14 +16,12 @@ class Geometry:
         """
         Returns the coordinates of the geometry. Should be implemented by subclasses.
         """
-        pass
 
     @staticmethod
     def parse_coordinates(coordinates: Any) -> Any:
         """
         Parses a list of coordinates into a specific geometry type. Should be implemented by subclasses.
         """
-        pass
 
 
 @dataclass

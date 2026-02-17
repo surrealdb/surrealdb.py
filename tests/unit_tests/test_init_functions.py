@@ -92,7 +92,6 @@ def test_blocking_meta_class_missing_url() -> None:
     """Test BlockingSurrealDBMeta with missing URL raises ValueError."""
     # This would test the meta class directly, but we can't instantiate it
     # The factory function doesn't expose this error case
-    pass
 
 
 def test_async_meta_class_positional_arg() -> None:
@@ -113,4 +112,3 @@ def test_async_meta_class_missing_url() -> None:
     """Test AsyncSurrealDBMeta with missing URL raises ValueError."""
     # This would test the meta class directly, but we can't instantiate it
     # The factory function doesn't expose this error case
-    pass

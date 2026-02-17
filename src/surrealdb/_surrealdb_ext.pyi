@@ -11,7 +11,6 @@ class AsyncEmbeddedDB:
         Args:
             url: Database URL (mem:// or file://).
         """
-        ...
 
     async def __aenter__(self) -> AsyncEmbeddedDB: ...
     async def __aexit__(
@@ -19,11 +18,9 @@ class AsyncEmbeddedDB:
     ) -> None: ...
     async def connect(self) -> None:
         """Connect to the database."""
-        ...
 
     async def close(self) -> None:
         """Close the database connection."""
-        ...
 
     async def execute(self, cbor_request: bytes) -> bytes:
         """Execute a CBOR-encoded request and return a CBOR-encoded response.
@@ -34,7 +31,6 @@ class AsyncEmbeddedDB:
         Returns:
             CBOR-encoded response containing id and result.
         """
-        ...
 
 class SyncEmbeddedDB:
     """Blocking embedded SurrealDB database instance."""
@@ -45,17 +41,14 @@ class SyncEmbeddedDB:
         Args:
             url: Database URL (mem:// or file://).
         """
-        ...
 
     def __enter__(self) -> SyncEmbeddedDB: ...
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None: ...
     def connect(self) -> None:
         """Connect to the database."""
-        ...
 
     def close(self) -> None:
         """Close the database connection."""
-        ...
 
     def execute(self, cbor_request: bytes) -> bytes:
         """Execute a CBOR-encoded request and return a CBOR-encoded response.
@@ -66,4 +59,3 @@ class SyncEmbeddedDB:
         Returns:
             CBOR-encoded response containing id and result.
         """
-        ...
