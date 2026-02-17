@@ -1,6 +1,7 @@
 """WebSocket endpoints for live queries."""
 
 import asyncio
+import contextlib
 import json
 
 from sanic import Blueprint
@@ -81,16 +82,12 @@ async def users_live_query(request, ws):
         finally:
             # Clean up
             live_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await live_task
-            except asyncio.CancelledError:
-                pass
 
             # Kill the live query
-            try:
+            with contextlib.suppress(Exception):
                 await db.kill(live_query_id)
-            except Exception:
-                pass
 
     except Exception as e:
         await ws.send(

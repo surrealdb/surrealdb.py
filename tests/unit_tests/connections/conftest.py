@@ -1,3 +1,4 @@
+import contextlib
 from collections.abc import AsyncGenerator, Generator
 from typing import Any
 
@@ -55,11 +56,8 @@ async def async_ws_connection(
         yield connection
     finally:
         # Ensure connection is always closed
-        try:
+        with contextlib.suppress(Exception):
             await connection.close()
-        except Exception:
-            # Ignore any exceptions during cleanup
-            pass
 
 
 @pytest.fixture
