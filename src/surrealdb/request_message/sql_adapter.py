@@ -55,9 +55,7 @@ class SqlAdapter:
         with open(file_path) as file:
             raw_buffer = file.read().split("\n")
             for i in raw_buffer:
-                if i == "":
-                    pass
-                elif i[0:2] == "--":
+                if i == "" or i[0:2] == "--":
                     pass
                 else:
                     buffer.append(i)
