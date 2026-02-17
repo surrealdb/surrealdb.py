@@ -85,6 +85,9 @@ select = [
     "UP", # pyupgrade
 ]
 
+[tool.ruff.lint.isort]
+known-first-party = ["surrealdb"]
+
 # --------------------------------------------------
 # mypy
 # --------------------------------------------------
