@@ -81,8 +81,10 @@ exclude = ["src/surrealdb/__init__.py"]
 
 [tool.ruff.lint]
 select = [
-    "I",  # isort
-    "UP", # pyupgrade
+    "COM", # flake8-commas
+    "I",   # isort
+    "PIE", # flake8-pie
+    "UP",  # pyupgrade
 ]
 
 [tool.ruff.lint.per-file-ignores]
