@@ -1,7 +1,5 @@
 """GraphQL mutation resolvers."""
 
-from typing import Optional
-
 import strawberry
 from strawberry.types import Info
 

@@ -1,7 +1,5 @@
 """User CRUD endpoints."""
 
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from surrealdb import AsyncSurreal
 
@@ -49,10 +47,10 @@ async def create_user(
         )
 
 
-@router.get("", response_model=List[UserResponse])
+@router.get("", response_model=list[UserResponse])
 async def list_users(
     db: AsyncSurreal = Depends(get_db),
-) -> List[UserResponse]:
+) -> list[UserResponse]:
     """Get all users."""
     try:
         result = await db.select("users")

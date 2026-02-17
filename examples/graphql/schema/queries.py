@@ -1,7 +1,5 @@
 """GraphQL query resolvers."""
 
-from typing import List, Optional
-
 import strawberry
 from strawberry.types import Info
 
@@ -15,7 +13,7 @@ class Query:
     """Root Query type."""
 
     @strawberry.field
-    async def users(self, info: Info) -> List[User]:
+    async def users(self, info: Info) -> list[User]:
         """Get all users.
 
         Returns:
@@ -45,7 +43,7 @@ class Query:
             raise Exception(f"Failed to fetch users: {str(e)}")
 
     @strawberry.field
-    async def user(self, info: Info, id: str) -> Optional[User]:
+    async def user(self, info: Info, id: str) -> User | None:
         """Get a single user by ID.
 
         Args:
