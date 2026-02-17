@@ -1,7 +1,7 @@
 """Database connection management."""
 
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from surrealdb import AsyncSurreal
 

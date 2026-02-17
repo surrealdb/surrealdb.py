@@ -1,6 +1,6 @@
 """Database connection management."""
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from surrealdb import AsyncSurreal
 
