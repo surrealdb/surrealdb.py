@@ -3,8 +3,12 @@
 import pytest
 
 from surrealdb.errors import (
+    AlreadyExistsDetailKind,
     AlreadyExistsError,
+    AuthDetailKind,
+    ConfigurationDetailKind,
     ConfigurationError,
+    ConnectionDetailKind,
     ConnectionUnavailableError,
     ErrorKind,
     InternalError,
@@ -12,9 +16,13 @@ from surrealdb.errors import (
     InvalidGeometryError,
     InvalidRecordIdError,
     InvalidTableError,
+    NotAllowedDetailKind,
     NotAllowedError,
+    NotFoundDetailKind,
     NotFoundError,
+    QueryDetailKind,
     QueryError,
+    SerializationDetailKind,
     SerializationError,
     ServerError,
     SurrealDBMethodError,
@@ -23,6 +31,7 @@ from surrealdb.errors import (
     UnexpectedResponseError,
     UnsupportedEngineError,
     UnsupportedFeatureError,
+    ValidationDetailKind,
     ValidationError,
     parse_query_error,
     parse_rpc_error,
@@ -34,13 +43,15 @@ from surrealdb.errors import (
 
 
 class TestParseRpcErrorNewFormat:
+    """Tests using the v3.0.0+ ``{kind, details?}`` wire format."""
+
     def test_not_allowed_with_token_expired_details(self) -> None:
         err = parse_rpc_error(
             {
                 "code": -32002,
                 "kind": "NotAllowed",
                 "message": "Token has expired",
-                "details": {"Auth": "TokenExpired"},
+                "details": {"kind": "Auth", "details": {"kind": "TokenExpired"}},
             }
         )
 
@@ -49,7 +60,7 @@ class TestParseRpcErrorNewFormat:
         assert err.kind == "NotAllowed"
         assert err.code == -32002
         assert str(err) == "Token has expired"
-        assert err.details == {"Auth": "TokenExpired"}
+        assert err.details == {"kind": "Auth", "details": {"kind": "TokenExpired"}}
         assert err.server_cause is None
 
         assert err.is_token_expired is True
@@ -64,7 +75,7 @@ class TestParseRpcErrorNewFormat:
                 "code": -32002,
                 "kind": "NotAllowed",
                 "message": "Invalid credentials",
-                "details": {"Auth": "InvalidAuth"},
+                "details": {"kind": "Auth", "details": {"kind": "InvalidAuth"}},
             }
         )
         assert isinstance(err, NotAllowedError)
@@ -77,7 +88,7 @@ class TestParseRpcErrorNewFormat:
                 "code": -32602,
                 "kind": "NotAllowed",
                 "message": "Method not allowed",
-                "details": {"Method": {"name": "begin"}},
+                "details": {"kind": "Method", "details": {"name": "begin"}},
             }
         )
         assert isinstance(err, NotAllowedError)
@@ -90,7 +101,7 @@ class TestParseRpcErrorNewFormat:
                 "code": -32602,
                 "kind": "NotAllowed",
                 "message": "Scripting is blocked",
-                "details": {"Scripting": {}},
+                "details": {"kind": "Scripting"},
             }
         )
         assert isinstance(err, NotAllowedError)
@@ -102,7 +113,7 @@ class TestParseRpcErrorNewFormat:
                 "code": -32602,
                 "kind": "NotAllowed",
                 "message": "Function not allowed",
-                "details": {"Function": {"name": "fn::custom"}},
+                "details": {"kind": "Function", "details": {"name": "fn::custom"}},
             }
         )
         assert isinstance(err, NotAllowedError)
@@ -114,7 +125,7 @@ class TestParseRpcErrorNewFormat:
                 "code": -32000,
                 "kind": "NotFound",
                 "message": "Table not found",
-                "details": {"Table": {"name": "users"}},
+                "details": {"kind": "Table", "details": {"name": "users"}},
             }
         )
 
@@ -130,7 +141,7 @@ class TestParseRpcErrorNewFormat:
                 "code": -32000,
                 "kind": "NotFound",
                 "message": "Record not found",
-                "details": {"Record": {"id": "users:123"}},
+                "details": {"kind": "Record", "details": {"id": "users:123"}},
             }
         )
         assert isinstance(err, NotFoundError)
@@ -143,7 +154,7 @@ class TestParseRpcErrorNewFormat:
                 "code": -32601,
                 "kind": "NotFound",
                 "message": "Method not found",
-                "details": {"Method": {"name": "unknown_method"}},
+                "details": {"kind": "Method", "details": {"name": "unknown_method"}},
             }
         )
         assert isinstance(err, NotFoundError)
@@ -155,7 +166,7 @@ class TestParseRpcErrorNewFormat:
                 "code": -32000,
                 "kind": "NotFound",
                 "message": "Namespace not found",
-                "details": {"Namespace": {"name": "test"}},
+                "details": {"kind": "Namespace", "details": {"name": "test"}},
             }
         )
         assert isinstance(err, NotFoundError)
@@ -167,7 +178,7 @@ class TestParseRpcErrorNewFormat:
                 "code": -32000,
                 "kind": "NotFound",
                 "message": "Database not found",
-                "details": {"Database": {"name": "test"}},
+                "details": {"kind": "Database", "details": {"name": "test"}},
             }
         )
         assert isinstance(err, NotFoundError)
@@ -179,7 +190,7 @@ class TestParseRpcErrorNewFormat:
                 "code": -32000,
                 "kind": "AlreadyExists",
                 "message": "Record already exists",
-                "details": {"Record": {"id": "users:123"}},
+                "details": {"kind": "Record", "details": {"id": "users:123"}},
             }
         )
         assert isinstance(err, AlreadyExistsError)
@@ -192,19 +203,19 @@ class TestParseRpcErrorNewFormat:
                 "code": -32000,
                 "kind": "AlreadyExists",
                 "message": "Table already exists",
-                "details": {"Table": {"name": "users"}},
+                "details": {"kind": "Table", "details": {"name": "users"}},
             }
         )
         assert isinstance(err, AlreadyExistsError)
         assert err.table_name == "users"
 
-    def test_validation_with_parse_string_variant(self) -> None:
+    def test_validation_with_parse_details(self) -> None:
         err = parse_rpc_error(
             {
                 "code": -32700,
                 "kind": "Validation",
                 "message": "Parse error",
-                "details": "Parse",
+                "details": {"kind": "Parse"},
             }
         )
         assert isinstance(err, ValidationError)
@@ -217,7 +228,7 @@ class TestParseRpcErrorNewFormat:
                 "code": -32603,
                 "kind": "Validation",
                 "message": "Invalid parameter",
-                "details": {"InvalidParameter": {"name": "limit"}},
+                "details": {"kind": "InvalidParameter", "details": {"name": "limit"}},
             }
         )
         assert isinstance(err, ValidationError)
@@ -230,7 +241,7 @@ class TestParseRpcErrorNewFormat:
                 "code": -32003,
                 "kind": "Query",
                 "message": "Query not executed",
-                "details": {"NotExecuted": {}},
+                "details": {"kind": "NotExecuted"},
             }
         )
         assert isinstance(err, QueryError)
@@ -245,7 +256,10 @@ class TestParseRpcErrorNewFormat:
                 "code": -32004,
                 "kind": "Query",
                 "message": "Query timed out",
-                "details": {"TimedOut": {"duration": {"secs": 5, "nanos": 0}}},
+                "details": {
+                    "kind": "TimedOut",
+                    "details": {"duration": {"secs": 5, "nanos": 0}},
+                },
             }
         )
         assert isinstance(err, QueryError)
@@ -258,7 +272,7 @@ class TestParseRpcErrorNewFormat:
                 "code": -32005,
                 "kind": "Query",
                 "message": "Query cancelled",
-                "details": {"Cancelled": {}},
+                "details": {"kind": "Cancelled"},
             }
         )
         assert isinstance(err, QueryError)
@@ -270,7 +284,7 @@ class TestParseRpcErrorNewFormat:
                 "code": -32604,
                 "kind": "Configuration",
                 "message": "Live queries not supported",
-                "details": {"LiveQueryNotSupported": {}},
+                "details": {"kind": "LiveQueryNotSupported"},
             }
         )
         assert isinstance(err, ConfigurationError)
@@ -282,7 +296,7 @@ class TestParseRpcErrorNewFormat:
                 "code": -32008,
                 "kind": "Serialization",
                 "message": "Deserialization failed",
-                "details": {"Deserialization": {}},
+                "details": {"kind": "Deserialization"},
             }
         )
         assert isinstance(err, SerializationError)
@@ -403,7 +417,7 @@ class TestParseQueryError:
                 "time": "1ms",
                 "result": "Table not found",
                 "kind": "NotFound",
-                "details": {"Table": {"name": "users"}},
+                "details": {"kind": "Table", "details": {"name": "users"}},
             }
         )
         assert isinstance(err, NotFoundError)
@@ -433,7 +447,7 @@ class TestParseQueryError:
                 "time": "1ms",
                 "result": "Permission denied",
                 "kind": "NotAllowed",
-                "details": {"Auth": "TokenExpired"},
+                "details": {"kind": "Auth", "details": {"kind": "TokenExpired"}},
                 "cause": {
                     "code": -32000,
                     "kind": "Internal",
@@ -446,6 +460,24 @@ class TestParseQueryError:
         assert cause is not None
         assert isinstance(cause, InternalError)
         assert str(cause) == "Session expired"
+
+    def test_double_wrapped_details_unwrapped(self) -> None:
+        """SurrealDB v3.0.0 double-wraps details in query result errors (fixed in v3.0.1)."""
+        err = parse_query_error(
+            {
+                "status": "ERR",
+                "time": "1ms",
+                "result": "Record already exists",
+                "kind": "AlreadyExists",
+                "details": {
+                    "kind": "AlreadyExists",
+                    "details": {"kind": "Record", "details": {"id": "person:dup"}},
+                },
+            }
+        )
+        assert isinstance(err, AlreadyExistsError)
+        assert err.details == {"kind": "Record", "details": {"id": "person:dup"}}
+        assert err.record_id == "person:dup"
 
 
 # ================================================================= #
@@ -508,7 +540,7 @@ class TestCauseChain:
                     "code": -32000,
                     "kind": "NotFound",
                     "message": "Nested not found",
-                    "details": {"Table": {"name": "users"}},
+                    "details": {"kind": "Table", "details": {"name": "users"}},
                 },
             }
         )
@@ -614,6 +646,156 @@ class TestErrorKind:
             }
         )
         assert err.kind == ErrorKind.NOT_FOUND
+
+
+# ================================================================= #
+#  Detail kind constants                                             #
+# ================================================================= #
+
+
+class TestDetailKindConstants:
+    def test_auth_detail_kinds(self) -> None:
+        assert AuthDetailKind.TOKEN_EXPIRED == "TokenExpired"
+        assert AuthDetailKind.SESSION_EXPIRED == "SessionExpired"
+        assert AuthDetailKind.INVALID_AUTH == "InvalidAuth"
+        assert AuthDetailKind.UNEXPECTED_AUTH == "UnexpectedAuth"
+        assert AuthDetailKind.MISSING_USER_OR_PASS == "MissingUserOrPass"
+        assert AuthDetailKind.NO_SIGNIN_TARGET == "NoSigninTarget"
+        assert AuthDetailKind.INVALID_PASS == "InvalidPass"
+        assert AuthDetailKind.TOKEN_MAKING_FAILED == "TokenMakingFailed"
+        assert AuthDetailKind.INVALID_SIGNUP == "InvalidSignup"
+        assert AuthDetailKind.INVALID_ROLE == "InvalidRole"
+        assert AuthDetailKind.NOT_ALLOWED == "NotAllowed"
+
+    def test_validation_detail_kinds(self) -> None:
+        assert ValidationDetailKind.PARSE == "Parse"
+        assert ValidationDetailKind.INVALID_REQUEST == "InvalidRequest"
+        assert ValidationDetailKind.INVALID_PARAMS == "InvalidParams"
+        assert ValidationDetailKind.NAMESPACE_EMPTY == "NamespaceEmpty"
+        assert ValidationDetailKind.DATABASE_EMPTY == "DatabaseEmpty"
+        assert ValidationDetailKind.INVALID_PARAMETER == "InvalidParameter"
+        assert ValidationDetailKind.INVALID_CONTENT == "InvalidContent"
+        assert ValidationDetailKind.INVALID_MERGE == "InvalidMerge"
+
+    def test_configuration_detail_kinds(self) -> None:
+        assert ConfigurationDetailKind.LIVE_QUERY_NOT_SUPPORTED == "LiveQueryNotSupported"
+        assert ConfigurationDetailKind.BAD_LIVE_QUERY_CONFIG == "BadLiveQueryConfig"
+        assert ConfigurationDetailKind.BAD_GRAPHQL_CONFIG == "BadGraphqlConfig"
+
+    def test_query_detail_kinds(self) -> None:
+        assert QueryDetailKind.NOT_EXECUTED == "NotExecuted"
+        assert QueryDetailKind.TIMED_OUT == "TimedOut"
+        assert QueryDetailKind.CANCELLED == "Cancelled"
+
+    def test_serialization_detail_kinds(self) -> None:
+        assert SerializationDetailKind.SERIALIZATION == "Serialization"
+        assert SerializationDetailKind.DESERIALIZATION == "Deserialization"
+
+    def test_not_allowed_detail_kinds(self) -> None:
+        assert NotAllowedDetailKind.SCRIPTING == "Scripting"
+        assert NotAllowedDetailKind.AUTH == "Auth"
+        assert NotAllowedDetailKind.METHOD == "Method"
+        assert NotAllowedDetailKind.FUNCTION == "Function"
+        assert NotAllowedDetailKind.TARGET == "Target"
+
+    def test_not_found_detail_kinds(self) -> None:
+        assert NotFoundDetailKind.METHOD == "Method"
+        assert NotFoundDetailKind.SESSION == "Session"
+        assert NotFoundDetailKind.TABLE == "Table"
+        assert NotFoundDetailKind.RECORD == "Record"
+        assert NotFoundDetailKind.NAMESPACE == "Namespace"
+        assert NotFoundDetailKind.DATABASE == "Database"
+        assert NotFoundDetailKind.TRANSACTION == "Transaction"
+
+    def test_already_exists_detail_kinds(self) -> None:
+        assert AlreadyExistsDetailKind.SESSION == "Session"
+        assert AlreadyExistsDetailKind.TABLE == "Table"
+        assert AlreadyExistsDetailKind.RECORD == "Record"
+        assert AlreadyExistsDetailKind.NAMESPACE == "Namespace"
+        assert AlreadyExistsDetailKind.DATABASE == "Database"
+
+    def test_connection_detail_kinds(self) -> None:
+        assert ConnectionDetailKind.UNINITIALISED == "Uninitialised"
+        assert ConnectionDetailKind.ALREADY_CONNECTED == "AlreadyConnected"
+
+
+# ================================================================= #
+#  Additional convenience properties                                 #
+# ================================================================= #
+
+
+class TestAdditionalConvenienceProperties:
+    def test_not_allowed_target_name(self) -> None:
+        err = parse_rpc_error(
+            {
+                "code": -32602,
+                "kind": "NotAllowed",
+                "message": "Target not allowed",
+                "details": {"kind": "Target", "details": {"name": "some_target"}},
+            }
+        )
+        assert isinstance(err, NotAllowedError)
+        assert err.target_name == "some_target"
+
+    def test_not_found_session_id(self) -> None:
+        err = parse_rpc_error(
+            {
+                "code": -32000,
+                "kind": "NotFound",
+                "message": "Session not found",
+                "details": {"kind": "Session", "details": {"id": "abc-123"}},
+            }
+        )
+        assert isinstance(err, NotFoundError)
+        assert err.session_id == "abc-123"
+
+    def test_not_found_session_id_null(self) -> None:
+        err = parse_rpc_error(
+            {
+                "code": -32000,
+                "kind": "NotFound",
+                "message": "Session not found",
+                "details": {"kind": "Session", "details": {"id": None}},
+            }
+        )
+        assert isinstance(err, NotFoundError)
+        assert err.session_id is None
+
+    def test_already_exists_session_id(self) -> None:
+        err = parse_rpc_error(
+            {
+                "code": -32000,
+                "kind": "AlreadyExists",
+                "message": "Session already exists",
+                "details": {"kind": "Session", "details": {"id": "abc-123"}},
+            }
+        )
+        assert isinstance(err, AlreadyExistsError)
+        assert err.session_id == "abc-123"
+
+    def test_already_exists_namespace_name(self) -> None:
+        err = parse_rpc_error(
+            {
+                "code": -32000,
+                "kind": "AlreadyExists",
+                "message": "Namespace already exists",
+                "details": {"kind": "Namespace", "details": {"name": "test"}},
+            }
+        )
+        assert isinstance(err, AlreadyExistsError)
+        assert err.namespace_name == "test"
+
+    def test_already_exists_database_name(self) -> None:
+        err = parse_rpc_error(
+            {
+                "code": -32000,
+                "kind": "AlreadyExists",
+                "message": "Database already exists",
+                "details": {"kind": "Database", "details": {"name": "test"}},
+            }
+        )
+        assert isinstance(err, AlreadyExistsError)
+        assert err.database_name == "test"
 
 
 # ================================================================= #

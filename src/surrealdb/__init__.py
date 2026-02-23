@@ -43,8 +43,12 @@ from surrealdb.data.types.range import Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
+    AlreadyExistsDetailKind,
     AlreadyExistsError,
+    AuthDetailKind,
+    ConfigurationDetailKind,
     ConfigurationError,
+    ConnectionDetailKind,
     ConnectionUnavailableError,
     ErrorKind,
     InternalError,
@@ -52,9 +56,13 @@ from surrealdb.errors import (
     InvalidGeometryError,
     InvalidRecordIdError,
     InvalidTableError,
+    NotAllowedDetailKind,
     NotAllowedError,
+    NotFoundDetailKind,
     NotFoundError,
+    QueryDetailKind,
     QueryError,
+    SerializationDetailKind,
     SerializationError,
     ServerError,
     SurrealDBMethodError,
@@ -63,6 +71,7 @@ from surrealdb.errors import (
     UnexpectedResponseError,
     UnsupportedEngineError,
     UnsupportedFeatureError,
+    ValidationDetailKind,
     ValidationError,
 )
 from surrealdb.types import Tokens, Value
@@ -104,6 +113,16 @@ __all__ = [
     "AlreadyExistsError",
     "InternalError",
     "ErrorKind",
+    # Error detail kind constants
+    "AuthDetailKind",
+    "ValidationDetailKind",
+    "ConfigurationDetailKind",
+    "QueryDetailKind",
+    "SerializationDetailKind",
+    "NotAllowedDetailKind",
+    "NotFoundDetailKind",
+    "AlreadyExistsDetailKind",
+    "ConnectionDetailKind",
     # Errors – SDK-side
     "ConnectionUnavailableError",
     "UnsupportedEngineError",

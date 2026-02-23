@@ -45,23 +45,132 @@ class ErrorKind:
 
 
 # ------------------------------------------------------------------ #
-#  Detail helpers (serde externally-tagged enum navigation)            #
+#  Detail kind constants (mirrors Rust ``ErrorDetails`` tree)          #
 # ------------------------------------------------------------------ #
 
 
-def _has_detail_key(details: dict[str, Any] | str | None, key: str) -> bool:
-    """Check if *details* contains *key* (handles serde tagged format)."""
-    if isinstance(details, dict):
-        return key in details
-    if isinstance(details, str):
-        return details == key
-    return False
+class AuthDetailKind:
+    """Detail kinds for authentication errors (nested inside ``NotAllowed``)."""
+
+    TOKEN_EXPIRED = "TokenExpired"
+    SESSION_EXPIRED = "SessionExpired"
+    INVALID_AUTH = "InvalidAuth"
+    UNEXPECTED_AUTH = "UnexpectedAuth"
+    MISSING_USER_OR_PASS = "MissingUserOrPass"
+    NO_SIGNIN_TARGET = "NoSigninTarget"
+    INVALID_PASS = "InvalidPass"
+    TOKEN_MAKING_FAILED = "TokenMakingFailed"
+    INVALID_SIGNUP = "InvalidSignup"
+    INVALID_ROLE = "InvalidRole"
+    NOT_ALLOWED = "NotAllowed"
 
 
-def _get_detail_value(details: dict[str, Any] | str | None, key: str) -> Any:
-    """Get the value for *key* from *details* (handles serde tagged format)."""
+class ValidationDetailKind:
+    """Detail kinds for validation errors."""
+
+    PARSE = "Parse"
+    INVALID_REQUEST = "InvalidRequest"
+    INVALID_PARAMS = "InvalidParams"
+    NAMESPACE_EMPTY = "NamespaceEmpty"
+    DATABASE_EMPTY = "DatabaseEmpty"
+    INVALID_PARAMETER = "InvalidParameter"
+    INVALID_CONTENT = "InvalidContent"
+    INVALID_MERGE = "InvalidMerge"
+
+
+class ConfigurationDetailKind:
+    """Detail kinds for configuration errors."""
+
+    LIVE_QUERY_NOT_SUPPORTED = "LiveQueryNotSupported"
+    BAD_LIVE_QUERY_CONFIG = "BadLiveQueryConfig"
+    BAD_GRAPHQL_CONFIG = "BadGraphqlConfig"
+
+
+class QueryDetailKind:
+    """Detail kinds for query errors."""
+
+    NOT_EXECUTED = "NotExecuted"
+    TIMED_OUT = "TimedOut"
+    CANCELLED = "Cancelled"
+
+
+class SerializationDetailKind:
+    """Detail kinds for serialization errors."""
+
+    SERIALIZATION = "Serialization"
+    DESERIALIZATION = "Deserialization"
+
+
+class NotAllowedDetailKind:
+    """Detail kinds for not-allowed errors."""
+
+    SCRIPTING = "Scripting"
+    AUTH = "Auth"
+    METHOD = "Method"
+    FUNCTION = "Function"
+    TARGET = "Target"
+
+
+class NotFoundDetailKind:
+    """Detail kinds for not-found errors."""
+
+    METHOD = "Method"
+    SESSION = "Session"
+    TABLE = "Table"
+    RECORD = "Record"
+    NAMESPACE = "Namespace"
+    DATABASE = "Database"
+    TRANSACTION = "Transaction"
+
+
+class AlreadyExistsDetailKind:
+    """Detail kinds for already-exists errors."""
+
+    SESSION = "Session"
+    TABLE = "Table"
+    RECORD = "Record"
+    NAMESPACE = "Namespace"
+    DATABASE = "Database"
+
+
+class ConnectionDetailKind:
+    """Detail kinds for connection errors."""
+
+    UNINITIALISED = "Uninitialised"
+    ALREADY_CONNECTED = "AlreadyConnected"
+
+
+# ------------------------------------------------------------------ #
+#  Detail helpers                                                      #
+#                                                                      #
+#  Server error details use the ``{kind, details?}`` wire format.      #
+# ------------------------------------------------------------------ #
+
+
+def _detail_kind(details: Any) -> str | None:
+    """Extract the ``kind`` from a ``{kind, details?}`` detail object."""
     if isinstance(details, dict):
-        return details.get(key)
+        kind = details.get("kind")
+        if isinstance(kind, str):
+            return kind
+    return None
+
+
+def _detail_inner(details: Any) -> Any:
+    """Extract the ``details`` value from a ``{kind, details?}`` detail object."""
+    if isinstance(details, dict):
+        return details.get("details")
+    return None
+
+
+def _detail_field(details: Any, kind: str, field: str) -> str | None:
+    """Get a named string field from details matching *kind*."""
+    if _detail_kind(details) != kind:
+        return None
+    inner = _detail_inner(details)
+    if isinstance(inner, dict) and field in inner:
+        value = inner[field]
+        return str(value) if value is not None else None
     return None
 
 
@@ -85,13 +194,13 @@ class ServerError(SurrealError):
         kind: str,
         message: str,
         code: int = 0,
-        details: dict[str, Any] | str | None = None,
+        details: dict[str, Any] | None = None,
         cause: ServerError | None = None,
     ) -> None:
         super().__init__(message)
         self.kind: str = kind
         self.code: int = code
-        self.details: dict[str, Any] | str | None = details
+        self.details: dict[str, Any] | None = details
         if cause is not None:
             self.__cause__ = cause
 
@@ -132,14 +241,11 @@ class ValidationError(ServerError):
 
     @property
     def is_parse_error(self) -> bool:
-        return _has_detail_key(self.details, "Parse")
+        return _detail_kind(self.details) == "Parse"
 
     @property
     def parameter_name(self) -> str | None:
-        v = _get_detail_value(self.details, "InvalidParameter")
-        if isinstance(v, dict) and "name" in v:
-            return str(v["name"])
-        return None
+        return _detail_field(self.details, "InvalidParameter", "name")
 
 
 class ConfigurationError(ServerError):
@@ -147,7 +253,7 @@ class ConfigurationError(ServerError):
 
     @property
     def is_live_query_not_supported(self) -> bool:
-        return _has_detail_key(self.details, "LiveQueryNotSupported")
+        return _detail_kind(self.details) == "LiveQueryNotSupported"
 
 
 class ThrownError(ServerError):
@@ -159,22 +265,24 @@ class QueryError(ServerError):
 
     @property
     def is_not_executed(self) -> bool:
-        return _has_detail_key(self.details, "NotExecuted")
+        return _detail_kind(self.details) == "NotExecuted"
 
     @property
     def is_timed_out(self) -> bool:
-        return _has_detail_key(self.details, "TimedOut")
+        return _detail_kind(self.details) == "TimedOut"
 
     @property
     def is_cancelled(self) -> bool:
-        return _has_detail_key(self.details, "Cancelled")
+        return _detail_kind(self.details) == "Cancelled"
 
     @property
     def timeout(self) -> dict[str, Any] | None:
         """The timeout duration (``{"secs": ..., "nanos": ...}``) or ``None``."""
-        v = _get_detail_value(self.details, "TimedOut")
-        if isinstance(v, dict) and "duration" in v:
-            duration = v["duration"]
+        if _detail_kind(self.details) != "TimedOut":
+            return None
+        inner = _detail_inner(self.details)
+        if isinstance(inner, dict):
+            duration = inner.get("duration")
             if isinstance(duration, dict):
                 return duration
         return None
@@ -185,7 +293,7 @@ class SerializationError(ServerError):
 
     @property
     def is_deserialization(self) -> bool:
-        return _has_detail_key(self.details, "Deserialization")
+        return _detail_kind(self.details) == "Deserialization"
 
 
 class NotAllowedError(ServerError):
@@ -193,29 +301,31 @@ class NotAllowedError(ServerError):
 
     @property
     def is_token_expired(self) -> bool:
-        return _get_detail_value(self.details, "Auth") == "TokenExpired"
+        if _detail_kind(self.details) != "Auth":
+            return False
+        return _detail_kind(_detail_inner(self.details)) == "TokenExpired"
 
     @property
     def is_invalid_auth(self) -> bool:
-        return _get_detail_value(self.details, "Auth") == "InvalidAuth"
+        if _detail_kind(self.details) != "Auth":
+            return False
+        return _detail_kind(_detail_inner(self.details)) == "InvalidAuth"
 
     @property
     def is_scripting_blocked(self) -> bool:
-        return _has_detail_key(self.details, "Scripting")
+        return _detail_kind(self.details) == "Scripting"
 
     @property
     def method_name(self) -> str | None:
-        v = _get_detail_value(self.details, "Method")
-        if isinstance(v, dict) and "name" in v:
-            return str(v["name"])
-        return None
+        return _detail_field(self.details, "Method", "name")
 
     @property
     def function_name(self) -> str | None:
-        v = _get_detail_value(self.details, "Function")
-        if isinstance(v, dict) and "name" in v:
-            return str(v["name"])
-        return None
+        return _detail_field(self.details, "Function", "name")
+
+    @property
+    def target_name(self) -> str | None:
+        return _detail_field(self.details, "Target", "name")
 
 
 class NotFoundError(ServerError):
@@ -223,38 +333,27 @@ class NotFoundError(ServerError):
 
     @property
     def table_name(self) -> str | None:
-        v = _get_detail_value(self.details, "Table")
-        if isinstance(v, dict) and "name" in v:
-            return str(v["name"])
-        return None
+        return _detail_field(self.details, "Table", "name")
 
     @property
     def record_id(self) -> str | None:
-        v = _get_detail_value(self.details, "Record")
-        if isinstance(v, dict) and "id" in v:
-            return str(v["id"])
-        return None
+        return _detail_field(self.details, "Record", "id")
 
     @property
     def method_name(self) -> str | None:
-        v = _get_detail_value(self.details, "Method")
-        if isinstance(v, dict) and "name" in v:
-            return str(v["name"])
-        return None
+        return _detail_field(self.details, "Method", "name")
 
     @property
     def namespace_name(self) -> str | None:
-        v = _get_detail_value(self.details, "Namespace")
-        if isinstance(v, dict) and "name" in v:
-            return str(v["name"])
-        return None
+        return _detail_field(self.details, "Namespace", "name")
 
     @property
     def database_name(self) -> str | None:
-        v = _get_detail_value(self.details, "Database")
-        if isinstance(v, dict) and "name" in v:
-            return str(v["name"])
-        return None
+        return _detail_field(self.details, "Database", "name")
+
+    @property
+    def session_id(self) -> str | None:
+        return _detail_field(self.details, "Session", "id")
 
 
 class AlreadyExistsError(ServerError):
@@ -262,17 +361,23 @@ class AlreadyExistsError(ServerError):
 
     @property
     def record_id(self) -> str | None:
-        v = _get_detail_value(self.details, "Record")
-        if isinstance(v, dict) and "id" in v:
-            return str(v["id"])
-        return None
+        return _detail_field(self.details, "Record", "id")
 
     @property
     def table_name(self) -> str | None:
-        v = _get_detail_value(self.details, "Table")
-        if isinstance(v, dict) and "name" in v:
-            return str(v["name"])
-        return None
+        return _detail_field(self.details, "Table", "name")
+
+    @property
+    def session_id(self) -> str | None:
+        return _detail_field(self.details, "Session", "id")
+
+    @property
+    def namespace_name(self) -> str | None:
+        return _detail_field(self.details, "Namespace", "name")
+
+    @property
+    def database_name(self) -> str | None:
+        return _detail_field(self.details, "Database", "name")
 
 
 class InternalError(ServerError):
@@ -403,6 +508,17 @@ def parse_query_error(raw: dict[str, Any]) -> ServerError:
     Query errors use ``result`` as the message field and have no ``code``.
     """
     kind = _resolve_kind(raw.get("kind"), None)
+    details = raw.get("details")
+
+    # Workaround: SurrealDB v3.0.0 double-wraps details in query result
+    # errors.  Fixed in v3.0.1, but kept for backward compatibility.
+    if (
+        isinstance(details, dict)
+        and details.get("kind") == kind
+        and isinstance(details.get("details"), dict)
+    ):
+        details = details["details"]
+
     cause: ServerError | None = None
     if raw.get("cause") is not None:
         cause = parse_rpc_error(raw["cause"])
@@ -411,6 +527,6 @@ def parse_query_error(raw: dict[str, Any]) -> ServerError:
         kind=kind,
         message=raw.get("result", ""),
         code=0,
-        details=raw.get("details"),
+        details=details,
         cause=cause,
     )
