@@ -19,6 +19,7 @@ async def setup_schema(
         "DEFINE FIELD enabled ON user TYPE bool;"
         "DEFINE INDEX email ON user FIELDS email UNIQUE;"
     )
+    await async_ws_connection.query_raw("REMOVE ACCESS user ON DATABASE;")
     await async_ws_connection.query(
         "DEFINE ACCESS user ON DATABASE TYPE RECORD "
         "SIGNUP ( CREATE user SET name = $name, email = $email, password = crypto::argon2::generate($password), enabled = true ) "

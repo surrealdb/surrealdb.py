@@ -140,9 +140,9 @@ class RecordID:
                 ]
             ),
             serialization=core_schema.wrap_serializer_function_ser_schema(
-                lambda value, _handler, info: value
-                if info.mode == "python"
-                else str(value),
+                lambda value, _handler, info: (
+                    value if info.mode == "python" else str(value)
+                ),
                 info_arg=True,
             ),
         )

@@ -113,7 +113,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
                 ):
                     return auth_response[0]
             # If it's a different error, raise it
-            raise parse_rpc_error(error)
+            if error is not None:
+                raise parse_rpc_error(error)
 
         self.check_response_for_result(response, "getting database information")
         return response["result"]
