@@ -89,9 +89,9 @@ async def surrealdb_connection():  # type: ignore[misc]
     connection = AsyncWsSurrealConnection(url)
     await connection.signin(vars_params)
     await connection.use(namespace=namespace, database=database_name)
-    await connection.query("REMOVE TABLE person;")
+    await connection.query_raw("REMOVE TABLE person;")
     yield connection
-    await connection.query("REMOVE TABLE person;")
+    await connection.query_raw("REMOVE TABLE person;")
     await connection.close()
 
 

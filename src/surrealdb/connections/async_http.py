@@ -10,6 +10,7 @@ from surrealdb.connections.utils_mixin import UtilsMixin
 from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
+from surrealdb.errors import SurrealError, UnsupportedFeatureError
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 from surrealdb.types import Tokens, Value, parse_auth_result
@@ -156,6 +157,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         response = await self.query_raw(query, vars)
         self.check_response_for_error(response, "query")
         self.check_response_for_result(response, "query")
+        self._check_query_result(response["result"][0])
         return response["result"][0]["result"]
 
     async def query_raw(
@@ -190,6 +192,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
         response = await self.query_raw(query, variables)
         self.check_response_for_error(response, "create")
+        self._check_query_result(response["result"][0])
         result = response["result"][0]["result"]
         # CREATE always creates a single record, so always unwrap
         return self._unwrap_result(result, unwrap=True)
@@ -201,6 +204,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
         response = await self.query_raw(query, variables)
         self.check_response_for_error(response, "delete")
+        self._check_query_result(response["result"][0])
         result = response["result"][0]["result"]
         # DELETE on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
@@ -214,7 +218,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     ) -> Value:
         # Validate that table is not a RecordID
         if isinstance(table, RecordID):
-            raise Exception(
+            raise SurrealError(
                 f"There was a problem with the database: Can not execute INSERT statement using value '{table}'"
             )
 
@@ -225,6 +229,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
         response = await self.query_raw(query, variables)
         self.check_response_for_error(response, "insert")
+        self._check_query_result(response["result"][0])
         return response["result"][0]["result"]
 
     async def insert_relation(
@@ -239,6 +244,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
         response = await self.query_raw(query, variables)
         self.check_response_for_error(response, "insert_relation")
+        self._check_query_result(response["result"][0])
         return response["result"][0]["result"]
 
     async def let(self, key: str, value: Value) -> None:
@@ -259,6 +265,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
         response = await self.query_raw(query, variables)
         self.check_response_for_error(response, "merge")
+        self._check_query_result(response["result"][0])
         result = response["result"][0]["result"]
         # MERGE on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
@@ -277,6 +284,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
         response = await self.query_raw(query, variables)
         self.check_response_for_error(response, "patch")
+        self._check_query_result(response["result"][0])
         result = response["result"][0]["result"]
         # PATCH on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
@@ -290,6 +298,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
         response = await self.query_raw(query, variables)
         self.check_response_for_error(response, "select")
+        self._check_query_result(response["result"][0])
         return response["result"][0]["result"]
 
     async def update(self, record: RecordIdType, data: Value | None = None) -> Value:
@@ -304,6 +313,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
         response = await self.query_raw(query, variables)
         self.check_response_for_error(response, "update")
+        self._check_query_result(response["result"][0])
         result = response["result"][0]["result"]
         # UPDATE on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
@@ -329,6 +339,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
         response = await self.query_raw(query, variables)
         self.check_response_for_error(response, "upsert")
+        self._check_query_result(response["result"][0])
         result = response["result"][0]["result"]
         # UPSERT on a specific record returns a single dict, on a table returns a list
         return self._unwrap_result(
@@ -357,31 +368,31 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
             await self._session.close()
 
     async def attach(self) -> None:
-        raise NotImplementedError(
+        raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
     async def detach(self, session_id: Any) -> None:
-        raise NotImplementedError(
+        raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
     async def begin(self, session_id: Any = None) -> None:
-        raise NotImplementedError(
+        raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
     async def commit(self, txn_id: Any, session_id: Any = None) -> None:
-        raise NotImplementedError(
+        raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
     async def cancel(self, txn_id: Any, session_id: Any = None) -> None:
-        raise NotImplementedError(
+        raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
     async def new_session(self) -> None:
-        raise NotImplementedError(
+        raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )

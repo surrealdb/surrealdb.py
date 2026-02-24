@@ -5,6 +5,8 @@ Defines a unset of geometry classes for representing geometric shapes such as po
 from dataclasses import dataclass
 from typing import Any
 
+from surrealdb.errors import InvalidGeometryError
+
 
 class Geometry:
     """
@@ -196,7 +198,7 @@ class GeometryPolygon(Geometry):
 
         # A linear ring must have at least 4 points (minimum triangle + closing point)
         if len(points) < 4:
-            raise ValueError(
+            raise InvalidGeometryError(
                 f"Invalid {ring_type} ring: must have at least 4 points (including closing point), "
                 f"got {len(points)}"
             )
@@ -205,7 +207,7 @@ class GeometryPolygon(Geometry):
         first_point = points[0]
         last_point = points[-1]
         if first_point != last_point:
-            raise ValueError(
+            raise InvalidGeometryError(
                 f"Invalid {ring_type} ring: first point {first_point.get_coordinates()} "
                 f"must equal last point {last_point.get_coordinates()} to close the ring"
             )

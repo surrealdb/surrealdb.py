@@ -24,10 +24,13 @@ def test_bearer_access_record_user(bearer_v3_root_ws: dict) -> None:
     namespace = bearer_v3_root_ws["namespace"]
     database_name = bearer_v3_root_ws["database_name"]
 
-    root.query("DEFINE TABLE users SCHEMAFULL")
-    root.query("DEFINE FIELD name ON users TYPE string")
+    root.query("DEFINE TABLE IF NOT EXISTS users SCHEMAFULL")
+    root.query("DEFINE FIELD IF NOT EXISTS name ON users TYPE string")
+    root.query_raw("DELETE users:testrecord")
     root.query("CREATE users:testrecord SET name = 'Test Record User'")
-    root.query("DEFINE ACCESS bearer_record_api ON DATABASE TYPE BEARER FOR RECORD")
+    root.query(
+        "DEFINE ACCESS IF NOT EXISTS bearer_record_api ON DATABASE TYPE BEARER FOR RECORD"
+    )
 
     grant_result = root.query(
         "ACCESS bearer_record_api GRANT FOR RECORD users:testrecord"
@@ -75,10 +78,13 @@ def test_bearer_record_signin_token_not_usable_with_authenticate(
     namespace = bearer_v3_root_ws["namespace"]
     database_name = bearer_v3_root_ws["database_name"]
 
-    root.query("DEFINE TABLE auth_records SCHEMAFULL")
-    root.query("DEFINE FIELD name ON auth_records TYPE string")
+    root.query("DEFINE TABLE IF NOT EXISTS auth_records SCHEMAFULL")
+    root.query("DEFINE FIELD IF NOT EXISTS name ON auth_records TYPE string")
+    root.query_raw("DELETE auth_records:auth_test")
     root.query("CREATE auth_records:auth_test SET name = 'Auth Test Record'")
-    root.query("DEFINE ACCESS bearer_record_auth ON DATABASE TYPE BEARER FOR RECORD")
+    root.query(
+        "DEFINE ACCESS IF NOT EXISTS bearer_record_auth ON DATABASE TYPE BEARER FOR RECORD"
+    )
     grant_result = root.query(
         "ACCESS bearer_record_auth GRANT FOR RECORD auth_records:auth_test"
     )

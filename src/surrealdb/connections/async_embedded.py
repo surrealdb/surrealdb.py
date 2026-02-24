@@ -13,6 +13,7 @@ from surrealdb._surrealdb_ext import AsyncEmbeddedDB
 from surrealdb.connections.async_ws import AsyncSurrealSession, AsyncWsSurrealConnection
 from surrealdb.connections.url import Url
 from surrealdb.data.cbor import decode
+from surrealdb.errors import UnsupportedFeatureError
 from surrealdb.request_message.message import RequestMessage
 
 
@@ -131,32 +132,32 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         return response
 
     async def attach(self) -> UUID:
-        raise NotImplementedError(
+        raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
     async def detach(self, session_id: Any) -> None:
-        raise NotImplementedError(
+        raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
     async def begin(self, session_id: Any = None) -> UUID:
-        raise NotImplementedError(
+        raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
     async def commit(self, txn_id: Any, session_id: Any = None) -> None:
-        raise NotImplementedError(
+        raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
     async def cancel(self, txn_id: Any, session_id: Any = None) -> None:
-        raise NotImplementedError(
+        raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
     async def new_session(self) -> AsyncSurrealSession:
-        raise NotImplementedError(
+        raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 

@@ -18,8 +18,8 @@ async def setup_async_ws_signin() -> None:
     connection = AsyncWsSurrealConnection(url)
     _ = await connection.signin(vars_params)
     _ = await connection.use(namespace=namespace, database=database_name)
-    _ = await connection.query("DELETE user;")
-    _ = await connection.query("REMOVE TABLE user;")
+    _ = await connection.query_raw("DELETE user;")
+    _ = await connection.query_raw("REMOVE TABLE user;")
     _ = await connection.query(
         "DEFINE TABLE user SCHEMAFULL PERMISSIONS FOR select, update, delete WHERE id = $auth.id;"
         "DEFINE FIELD name ON user TYPE string;"
@@ -28,14 +28,15 @@ async def setup_async_ws_signin() -> None:
         "DEFINE FIELD enabled ON user TYPE bool;"
         "DEFINE INDEX email ON user FIELDS email UNIQUE;"
     )
+    _ = await connection.query_raw("REMOVE ACCESS user ON DATABASE;")
     _ = await connection.query(
         "DEFINE ACCESS user ON DATABASE TYPE RECORD "
         "SIGNUP ( CREATE user SET name = $name, email = $email, password = crypto::argon2::generate($password), enabled = true ) "
         "SIGNIN ( SELECT * FROM user WHERE email = $email AND crypto::argon2::compare(password, $password) );"
     )
     _ = await connection.query(
-        'DEFINE USER test ON NAMESPACE PASSWORD "test" ROLES OWNER; '
-        'DEFINE USER test ON DATABASE PASSWORD "test" ROLES OWNER;'
+        'DEFINE USER IF NOT EXISTS test ON NAMESPACE PASSWORD "test" ROLES OWNER; '
+        'DEFINE USER IF NOT EXISTS test ON DATABASE PASSWORD "test" ROLES OWNER;'
     )
     _ = await connection.query(
         "CREATE user SET name = 'test', email = 'test@gmail.com', password = crypto::argon2::generate('test'), enabled = true"
@@ -51,8 +52,8 @@ async def setup_async_ws_signin() -> None:
         "connection": connection,
     }
 
-    await connection.query("DELETE user;")
-    await connection.query("REMOVE TABLE user;")
+    await connection.query_raw("DELETE user;")
+    await connection.query_raw("REMOVE TABLE user;")
 
 
 @pytest.mark.asyncio

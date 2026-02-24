@@ -16,6 +16,7 @@ from surrealdb.connections.blocking_ws import (
 )
 from surrealdb.connections.url import Url
 from surrealdb.data.cbor import decode
+from surrealdb.errors import UnsupportedFeatureError
 from surrealdb.request_message.message import RequestMessage
 
 
@@ -130,32 +131,32 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
         return response
 
     def attach(self) -> UUID:
-        raise NotImplementedError(
+        raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
     def detach(self, session_id: Any) -> None:
-        raise NotImplementedError(
+        raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
     def begin(self, session_id: Any = None) -> UUID:
-        raise NotImplementedError(
+        raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
     def commit(self, txn_id: Any, session_id: Any = None) -> None:
-        raise NotImplementedError(
+        raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
     def cancel(self, txn_id: Any, session_id: Any = None) -> None:
-        raise NotImplementedError(
+        raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
     def new_session(self) -> BlockingSurrealSession:
-        raise NotImplementedError(
+        raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 

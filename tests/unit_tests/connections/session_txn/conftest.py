@@ -11,7 +11,6 @@ import pytest
 
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
-
 pytestmark = pytest.mark.surrealdb_v3
 
 

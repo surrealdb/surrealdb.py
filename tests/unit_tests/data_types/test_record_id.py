@@ -7,6 +7,7 @@ import pytest
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data import cbor
 from surrealdb.data.types.record_id import RecordID
+from surrealdb.errors import InvalidRecordIdError
 
 
 # Unit tests for RecordID class
@@ -50,7 +51,7 @@ def test_record_id_pydantic_model_validate_from_dict() -> None:
     pydantic = pytest.importorskip("pydantic")
 
     class Person(pydantic.BaseModel):
-        id: Optional[RecordID] = None
+        id: RecordID | None = None
         name: str
 
     person = Person.model_validate({"id": "person:abc", "name": "Martin"})
@@ -64,7 +65,7 @@ def test_record_id_pydantic_model_validate_json() -> None:
     pydantic = pytest.importorskip("pydantic")
 
     class Person(pydantic.BaseModel):
-        id: Optional[RecordID] = None
+        id: RecordID | None = None
         name: str
 
     person = Person.model_validate_json('{"id":"person:abc","name":"Martin"}')
@@ -78,7 +79,7 @@ def test_record_id_pydantic_model_dump_python_keeps_instance() -> None:
     pydantic = pytest.importorskip("pydantic")
 
     class Person(pydantic.BaseModel):
-        id: Optional[RecordID] = None
+        id: RecordID | None = None
         name: str
 
     person = Person.model_validate({"id": "person:abc", "name": "Martin"})
@@ -92,7 +93,7 @@ def test_record_id_pydantic_model_dump_json_stringifies() -> None:
     pydantic = pytest.importorskip("pydantic")
 
     class Person(pydantic.BaseModel):
-        id: Optional[RecordID] = None
+        id: RecordID | None = None
         name: str
 
     person = Person.model_validate({"id": "person:abc", "name": "Martin"})
@@ -102,7 +103,7 @@ def test_record_id_pydantic_model_dump_json_stringifies() -> None:
 
 def test_record_id_parse_invalid() -> None:
     """Test RecordID.parse with invalid string."""
-    with pytest.raises(ValueError, match="invalid string provided for parse"):
+    with pytest.raises(InvalidRecordIdError, match="invalid string provided for parse"):
         RecordID.parse("invalid_string")
 
 
@@ -323,9 +324,10 @@ async def surrealdb_connection():  # type: ignore[misc]
     connection = AsyncWsSurrealConnection(url)
     await connection.signin(vars_params)
     await connection.use(namespace=namespace, database=database_name)
+    await connection.query("DEFINE TABLE record_id_tests SCHEMALESS;")
     await connection.query("DELETE record_id_tests;")
     yield connection
-    await connection.query("DELETE record_id_tests;")
+    await connection.query("REMOVE TABLE IF EXISTS record_id_tests;")
     await connection.close()
 
 

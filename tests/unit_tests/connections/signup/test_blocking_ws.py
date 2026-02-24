@@ -20,8 +20,8 @@ def setup_blocking_ws_signup() -> None:
     connection = BlockingWsSurrealConnection(url)
     _ = connection.signin(vars_params)
     _ = connection.use(namespace=namespace, database=database_name)
-    _ = connection.query("DELETE user;")
-    _ = connection.query("REMOVE TABLE user;")
+    _ = connection.query_raw("DELETE user;")
+    _ = connection.query_raw("REMOVE TABLE user;")
     _ = connection.query(
         "DEFINE TABLE user SCHEMAFULL PERMISSIONS FOR select, update, delete WHERE id = $auth.id;"
         "DEFINE FIELD name ON user TYPE string;"
@@ -30,6 +30,7 @@ def setup_blocking_ws_signup() -> None:
         "DEFINE FIELD enabled ON user TYPE bool;"
         "DEFINE INDEX email ON user FIELDS email UNIQUE;"
     )
+    _ = connection.query_raw("REMOVE ACCESS user ON DATABASE;")
     _ = connection.query(
         "DEFINE ACCESS user ON DATABASE TYPE RECORD "
         "SIGNUP ( CREATE user SET name = $name, email = $email, password = crypto::argon2::generate($password), enabled = true ) "

@@ -15,8 +15,6 @@ from surrealdb.connections.blocking_ws import (
     BlockingWsSurrealConnection,
 )
 from surrealdb.connections.url import Url, UrlScheme
-
-from surrealdb.data.types.table import Table
 from surrealdb.data.types.constants import (
     TAG_BOUND_EXCLUDED,
     TAG_BOUND_INCLUDED,
@@ -38,17 +36,50 @@ from surrealdb.data.types.constants import (
     TAG_TABLE_NAME,
     TAG_UUID_STRING,
 )
+from surrealdb.data.types.datetime import Datetime
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.geometry import Geometry
 from surrealdb.data.types.range import Range
 from surrealdb.data.types.record_id import RecordID
-from surrealdb.data.types.datetime import Datetime
-
+from surrealdb.data.types.table import Table
+from surrealdb.errors import (
+    AlreadyExistsDetailKind,
+    AlreadyExistsError,
+    AuthDetailKind,
+    ConfigurationDetailKind,
+    ConfigurationError,
+    ConnectionDetailKind,
+    ConnectionUnavailableError,
+    ErrorKind,
+    InternalError,
+    InvalidDurationError,
+    InvalidGeometryError,
+    InvalidRecordIdError,
+    InvalidTableError,
+    NotAllowedDetailKind,
+    NotAllowedError,
+    NotFoundDetailKind,
+    NotFoundError,
+    QueryDetailKind,
+    QueryError,
+    SerializationDetailKind,
+    SerializationError,
+    ServerError,
+    SurrealDBMethodError,
+    SurrealError,
+    ThrownError,
+    UnexpectedResponseError,
+    UnsupportedEngineError,
+    UnsupportedFeatureError,
+    ValidationDetailKind,
+    ValidationError,
+)
 from surrealdb.types import Tokens, Value
 
 __all__ = [
     "AsyncSurreal",
     "Surreal",
+    # Connections
     "AsyncEmbeddedSurrealConnection",
     "AsyncHttpSurrealConnection",
     "AsyncSurrealSession",
@@ -59,6 +90,7 @@ __all__ = [
     "BlockingSurrealSession",
     "BlockingSurrealTransaction",
     "BlockingWsSurrealConnection",
+    # Data types
     "Table",
     "Duration",
     "Geometry",
@@ -67,6 +99,41 @@ __all__ = [
     "Datetime",
     "Tokens",
     "Value",
+    # Errors – base
+    "SurrealError",
+    # Errors – server
+    "ServerError",
+    "ValidationError",
+    "ConfigurationError",
+    "ThrownError",
+    "QueryError",
+    "SerializationError",
+    "NotAllowedError",
+    "NotFoundError",
+    "AlreadyExistsError",
+    "InternalError",
+    "ErrorKind",
+    # Error detail kind constants
+    "AuthDetailKind",
+    "ValidationDetailKind",
+    "ConfigurationDetailKind",
+    "QueryDetailKind",
+    "SerializationDetailKind",
+    "NotAllowedDetailKind",
+    "NotFoundDetailKind",
+    "AlreadyExistsDetailKind",
+    "ConnectionDetailKind",
+    # Errors – SDK-side
+    "ConnectionUnavailableError",
+    "UnsupportedEngineError",
+    "UnsupportedFeatureError",
+    "UnexpectedResponseError",
+    "InvalidRecordIdError",
+    "InvalidDurationError",
+    "InvalidGeometryError",
+    "InvalidTableError",
+    # Errors – backward compat
+    "SurrealDBMethodError",
     # Constants
     "TAG_BOUND_EXCLUDED",
     "TAG_BOUND_INCLUDED",
@@ -93,9 +160,8 @@ __all__ = [
 class AsyncSurrealDBMeta(type):
 
     def __call__(cls, *args: Any, **kwargs: Any) -> Union[AsyncEmbeddedSurrealConnection, AsyncHttpSurrealConnection, AsyncWsSurrealConnection]:
-        # Ensure `url` is provided as either an arg or kwarg
         if len(args) > 0:
-            url = args[0]  # Assume the first positional argument is `url`
+            url = args[0]
         else:
             url = kwargs.get("url")
 
@@ -117,17 +183,14 @@ class AsyncSurrealDBMeta(type):
         ):
             return AsyncWsSurrealConnection(url=url)
         else:
-            raise ValueError(
-                f"Unsupported protocol in URL: {url}. Use 'memory', 'mem://', 'file://', 'surrealkv://', 'ws://', or 'http://'."
-            )
+            raise UnsupportedEngineError(url)
 
 
 class BlockingSurrealDBMeta(type):
 
     def __call__(cls, *args: Any, **kwargs: Any) -> Union[BlockingEmbeddedSurrealConnection, BlockingHttpSurrealConnection, BlockingWsSurrealConnection]:
-        # Ensure `url` is provided as either an arg or kwarg
         if len(args) > 0:
-            url = args[0]  # Assume the first positional argument is `url`
+            url = args[0]
         else:
             url = kwargs.get("url")
 
@@ -149,16 +212,14 @@ class BlockingSurrealDBMeta(type):
         ):
             return BlockingWsSurrealConnection(url=url)
         else:
-            raise ValueError(
-                f"Unsupported protocol in URL: {url}. Use 'memory', 'mem://', 'file://', 'surrealkv://', 'ws://', or 'http://'."
-            )
+            raise UnsupportedEngineError(url)
 
 
 def Surreal(
     url: str,
 ) -> Union[BlockingEmbeddedSurrealConnection, BlockingWsSurrealConnection, BlockingHttpSurrealConnection]:
     constructed_url = Url(url)
-    if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.MEMORY,UrlScheme.FILE, UrlScheme.SURREALKV):
+    if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV):
         return BlockingEmbeddedSurrealConnection(url=url)
     elif (
         constructed_url.scheme == UrlScheme.HTTP
@@ -171,9 +232,7 @@ def Surreal(
     ):
         return BlockingWsSurrealConnection(url=url)
     else:
-        raise ValueError(
-            f"Unsupported protocol in URL: {url}. Use 'memory', 'mem://', 'file://', 'surrealkv://', 'ws://', or 'http://'."
-        )
+        raise UnsupportedEngineError(url)
 
 
 def AsyncSurreal(
@@ -193,6 +252,4 @@ def AsyncSurreal(
     ):
         return AsyncWsSurrealConnection(url=url)
     else:
-        raise ValueError(
-            f"Unsupported protocol in URL: {url}. Use 'memory', 'mem://', 'file://', 'surrealkv://', 'ws://', or 'http://'."
-        )
+        raise UnsupportedEngineError(url)

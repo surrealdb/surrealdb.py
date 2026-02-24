@@ -18,8 +18,8 @@ def setup_blocking_http_signin() -> None:
     connection = BlockingHttpSurrealConnection(url)
     _ = connection.signin(vars_params)
     _ = connection.use(namespace=namespace, database=database_name)
-    _ = connection.query("DELETE user;")
-    _ = connection.query("REMOVE TABLE user;")
+    _ = connection.query_raw("DELETE user;")
+    _ = connection.query_raw("REMOVE TABLE user;")
     _ = connection.query(
         "DEFINE TABLE user SCHEMAFULL PERMISSIONS FOR select, update, delete WHERE id = $auth.id;"
         "DEFINE FIELD name ON user TYPE string;"
@@ -28,14 +28,15 @@ def setup_blocking_http_signin() -> None:
         "DEFINE FIELD enabled ON user TYPE bool;"
         "DEFINE INDEX email ON user FIELDS email UNIQUE;"
     )
+    _ = connection.query_raw("REMOVE ACCESS user ON DATABASE;")
     _ = connection.query(
         "DEFINE ACCESS user ON DATABASE TYPE RECORD "
         "SIGNUP ( CREATE user SET name = $name, email = $email, password = crypto::argon2::generate($password), enabled = true ) "
         "SIGNIN ( SELECT * FROM user WHERE email = $email AND crypto::argon2::compare(password, $password) );"
     )
     _ = connection.query(
-        'DEFINE USER test ON NAMESPACE PASSWORD "test" ROLES OWNER; '
-        'DEFINE USER test ON DATABASE PASSWORD "test" ROLES OWNER;'
+        'DEFINE USER IF NOT EXISTS test ON NAMESPACE PASSWORD "test" ROLES OWNER; '
+        'DEFINE USER IF NOT EXISTS test ON DATABASE PASSWORD "test" ROLES OWNER;'
     )
     _ = connection.query(
         "CREATE user SET name = 'test', email = 'test@gmail.com', password = crypto::argon2::generate('test'), enabled = true"
@@ -51,8 +52,8 @@ def setup_blocking_http_signin() -> None:
         "connection": connection,
     }
 
-    connection.query("DELETE user;")
-    connection.query("REMOVE TABLE user;")
+    connection.query_raw("DELETE user;")
+    connection.query_raw("REMOVE TABLE user;")
 
 
 def test_signin_root(setup_blocking_http_signin) -> None:

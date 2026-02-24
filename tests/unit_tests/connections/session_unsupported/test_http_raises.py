@@ -2,6 +2,7 @@ import pytest
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
+from surrealdb.errors import UnsupportedFeatureError
 
 
 def test_async_http_attach_raises() -> None:
@@ -9,7 +10,7 @@ def test_async_http_attach_raises() -> None:
 
     async def _run() -> None:
         with pytest.raises(
-            NotImplementedError,
+            UnsupportedFeatureError,
             match="Multi-session and client-side transactions are only supported for WebSocket connections",
         ):
             await conn.attach()
@@ -24,7 +25,7 @@ def test_async_http_new_session_raises() -> None:
 
     async def _run() -> None:
         with pytest.raises(
-            NotImplementedError,
+            UnsupportedFeatureError,
             match="Multi-session and client-side transactions are only supported for WebSocket connections",
         ):
             await conn.new_session()
@@ -37,7 +38,7 @@ def test_async_http_new_session_raises() -> None:
 def test_blocking_http_attach_raises() -> None:
     conn = BlockingHttpSurrealConnection("http://localhost:8000")
     with pytest.raises(
-        NotImplementedError,
+        UnsupportedFeatureError,
         match="Multi-session and client-side transactions are only supported for WebSocket connections",
     ):
         conn.attach()
@@ -46,7 +47,7 @@ def test_blocking_http_attach_raises() -> None:
 def test_blocking_http_new_session_raises() -> None:
     conn = BlockingHttpSurrealConnection("http://localhost:8000")
     with pytest.raises(
-        NotImplementedError,
+        UnsupportedFeatureError,
         match="Multi-session and client-side transactions are only supported for WebSocket connections",
     ):
         conn.new_session()
