@@ -20,15 +20,17 @@ def setup_data(
     blocking_ws_connection: BlockingWsSurrealConnection,
 ) -> Generator[None, None, None]:
     """Setup test data before each test and cleanup after."""
-    blocking_ws_connection.query("DELETE user;")
-    blocking_ws_connection.query("DELETE likes;")
-    blocking_ws_connection.query("DELETE document;")
+    blocking_ws_connection.query_raw("DELETE user;")
+    blocking_ws_connection.query_raw("DELETE likes;")
+    blocking_ws_connection.query_raw("DELETE document;")
+    blocking_ws_connection.query_raw("REMOVE TABLE user;")
+    blocking_ws_connection.query("DEFINE TABLE IF NOT EXISTS user SCHEMALESS;")
     blocking_ws_connection.query("CREATE user:1 SET name = 'User 1';")
     blocking_ws_connection.query("CREATE user:2 SET name = 'User 2';")
     yield
-    blocking_ws_connection.query("DELETE user;")
-    blocking_ws_connection.query("DELETE likes;")
-    blocking_ws_connection.query("DELETE document;")
+    blocking_ws_connection.query_raw("DELETE user;")
+    blocking_ws_connection.query_raw("DELETE likes;")
+    blocking_ws_connection.query_raw("DELETE document;")
 
 
 def test_concurrent_insert_relation(

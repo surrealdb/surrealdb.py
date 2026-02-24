@@ -20,8 +20,8 @@ def setup_blocking_http_signup() -> None:
     connection = BlockingHttpSurrealConnection(url)
     _ = connection.signin(vars_params)
     _ = connection.use(namespace=namespace, database=database_name)
-    _ = connection.query("DELETE user;")
-    _ = connection.query("REMOVE TABLE user;")
+    _ = connection.query_raw("DELETE user;")
+    _ = connection.query_raw("REMOVE TABLE user;")
     _ = connection.query(
         "DEFINE TABLE user SCHEMAFULL PERMISSIONS FOR select, update, delete WHERE id = $auth.id;"
         "DEFINE FIELD name ON user TYPE string;"

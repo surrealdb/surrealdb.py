@@ -7,7 +7,7 @@ from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 
 @pytest.fixture
 async def main_connection(async_http_connection: AsyncHttpSurrealConnection) -> None:
-    await async_http_connection.query("DEFINE TABLE user SCHEMALESS;")
+    await async_http_connection.query("DEFINE TABLE IF NOT EXISTS user SCHEMALESS;")
     await async_http_connection.query("DELETE user;")
     await async_http_connection.query_raw(
         "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', password = 'password123', enabled = true;"

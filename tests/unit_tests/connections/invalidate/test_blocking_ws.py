@@ -20,7 +20,7 @@ def main_connection() -> None:
     connection = BlockingWsSurrealConnection(url)
     connection.signin(vars_params)
     connection.use(namespace=namespace, database=database_name)
-    connection.query("DEFINE TABLE user SCHEMALESS;")
+    connection.query("DEFINE TABLE IF NOT EXISTS user SCHEMALESS;")
     connection.query("DELETE user;")
     connection.query_raw(
         "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', password = 'password123', enabled = true;"

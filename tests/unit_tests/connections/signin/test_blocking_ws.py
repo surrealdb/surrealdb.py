@@ -18,8 +18,8 @@ def setup_blocking_ws_signin() -> None:
     connection = BlockingWsSurrealConnection(url)
     _ = connection.signin(vars_params)
     _ = connection.use(namespace=namespace, database=database_name)
-    _ = connection.query("DELETE user;")
-    _ = connection.query("REMOVE TABLE user;")
+    _ = connection.query_raw("DELETE user;")
+    _ = connection.query_raw("REMOVE TABLE user;")
     _ = connection.query(
         "DEFINE TABLE user SCHEMAFULL PERMISSIONS FOR select, update, delete WHERE id = $auth.id;"
         "DEFINE FIELD name ON user TYPE string;"
@@ -34,8 +34,8 @@ def setup_blocking_ws_signin() -> None:
         "SIGNIN ( SELECT * FROM user WHERE email = $email AND crypto::argon2::compare(password, $password) );"
     )
     _ = connection.query(
-        'DEFINE USER test ON NAMESPACE PASSWORD "test" ROLES OWNER; '
-        'DEFINE USER test ON DATABASE PASSWORD "test" ROLES OWNER;'
+        'DEFINE USER IF NOT EXISTS test ON NAMESPACE PASSWORD "test" ROLES OWNER; '
+        'DEFINE USER IF NOT EXISTS test ON DATABASE PASSWORD "test" ROLES OWNER;'
     )
     _ = connection.query(
         "CREATE user SET name = 'test', email = 'test@gmail.com', password = crypto::argon2::generate('test'), enabled = true"
@@ -51,8 +51,8 @@ def setup_blocking_ws_signin() -> None:
         "connection": connection,
     }
 
-    connection.query("DELETE user;")
-    connection.query("REMOVE TABLE user;")
+    connection.query_raw("DELETE user;")
+    connection.query_raw("REMOVE TABLE user;")
     if connection.socket:
         connection.socket.close()
 
