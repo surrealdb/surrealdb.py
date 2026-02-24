@@ -678,7 +678,9 @@ class TestDetailKindConstants:
         assert ValidationDetailKind.INVALID_MERGE == "InvalidMerge"
 
     def test_configuration_detail_kinds(self) -> None:
-        assert ConfigurationDetailKind.LIVE_QUERY_NOT_SUPPORTED == "LiveQueryNotSupported"
+        assert (
+            ConfigurationDetailKind.LIVE_QUERY_NOT_SUPPORTED == "LiveQueryNotSupported"
+        )
         assert ConfigurationDetailKind.BAD_LIVE_QUERY_CONFIG == "BadLiveQueryConfig"
         assert ConfigurationDetailKind.BAD_GRAPHQL_CONFIG == "BadGraphqlConfig"
 
