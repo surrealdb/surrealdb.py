@@ -528,6 +528,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         response = self._send(message, "begin")
         self.check_response_for_result(response, "begin")
         result = response["result"]
+        if isinstance(result, UUID):
+            return result
         if isinstance(result, str):
             return UUID(result)
         if isinstance(result, list) and len(result) == 1:
