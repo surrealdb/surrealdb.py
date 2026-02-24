@@ -19,7 +19,7 @@ from surrealdb.connections.utils_mixin import UtilsMixin
 from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
-from surrealdb.errors import SurrealError, UnexpectedResponseError
+from surrealdb.errors import SurrealError, UnexpectedResponseError, ValidationError
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 from surrealdb.types import Tokens, Value, parse_auth_result
@@ -279,10 +279,18 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         record: RecordIdType,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
+        **kwargs
     ) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
-        query = f"SELECT * FROM {resource_ref}"
+        if kwargs.get("fields") is not None and isinstance(kwargs.get("fields"), list):
+            field_string = ', '.join(kwargs.get("fields"))
+        elif kwargs.get("fields") is None:
+            field_string = "*"
+        else:
+            raise ValidationError("fields must be a list or None")
+
+        query = f"SELECT {field_string} FROM {resource_ref}"
 
         response = await self.query_raw(
             query, variables, session_id=session_id, txn_id=txn_id
