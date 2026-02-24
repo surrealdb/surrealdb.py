@@ -23,8 +23,8 @@ def test_bearer_access_system_user(bearer_v3_root_ws: dict) -> None:
     namespace = bearer_v3_root_ws["namespace"]
     database_name = bearer_v3_root_ws["database_name"]
 
-    root.query("DEFINE USER testuser ON DATABASE PASSWORD 'testpass' ROLES EDITOR")
-    root.query("DEFINE ACCESS bearer_api ON DATABASE TYPE BEARER FOR USER")
+    root.query("DEFINE USER IF NOT EXISTS testuser ON DATABASE PASSWORD 'testpass' ROLES EDITOR")
+    root.query("DEFINE ACCESS IF NOT EXISTS bearer_api ON DATABASE TYPE BEARER FOR USER")
 
     grant_result = root.query("ACCESS bearer_api GRANT FOR USER testuser")
     assert grant_result is not None
@@ -70,8 +70,8 @@ def test_bearer_signin_token_not_usable_with_authenticate(
     namespace = bearer_v3_root_ws["namespace"]
     database_name = bearer_v3_root_ws["database_name"]
 
-    root.query("DEFINE USER auth_testuser ON DATABASE PASSWORD 'testpass' ROLES EDITOR")
-    root.query("DEFINE ACCESS bearer_auth_test ON DATABASE TYPE BEARER FOR USER")
+    root.query("DEFINE USER IF NOT EXISTS auth_testuser ON DATABASE PASSWORD 'testpass' ROLES EDITOR")
+    root.query("DEFINE ACCESS IF NOT EXISTS bearer_auth_test ON DATABASE TYPE BEARER FOR USER")
     grant_result = root.query("ACCESS bearer_auth_test GRANT FOR USER auth_testuser")
     bearer_key = grant_result["grant"]["key"]
 
