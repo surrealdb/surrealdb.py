@@ -288,7 +288,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         elif kwargs.get("fields") is None:
             field_string = "*"
         else:
-            raise ValidationError("fields must be a list or None")
+            raise ValidationError(message="fields must be a list or None")
 
         query = f"SELECT {field_string} FROM {resource_ref}"
 
