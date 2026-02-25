@@ -2,9 +2,15 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+
 jobs:
   comment-prs:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
