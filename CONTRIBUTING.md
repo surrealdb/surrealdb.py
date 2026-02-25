@@ -4,11 +4,125 @@ We would &nbsp;<img width="15" alt="Love" src="https://github.com/surrealdb/surr
 
 ## How to start
 
-If you are worried or don’t know where to start, check out our next section explaining what kind of help we could use and where can you get involved. You can ask us a question on [GitHub Discussions](https://github.com/surrealdb/surrealdb/discussions), or the [SurrealDB Discord Server](https://surrealdb.com/discord). Alternatively, you can message us on any channel in the [SurrealDB Community](https://surrealdb.com/community)!
+If you are worried or don’t know where to start, check out our next section explaining what kind of help we could use and where can you get involved. You can ask us a question on [SurrealDB Discord Server](https://surrealdb.com/discord).
 
 ## Code of conduct
 
 Please help us keep SurrealDB open and inclusive. Kindly read and follow our [Code of Conduct](/CODE_OF_CONDUCT.md).
+
+## Development
+
+This project uses [uv](https://docs.astral.sh/uv/) for fast dependency management and **maturin** for building.
+
+### Setup
+
+1. **Install uv** (if not already installed):
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+2. **Clone and setup**:
+   ```bash
+   git clone https://github.com/surrealdb/surrealdb.py.git
+   cd surrealdb.py
+   uv sync --group dev
+   ```
+
+3. **Activate environment**:
+   ```bash
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   ```
+
+### Dependency Philosophy
+
+This project follows library best practices for dependency management:
+- **Minimal constraints**: Uses `>=` instead of exact pins for maximum compatibility
+- **Essential only**: Only direct dependencies that are actually imported
+- **Clean separation**: Development tools in separate dependency groups
+- **Well-maintained tools**: Avoid dependencies which go 6+ months without so much as a patch
+
+### Development Workflow
+
+1. **Install dependencies:**
+   ```bash
+   # Install main dependencies
+   uv sync
+   
+   # Install with dev dependencies (linting, type checking, testing)
+   uv sync --group dev
+   ```
+
+2. **Run development tools:**
+   ```bash
+   # Run linting
+   uv run ruff check src/
+   
+   # Run formatting
+   uv run ruff format src/
+   
+   # Run type checking
+   uv run mypy --explicit-package-bases src/
+   
+   # Run tests (with coverage)
+   uv run scripts/tests.sh
+   # Or directly:
+   uv run pytest --cov=src/surrealdb --cov-report=term-missing --cov-report=html
+   ```
+
+3. **Build the project:**
+   ```bash
+   uv build
+   ```
+
+### Code Quality
+
+```bash
+# Format code
+uv run ruff format
+
+# Lint code  
+uv run ruff check
+
+# Type checking
+uv run mypy src/
+uv run pyright src/
+```
+
+TODO: migrate to basedpyright. Try it with `uvx run basedpyright src/`
+
+### Testing
+
+#### Quick Test (Latest Version)
+```bash
+# Start SurrealDB v3.0.0
+docker compose up surrealdb -d
+
+# Run tests
+uv run pytest --cov=src/surrealdb --cov-report=term-missing --cov-report=html
+```
+
+#### Available Docker Profiles
+```bash
+# Development (default - v3.0.0)
+docker compose up surrealdb -d
+
+# Test specific v2.x versions
+docker compose --profile v2-0 up -d    # v2.0.5 on port 8020
+docker compose --profile v2-1 up -d    # v2.1.8 on port 8021  
+docker compose --profile v2-2 up -d    # v2.2.6 on port 8022
+docker compose --profile v2-3 up -d    # v2.3.6 on port 8023
+docker compose --profile v3 up -d      # v2.3.6 on port 8023
+```
+
+### For maintainers
+
+```bash
+# Build package
+uv build
+
+# Publish to PyPI (requires authentication)
+uv publish
+```
 
 <!--
 ---**----**-------------------------------------------
