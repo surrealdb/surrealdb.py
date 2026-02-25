@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0-alpha.1] - 2026-02-25
+### Added
+- SurrealDB 3.x protocol and feature support (#230).
+- Structured error hierarchy and `ServerError` with SurrealDB 3.x–style kind/details (#233).
+- Logfire observability example and README section (#229).
+
+### Changed
+- Drop Python 3.9 support; minimum Python is 3.10 (#230).
+- Add release-comment workflow for builds (#240).
+
+### Fixed
+- Fix WebSocket session and transaction ID handling for `begin`/`commit`/`cancel` (#236).
+
 ## [1.0.8] - 2026-01-07
 ### Added
 - Add optional `pydantic` extra so `RecordID` fields validate and serialize cleanly in `BaseModel`s and JSON schema outputs.
@@ -74,7 +87,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial stable release of the SurrealDB Python client.
 
-[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v1.0.7...HEAD
+[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v2.0.0-alpha.1...HEAD
+[2.0.0-alpha.1]: https://github.com/surrealdb/surrealdb.py/compare/v1.0.8...v2.0.0-alpha.1
+[1.0.8]: https://github.com/surrealdb/surrealdb.py/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/surrealdb/surrealdb.py/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/surrealdb/surrealdb.py/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/surrealdb/surrealdb.py/compare/v1.0.4...v1.0.5

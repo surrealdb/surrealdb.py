@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "surrealdb"
-version = "1.0.8"
+version = "2.0.0-alpha.1"
 description = "SurrealDB python client"
 readme = "README.md"
 authors = [{ name = "SurrealDB" }]
