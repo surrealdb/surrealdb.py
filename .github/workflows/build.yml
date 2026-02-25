@@ -14,7 +14,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [x86_64]
+        include:
+          - target: x86_64
+            manylinux: auto
+          - target: x86_64-unknown-linux-musl
+            manylinux: musllinux_1_2
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,7 +35,7 @@ jobs:
           target: ${{ matrix.target }}
           args: --release --out dist --interpreter 3.10 3.11 3.12 3.13
           sccache: "true"
-          manylinux: auto
+          manylinux: ${{ matrix.manylinux }}
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -44,7 +48,11 @@ jobs:
     runs-on: ubuntu-24.04-arm
     strategy:
       matrix:
-        target: [aarch64]
+        include:
+          - target: aarch64
+            manylinux: auto
+          - target: aarch64-unknown-linux-musl
+            manylinux: musllinux_1_2
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -61,7 +69,7 @@ jobs:
           target: ${{ matrix.target }}
           args: --release --out dist --interpreter 3.10 3.11 3.12 3.13
           sccache: "true"
-          manylinux: auto
+          manylinux: ${{ matrix.manylinux }}
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
