@@ -2,6 +2,7 @@ from collections.abc import Generator
 
 import pytest
 
+from surrealdb import UnexpectedResponseError
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 
@@ -105,4 +106,22 @@ def test_transaction_query_select(
     assert selected.get("name") == "txn-query"
 
     txn.commit()
+    session.close_session()
+
+
+def test_transaction_begin_uuid_v3(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    connection_params: dict,
+    setup_table: None,
+) -> None:
+    session = blocking_ws_connection.new_session()
+    session.use(
+        connection_params["namespace"],
+        connection_params["database_name"],
+    )
+    try:
+        txn = session.begin_transaction()
+        txn.commit()
+    except UnexpectedResponseError:
+        pytest.fail("UnexpectedResponseError on transaction start")
     session.close_session()

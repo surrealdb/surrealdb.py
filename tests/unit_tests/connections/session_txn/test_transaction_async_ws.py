@@ -2,6 +2,7 @@ from collections.abc import AsyncGenerator
 
 import pytest
 
+from surrealdb import UnexpectedResponseError
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 
 
@@ -108,4 +109,22 @@ async def test_transaction_query_select(
     assert selected.get("name") == "txn-query"
 
     await txn.commit()
+    await session.close_session()
+
+@pytest.mark.asyncio
+async def test_transaction_begin_uuid_v3(
+        async_ws_connection: AsyncWsSurrealConnection,
+        connection_params: dict,
+        setup_table: None,
+) -> None:
+    session = await async_ws_connection.new_session()
+    await session.use(
+        connection_params["namespace"],
+        connection_params["database_name"],
+    )
+    try:
+        txn = await session.begin_transaction()
+        await txn.commit()
+    except UnexpectedResponseError:
+        pytest.fail("UnexpectedResponseError on transaction start")
     await session.close_session()
