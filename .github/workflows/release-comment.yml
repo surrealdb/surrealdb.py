@@ -80,8 +80,7 @@ jobs:
           RELEASE_URL="${{ github.event.release.html_url }}"
           RELEASE_NAME="${{ github.event.release.name }}"
           if [ ${#RELEASE_BODY_JSON} -gt 1800 ]; then
-            BODY=$(echo $RELEASE_BODY_JSON | head -c 1797 | sed 's/[^"]*$//')
-            BODY="${BODY%\"}...\""
+            BODY="\"$(echo $RELEASE_BODY_JSON | head -c 1796 | cut -c2-)...\""
           else
             BODY=$RELEASE_BODY_JSON
           fi
