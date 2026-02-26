@@ -74,11 +74,16 @@ jobs:
       - name: Send Discord notification
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          RELEASE_BODY_JSON: ${{ toJSON(github.event.release.body) }}
         run: |
           TAG="${{ github.event.release.tag_name }}"
           RELEASE_URL="${{ github.event.release.html_url }}"
           RELEASE_NAME="${{ github.event.release.name }}"
-          BODY=$(echo '${{ toJson(github.event.release.body) }}' | head -c 1800)
+          if [ ${#RELEASE_BODY_JSON} -gt 1800 ]; then
+            BODY="\"$(echo $RELEASE_BODY_JSON | head -c 1796 | cut -c2-)...\""
+          else
+            BODY=$RELEASE_BODY_JSON
+          fi
 
           curl -s -X POST "$DISCORD_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
