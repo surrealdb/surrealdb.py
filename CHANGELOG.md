@@ -91,7 +91,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial stable release of the SurrealDB Python client.
 
-[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v2.0.0-alpha.1...HEAD
+[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/surrealdb/surrealdb.py/compare/v2.0.0-alpha.1...v2.0.0
 [2.0.0-alpha.1]: https://github.com/surrealdb/surrealdb.py/compare/v1.0.8...v2.0.0-alpha.1
 [1.0.8]: https://github.com/surrealdb/surrealdb.py/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/surrealdb/surrealdb.py/compare/v1.0.6...v1.0.7

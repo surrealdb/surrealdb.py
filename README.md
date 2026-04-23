@@ -198,7 +198,7 @@ import asyncio
 from surrealdb import AsyncSurreal
 
 async def main():
-    # Create a file-based database (can use "file://" or "surrealkv://")
+    # Create a file-based database (can use "file://", "surrealkv://", or "surrealkv+versioned://")
     async with AsyncSurreal("file://mydb") as db:
         await db.use("test", "test")
         await db.signin({"username": "root", "password": "root"})
@@ -241,7 +241,7 @@ with Surreal("file://mydb") as db:
 
 ### When to Use Embedded vs Remote
 
-**Use Embedded (`memory`, `mem://`, `file://`, or `surrealkv://`) when:**
+**Use Embedded (`memory`, `mem://`, `file://`, `surrealkv://`, or `surrealkv+versioned://`) when:**
 - Building desktop applications
 - Running tests (in-memory is very fast)
 - Local development without server setup

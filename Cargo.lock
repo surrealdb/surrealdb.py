@@ -3151,7 +3151,7 @@ dependencies = [
 
 [[package]]
 name = "surrealdb-py"
-version = "1.0.7"
+version = "2.0.0"
 dependencies = [
  "arc-swap",
  "pyo3",

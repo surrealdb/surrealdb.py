@@ -32,7 +32,7 @@ python examples/embedded/basic_sync.py
 ### `persistence.py`
 
 Demonstrates file-based persistent storage:
-- Using `file://` (or `surrealkv://`) URLs for persistent databases
+- Using `file://` (or `surrealkv://`/`surrealkv+versioned://`) URLs for persistent databases
 - Data persisting across multiple connections
 - Updating persisted data
 - Using temporary directories for testing
@@ -44,7 +44,7 @@ python examples/embedded/persistence.py
 
 ## When to Use Embedded vs Remote
 
-### Use Embedded Database (`memory`, `mem://`, `file://`, or `surrealkv://`) when:
+### Use Embedded Database (`memory`, `mem://`, `file://`, `surrealkv://`, or `surrealkv+versioned://`) when:
 
 - **Desktop Applications**: No server setup required
 - **Testing**: In-memory databases are extremely fast for tests
@@ -67,7 +67,7 @@ python examples/embedded/persistence.py
 - **Non-persistent**: Data lost when connection closes
 - **Best for**: Tests, caches, temporary data
 
-### File-Based (`file://` or `surrealkv://`)
+### File-Based (`file://`, `surrealkv://`, or `surrealkv+versioned://`)
 - **Persistent**: Data saved to disk
 - **Good performance**: SurrealKV storage engine
 - **Best for**: Local apps, development, single-node deployments
