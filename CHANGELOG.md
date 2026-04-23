@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-04-23
+### Added
+- Support `surrealkv+versioned://` URL scheme for embedded databases with versioning (#231).
+
 ## [2.0.0-alpha.1] - 2026-02-25
 ### Added
 - SurrealDB 3.x protocol and feature support (#230).
