@@ -399,7 +399,7 @@ class UnsupportedEngineError(SurrealError):
     def __init__(self, url: str) -> None:
         super().__init__(
             f"Unsupported protocol in URL: {url}. "
-            "Use 'memory', 'mem://', 'file://', 'surrealkv://', 'ws://', or 'http://'."
+            "Use 'memory', 'mem://', 'file://', 'surrealkv://', 'surrealkv+versioned://', 'ws://', or 'http://'."
         )
         self.url = url
 

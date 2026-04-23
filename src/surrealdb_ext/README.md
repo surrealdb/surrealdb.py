@@ -27,7 +27,7 @@ The embedded database feature allows SurrealDB to run directly within your Pytho
 ### Key Features
 
 - **No server required**: Database runs directly in your Python process
-- **Multiple storage backends**: In-memory (`memory` or `mem://`) and file-based (`file://` or `surrealkv://`) options
+- **Multiple storage backends**: In-memory (`memory` or `mem://`) and file-based (`file://`, `surrealkv://`, or `surrealkv+versioned://`) options
 - **Full API compatibility**: Works with all SDK methods (query, select, create, update, etc.)
 - **Async and sync support**: Both `AsyncSurreal` and `Surreal` APIs available
 - **Cross-platform**: Pre-built wheels for Linux, macOS, and Windows
@@ -91,13 +91,13 @@ The SDK supports four connection types through URL schemes:
 | `ws://`, `wss://` | Remote | WebSocket connection | `ws://localhost:8000/rpc` | Production, multi-client |
 | `http://`, `https://` | Remote | HTTP connection | `http://localhost:8000` | REST-like access |
 | `memory`, `mem://` | Embedded | In-memory database | `memory` or `mem://` | Testing, caching |
-| `file://`, `surrealkv://` | Embedded | File-based database | `file://mydb` or `surrealkv://mydb` | Local apps, development |
+| `file://`, `surrealkv://`, `surrealkv+versioned://` | Embedded | File-based database | `file://mydb` or `surrealkv://mydb` | Local apps, development |
 
-**Note:** Embedded databases (`memory`, `mem://`, `file://`, and `surrealkv://`) use the native Rust extension and don't require a separate SurrealDB server.
+**Note:** Embedded databases (`memory`, `mem://`, `file://`, `surrealkv://`, and `surrealkv+versioned://`) use the native Rust extension and don't require a separate SurrealDB server.
 
 ### Embedded vs Remote: Which Should You Use?
 
-**Choose Embedded (`memory`, `mem://`, `file://`, or `surrealkv://`) when:**
+**Choose Embedded (`memory`, `mem://`, `file://`, `surrealkv://`, or `surrealkv+versioned://`) when:**
 - ✅ Building desktop/CLI applications
 - ✅ Running unit tests (in-memory is extremely fast)
 - ✅ Local development without Docker/server setup
@@ -247,7 +247,7 @@ The embedded database supports two storage backends, configured via the Cargo.to
 - No disk I/O overhead
 - **Best for:** Unit tests, temporary caches, development prototyping
 
-**File-Based (`file://` or `surrealkv://`) - kv-surrealkv feature:**
+**File-Based (`file://`, `surrealkv://`, or `surrealkv+versioned://`) - kv-surrealkv feature:**
 - Uses SurrealKV storage engine (SurrealDB's custom storage layer)
 - Data persists to disk automatically
 - ACID compliant with transaction support
@@ -256,7 +256,7 @@ The embedded database supports two storage backends, configured via the Cargo.to
 
 **Backend Comparison:**
 
-| Feature | `memory`/`mem://` | `file://`/`surrealkv://` |
+| Feature | `memory`/`mem://` | `file://`/`surrealkv://`/`surrealkv+versioned://` |
 |---------|----------|-----------|
 | Persistence | ❌ No | ✅ Yes |
 | Speed | ⚡ Fastest | 🚀 Fast |
@@ -554,9 +554,9 @@ cd src/surrealdb_ext && cargo clippy
 
 A: No! Pre-built wheels are available on PyPI for all major platforms. Just `pip install surrealdb` and it works. Rust is only needed if building from source.
 
-**Q: What's the difference between `memory` (or `mem://`) and `file://` (or `surrealkv://`)?**
+**Q: What's the difference between `memory` (or `mem://`) and `file://` (or `surrealkv://`/`surrealkv+versioned://`)?**
 
-A: `memory`/`mem://` stores data in RAM (fast, non-persistent), while `file://`/`surrealkv://` stores data on disk (persistent, good performance). Use `memory` for tests/caches, `file://` for apps that need persistence.
+A: `memory`/`mem://` stores data in RAM (fast, non-persistent), while `file://`/`surrealkv://`/`surrealkv+versioned://` stores data on disk (persistent, good performance). Use `memory` for tests/caches, `file://` for apps that need persistence, and `surrealkv+versioned://` when you also need versioning support.
 
 **Q: Can I use embedded and remote databases in the same application?**
 

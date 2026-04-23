@@ -27,13 +27,15 @@ impl SyncEmbeddedDB {
             "memory".to_string()
         } else if url.starts_with("memory") {
             "memory".to_string()
+        } else if url.starts_with("surrealkv+versioned://") {
+            url
         } else if url.starts_with("surrealkv://") {
             url
         } else if url.starts_with("file://") {
             url.replace("file://", "surrealkv://").to_string()
         } else {
             return Err(PyErr::new::<PyValueError, _>(format!(
-                "Unsupported URL scheme: {url}. Use 'mem://' or 'file://'"
+                "Unsupported URL scheme: {url}. Use 'mem://', 'memory', 'file://', 'surrealkv://', or 'surrealkv+versioned://'"
             )));
         };
         // Create the runtime

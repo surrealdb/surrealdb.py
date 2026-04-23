@@ -11,6 +11,7 @@ class UrlScheme(Enum):
     FILE = "file"
     MEMORY = "memory"
     SURREALKV = "surrealkv"
+    SURREALKV_VERSIONED = "surrealkv+versioned"
 
 
 class Url:
