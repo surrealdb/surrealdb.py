@@ -170,7 +170,7 @@ class AsyncSurrealDBMeta(type):
 
         constructed_url = Url(url)
 
-        if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV):
+        if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV, UrlScheme.SURREALKV_VERSIONED):
             return AsyncEmbeddedSurrealConnection(url=url)
         elif (
             constructed_url.scheme == UrlScheme.HTTP
@@ -199,7 +199,7 @@ class BlockingSurrealDBMeta(type):
 
         constructed_url = Url(url)
 
-        if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV):
+        if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV, UrlScheme.SURREALKV_VERSIONED):
             return BlockingEmbeddedSurrealConnection(url=url)
         elif (
             constructed_url.scheme == UrlScheme.HTTP
@@ -219,7 +219,7 @@ def Surreal(
     url: str,
 ) -> Union[BlockingEmbeddedSurrealConnection, BlockingWsSurrealConnection, BlockingHttpSurrealConnection]:
     constructed_url = Url(url)
-    if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV):
+    if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV, UrlScheme.SURREALKV_VERSIONED):
         return BlockingEmbeddedSurrealConnection(url=url)
     elif (
         constructed_url.scheme == UrlScheme.HTTP
@@ -239,7 +239,7 @@ def AsyncSurreal(
     url: str,
 ) -> Union[AsyncEmbeddedSurrealConnection, AsyncWsSurrealConnection, AsyncHttpSurrealConnection]:
     constructed_url = Url(url)
-    if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV):
+    if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV, UrlScheme.SURREALKV_VERSIONED):
         return AsyncEmbeddedSurrealConnection(url=url)
     elif (
         constructed_url.scheme == UrlScheme.HTTP

@@ -27,6 +27,8 @@ impl SyncEmbeddedDB {
             "memory".to_string()
         } else if url.starts_with("memory") {
             "memory".to_string()
+        } else if url.starts_with("surrealkv+versioned://") {
+            url
         } else if url.starts_with("surrealkv://") {
             url
         } else if url.starts_with("file://") {
