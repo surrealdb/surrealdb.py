@@ -22,7 +22,7 @@ class Config:
     surrealdb_password: str
 
     # Logfire settings
-    logfire_token: Optional[str] = None
+    logfire_token: str | None = None
 
     @classmethod
     def from_env(cls) -> "Config":
