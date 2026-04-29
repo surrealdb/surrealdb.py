@@ -45,10 +45,12 @@ def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
         tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_LINE, obj.geometry_lines)
 
     elif isinstance(obj, GeometryMultiPoint):
-        tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_POINT, obj.geometry_points)
+        tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_POINT,
+                         obj.geometry_points)
 
     elif isinstance(obj, GeometryMultiPolygon):
-        tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_POLYGON, obj.geometry_polygons)
+        tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_POLYGON,
+                         obj.geometry_polygons)
 
     elif isinstance(obj, GeometryCollection):
         tagged = CBORTag(constants.TAG_GEOMETRY_COLLECTION, obj.geometries)
@@ -129,7 +131,8 @@ def tag_decoder(
         if len(tag.value) == 1:
             return Duration.parse(tag.value[0], 0)  # seconds only
         else:
-            return Duration.parse(tag.value[0], tag.value[1])  # seconds and nanoseconds
+            # seconds and nanoseconds
+            return Duration.parse(tag.value[0], tag.value[1])
 
     elif tag.tag == constants.TAG_DURATION:
         # TAG_DURATION is encoded as [seconds, nanoseconds] tuple
@@ -139,7 +142,8 @@ def tag_decoder(
         elif isinstance(tag.value, str):
             return Duration.parse(tag.value)
         else:
-            raise ValueError(f"Unexpected TAG_DURATION value format: {tag.value}")
+            raise ValueError(
+                f"Unexpected TAG_DURATION value format: {tag.value}")
 
     elif tag.tag == constants.TAG_DATETIME_COMPACT:
         # TODO => convert [seconds, nanoseconds] => return datetime
@@ -152,6 +156,9 @@ def tag_decoder(
 
     elif tag.tag == constants.TAG_DECIMAL_STRING:
         return decimal.Decimal(tag.value)
+
+    elif tag.tag == constants.TAG_SET:
+        return set(tag.value) if isinstance(tag.value, list) else tag.value
 
     else:
         raise BufferError("no decoder for tag", tag.tag)
