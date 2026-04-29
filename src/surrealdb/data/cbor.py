@@ -129,7 +129,8 @@ def tag_decoder(
         if len(tag.value) == 1:
             return Duration.parse(tag.value[0], 0)  # seconds only
         else:
-            return Duration.parse(tag.value[0], tag.value[1])  # seconds and nanoseconds
+            # seconds and nanoseconds
+            return Duration.parse(tag.value[0], tag.value[1])
 
     elif tag.tag == constants.TAG_DURATION:
         # TAG_DURATION is encoded as [seconds, nanoseconds] tuple
@@ -152,6 +153,9 @@ def tag_decoder(
 
     elif tag.tag == constants.TAG_DECIMAL_STRING:
         return decimal.Decimal(tag.value)
+
+    elif tag.tag == constants.TAG_SET:
+        return set(tag.value) if isinstance(tag.value, list) else tag.value
 
     else:
         raise BufferError("no decoder for tag", tag.tag)

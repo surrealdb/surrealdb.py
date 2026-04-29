@@ -1,9 +1,9 @@
 """Database setup with Logfire instrumentation."""
 
 import logfire
-from surrealdb import AsyncSurreal
-
 from config import config
+
+from surrealdb import AsyncSurreal
 
 
 def setup_logfire() -> None:
