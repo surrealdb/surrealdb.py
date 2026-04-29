@@ -45,12 +45,10 @@ def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
         tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_LINE, obj.geometry_lines)
 
     elif isinstance(obj, GeometryMultiPoint):
-        tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_POINT,
-                         obj.geometry_points)
+        tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_POINT, obj.geometry_points)
 
     elif isinstance(obj, GeometryMultiPolygon):
-        tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_POLYGON,
-                         obj.geometry_polygons)
+        tagged = CBORTag(constants.TAG_GEOMETRY_MULTI_POLYGON, obj.geometry_polygons)
 
     elif isinstance(obj, GeometryCollection):
         tagged = CBORTag(constants.TAG_GEOMETRY_COLLECTION, obj.geometries)
@@ -142,8 +140,7 @@ def tag_decoder(
         elif isinstance(tag.value, str):
             return Duration.parse(tag.value)
         else:
-            raise ValueError(
-                f"Unexpected TAG_DURATION value format: {tag.value}")
+            raise ValueError(f"Unexpected TAG_DURATION value format: {tag.value}")
 
     elif tag.tag == constants.TAG_DATETIME_COMPACT:
         # TODO => convert [seconds, nanoseconds] => return datetime
