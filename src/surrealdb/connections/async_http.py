@@ -1,16 +1,21 @@
 import uuid
 from types import TracebackType
-from typing import Any, cast
+from typing import Any, cast, overload
 
 import aiohttp
 
 from surrealdb.connections.async_template import AsyncTemplate
+from surrealdb.connections.builders import (
+    AsyncCrudBuilder,
+    AsyncInsertBuilder,
+    AsyncQueryBuilder,
+)
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import UtilsMixin
 from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
-from surrealdb.errors import SurrealError, UnsupportedFeatureError
+from surrealdb.errors import UnsupportedFeatureError
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 from surrealdb.types import Tokens, Value, parse_auth_result
@@ -54,17 +59,6 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         operation: str,
         bypass: bool = False,
     ) -> dict[str, Any]:
-        """
-        Sends an HTTP request to the SurrealDB server.
-
-        :param endpoint: (str) The endpoint of the SurrealDB API to send the request to.
-        :param method: (str) The HTTP method (e.g., "POST", "GET", "PUT", "DELETE").
-        :param headers: (dict) Optional headers to include in the request.
-        :param payload: (dict) Optional JSON payload to include in the request body.
-
-        :return: (dict) The decoded JSON response from the server.
-        """
-        # json_body, method, endpoint = message.JSON_HTTP_DESCRIPTOR
         data = message.WS_CBOR_DESCRIPTOR
         url = f"{self.url.raw_url}/rpc"
         headers: dict[str, str] = {}
@@ -82,7 +76,6 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
                 method="POST",
                 url=url,
                 headers=headers,
-                # json=json.dumps(json_body),
                 data=data,
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as response:
@@ -93,7 +86,6 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
                     self.check_response_for_error(data, operation)
                 return data
 
-    # TODO: do we need this since `authenticate` is meant to get the token as an arg?
     def set_token(self, token: str) -> None:
         """
         Sets the token for authentication.
@@ -153,12 +145,14 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.namespace = namespace
         self.database = database
 
-    async def query(self, query: str, vars: dict[str, Value] | None = None) -> Value:
-        response = await self.query_raw(query, vars)
-        self.check_response_for_error(response, "query")
-        self.check_response_for_result(response, "query")
-        self._check_query_result(response["result"][0])
-        return response["result"][0]["result"]
+    def query(
+        self, query: str, vars: dict[str, Value] | None = None
+    ) -> AsyncQueryBuilder:
+        return AsyncQueryBuilder(
+            executor=self._make_executor(),
+            query=query,
+            variables=vars,
+        )
 
     async def query_raw(
         self, query: str, params: dict[str, Value] | None = None
@@ -176,120 +170,134 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         response = await self._send(message, "query", bypass=True)
         return response
 
-    async def create(
-        self,
-        record: RecordIdType,
-        data: Value | None = None,
-    ) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
+    def _make_executor(self) -> Any:
+        async def _executor(query: str, params: dict[str, Any]) -> dict[str, Any]:
+            return await self.query_raw(query, params)
 
-        if data is None:
-            query = f"CREATE {resource_ref}"
-        else:
-            variables["_content"] = data
-            query = f"CREATE {resource_ref} CONTENT $_content"
+        return _executor
 
-        response = await self.query_raw(query, variables)
-        self.check_response_for_error(response, "create")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # CREATE always creates a single record, so always unwrap
-        return self._unwrap_result(result, unwrap=True)
+    # CRUD overloads --------------------------------------------------------
 
-    async def delete(self, record: RecordIdType) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-        query = f"DELETE {resource_ref} RETURN BEFORE"
-
-        response = await self.query_raw(query, variables)
-        self.check_response_for_error(response, "delete")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # DELETE on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
+    @overload
+    def create(
+        self, record: RecordID, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def create(
+        self, record: Table, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def create(
+        self, record: str, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    def create(
+        self, record: RecordIdType, data: Value | None = None
+    ) -> AsyncCrudBuilder[Any]:
+        return AsyncCrudBuilder(
+            executor=self._make_executor(),
+            operation="CREATE",
+            record=record,
+            op_name="create",
+            data=data,
+            always_unwrap=True,
         )
 
-    async def insert(
+    @overload
+    def update(
+        self, record: RecordID, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def update(
+        self, record: Table, data: Value | None = None
+    ) -> AsyncCrudBuilder[list[Value]]: ...
+    @overload
+    def update(
+        self, record: str, data: Value | None = None
+    ) -> AsyncCrudBuilder[Value]: ...
+    def update(
+        self, record: RecordIdType, data: Value | None = None
+    ) -> AsyncCrudBuilder[Any]:
+        return AsyncCrudBuilder(
+            executor=self._make_executor(),
+            operation="UPDATE",
+            record=record,
+            op_name="update",
+            data=data,
+        )
+
+    @overload
+    def upsert(
+        self, record: RecordID, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def upsert(
+        self, record: Table, data: Value | None = None
+    ) -> AsyncCrudBuilder[list[Value]]: ...
+    @overload
+    def upsert(
+        self, record: str, data: Value | None = None
+    ) -> AsyncCrudBuilder[Value]: ...
+    def upsert(
+        self, record: RecordIdType, data: Value | None = None
+    ) -> AsyncCrudBuilder[Any]:
+        return AsyncCrudBuilder(
+            executor=self._make_executor(),
+            operation="UPSERT",
+            record=record,
+            op_name="upsert",
+            data=data,
+        )
+
+    @overload
+    def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def delete(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
+    @overload
+    def delete(self, record: str) -> AsyncCrudBuilder[Value]: ...
+    def delete(self, record: RecordIdType) -> AsyncCrudBuilder[Any]:
+        return AsyncCrudBuilder(
+            executor=self._make_executor(),
+            operation="DELETE",
+            record=record,
+            op_name="delete",
+        )
+
+    def insert(
         self,
         table: str | Table,
-        data: Value,
-    ) -> Value:
-        # Validate that table is not a RecordID
-        if isinstance(table, RecordID):
-            raise SurrealError(
-                f"There was a problem with the database: Can not execute INSERT statement using value '{table}'"
-            )
+        data: Value | None = None,
+        *,
+        relation: bool = False,
+    ) -> AsyncInsertBuilder:
+        return AsyncInsertBuilder(
+            executor=self._make_executor(),
+            table=table,
+            data=data,
+            relation=relation,
+        )
 
-        variables: dict[str, Any] = {}
-        table_ref = self._resource_to_variable(table, variables, "_table")
-        variables["_data"] = data
-        query = f"INSERT INTO {table_ref} $_data"
-
-        response = await self.query_raw(query, variables)
-        self.check_response_for_error(response, "insert")
-        self._check_query_result(response["result"][0])
-        return response["result"][0]["result"]
-
-    async def insert_relation(
+    async def run(
         self,
-        table: str | Table,
-        data: Value,
+        name: str,
+        args: list[Value] | None = None,
+        version: str | None = None,
     ) -> Value:
-        variables: dict[str, Any] = {}
-        table_ref = self._resource_to_variable(table, variables, "_table")
-        variables["_data"] = data
-        query = f"INSERT RELATION INTO {table_ref} $_data"
-
-        response = await self.query_raw(query, variables)
-        self.check_response_for_error(response, "insert_relation")
-        self._check_query_result(response["result"][0])
-        return response["result"][0]["result"]
+        kwargs: dict[str, Any] = {"name": name}
+        if version is not None:
+            kwargs["version"] = version
+        if args is not None:
+            kwargs["args"] = args
+        message = RequestMessage(RequestMethod.RUN, **kwargs)
+        self.id = message.id
+        response = await self._send(message, "run")
+        self.check_response_for_result(response, "run")
+        return response["result"]
 
     async def let(self, key: str, value: Value) -> None:
         self.vars[key] = value
 
     async def unset(self, key: str) -> None:
         self.vars.pop(key)
-
-    async def merge(self, record: RecordIdType, data: Value | None = None) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-
-        if data is None:
-            query = f"UPDATE {resource_ref} MERGE {{}}"
-        else:
-            variables["_data"] = data
-            query = f"UPDATE {resource_ref} MERGE $_data"
-
-        response = await self.query_raw(query, variables)
-        self.check_response_for_error(response, "merge")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # MERGE on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
-        )
-
-    async def patch(self, record: RecordIdType, data: Value | None = None) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-
-        if data is None:
-            query = f"UPDATE {resource_ref} PATCH []"
-        else:
-            variables["_patches"] = data
-            query = f"UPDATE {resource_ref} PATCH $_patches"
-
-        response = await self.query_raw(query, variables)
-        self.check_response_for_error(response, "patch")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # PATCH on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
-        )
 
     async def select(self, record: RecordIdType) -> Value:
         variables: dict[str, Any] = {}
@@ -301,50 +309,12 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self._check_query_result(response["result"][0])
         return response["result"][0]["result"]
 
-    async def update(self, record: RecordIdType, data: Value | None = None) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-
-        if data is None:
-            query = f"UPDATE {resource_ref}"
-        else:
-            variables["_content"] = data
-            query = f"UPDATE {resource_ref} CONTENT $_content"
-
-        response = await self.query_raw(query, variables)
-        self.check_response_for_error(response, "update")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # UPDATE on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
-        )
-
     async def version(self) -> str:
         message = RequestMessage(RequestMethod.VERSION)
         self.id = message.id
         response = await self._send(message, "getting database version")
         self.check_response_for_result(response, "getting database version")
         return response["result"]
-
-    async def upsert(self, record: RecordIdType, data: Value | None = None) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-
-        if data is None:
-            query = f"UPSERT {resource_ref}"
-        else:
-            variables["_content"] = data
-            query = f"UPSERT {resource_ref} CONTENT $_content"
-
-        response = await self.query_raw(query, variables)
-        self.check_response_for_error(response, "upsert")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # UPSERT on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
-        )
 
     async def __aenter__(self) -> "AsyncHttpSurrealConnection":
         """

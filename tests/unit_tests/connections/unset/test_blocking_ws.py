@@ -4,7 +4,7 @@ from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 
 def test_unset(blocking_ws_connection: BlockingWsSurrealConnection) -> None:
-    blocking_ws_connection.query("DELETE person;")
+    blocking_ws_connection.query("DELETE person;").execute()
     outcome = blocking_ws_connection.let(
         "name",
         {
@@ -13,7 +13,7 @@ def test_unset(blocking_ws_connection: BlockingWsSurrealConnection) -> None:
         },
     )
     assert outcome is None
-    blocking_ws_connection.query("CREATE person SET name = $name")
+    blocking_ws_connection.query("CREATE person SET name = $name").execute()
     outcome = blocking_ws_connection.query(
         "SELECT * FROM person WHERE name.first = $name.first"
     )
@@ -28,4 +28,4 @@ def test_unset(blocking_ws_connection: BlockingWsSurrealConnection) -> None:
     )
     assert outcome == []
 
-    blocking_ws_connection.query("DELETE person;")
+    blocking_ws_connection.query("DELETE person;").execute()

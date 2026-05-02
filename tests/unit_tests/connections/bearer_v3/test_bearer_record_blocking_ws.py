@@ -24,17 +24,17 @@ def test_bearer_access_record_user(bearer_v3_root_ws: dict) -> None:
     namespace = bearer_v3_root_ws["namespace"]
     database_name = bearer_v3_root_ws["database_name"]
 
-    root.query("DEFINE TABLE IF NOT EXISTS users SCHEMAFULL")
-    root.query("DEFINE FIELD IF NOT EXISTS name ON users TYPE string")
+    root.query("DEFINE TABLE IF NOT EXISTS users SCHEMAFULL").execute()
+    root.query("DEFINE FIELD IF NOT EXISTS name ON users TYPE string").execute()
     root.query_raw("DELETE users:testrecord")
-    root.query("CREATE users:testrecord SET name = 'Test Record User'")
+    root.query("CREATE users:testrecord SET name = 'Test Record User'").execute()
     root.query(
         "DEFINE ACCESS IF NOT EXISTS bearer_record_api ON DATABASE TYPE BEARER FOR RECORD"
-    )
+    ).execute()
 
     grant_result = root.query(
         "ACCESS bearer_record_api GRANT FOR RECORD users:testrecord"
-    )
+    ).execute()
     assert grant_result is not None
     assert isinstance(grant_result, dict)
     grant_info = grant_result.get("grant")
@@ -78,16 +78,16 @@ def test_bearer_record_signin_token_not_usable_with_authenticate(
     namespace = bearer_v3_root_ws["namespace"]
     database_name = bearer_v3_root_ws["database_name"]
 
-    root.query("DEFINE TABLE IF NOT EXISTS auth_records SCHEMAFULL")
-    root.query("DEFINE FIELD IF NOT EXISTS name ON auth_records TYPE string")
+    root.query("DEFINE TABLE IF NOT EXISTS auth_records SCHEMAFULL").execute()
+    root.query("DEFINE FIELD IF NOT EXISTS name ON auth_records TYPE string").execute()
     root.query_raw("DELETE auth_records:auth_test")
-    root.query("CREATE auth_records:auth_test SET name = 'Auth Test Record'")
+    root.query("CREATE auth_records:auth_test SET name = 'Auth Test Record'").execute()
     root.query(
         "DEFINE ACCESS IF NOT EXISTS bearer_record_auth ON DATABASE TYPE BEARER FOR RECORD"
-    )
+    ).execute()
     grant_result = root.query(
         "ACCESS bearer_record_auth GRANT FOR RECORD auth_records:auth_test"
-    )
+    ).execute()
     bearer_key = grant_result["grant"]["key"]
 
     conn = BlockingWsSurrealConnection(url)

@@ -44,7 +44,7 @@ async def test_insert_relation_record_ids(
             "out": RecordID("likes", 400),
         },
     ]
-    outcome = await async_ws_connection.insert_relation("likes", data)
+    outcome = await async_ws_connection.insert("likes", data, relation=True)
     assert RecordID("user", "tobie") == outcome[0]["in"]
     assert RecordID("likes", 123) == outcome[0]["out"]
     assert RecordID("user", "jaime") == outcome[1]["in"]
@@ -58,6 +58,6 @@ async def test_insert_relation_record_id(
         "in": RecordID("user", "tobie"),
         "out": RecordID("likes", 123),
     }
-    outcome = await async_ws_connection.insert_relation("likes", data)
+    outcome = await async_ws_connection.insert("likes", data, relation=True)
     assert RecordID("user", "tobie") == outcome[0]["in"]
     assert RecordID("likes", 123) == outcome[0]["out"]

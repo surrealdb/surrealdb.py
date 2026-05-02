@@ -22,9 +22,9 @@ def create_data() -> dict[str, Any]:
 def setup_user(
     blocking_http_connection: BlockingHttpSurrealConnection,
 ) -> Generator[None, None, None]:
-    blocking_http_connection.query("DELETE user;")
+    blocking_http_connection.query("DELETE user;").execute()
     yield
-    blocking_http_connection.query("DELETE user;")
+    blocking_http_connection.query("DELETE user;").execute()
 
 
 def test_create_string(

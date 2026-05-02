@@ -1,16 +1,21 @@
 import uuid
 from types import TracebackType
-from typing import Any, cast
+from typing import Any, cast, overload
 
 import requests
 
+from surrealdb.connections.builders import (
+    SyncCrudBuilder,
+    SyncInsertBuilder,
+    SyncQueryBuilder,
+)
 from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import UtilsMixin
 from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
-from surrealdb.errors import SurrealError, UnsupportedFeatureError, parse_rpc_error
+from surrealdb.errors import UnsupportedFeatureError, parse_rpc_error
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 from surrealdb.types import Tokens, Value, parse_auth_result
@@ -94,7 +99,6 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.id = message.id
         response = self._send(message, "getting database information", bypass=True)
 
-        # Check if we got an error
         if response.get("error"):
             error = response.get("error")
             # If INFO returns "No result found", try to get auth info via $auth
@@ -104,7 +108,6 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
                 and error.get("code") == -32000
                 and "No result found" in error.get("message", "")
             ):
-                # Try to get authenticated user record via $auth
                 auth_response = self.query("SELECT * FROM $auth")
                 if (
                     auth_response
@@ -112,7 +115,6 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
                     and len(auth_response) > 0
                 ):
                     return auth_response[0]
-            # If it's a different error, raise it
             if error is not None:
                 raise parse_rpc_error(error)
 
@@ -130,12 +132,14 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.namespace = namespace
         self.database = database
 
-    def query(self, query: str, vars: dict[str, Value] | None = None) -> Value:
-        response = self.query_raw(query, vars)
-        self.check_response_for_error(response, "query")
-        self.check_response_for_result(response, "query")
-        self._check_query_result(response["result"][0])
-        return response["result"][0]["result"]
+    def query(
+        self, query: str, vars: dict[str, Value] | None = None
+    ) -> SyncQueryBuilder:
+        return SyncQueryBuilder(
+            executor=self._make_executor(),
+            query=query,
+            variables=vars,
+        )
 
     def query_raw(
         self, query: str, params: dict[str, Value] | None = None
@@ -153,120 +157,134 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         response = self._send(message, "query", bypass=True)
         return response
 
+    def _make_executor(self) -> Any:
+        def _executor(query: str, params: dict[str, Any]) -> dict[str, Any]:
+            return self.query_raw(query, params)
+
+        return _executor
+
+    # CRUD overloads --------------------------------------------------------
+
+    @overload
     def create(
-        self,
-        record: RecordIdType,
-        data: Value | None = None,
-    ) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
+        self, record: RecordID, data: Value | None = None
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def create(
+        self, record: Table, data: Value | None = None
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def create(
+        self, record: str, data: Value | None = None
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def create(
+        self, record: RecordIdType, data: Value | None = None
+    ) -> SyncCrudBuilder[Any]:
+        return SyncCrudBuilder(
+            executor=self._make_executor(),
+            operation="CREATE",
+            record=record,
+            op_name="create",
+            data=data,
+            always_unwrap=True,
+        )
 
-        if data is None:
-            query = f"CREATE {resource_ref}"
-        else:
-            variables["_content"] = data
-            query = f"CREATE {resource_ref} CONTENT $_content"
+    @overload
+    def update(
+        self, record: RecordID, data: Value | None = None
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def update(
+        self, record: Table, data: Value | None = None
+    ) -> SyncCrudBuilder[list[Value]]: ...
+    @overload
+    def update(
+        self, record: str, data: Value | None = None
+    ) -> SyncCrudBuilder[Value]: ...
+    def update(
+        self, record: RecordIdType, data: Value | None = None
+    ) -> SyncCrudBuilder[Any]:
+        return SyncCrudBuilder(
+            executor=self._make_executor(),
+            operation="UPDATE",
+            record=record,
+            op_name="update",
+            data=data,
+        )
 
-        response = self.query_raw(query, variables)
-        self.check_response_for_error(response, "create")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # CREATE always creates a single record, so always unwrap
-        return self._unwrap_result(result, unwrap=True)
+    @overload
+    def upsert(
+        self, record: RecordID, data: Value | None = None
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def upsert(
+        self, record: Table, data: Value | None = None
+    ) -> SyncCrudBuilder[list[Value]]: ...
+    @overload
+    def upsert(
+        self, record: str, data: Value | None = None
+    ) -> SyncCrudBuilder[Value]: ...
+    def upsert(
+        self, record: RecordIdType, data: Value | None = None
+    ) -> SyncCrudBuilder[Any]:
+        return SyncCrudBuilder(
+            executor=self._make_executor(),
+            operation="UPSERT",
+            record=record,
+            op_name="upsert",
+            data=data,
+        )
 
-    def delete(self, record: RecordIdType) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-        query = f"DELETE {resource_ref} RETURN BEFORE"
-
-        response = self.query_raw(query, variables)
-        self.check_response_for_error(response, "delete")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # DELETE on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
+    @overload
+    def delete(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def delete(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
+    @overload
+    def delete(self, record: str) -> SyncCrudBuilder[Value]: ...
+    def delete(self, record: RecordIdType) -> SyncCrudBuilder[Any]:
+        return SyncCrudBuilder(
+            executor=self._make_executor(),
+            operation="DELETE",
+            record=record,
+            op_name="delete",
         )
 
     def insert(
         self,
         table: str | Table,
-        data: Value,
-    ) -> Value:
-        # Validate that table is not a RecordID
-        if isinstance(table, RecordID):
-            raise SurrealError(
-                f"There was a problem with the database: Can not execute INSERT statement using value '{table}'"
-            )
+        data: Value | None = None,
+        *,
+        relation: bool = False,
+    ) -> SyncInsertBuilder:
+        return SyncInsertBuilder(
+            executor=self._make_executor(),
+            table=table,
+            data=data,
+            relation=relation,
+        )
 
-        variables: dict[str, Any] = {}
-        table_ref = self._resource_to_variable(table, variables, "_table")
-        variables["_data"] = data
-        query = f"INSERT INTO {table_ref} $_data"
-
-        response = self.query_raw(query, variables)
-        self.check_response_for_error(response, "insert")
-        self._check_query_result(response["result"][0])
-        return response["result"][0]["result"]
-
-    def insert_relation(
+    def run(
         self,
-        table: str | Table,
-        data: Value,
+        name: str,
+        args: list[Value] | None = None,
+        version: str | None = None,
     ) -> Value:
-        variables: dict[str, Any] = {}
-        table_ref = self._resource_to_variable(table, variables, "_table")
-        variables["_data"] = data
-        query = f"INSERT RELATION INTO {table_ref} $_data"
-
-        response = self.query_raw(query, variables)
-        self.check_response_for_error(response, "insert_relation")
-        self._check_query_result(response["result"][0])
-        return response["result"][0]["result"]
+        kwargs: dict[str, Any] = {"name": name}
+        if version is not None:
+            kwargs["version"] = version
+        if args is not None:
+            kwargs["args"] = args
+        message = RequestMessage(RequestMethod.RUN, **kwargs)
+        self.id = message.id
+        response = self._send(message, "run")
+        self.check_response_for_result(response, "run")
+        return response["result"]
 
     def let(self, key: str, value: Value) -> None:
         self.vars[key] = value
 
     def unset(self, key: str) -> None:
         self.vars.pop(key)
-
-    def merge(self, record: RecordIdType, data: Value | None = None) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-
-        if data is None:
-            query = f"UPDATE {resource_ref} MERGE {{}}"
-        else:
-            variables["_data"] = data
-            query = f"UPDATE {resource_ref} MERGE $_data"
-
-        response = self.query_raw(query, variables)
-        self.check_response_for_error(response, "merge")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # MERGE on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
-        )
-
-    def patch(self, record: RecordIdType, data: Value | None = None) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-
-        if data is None:
-            query = f"UPDATE {resource_ref} PATCH []"
-        else:
-            variables["_patches"] = data
-            query = f"UPDATE {resource_ref} PATCH $_patches"
-
-        response = self.query_raw(query, variables)
-        self.check_response_for_error(response, "patch")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # PATCH on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
-        )
 
     def select(self, record: RecordIdType) -> Value:
         variables: dict[str, Any] = {}
@@ -278,50 +296,12 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self._check_query_result(response["result"][0])
         return response["result"][0]["result"]
 
-    def update(self, record: RecordIdType, data: Value | None = None) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-
-        if data is None:
-            query = f"UPDATE {resource_ref}"
-        else:
-            variables["_content"] = data
-            query = f"UPDATE {resource_ref} CONTENT $_content"
-
-        response = self.query_raw(query, variables)
-        self.check_response_for_error(response, "update")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # UPDATE on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
-        )
-
     def version(self) -> str:
         message = RequestMessage(RequestMethod.VERSION)
         self.id = message.id
         response = self._send(message, "getting database version")
         self.check_response_for_result(response, "getting database version")
         return response["result"]
-
-    def upsert(self, record: RecordIdType, data: Value | None = None) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-
-        if data is None:
-            query = f"UPSERT {resource_ref}"
-        else:
-            variables["_content"] = data
-            query = f"UPSERT {resource_ref} CONTENT $_content"
-
-        response = self.query_raw(query, variables)
-        self.check_response_for_error(response, "upsert")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # UPSERT on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
-        )
 
     def __enter__(self) -> "BlockingHttpSurrealConnection":
         """

@@ -9,10 +9,10 @@ from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 def setup_table(
     blocking_ws_connection: BlockingWsSurrealConnection,
 ) -> Generator[None, None, None]:
-    blocking_ws_connection.query("REMOVE TABLE IF EXISTS session_txn_test;")
-    blocking_ws_connection.query("DEFINE TABLE session_txn_test SCHEMALESS;")
+    blocking_ws_connection.query("REMOVE TABLE IF EXISTS session_txn_test;").execute()
+    blocking_ws_connection.query("DEFINE TABLE session_txn_test SCHEMALESS;").execute()
     yield
-    blocking_ws_connection.query("REMOVE TABLE IF EXISTS session_txn_test;")
+    blocking_ws_connection.query("REMOVE TABLE IF EXISTS session_txn_test;").execute()
 
 
 def test_attach_returns_uuid(
@@ -92,10 +92,8 @@ def test_two_sessions_isolated(
 
     res_a = session_a.query("RETURN $var;")
     res_b = session_b.query("RETURN $var;")
-    assert isinstance(res_a, int)
-    assert isinstance(res_b, int)
-    assert res_a == [123]
-    assert res_b == [456]
+    assert res_a == 123
+    assert res_b == 456
 
     session_a.close_session()
     session_b.close_session()

@@ -32,12 +32,12 @@ def existing_data() -> dict[str, Any]:
 def setup_user(
     blocking_http_connection: BlockingHttpSurrealConnection,
 ) -> Generator[None, None, None]:
-    blocking_http_connection.query("DELETE user;")
+    blocking_http_connection.query("DELETE user;").execute()
     blocking_http_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
-    )
+    ).execute()
     yield
-    blocking_http_connection.query("DELETE user;")
+    blocking_http_connection.query("DELETE user;").execute()
 
 
 def test_upsert_string(

@@ -7,19 +7,24 @@ import uuid
 from asyncio import AbstractEventLoop, Future, Queue, Task
 from collections.abc import AsyncGenerator
 from types import TracebackType
-from typing import Any
+from typing import Any, overload
 from uuid import UUID
 
 import websockets
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from surrealdb.connections.async_template import AsyncTemplate
+from surrealdb.connections.builders import (
+    AsyncCrudBuilder,
+    AsyncInsertBuilder,
+    AsyncQueryBuilder,
+)
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import UtilsMixin
 from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
-from surrealdb.errors import SurrealError, UnexpectedResponseError
+from surrealdb.errors import UnexpectedResponseError
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 from surrealdb.types import Tokens, Value, parse_auth_result
@@ -203,20 +208,18 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         message = RequestMessage(RequestMethod.USE, **kwargs)
         await self._send(message, "use")
 
-    async def query(
+    def query(
         self,
         query: str,
         vars: dict[str, Value] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> Value:
-        response = await self.query_raw(
-            query, vars, session_id=session_id, txn_id=txn_id
+    ) -> AsyncQueryBuilder:
+        return AsyncQueryBuilder(
+            executor=self._make_executor(session_id, txn_id),
+            query=query,
+            variables=vars,
         )
-        self.check_response_for_error(response, "query")
-        self.check_response_for_result(response, "query")
-        self._check_query_result(response["result"][0])
-        return response["result"][0]["result"]
 
     async def query_raw(
         self,
@@ -291,176 +294,228 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self._check_query_result(response["result"][0])
         return response["result"][0]["result"]
 
-    async def create(
+    def _make_executor(
         self,
-        record: RecordIdType,
-        data: Value | None = None,
-        session_id: UUID | None = None,
-        txn_id: UUID | None = None,
-    ) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
+        session_id: UUID | None,
+        txn_id: UUID | None,
+    ) -> Any:
+        """Build an executor closure that calls query_raw with the right context."""
 
-        if data is None:
-            query = f"CREATE {resource_ref}"
-        else:
-            variables["_content"] = data
-            query = f"CREATE {resource_ref} CONTENT $_content"
-
-        response = await self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
-        )
-        self.check_response_for_error(response, "create")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # CREATE always creates a single record, so always unwrap
-        return self._unwrap_result(result, unwrap=True)
-
-    async def update(
-        self,
-        record: RecordIdType,
-        data: Value | None = None,
-        session_id: UUID | None = None,
-        txn_id: UUID | None = None,
-    ) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-
-        if data is None:
-            query = f"UPDATE {resource_ref}"
-        else:
-            variables["_content"] = data
-            query = f"UPDATE {resource_ref} CONTENT $_content"
-
-        response = await self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
-        )
-        self.check_response_for_error(response, "update")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # UPDATE on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
-        )
-
-    async def merge(
-        self,
-        record: RecordIdType,
-        data: Value | None = None,
-        session_id: UUID | None = None,
-        txn_id: UUID | None = None,
-    ) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-
-        if data is None:
-            query = f"UPDATE {resource_ref} MERGE {{}}"
-        else:
-            variables["_data"] = data
-            query = f"UPDATE {resource_ref} MERGE $_data"
-
-        response = await self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
-        )
-        self.check_response_for_error(response, "merge")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # MERGE on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
-        )
-
-    async def patch(
-        self,
-        record: RecordIdType,
-        data: Value | None = None,
-        session_id: UUID | None = None,
-        txn_id: UUID | None = None,
-    ) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-
-        if data is None:
-            query = f"UPDATE {resource_ref} PATCH []"
-        else:
-            variables["_patches"] = data
-            query = f"UPDATE {resource_ref} PATCH $_patches"
-
-        response = await self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
-        )
-        self.check_response_for_error(response, "patch")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # PATCH on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
-        )
-
-    async def delete(
-        self,
-        record: RecordIdType,
-        session_id: UUID | None = None,
-        txn_id: UUID | None = None,
-    ) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-        query = f"DELETE {resource_ref} RETURN BEFORE"
-
-        response = await self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
-        )
-        self.check_response_for_error(response, "delete")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # DELETE on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
-        )
-
-    async def insert(
-        self,
-        table: str | Table,
-        data: Value,
-        session_id: UUID | None = None,
-        txn_id: UUID | None = None,
-    ) -> Value:
-        # Validate that table is not a RecordID
-        if isinstance(table, RecordID):
-            raise SurrealError(
-                f"There was a problem with the database: Can not execute INSERT statement using value '{table}'"
+        async def _executor(query: str, params: dict[str, Any]) -> dict[str, Any]:
+            return await self.query_raw(
+                query, params, session_id=session_id, txn_id=txn_id
             )
 
-        variables: dict[str, Any] = {}
-        table_ref = self._resource_to_variable(table, variables, "_table")
-        variables["_data"] = data
-        query = f"INSERT INTO {table_ref} $_data"
+        return _executor
 
-        response = await self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+    # CRUD overloads --------------------------------------------------------
+
+    @overload
+    def create(
+        self,
+        record: RecordID,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def create(
+        self,
+        record: Table,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def create(
+        self,
+        record: str,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    def create(
+        self,
+        record: RecordIdType,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[Any]:
+        return AsyncCrudBuilder(
+            executor=self._make_executor(session_id, txn_id),
+            operation="CREATE",
+            record=record,
+            op_name="create",
+            data=data,
+            always_unwrap=True,
         )
-        self.check_response_for_error(response, "insert")
-        self._check_query_result(response["result"][0])
-        return response["result"][0]["result"]
 
-    async def insert_relation(
+    @overload
+    def update(
+        self,
+        record: RecordID,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def update(
+        self,
+        record: Table,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[list[Value]]: ...
+    @overload
+    def update(
+        self,
+        record: str,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[Value]: ...
+    def update(
+        self,
+        record: RecordIdType,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[Any]:
+        return AsyncCrudBuilder(
+            executor=self._make_executor(session_id, txn_id),
+            operation="UPDATE",
+            record=record,
+            op_name="update",
+            data=data,
+        )
+
+    @overload
+    def upsert(
+        self,
+        record: RecordID,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def upsert(
+        self,
+        record: Table,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[list[Value]]: ...
+    @overload
+    def upsert(
+        self,
+        record: str,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[Value]: ...
+    def upsert(
+        self,
+        record: RecordIdType,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[Any]:
+        return AsyncCrudBuilder(
+            executor=self._make_executor(session_id, txn_id),
+            operation="UPSERT",
+            record=record,
+            op_name="upsert",
+            data=data,
+        )
+
+    @overload
+    def delete(
+        self,
+        record: RecordID,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def delete(
+        self,
+        record: Table,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[list[Value]]: ...
+    @overload
+    def delete(
+        self,
+        record: str,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[Value]: ...
+    def delete(
+        self,
+        record: RecordIdType,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[Any]:
+        return AsyncCrudBuilder(
+            executor=self._make_executor(session_id, txn_id),
+            operation="DELETE",
+            record=record,
+            op_name="delete",
+        )
+
+    def insert(
         self,
         table: str | Table,
-        data: Value,
+        data: Value | None = None,
+        *,
+        relation: bool = False,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncInsertBuilder:
+        return AsyncInsertBuilder(
+            executor=self._make_executor(session_id, txn_id),
+            table=table,
+            data=data,
+            relation=relation,
+        )
+
+    async def run(
+        self,
+        name: str,
+        args: list[Value] | None = None,
+        version: str | None = None,
+        *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> Value:
-        variables: dict[str, Any] = {}
-        table_ref = self._resource_to_variable(table, variables, "_table")
-        variables["_data"] = data
-        query = f"INSERT RELATION INTO {table_ref} $_data"
-
-        response = await self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
-        )
-        self.check_response_for_error(response, "insert_relation")
-        self._check_query_result(response["result"][0])
-        return response["result"][0]["result"]
+        kwargs: dict[str, Any] = {"name": name}
+        if version is not None:
+            kwargs["version"] = version
+        if args is not None:
+            kwargs["args"] = args
+        if session_id is not None:
+            kwargs["session"] = session_id
+        if txn_id is not None:
+            kwargs["txn"] = txn_id
+        message = RequestMessage(RequestMethod.RUN, **kwargs)
+        response = await self._send(message, "run")
+        self.check_response_for_result(response, "run")
+        return response["result"]
 
     async def live(
         self,
@@ -562,33 +617,6 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         session_id = await self.attach()
         return AsyncSurrealSession(self, session_id)
 
-    async def upsert(
-        self,
-        record: RecordIdType,
-        data: Value | None = None,
-        session_id: UUID | None = None,
-        txn_id: UUID | None = None,
-    ) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-
-        if data is None:
-            query = f"UPSERT {resource_ref}"
-        else:
-            variables["_content"] = data
-            query = f"UPSERT {resource_ref} CONTENT $_content"
-
-        response = await self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
-        )
-        self.check_response_for_error(response, "upsert")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # UPSERT on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
-        )
-
     async def close(self) -> None:
         # Cancel the receive task first
         if self.recv_task and not self.recv_task.done():
@@ -645,12 +673,12 @@ class AsyncSurrealSession:
     async def use(self, namespace: str, database: str) -> None:
         await self._connection.use(namespace, database, session_id=self._session_id)
 
-    async def query(
+    def query(
         self,
         query: str,
         vars: dict[str, Value] | None = None,
-    ) -> Value:
-        return await self._connection.query(query, vars, session_id=self._session_id)
+    ) -> AsyncQueryBuilder:
+        return self._connection.query(query, vars, session_id=self._session_id)
 
     async def signin(self, vars: dict[str, Value]) -> Tokens:
         return await self._connection.signin(vars, session_id=self._session_id)
@@ -673,59 +701,50 @@ class AsyncSurrealSession:
     async def select(self, record: RecordIdType) -> Value:
         return await self._connection.select(record, session_id=self._session_id)
 
-    async def create(
+    def create(
         self,
         record: RecordIdType,
         data: Value | None = None,
-    ) -> Value:
-        return await self._connection.create(record, data, session_id=self._session_id)
+    ) -> AsyncCrudBuilder[Any]:
+        return self._connection.create(record, data, session_id=self._session_id)
 
-    async def update(
+    def update(
         self,
         record: RecordIdType,
         data: Value | None = None,
-    ) -> Value:
-        return await self._connection.update(record, data, session_id=self._session_id)
+    ) -> AsyncCrudBuilder[Any]:
+        return self._connection.update(record, data, session_id=self._session_id)
 
-    async def merge(
+    def upsert(
         self,
         record: RecordIdType,
         data: Value | None = None,
-    ) -> Value:
-        return await self._connection.merge(record, data, session_id=self._session_id)
+    ) -> AsyncCrudBuilder[Any]:
+        return self._connection.upsert(record, data, session_id=self._session_id)
 
-    async def patch(
-        self,
-        record: RecordIdType,
-        data: Value | None = None,
-    ) -> Value:
-        return await self._connection.patch(record, data, session_id=self._session_id)
+    def delete(self, record: RecordIdType) -> AsyncCrudBuilder[Any]:
+        return self._connection.delete(record, session_id=self._session_id)
 
-    async def delete(self, record: RecordIdType) -> Value:
-        return await self._connection.delete(record, session_id=self._session_id)
-
-    async def insert(
+    def insert(
         self,
         table: str | Table,
-        data: Value,
-    ) -> Value:
-        return await self._connection.insert(table, data, session_id=self._session_id)
-
-    async def insert_relation(
-        self,
-        table: str | Table,
-        data: Value,
-    ) -> Value:
-        return await self._connection.insert_relation(
-            table, data, session_id=self._session_id
+        data: Value | None = None,
+        *,
+        relation: bool = False,
+    ) -> AsyncInsertBuilder:
+        return self._connection.insert(
+            table, data, relation=relation, session_id=self._session_id
         )
 
-    async def upsert(
+    async def run(
         self,
-        record: RecordIdType,
-        data: Value | None = None,
+        name: str,
+        args: list[Value] | None = None,
+        version: str | None = None,
     ) -> Value:
-        return await self._connection.upsert(record, data, session_id=self._session_id)
+        return await self._connection.run(
+            name, args, version, session_id=self._session_id
+        )
 
     async def live(
         self,
@@ -756,12 +775,12 @@ class AsyncSurrealTransaction:
         self._session_id = session_id
         self._txn_id = txn_id
 
-    async def query(
+    def query(
         self,
         query: str,
         vars: dict[str, Value] | None = None,
-    ) -> Value:
-        return await self._connection.query(
+    ) -> AsyncQueryBuilder:
+        return self._connection.query(
             query,
             vars,
             session_id=self._session_id,
@@ -775,95 +794,86 @@ class AsyncSurrealTransaction:
             txn_id=self._txn_id,
         )
 
-    async def create(
+    def create(
         self,
         record: RecordIdType,
         data: Value | None = None,
-    ) -> Value:
-        return await self._connection.create(
+    ) -> AsyncCrudBuilder[Any]:
+        return self._connection.create(
             record,
             data,
             session_id=self._session_id,
             txn_id=self._txn_id,
         )
 
-    async def update(
+    def update(
         self,
         record: RecordIdType,
         data: Value | None = None,
-    ) -> Value:
-        return await self._connection.update(
+    ) -> AsyncCrudBuilder[Any]:
+        return self._connection.update(
             record,
             data,
             session_id=self._session_id,
             txn_id=self._txn_id,
         )
 
-    async def merge(
+    def upsert(
         self,
         record: RecordIdType,
         data: Value | None = None,
-    ) -> Value:
-        return await self._connection.merge(
+    ) -> AsyncCrudBuilder[Any]:
+        return self._connection.upsert(
             record,
             data,
             session_id=self._session_id,
             txn_id=self._txn_id,
         )
 
-    async def patch(
-        self,
-        record: RecordIdType,
-        data: Value | None = None,
-    ) -> Value:
-        return await self._connection.patch(
-            record,
-            data,
-            session_id=self._session_id,
-            txn_id=self._txn_id,
-        )
-
-    async def delete(self, record: RecordIdType) -> Value:
-        return await self._connection.delete(
+    def delete(self, record: RecordIdType) -> AsyncCrudBuilder[Any]:
+        return self._connection.delete(
             record,
             session_id=self._session_id,
             txn_id=self._txn_id,
         )
 
-    async def insert(
+    def insert(
         self,
         table: str | Table,
-        data: Value,
-    ) -> Value:
-        return await self._connection.insert(
-            table,
-            data,
-            session_id=self._session_id,
-            txn_id=self._txn_id,
-        )
-
-    async def insert_relation(
-        self,
-        table: str | Table,
-        data: Value,
-    ) -> Value:
-        return await self._connection.insert_relation(
-            table,
-            data,
-            session_id=self._session_id,
-            txn_id=self._txn_id,
-        )
-
-    async def upsert(
-        self,
-        record: RecordIdType,
         data: Value | None = None,
-    ) -> Value:
-        return await self._connection.upsert(
-            record,
+        *,
+        relation: bool = False,
+    ) -> AsyncInsertBuilder:
+        return self._connection.insert(
+            table,
             data,
+            relation=relation,
             session_id=self._session_id,
             txn_id=self._txn_id,
+        )
+
+    async def run(
+        self,
+        name: str,
+        args: list[Value] | None = None,
+        version: str | None = None,
+    ) -> Value:
+        return await self._connection.run(
+            name,
+            args,
+            version,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+        )
+
+    async def let(self, key: str, value: Value) -> None:
+        await self._connection.let(
+            key, value, session_id=self._session_id, txn_id=self._txn_id
+        )
+
+    async def unset(self, key: str) -> None:
+        await self._connection.unset(
+            key, session_id=self._session_id, txn_id=self._txn_id
         )
 
     async def commit(self) -> None:
