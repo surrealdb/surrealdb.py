@@ -415,6 +415,16 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             result, unwrap=self._is_single_record_operation(record)
         )
 
+    @staticmethod
+    def _live_notification_matches(
+        query_uuid: str | UUID, notification: dict[str, Any]
+    ) -> bool:
+        """Return True if this push belongs to the given live query id."""
+        nid = notification.get("id")
+        if nid is None:
+            return False
+        return str(nid) == str(query_uuid)
+
     def subscribe_live(
         self,
         query_uuid: str | UUID,
@@ -426,7 +436,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             query_uuid (Union[str, UUID]): The query UUID to subscribe to.
 
         Yields:
-            dict: The results of live updates.
+            dict: Each live notification from the server (``action``, ``result``, ``id``,
+            ``record``, etc.), not only the changed record payload.
         """
         try:
             while True:
@@ -442,9 +453,11 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                         data if isinstance(data, bytes) else data.encode()
                     )
 
-                    # Check if the response matches the query UUID
-                    if response.get("result", {}).get("id") == query_uuid:
-                        yield response["result"]["result"]
+                    notif = response.get("result")
+                    if isinstance(notif, dict) and self._live_notification_matches(
+                        query_uuid, notif
+                    ):
+                        yield notif
                 except Exception as e:
                     # Handle WebSocket or decoding errors
                     print("Error in live subscription:", e)

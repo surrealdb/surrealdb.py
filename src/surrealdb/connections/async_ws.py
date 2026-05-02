@@ -482,6 +482,10 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def subscribe_live(
         self, query_uuid: str | UUID
     ) -> AsyncGenerator[dict[str, Value], None]:
+        """Stream live notifications for the given live query id.
+
+        Each item matches the wire format (``action``, ``result``, ``id``, ``record``, …).
+        """
         result_queue: Queue[dict[str, Any]] = Queue()
         suid = str(query_uuid)
 
@@ -494,7 +498,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         async def _iter() -> AsyncGenerator[dict[str, Any], None]:
             while True:
                 ret = await result_queue.get()
-                yield ret["result"]
+                yield ret
 
         return _iter()
 

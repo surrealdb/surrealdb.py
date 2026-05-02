@@ -26,8 +26,10 @@ def test_live_subscription(
     # Wait for the live subscription update
     try:
         for update in subscription:
-            assert update["name"] == "Jaime"
-            assert update["id"] == RecordID("user", "jaime")
+            assert update["action"] == "CREATE"
+            record = update["result"]
+            assert record["name"] == "Jaime"
+            assert record["id"] == RecordID("user", "jaime")
             break  # Exit after receiving the first update
     except Exception as e:
         pytest.fail(f"Error waiting for live subscription update: {e}")

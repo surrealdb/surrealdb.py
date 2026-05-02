@@ -380,16 +380,10 @@ class AsyncTemplate:
     async def subscribe_live(
         self, query_uuid: str | UUID
     ) -> AsyncGenerator[dict[str, Value], None]:
-        """Returns a queue that receives notification messages from a running live query.
+        """Iterate live notifications for the given live query id.
 
-        Args:
-            query_uuid: The uuid for the live query
-
-        Returns:
-            the notification queue
-
-        Example:
-            await db.subscribe_live(UUID)
+        Yields the full notification dict from the server (``action``, ``result``, ``id``,
+        ``record``, …), not only the changed record document.
         """
         raise NotImplementedError(f"subscribe_live not implemented for: {self}")
 

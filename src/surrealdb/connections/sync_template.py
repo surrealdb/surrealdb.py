@@ -386,16 +386,10 @@ class SyncTemplate:
     def subscribe_live(
         self, query_uuid: str | UUID
     ) -> Generator[dict[str, Value], None, None]:
-        """Live notification returns a queue that receives notification messages from the back end.
+        """Iterate live notifications for the given live query id.
 
-        Args:
-            query_uuid: The uuid for the live query
-
-        Returns:
-            the notification queue
-
-        Example:
-            db.subscribe_live(UUID)
+        Yields the full notification dict from the server (``action``, ``result``, ``id``,
+        ``record``, …), not only the changed record document.
         """
         raise NotImplementedError(f"subscribe_live not implemented for: {self}")
 

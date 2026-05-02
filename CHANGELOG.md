@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** WebSocket `subscribe_live()` now yields the full live-notification object (`action`, `result`, `id`, …) from the server instead of only the inner record ([#247](https://github.com/surrealdb/surrealdb.py/issues/247)).
+
+### Fixed
+- `subscribe_live` WebSocket tests perform mutations on a secondary connection so query RPC replies are not interleaved with live notifications on the same socket.
+
 ## [2.0.0] - 2026-04-23
 ### Added
 - Support `surrealkv+versioned://` URL scheme for embedded databases with versioning (#231).
