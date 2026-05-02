@@ -47,14 +47,28 @@ def session_txn_requires_v3(
         connection_params["namespace"],
         connection_params["database_name"],
     )
+    result = None
+    probe_error: Exception | None = None
     try:
-        blocking_ws_connection.query("REMOVE TABLE IF EXISTS session_txn_probe;")
-        blocking_ws_connection.query("DEFINE TABLE session_txn_probe SCHEMALESS;")
-        session.create("session_txn_probe:check", {"probe": True})
-        result = session.query("SELECT * FROM session_txn_probe;")
+        blocking_ws_connection.query("REMOVE TABLE IF EXISTS session_txn_probe;").execute()
+        blocking_ws_connection.query("DEFINE TABLE session_txn_probe SCHEMALESS;").execute()
+        try:
+            # Mirror what the actual tests do - no signin on the session.
+            session.create("session_txn_probe:check", {"probe": True}).execute()
+            result = session.query("SELECT * FROM session_txn_probe;").execute()
+        except Exception as exc:  # noqa: BLE001 - capture for skip decision
+            probe_error = exc
     finally:
-        session.close_session()
-        blocking_ws_connection.query("REMOVE TABLE IF EXISTS session_txn_probe;")
+        try:
+            session.close_session()
+        except Exception:
+            pass
+        blocking_ws_connection.query("REMOVE TABLE IF EXISTS session_txn_probe;").execute()
+    if probe_error is not None:
+        pytest.skip(
+            "Session-scoped create/query failed "
+            f"({type(probe_error).__name__}: {probe_error}); ensure SurrealDB 3.x with session support."
+        )
     if not result or not any(
         r.get("probe") is True for r in result if isinstance(r, dict)
     ):

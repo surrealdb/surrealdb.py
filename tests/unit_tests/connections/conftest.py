@@ -105,7 +105,7 @@ def blocking_http_connection(
         namespace=connection_params["namespace"],
         database=connection_params["database_name"],
     )
-    connection.query(_DEFINE_TABLES)
+    connection.query(_DEFINE_TABLES).execute()
     yield connection
 
 
@@ -120,7 +120,7 @@ def blocking_ws_connection(
         namespace=connection_params["namespace"],
         database=connection_params["database_name"],
     )
-    connection.query(_DEFINE_TABLES)
+    connection.query(_DEFINE_TABLES).execute()
     yield connection
     if connection.socket:
         connection.socket.close()
@@ -137,7 +137,7 @@ def blocking_ws_connection_secondary(
         namespace=connection_params["namespace"],
         database=connection_params["database_name"],
     )
-    connection.query(_DEFINE_TABLES)
+    connection.query(_DEFINE_TABLES).execute()
     yield connection
     if connection.socket:
         connection.socket.close()
@@ -172,10 +172,10 @@ def blocking_http_connection_with_user(
     blocking_http_connection: BlockingHttpSurrealConnection,
 ) -> Generator[BlockingHttpSurrealConnection, None, None]:
     """Blocking HTTP connection with a test user created"""
-    blocking_http_connection.query("DELETE user;")
+    blocking_http_connection.query("DELETE user;").execute()
     blocking_http_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
-    )
+    ).execute()
     yield blocking_http_connection
 
 
@@ -184,8 +184,8 @@ def blocking_ws_connection_with_user(
     blocking_ws_connection: BlockingWsSurrealConnection,
 ) -> Generator[BlockingWsSurrealConnection, None, None]:
     """Blocking WebSocket connection with a test user created"""
-    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query("DELETE user;").execute()
     blocking_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
-    )
+    ).execute()
     yield blocking_ws_connection

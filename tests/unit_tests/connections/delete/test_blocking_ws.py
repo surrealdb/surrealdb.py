@@ -15,8 +15,8 @@ def record_id() -> RecordID:
 def test_delete_string(
     blocking_ws_connection: BlockingWsSurrealConnection, record_id
 ) -> None:
-    blocking_ws_connection.query("DELETE user;")
-    blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';")
+    blocking_ws_connection.query("DELETE user;").execute()
+    blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()
 
     # Delete operation returns the deleted record
     outcome = blocking_ws_connection.delete("user:tobie")
@@ -32,8 +32,8 @@ def test_delete_string(
 def test_delete_record_id(
     blocking_ws_connection: BlockingWsSurrealConnection, record_id
 ) -> None:
-    blocking_ws_connection.query("DELETE user;")
-    blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';")
+    blocking_ws_connection.query("DELETE user;").execute()
+    blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()
 
     # Delete operation returns the deleted record
     outcome = blocking_ws_connection.delete(record_id)
@@ -47,9 +47,9 @@ def test_delete_record_id(
 
 
 def test_delete_table(blocking_ws_connection: BlockingWsSurrealConnection) -> None:
-    blocking_ws_connection.query("DELETE user;")
-    blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';")
-    blocking_ws_connection.query("CREATE user:jaime SET name = 'Jaime';")
+    blocking_ws_connection.query("DELETE user;").execute()
+    blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()
+    blocking_ws_connection.query("CREATE user:jaime SET name = 'Jaime';").execute()
 
     # Delete all users in the table
     table = Table("user")

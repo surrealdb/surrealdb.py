@@ -107,7 +107,7 @@ async def test_merge_operation() -> None:
         await db.create("item", {"name": "Item1", "quantity": 5})
 
         # Merge
-        merged = await db.merge("item", {"quantity": 10})
+        merged = await db.update("item").merge({"quantity": 10})
         assert merged is not None
 
 

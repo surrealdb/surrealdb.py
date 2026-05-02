@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0]
+### Added
+- New awaitable / lazy CRUD builder pattern. `create`, `update`, `upsert`, `delete`, and `insert` now return a builder that exposes chainable clause methods (`.content` / `.replace` / `.merge` / `.patch`) and is awaitable (async) or auto-executing on consumption (sync).
+- `.insert(table, data, relation=True)` (and the equivalent `.insert(table).relation().content(data)` chain) replaces the standalone `insert_relation` method.
+- New `run(name, args=None, version=None)` method on every connection / session / transaction, wired to the `RUN` RPC method.
+- `query().into(cls)` maps the N statement results positionally onto a dataclass (or any class accepting keyword arguments by parameter order).
+- New v3 API tests under `tests/unit_tests/connections/v3_api/` covering builder clauses, multi-statement query results, `.into()`, and `run()`.
+- Public re-exports of the builder classes (`AsyncCrudBuilder`, `AsyncInsertBuilder`, `AsyncQueryBuilder`, `AsyncQueryIntoBuilder`, and the `Sync*` equivalents) from `surrealdb`.
+
+### Changed
+- **Breaking:** `query()` now surfaces every statement result. A single-statement query returns the result `Value`; a multi-statement query (or `BEGIN ... COMMIT` block) returns `tuple[Value, ...]`. Fixes the silent-discard behaviour reported in [#232](https://github.com/surrealdb/surrealdb.py/issues/232).
+- **Breaking:** Sync `query()` / CRUD methods return a lazy builder. The operation runs when the result is consumed (indexed, iterated, compared, printed, etc.) or when `.execute()` is called explicitly. Fire-and-forget statements like `db.query("DELETE foo")` must call `.execute()` to run.
+- **Breaking:** `create`, `update`, `upsert`, `delete`, and `insert` are typed via `@overload` so type checkers infer `dict[str, Value]` for `RecordID` targets and `list[Value]` for `Table` targets.
+- The session and transaction classes (`AsyncSurrealSession` / `BlockingSurrealSession`, `AsyncSurrealTransaction` / `BlockingSurrealTransaction`) expose the same builder API and forward `session_id` / `txn_id` through to every operation.
+
+### Removed
+- **Breaking:** `db.merge(record, data)` — use `db.update(record).merge(data)` (or `.create/.upsert(record).merge(data)`).
+- **Breaking:** `db.patch(record, data)` — use `db.update(record).patch(data)`.
+- **Breaking:** `db.insert_relation(table, data)` — use `db.insert(table, data, relation=True)` or `db.insert(table).relation().content(data)`.
+
+## [2.0.1]
 ### Changed
 - **Breaking:** WebSocket `subscribe_live()` now yields the full live-notification object (`action`, `result`, `id`, …) from the server instead of only the inner record ([#247](https://github.com/surrealdb/surrealdb.py/issues/247)).
 
@@ -97,7 +118,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial stable release of the SurrealDB Python client.
 
-[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/surrealdb/surrealdb.py/compare/v2.0.1...v3.0.0
+[2.0.1]: https://github.com/surrealdb/surrealdb.py/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/surrealdb/surrealdb.py/compare/v2.0.0-alpha.1...v2.0.0
 [2.0.0-alpha.1]: https://github.com/surrealdb/surrealdb.py/compare/v1.0.8...v2.0.0-alpha.1
 [1.0.8]: https://github.com/surrealdb/surrealdb.py/compare/v1.0.7...v1.0.8

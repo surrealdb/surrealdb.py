@@ -29,6 +29,7 @@ class RequestMethod(Enum):
     BEGIN = "begin"
     COMMIT = "commit"
     CANCEL = "cancel"
+    RUN = "run"
 
     @staticmethod
     def from_string(method: str) -> "RequestMethod":

@@ -5,7 +5,7 @@ from surrealdb.data.types.record_id import RecordID
 
 
 def test_query(blocking_http_connection: BlockingHttpSurrealConnection) -> None:
-    blocking_http_connection.query("DELETE user;")
+    blocking_http_connection.query("DELETE user;").execute()
     result = blocking_http_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
     )
@@ -49,4 +49,4 @@ def test_query(blocking_http_connection: BlockingHttpSurrealConnection) -> None:
             "enabled": True,
         },
     ]
-    blocking_http_connection.query("DELETE user;")
+    blocking_http_connection.query("DELETE user;").execute()

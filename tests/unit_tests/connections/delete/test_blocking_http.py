@@ -24,8 +24,8 @@ def check_change(data: dict[str, Any], record_id) -> None:
 
 
 def test_debug_delete(blocking_http_connection: BlockingHttpSurrealConnection) -> None:
-    blocking_http_connection.query("DELETE user;")
-    blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';")
+    blocking_http_connection.query("DELETE user;").execute()
+    blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()
 
     # Debug: Check what delete actually returns
     outcome = blocking_http_connection.delete("user:tobie")
@@ -40,8 +40,8 @@ def test_debug_delete(blocking_http_connection: BlockingHttpSurrealConnection) -
 def test_delete_string(
     blocking_http_connection: BlockingHttpSurrealConnection, record_id: RecordID
 ) -> None:
-    blocking_http_connection.query("DELETE user;")
-    blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';")
+    blocking_http_connection.query("DELETE user;").execute()
+    blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()
 
     # Delete operation returns the deleted record
     outcome = blocking_http_connection.delete("user:tobie")
@@ -57,8 +57,8 @@ def test_delete_string(
 def test_delete_record_id(
     blocking_http_connection: BlockingHttpSurrealConnection, record_id: RecordID
 ) -> None:
-    blocking_http_connection.query("DELETE user;")
-    blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';")
+    blocking_http_connection.query("DELETE user;").execute()
+    blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()
 
     # Delete operation returns the deleted record
     outcome = blocking_http_connection.delete(record_id)
@@ -72,9 +72,9 @@ def test_delete_record_id(
 
 
 def test_delete_table(blocking_http_connection: BlockingHttpSurrealConnection) -> None:
-    blocking_http_connection.query("DELETE user;")
-    blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';")
-    blocking_http_connection.query("CREATE user:jaime SET name = 'Jaime';")
+    blocking_http_connection.query("DELETE user;").execute()
+    blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()
+    blocking_http_connection.query("CREATE user:jaime SET name = 'Jaime';").execute()
 
     # Delete all users in the table
     table = Table("user")

@@ -21,12 +21,12 @@ def patch_data() -> dict[str, Any]:
 def setup_user(
     blocking_ws_connection: BlockingWsSurrealConnection,
 ) -> Generator[None, None, None]:
-    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query("DELETE user;").execute()
     blocking_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
-    )
+    ).execute()
     yield
-    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query("DELETE user;").execute()
 
 
 def test_patch_string_with_data(
@@ -35,7 +35,7 @@ def test_patch_string_with_data(
     setup_user: None,
 ) -> None:
     record_id = RecordID("user", "tobie")
-    outcome = blocking_ws_connection.patch("user:tobie", patch_data)
+    outcome = blocking_ws_connection.update("user:tobie").patch(patch_data)
     assert outcome["id"] == record_id
     assert outcome["name"] == "Jaime"
     assert outcome["email"] == "jaime@example.com"
@@ -53,7 +53,7 @@ def test_patch_record_id_with_data(
     setup_user: None,
 ) -> None:
     record_id = RecordID("user", "tobie")
-    outcome = blocking_ws_connection.patch(record_id, patch_data)
+    outcome = blocking_ws_connection.update(record_id).patch(patch_data)
     assert outcome["id"] == record_id
     assert outcome["name"] == "Jaime"
     assert outcome["email"] == "jaime@example.com"
@@ -72,7 +72,7 @@ def test_patch_table_with_data(
 ) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")
-    outcome = blocking_ws_connection.patch(table, patch_data)
+    outcome = blocking_ws_connection.update(table).patch(patch_data)
     assert outcome[0]["id"] == record_id
     assert outcome[0]["name"] == "Jaime"
     assert outcome[0]["email"] == "jaime@example.com"

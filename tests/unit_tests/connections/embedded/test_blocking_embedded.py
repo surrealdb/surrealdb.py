@@ -98,7 +98,7 @@ def test_merge_operation() -> None:
         db.create("item", {"name": "Item1", "quantity": 5})
 
         # Merge
-        merged = db.merge("item", {"quantity": 10})
+        merged = db.update("item").merge({"quantity": 10})
         assert merged is not None
 
 

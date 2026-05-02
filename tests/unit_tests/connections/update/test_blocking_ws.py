@@ -38,10 +38,10 @@ def test_update_string(
     update_data: dict[str, Any],
     record_id,
 ) -> None:
-    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query("DELETE user;").execute()
     blocking_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
-    )
+    ).execute()
 
     outcome = blocking_ws_connection.update("user:tobie")
     assert outcome["id"] == record_id
@@ -55,10 +55,10 @@ def test_update_string_with_data(
     update_data: dict[str, Any],
     record_id,
 ) -> None:
-    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query("DELETE user;").execute()
     blocking_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
-    )
+    ).execute()
 
     first_outcome = blocking_ws_connection.update("user:tobie", update_data)
     check_change(first_outcome, record_id)
@@ -71,10 +71,10 @@ def test_update_record_id(
     update_data: dict[str, Any],
     record_id,
 ) -> None:
-    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query("DELETE user;").execute()
     blocking_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
-    )
+    ).execute()
 
     first_outcome = blocking_ws_connection.update(record_id)
     check_no_change(first_outcome, record_id)
@@ -87,10 +87,10 @@ def test_update_record_id_with_data(
     update_data: dict[str, Any],
     record_id,
 ) -> None:
-    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query("DELETE user;").execute()
     blocking_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
-    )
+    ).execute()
 
     outcome = blocking_ws_connection.update(record_id, update_data)
     check_change(outcome, record_id)
@@ -103,10 +103,10 @@ def test_update_table(
     update_data: dict[str, Any],
     record_id,
 ) -> None:
-    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query("DELETE user;").execute()
     blocking_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
-    )
+    ).execute()
 
     table = Table("user")
     first_outcome = blocking_ws_connection.update(table)
@@ -120,10 +120,10 @@ def test_update_table_with_data(
     update_data: dict[str, Any],
     record_id,
 ) -> None:
-    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query("DELETE user;").execute()
     blocking_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
-    )
+    ).execute()
 
     table = Table("user")
     outcome = blocking_ws_connection.update(table, update_data)

@@ -86,10 +86,8 @@ async def test_two_sessions_isolated(
 
     res_a = await session_a.query("RETURN $var;")
     res_b = await session_b.query("RETURN $var;")
-    assert isinstance(res_a, int)
-    assert isinstance(res_b, int)
-    assert res_a == [123]
-    assert res_b == [456]
+    assert res_a == 123
+    assert res_b == 456
 
     await session_a.close_session()
     await session_b.close_session()

@@ -81,7 +81,7 @@ For local, two options:
 ```python
 
 # Import the Surreal class
-from surrealdb import Surreal
+from surrealdb import Surreal, RecordID, Table
 
 # Using a context manger to automatically connect and disconnect
 with Surreal("ws://localhost:8000/rpc") as db:
@@ -143,6 +143,146 @@ with Surreal("ws://localhost:8000/rpc") as db:
     # Delete
     print(db.query("delete person"))
 ```
+
+## CRUD builder pattern (v3.0)
+
+`create`, `update`, `upsert`, `delete`, and `insert` return an awaitable
+(or lazy, for sync) builder. The builder exposes chainable clause methods
+that map directly to SurrealQL clauses.
+
+```python
+from surrealdb import AsyncSurreal, RecordID, Table
+
+async with AsyncSurreal("ws://localhost:8000/rpc") as db:
+    await db.signin({"username": "root", "password": "root"})
+    await db.use("ns", "db")
+
+    # Sugar: db.create(record, data) is equivalent to .content(data)
+    await db.create(RecordID("person", "tobie"), {"name": "Tobie"})
+
+    # Or use the builder explicitly
+    await db.create(RecordID("person", "tobie")).content({"name": "Tobie"})
+    await db.update(RecordID("person", "tobie")).replace({"name": "Tobie"})
+    await db.update(RecordID("person", "tobie")).merge({"vip": True})
+    await db.update(RecordID("person", "tobie")).patch([
+        {"op": "replace", "path": "/vip", "value": False},
+    ])
+
+    # `insert` accepts a `relation=True` kwarg or a chained `.relation()`
+    await db.insert(Table("likes"), {"in": ..., "out": ...}, relation=True)
+    await db.insert(Table("likes")).relation().content({"in": ..., "out": ...})
+```
+
+The builder is **typed** via `@overload`:
+
+- `RecordID` target -> `dict[str, Value]`
+- `Table` target   -> `list[Value]`
+- `str` target     -> `Value` (a record-id string returns a dict; a table-name
+  string returns a list - the type checker can't tell them apart, so falls back to `Value`)
+
+Sync usage is identical, just without `await`:
+
+```python
+from surrealdb import Surreal
+
+with Surreal("ws://localhost:8000/rpc") as db:
+    db.signin({"username": "root", "password": "root"})
+    db.use("ns", "db")
+
+    out = db.create(RecordID("person", "tobie")).merge({"name": "Tobie"})
+    # out behaves like the resulting dict (auto-executes on attribute / item access)
+```
+
+For sync builders that you discard without consuming (for example
+`db.query("DELETE foo")` for a fire-and-forget statement), call
+`.execute()` to run the operation.
+
+## Multi-statement queries and transactions (issue #232 fix)
+
+`query()` now surfaces every statement result. When the server returns a
+single result, `query()` returns a single Value. When it returns multiple
+(multi-statement queries or `BEGIN ... COMMIT` blocks), `query()` returns
+a `tuple[Value, ...]`.
+
+```python
+single = await db.query("SELECT * FROM person")
+many = await db.query(
+    "SELECT * FROM person; SELECT count() FROM person GROUP ALL"
+)
+# many is (people_list, count_list)
+```
+
+You can also map the N statement results onto a dataclass via `.into()`:
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Stats:
+    created: dict
+    all_people: list
+    count: int
+
+result = await db.query(
+    "CREATE person:tobie SET name = 'Tobie';"
+    "SELECT * FROM person;"
+    "SELECT count() FROM person GROUP ALL"
+).into(Stats)
+```
+
+For the raw server response (status, time, error per statement), keep
+using `query_raw()`.
+
+## Client-side transactions and sessions
+
+Multi-session and client-side transactions are supported **only for
+WebSocket connections** (`ws://` or `wss://`). They are not available for
+HTTP or embedded connections.
+
+```python
+async with AsyncSurreal("ws://localhost:8000/rpc") as db:
+    await db.signin({"username": "root", "password": "root"})
+    await db.use("ns", "db")
+
+    # Create a session
+    session = await db.new_session()
+    await session.use("ns", "db")
+
+    # Start a transaction on the session
+    txn = await session.begin_transaction()
+    await txn.create(RecordID("account", "alice"), {"balance": 100})
+    await txn.update(RecordID("account", "bob")).merge({"balance": 50})
+
+    # Commit (or call `await txn.cancel()` to roll back)
+    await txn.commit()
+
+    await session.close_session()
+```
+
+The same CRUD builder, query, and `run()` API is available on both
+`AsyncSurrealSession` / `BlockingSurrealSession` and
+`AsyncSurrealTransaction` / `BlockingSurrealTransaction`.
+
+## `run()` - calling SurrealDB functions
+
+```python
+result = await db.run("fn::increment", [1])
+greeting = await db.run("fn::greet", ["world"])
+```
+
+## Migrating from 2.x
+
+v3.0 is a breaking change. Highlights:
+
+| 2.x                                              | 3.0                                                       |
+| ------------------------------------------------ | --------------------------------------------------------- |
+| `db.merge(record, data)`                         | `db.update(record).merge(data)`                           |
+| `db.patch(record, data)`                         | `db.update(record).patch(data)`                           |
+| `db.insert_relation(table, data)`                | `db.insert(table, data, relation=True)`                   |
+| `db.query("SELECT 1; SELECT 2")` -> first result | `db.query("SELECT 1; SELECT 2")` -> `tuple` of all results |
+| n/a                                              | `db.run("fn::name", [args])`                              |
+| n/a                                              | `db.query("...").into(MyDataclass)`                       |
+| Sync `db.query("DELETE foo")` runs immediately   | Sync `db.query("DELETE foo").execute()` (lazy builder)     |
 
 ## Embedded Database
 
@@ -264,34 +404,12 @@ with Surreal("file://mydb") as db:
 
 For more examples, see the [`examples/embedded/`](examples/embedded/) directory.
 
-## Sessions and transactions
-
-Multi-session and client-side transactions are supported **only for WebSocket connections** (`ws://` or `wss://`). They are not available for HTTP or embedded connections.
+## Sessions in detail
 
 - **Sessions**: Call `attach()` on a WS connection to create a new session (returns a `UUID`). Use `new_session()` to get an `AsyncSurrealSession` or `BlockingSurrealSession` that scopes all operations to that session. Call `close_session()` on the session (or `detach(session_id)` on the connection) to drop it.
-- **Transactions**: On a session (or the default connection), call `begin_transaction()` to start a transaction (returns `AsyncSurrealTransaction` or `BlockingSurrealTransaction`). Run queries on the transaction object; then call `commit()` or `cancel()` to finish.
+- **Transactions**: On a session (or the default connection - though typical practice is to start on a session), call `begin_transaction()` to obtain a `Transaction` whose builder calls all participate in the same transaction. Call `commit()` to apply, or `cancel()` to roll back.
 
-Example (async WS):
-
-```python
-from surrealdb import AsyncSurreal
-
-async with AsyncSurreal("ws://localhost:8000/rpc") as db:
-    await db.signin({"username": "root", "password": "root"})
-    await db.use("test", "test")
-
-    session = await db.new_session()
-    await session.use("test", "test")
-    result = await session.query("SELECT 1")
-
-    txn = await session.begin_transaction()
-    await txn.query("CREATE person SET name = 'x'")
-    await txn.commit()
-
-    await session.close_session()
-```
-
-On HTTP or embedded connections, `attach()`, `detach()`, `begin()`, `commit()`, `cancel()`, and `new_session()` raise `NotImplementedError` with a message that sessions/transactions are only supported for WebSocket connections.
+On HTTP or embedded connections, `attach()`, `detach()`, `begin()`, `commit()`, `cancel()`, and `new_session()` raise `UnsupportedFeatureError` with a message that sessions/transactions are only supported for WebSocket connections.
 
 ## Observability with Logfire
 

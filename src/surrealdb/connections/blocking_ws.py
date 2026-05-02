@@ -6,13 +6,18 @@ import threading
 import uuid
 from collections.abc import Generator
 from types import TracebackType
-from typing import Any
+from typing import Any, overload
 from uuid import UUID
 
 import websockets
 import websockets.sync.client as ws_sync
 from websockets.sync.client import ClientConnection
 
+from surrealdb.connections.builders import (
+    _SyncCrudBuilder,
+    _SyncInsertBuilder,
+    _SyncQueryBuilder,
+)
 from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import UtilsMixin
@@ -21,7 +26,6 @@ from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     ConnectionUnavailableError,
-    SurrealError,
     UnexpectedResponseError,
 )
 from surrealdb.request_message.message import RequestMessage
@@ -160,12 +164,12 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         vars: dict[str, Value] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> Value:
-        response = self.query_raw(query, vars, session_id=session_id, txn_id=txn_id)
-        self.check_response_for_error(response, "query")
-        self.check_response_for_result(response, "query")
-        self._check_query_result(response["result"][0])
-        return response["result"][0]["result"]
+    ) -> _SyncQueryBuilder:
+        return _SyncQueryBuilder(
+            executor=self._make_executor(session_id, txn_id),
+            query=query,
+            variables=vars,
+        )
 
     def query_raw(
         self,
@@ -244,30 +248,227 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self._check_query_result(response["result"][0])
         return response["result"][0]["result"]
 
+    def _make_executor(
+        self,
+        session_id: UUID | None,
+        txn_id: UUID | None,
+    ) -> Any:
+        """Build an executor closure that calls query_raw with the right context."""
+
+        def _executor(query: str, params: dict[str, Any]) -> dict[str, Any]:
+            return self.query_raw(query, params, session_id=session_id, txn_id=txn_id)
+
+        return _executor
+
+    # CRUD overloads --------------------------------------------------------
+
+    @overload
+    def create(
+        self,
+        record: RecordID,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def create(
+        self,
+        record: Table,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def create(
+        self,
+        record: str,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
     def create(
         self,
         record: RecordIdType,
         data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> _SyncCrudBuilder[Any]:
+        return _SyncCrudBuilder(
+            executor=self._make_executor(session_id, txn_id),
+            operation="CREATE",
+            record=record,
+            op_name="create",
+            data=data,
+            always_unwrap=True,
+        )
+
+    @overload
+    def update(
+        self,
+        record: RecordID,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def update(
+        self,
+        record: Table,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> _SyncCrudBuilder[list[Value]]: ...
+    @overload
+    def update(
+        self,
+        record: str,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> _SyncCrudBuilder[Value]: ...
+    def update(
+        self,
+        record: RecordIdType,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> _SyncCrudBuilder[Any]:
+        return _SyncCrudBuilder(
+            executor=self._make_executor(session_id, txn_id),
+            operation="UPDATE",
+            record=record,
+            op_name="update",
+            data=data,
+        )
+
+    @overload
+    def upsert(
+        self,
+        record: RecordID,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def upsert(
+        self,
+        record: Table,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> _SyncCrudBuilder[list[Value]]: ...
+    @overload
+    def upsert(
+        self,
+        record: str,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> _SyncCrudBuilder[Value]: ...
+    def upsert(
+        self,
+        record: RecordIdType,
+        data: Value | None = None,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> _SyncCrudBuilder[Any]:
+        return _SyncCrudBuilder(
+            executor=self._make_executor(session_id, txn_id),
+            operation="UPSERT",
+            record=record,
+            op_name="upsert",
+            data=data,
+        )
+
+    @overload
+    def delete(
+        self,
+        record: RecordID,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def delete(
+        self,
+        record: Table,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> _SyncCrudBuilder[list[Value]]: ...
+    @overload
+    def delete(
+        self,
+        record: str,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> _SyncCrudBuilder[Value]: ...
+    def delete(
+        self,
+        record: RecordIdType,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> _SyncCrudBuilder[Any]:
+        return _SyncCrudBuilder(
+            executor=self._make_executor(session_id, txn_id),
+            operation="DELETE",
+            record=record,
+            op_name="delete",
+        )
+
+    def insert(
+        self,
+        table: str | Table,
+        data: Value | None = None,
+        *,
+        relation: bool = False,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> _SyncInsertBuilder:
+        return _SyncInsertBuilder(
+            executor=self._make_executor(session_id, txn_id),
+            table=table,
+            data=data,
+            relation=relation,
+        )
+
+    def run(
+        self,
+        name: str,
+        args: list[Value] | None = None,
+        version: str | None = None,
+        *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-
-        if data is None:
-            query = f"CREATE {resource_ref}"
-        else:
-            variables["_content"] = data
-            query = f"CREATE {resource_ref} CONTENT $_content"
-
-        response = self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
-        )
-        self.check_response_for_error(response, "create")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # CREATE always creates a single record, so always unwrap
-        return self._unwrap_result(result, unwrap=True)
+        kwargs: dict[str, Any] = {"name": name}
+        if version is not None:
+            kwargs["version"] = version
+        if args is not None:
+            kwargs["args"] = args
+        if session_id is not None:
+            kwargs["session"] = session_id
+        if txn_id is not None:
+            kwargs["txn"] = txn_id
+        message = RequestMessage(RequestMethod.RUN, **kwargs)
+        self.id = message.id
+        response = self._send(message, "run")
+        self.check_response_for_result(response, "run")
+        return response["result"]
 
     def live(
         self,
@@ -295,125 +496,6 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         message = RequestMessage(RequestMethod.KILL, **kwargs)
         self.id = message.id
         self._send(message, "kill")
-
-    def delete(
-        self,
-        record: RecordIdType,
-        session_id: UUID | None = None,
-        txn_id: UUID | None = None,
-    ) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-        query = f"DELETE {resource_ref} RETURN BEFORE"
-
-        response = self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
-        )
-        self.check_response_for_error(response, "delete")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # DELETE on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
-        )
-
-    def insert(
-        self,
-        table: str | Table,
-        data: Value,
-        session_id: UUID | None = None,
-        txn_id: UUID | None = None,
-    ) -> Value:
-        # Validate that table is not a RecordID
-        if isinstance(table, RecordID):
-            raise SurrealError(
-                f"There was a problem with the database: Can not execute INSERT statement using value '{table}'"
-            )
-
-        variables: dict[str, Any] = {}
-        table_ref = self._resource_to_variable(table, variables, "_table")
-        variables["_data"] = data
-        query = f"INSERT INTO {table_ref} $_data"
-
-        response = self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
-        )
-        self.check_response_for_error(response, "insert")
-        self._check_query_result(response["result"][0])
-        return response["result"][0]["result"]
-
-    def insert_relation(
-        self,
-        table: str | Table,
-        data: Value,
-        session_id: UUID | None = None,
-        txn_id: UUID | None = None,
-    ) -> Value:
-        variables: dict[str, Any] = {}
-        table_ref = self._resource_to_variable(table, variables, "_table")
-        variables["_data"] = data
-        query = f"INSERT RELATION INTO {table_ref} $_data"
-
-        response = self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
-        )
-        self.check_response_for_error(response, "insert_relation")
-        self._check_query_result(response["result"][0])
-        return response["result"][0]["result"]
-
-    def merge(
-        self,
-        record: RecordIdType,
-        data: Value | None = None,
-        session_id: UUID | None = None,
-        txn_id: UUID | None = None,
-    ) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-
-        if data is None:
-            query = f"UPDATE {resource_ref} MERGE {{}}"
-        else:
-            variables["_data"] = data
-            query = f"UPDATE {resource_ref} MERGE $_data"
-
-        response = self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
-        )
-        self.check_response_for_error(response, "merge")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # MERGE on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
-        )
-
-    def patch(
-        self,
-        record: RecordIdType,
-        data: Value | None = None,
-        session_id: UUID | None = None,
-        txn_id: UUID | None = None,
-    ) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-
-        if data is None:
-            query = f"UPDATE {resource_ref} PATCH []"
-        else:
-            variables["_patches"] = data
-            query = f"UPDATE {resource_ref} PATCH $_patches"
-
-        response = self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
-        )
-        self.check_response_for_error(response, "patch")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # PATCH on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
-        )
 
     def subscribe_live(
         self,
@@ -445,60 +527,6 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         except GeneratorExit:
             # Handle generator exit gracefully if needed
             pass
-
-    def update(
-        self,
-        record: RecordIdType,
-        data: Value | None = None,
-        session_id: UUID | None = None,
-        txn_id: UUID | None = None,
-    ) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-
-        if data is None:
-            query = f"UPDATE {resource_ref}"
-        else:
-            variables["_content"] = data
-            query = f"UPDATE {resource_ref} CONTENT $_content"
-
-        response = self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
-        )
-        self.check_response_for_error(response, "update")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # UPDATE on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
-        )
-
-    def upsert(
-        self,
-        record: RecordIdType,
-        data: Value | None = None,
-        session_id: UUID | None = None,
-        txn_id: UUID | None = None,
-    ) -> Value:
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-
-        if data is None:
-            query = f"UPSERT {resource_ref}"
-        else:
-            variables["_content"] = data
-            query = f"UPSERT {resource_ref} CONTENT $_content"
-
-        response = self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
-        )
-        self.check_response_for_error(response, "upsert")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # UPSERT on a specific record returns a single dict, on a table returns a list
-        return self._unwrap_result(
-            result, unwrap=self._is_single_record_operation(record)
-        )
 
     def attach(self) -> UUID:
         session_id = UUID(str(uuid.uuid4()))
@@ -601,7 +629,7 @@ class BlockingSurrealSession:
         self,
         query: str,
         vars: dict[str, Value] | None = None,
-    ) -> Value:
+    ) -> _SyncQueryBuilder:
         return self._connection.query(query, vars, session_id=self._session_id)
 
     def signin(self, vars: dict[str, Value]) -> Tokens:
@@ -629,55 +657,46 @@ class BlockingSurrealSession:
         self,
         record: RecordIdType,
         data: Value | None = None,
-    ) -> Value:
+    ) -> _SyncCrudBuilder[Any]:
         return self._connection.create(record, data, session_id=self._session_id)
 
     def update(
         self,
         record: RecordIdType,
         data: Value | None = None,
-    ) -> Value:
+    ) -> _SyncCrudBuilder[Any]:
         return self._connection.update(record, data, session_id=self._session_id)
-
-    def merge(
-        self,
-        record: RecordIdType,
-        data: Value | None = None,
-    ) -> Value:
-        return self._connection.merge(record, data, session_id=self._session_id)
-
-    def patch(
-        self,
-        record: RecordIdType,
-        data: Value | None = None,
-    ) -> Value:
-        return self._connection.patch(record, data, session_id=self._session_id)
-
-    def delete(self, record: RecordIdType) -> Value:
-        return self._connection.delete(record, session_id=self._session_id)
-
-    def insert(
-        self,
-        table: str | Table,
-        data: Value,
-    ) -> Value:
-        return self._connection.insert(table, data, session_id=self._session_id)
-
-    def insert_relation(
-        self,
-        table: str | Table,
-        data: Value,
-    ) -> Value:
-        return self._connection.insert_relation(
-            table, data, session_id=self._session_id
-        )
 
     def upsert(
         self,
         record: RecordIdType,
         data: Value | None = None,
-    ) -> Value:
+    ) -> _SyncCrudBuilder[Any]:
         return self._connection.upsert(record, data, session_id=self._session_id)
+
+    def delete(self, record: RecordIdType) -> _SyncCrudBuilder[Any]:
+        return self._connection.delete(record, session_id=self._session_id)
+
+    def insert(
+        self,
+        table: str | Table,
+        data: Value | None = None,
+        *,
+        relation: bool = False,
+    ) -> _SyncInsertBuilder:
+        return self._connection.insert(
+            table, data, relation=relation, session_id=self._session_id
+        )
+
+    def run(
+        self,
+        name: str,
+        args: list[Value] | None = None,
+        version: str | None = None,
+    ) -> Value:
+        return self._connection.run(
+            name, args, version, session_id=self._session_id
+        )
 
     def live(
         self,
@@ -712,7 +731,7 @@ class BlockingSurrealTransaction:
         self,
         query: str,
         vars: dict[str, Value] | None = None,
-    ) -> Value:
+    ) -> _SyncQueryBuilder:
         return self._connection.query(
             query,
             vars,
@@ -731,7 +750,7 @@ class BlockingSurrealTransaction:
         self,
         record: RecordIdType,
         data: Value | None = None,
-    ) -> Value:
+    ) -> _SyncCrudBuilder[Any]:
         return self._connection.create(
             record,
             data,
@@ -743,64 +762,9 @@ class BlockingSurrealTransaction:
         self,
         record: RecordIdType,
         data: Value | None = None,
-    ) -> Value:
+    ) -> _SyncCrudBuilder[Any]:
         return self._connection.update(
             record,
-            data,
-            session_id=self._session_id,
-            txn_id=self._txn_id,
-        )
-
-    def merge(
-        self,
-        record: RecordIdType,
-        data: Value | None = None,
-    ) -> Value:
-        return self._connection.merge(
-            record,
-            data,
-            session_id=self._session_id,
-            txn_id=self._txn_id,
-        )
-
-    def patch(
-        self,
-        record: RecordIdType,
-        data: Value | None = None,
-    ) -> Value:
-        return self._connection.patch(
-            record,
-            data,
-            session_id=self._session_id,
-            txn_id=self._txn_id,
-        )
-
-    def delete(self, record: RecordIdType) -> Value:
-        return self._connection.delete(
-            record,
-            session_id=self._session_id,
-            txn_id=self._txn_id,
-        )
-
-    def insert(
-        self,
-        table: str | Table,
-        data: Value,
-    ) -> Value:
-        return self._connection.insert(
-            table,
-            data,
-            session_id=self._session_id,
-            txn_id=self._txn_id,
-        )
-
-    def insert_relation(
-        self,
-        table: str | Table,
-        data: Value,
-    ) -> Value:
-        return self._connection.insert_relation(
-            table,
             data,
             session_id=self._session_id,
             txn_id=self._txn_id,
@@ -810,12 +774,58 @@ class BlockingSurrealTransaction:
         self,
         record: RecordIdType,
         data: Value | None = None,
-    ) -> Value:
+    ) -> _SyncCrudBuilder[Any]:
         return self._connection.upsert(
             record,
             data,
             session_id=self._session_id,
             txn_id=self._txn_id,
+        )
+
+    def delete(self, record: RecordIdType) -> _SyncCrudBuilder[Any]:
+        return self._connection.delete(
+            record,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+        )
+
+    def insert(
+        self,
+        table: str | Table,
+        data: Value | None = None,
+        *,
+        relation: bool = False,
+    ) -> _SyncInsertBuilder:
+        return self._connection.insert(
+            table,
+            data,
+            relation=relation,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+        )
+
+    def run(
+        self,
+        name: str,
+        args: list[Value] | None = None,
+        version: str | None = None,
+    ) -> Value:
+        return self._connection.run(
+            name,
+            args,
+            version,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+        )
+
+    def let(self, key: str, value: Value) -> None:
+        self._connection.let(
+            key, value, session_id=self._session_id, txn_id=self._txn_id
+        )
+
+    def unset(self, key: str) -> None:
+        self._connection.unset(
+            key, session_id=self._session_id, txn_id=self._txn_id
         )
 
     def commit(self) -> None:

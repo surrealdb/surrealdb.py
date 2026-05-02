@@ -14,6 +14,30 @@ from surrealdb.connections.blocking_ws import (
     BlockingSurrealTransaction,
     BlockingWsSurrealConnection,
 )
+from surrealdb.connections.builders import (
+    _AsyncCrudBuilder as AsyncCrudBuilder,
+)
+from surrealdb.connections.builders import (
+    _AsyncInsertBuilder as AsyncInsertBuilder,
+)
+from surrealdb.connections.builders import (
+    _AsyncQueryBuilder as AsyncQueryBuilder,
+)
+from surrealdb.connections.builders import (
+    _AsyncQueryIntoBuilder as AsyncQueryIntoBuilder,
+)
+from surrealdb.connections.builders import (
+    _SyncCrudBuilder as SyncCrudBuilder,
+)
+from surrealdb.connections.builders import (
+    _SyncInsertBuilder as SyncInsertBuilder,
+)
+from surrealdb.connections.builders import (
+    _SyncQueryBuilder as SyncQueryBuilder,
+)
+from surrealdb.connections.builders import (
+    _SyncQueryIntoBuilder as SyncQueryIntoBuilder,
+)
 from surrealdb.connections.url import Url, UrlScheme
 from surrealdb.data.types.constants import (
     TAG_BOUND_EXCLUDED,
@@ -90,6 +114,15 @@ __all__ = [
     "BlockingSurrealSession",
     "BlockingSurrealTransaction",
     "BlockingWsSurrealConnection",
+    # Builders (returned by create/update/upsert/delete/insert/query)
+    "AsyncCrudBuilder",
+    "AsyncInsertBuilder",
+    "AsyncQueryBuilder",
+    "AsyncQueryIntoBuilder",
+    "SyncCrudBuilder",
+    "SyncInsertBuilder",
+    "SyncQueryBuilder",
+    "SyncQueryIntoBuilder",
     # Data types
     "Table",
     "Duration",

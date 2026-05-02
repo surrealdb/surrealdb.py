@@ -39,7 +39,7 @@ def insert_data() -> dict[str, Any]:
 def test_insert_string_with_data(
     blocking_ws_connection: BlockingWsSurrealConnection, insert_bulk_data
 ) -> None:
-    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query("DELETE user;").execute()
     outcome = blocking_ws_connection.insert("user", insert_bulk_data)
     assert 2 == len(outcome)
     assert len(blocking_ws_connection.query("SELECT * FROM user;")) == 2
@@ -48,7 +48,7 @@ def test_insert_string_with_data(
 def test_insert_record_id_result_error(
     blocking_ws_connection: BlockingWsSurrealConnection, insert_data
 ) -> None:
-    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query("DELETE user;").execute()
     record_id = RecordID("user", "tobie")
     with pytest.raises(Exception) as context:
         _ = blocking_ws_connection.insert(record_id, insert_data)
