@@ -11,15 +11,13 @@
 <br>
 
 <p align="center">
-  <a href="https://github.com/surrealdb/surrealdb.py/actions"><img src="https://github.com/surrealdb/surrealdb.py/workflows/Tests/badge.svg"></a>
-  &nbsp;
 	<a href="https://github.com/surrealdb/surrealdb.py"><img src="https://img.shields.io/badge/status-stable-ff00bb.svg?style=flat-square"></a>
 	&nbsp;
 	<a href="https://surrealdb.com/docs/integration/libraries/python"><img src="https://img.shields.io/badge/docs-view-44cc11.svg?style=flat-square"></a>
 	&nbsp;
 	<a href="https://pypi.org/project/surrealdb/"><img src="https://img.shields.io/pypi/v/surrealdb?style=flat-square"></a>
-  &nbsp;
-  <a href="https://pypi.org/project/surrealdb/"><img src="https://img.shields.io/pypi/dm/surrealdb?style=flat-square"></a>    
+	&nbsp;
+    <a href="https://pypi.org/project/surrealdb/"><img src="https://img.shields.io/pypi/dm/surrealdb?style=flat-square"></a>    
 	&nbsp;
 	<a href="https://pypi.org/project/surrealdb/"><img src="https://img.shields.io/pypi/pyversions/surrealdb?style=flat-square"></a>
 </p>
@@ -27,22 +25,20 @@
 <p align="center">
 	<a href="https://surrealdb.com/discord"><img src="https://img.shields.io/discord/902568124350599239?label=discord&style=flat-square&color=5a66f6"></a>
 	&nbsp;
-  <a href="https://twitter.com/surrealdb"><img src="https://img.shields.io/badge/twitter-follow_us-1d9bf0.svg?style=flat-square"></a>
-  &nbsp;
-  <a href="https://www.linkedin.com/company/surrealdb/"><img src="https://img.shields.io/badge/linkedin-connect_with_us-0a66c2.svg?style=flat-square"></a>
-  &nbsp;
-  <a href="https://www.youtube.com/channel/UCjf2teVEuYVvvVC-gFZNq6w"><img src="https://img.shields.io/badge/youtube-subscribe-fc1c1c.svg?style=flat-square"></a>
+    <a href="https://x.com/surrealdb"><img src="https://img.shields.io/badge/x-follow_us-222222.svg?style=flat-square" alt="X"></a>
+    &nbsp;
+    <a href="https://www.linkedin.com/company/surrealdb/"><img src="https://img.shields.io/badge/linkedin-connect_with_us-0a66c2.svg?style=flat-square"></a>
+    &nbsp;
+    <a href="https://www.youtube.com/channel/UCjf2teVEuYVvvVC-gFZNq6w"><img src="https://img.shields.io/badge/youtube-subscribe-fc1c1c.svg?style=flat-square"></a>
 </p>
 
 # surrealdb.py
 
 The official SurrealDB SDK for Python.
 
-
 ## Documentation
 
-- [Official Documentation](https://surrealdb.com/docs/sdk/python)
-- [Examples](./examples)
+View the SDK documentation [here](https://surrealdb.com/docs/sdk/python).
 
 ## How to install
 
@@ -156,6 +152,18 @@ SurrealDB can also run embedded directly within your Python application natively
 
 The embedded database is included when you install `surrealdb`.
 
+Install the SDK using `pip`:
+
+```bash
+pip install surrealdb
+```
+
+Or install using `uv`:
+
+```bash
+uv add surrealdb
+```
+
 For source builds, you'll need Rust toolchain and maturin:
 
 ```sh
@@ -198,7 +206,6 @@ import asyncio
 from surrealdb import AsyncSurreal
 
 async def main():
-    # Create a file-based database (can use "file://", "surrealkv://", or "surrealkv+versioned://")
     async with AsyncSurreal("file://mydb") as db:
         await db.use("test", "test")
         await db.signin({"username": "root", "password": "root"})
@@ -241,7 +248,7 @@ with Surreal("file://mydb") as db:
 
 ### When to Use Embedded vs Remote
 
-**Use Embedded (`memory`, `mem://`, `file://`, `surrealkv://`, or `surrealkv+versioned://`) when:**
+**Use Embedded (`memory`, `mem://`, `file://`, or `surrealkv://`) when:**
 - Building desktop applications
 - Running tests (in-memory is very fast)
 - Local development without server setup
@@ -290,7 +297,7 @@ On HTTP or embedded connections, `attach()`, `detach()`, `begin()`, `commit()`, 
 
 [Pydantic Logfire](https://docs.pydantic.dev/logfire/) provides automatic instrumentation for SurrealDB operations, giving you instant observability into your database interactions. Logfire exports standard OpenTelemetry spans, making it compatible with any observability platform.
 
-### Quick Start
+### Quick start
 
 Install Logfire using `pip`:
 
@@ -304,7 +311,7 @@ Or install using `uv`:
 uv add logfire
 ```
 
-Enable instrumentation:
+**Usage**:
 
 ```python
 import logfire
