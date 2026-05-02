@@ -69,12 +69,23 @@ SyncExecutor = Callable[[str, dict[str, Any]], dict[str, Any]]
 # ---------------------------------------------------------------------------
 
 
-# Conservative identifier pattern. SurrealDB allows broader syntax (escaped
+# Conservative identifier patterns. SurrealDB allows broader syntax (escaped
 # identifiers ``⟨...⟩`` etc.) but we deliberately accept only the common safe
-# subset for inline use; anything else is parameter-bound through ``RecordID``
+# subsets for inline use; anything else is parameter-bound through ``RecordID``
 # / ``type::table()`` so user-supplied strings can never be concatenated into
 # the generated SurrealQL.
 _TABLE_ID_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# Range syntax such as ``user:1..10`` or ``user:a..=z``. We require a
+# safe-identifier table prefix and only permit alphanumerics, ``_`` and ``-``
+# in the bound positions so the inline fallback path cannot smuggle in
+# arbitrary SurrealQL.
+_RANGE_PATTERN = re.compile(
+    r"^[A-Za-z_][A-Za-z0-9_]*"   # table identifier
+    r":"
+    r"[A-Za-z0-9_\-]*"           # optional start bound
+    r"\.\.=?"                    # `..` or `..=`
+    r"[A-Za-z0-9_\-]*$"          # optional end bound
+)
 
 
 def _string_to_record_id(s: str, var_name: str) -> RecordID:
@@ -111,9 +122,12 @@ def _resource_to_variable(
     - ``"table:id"`` strings are parsed client-side into a ``RecordID``
       (matching SurrealQL's bare-literal semantics) and bound directly.
     - Bare table-name strings (``"user"``) use ``type::table($var)``.
-    - Range syntax (``"user:1..10"``) is left inline because there is no
-      runtime helper that parses it; obviously unsafe characters in this
-      fallback path raise rather than being executed verbatim.
+    - Range syntax (``"user:1..10"`` / ``"user:a..=z"``) is matched
+      against a strict allow-list pattern and only then inlined - no
+      runtime helper currently parses it for parameter binding.
+
+    Anything that matches none of the above is rejected with
+    :class:`SurrealError` rather than being concatenated into the SQL.
     """
     if isinstance(resource, RecordID):
         variables[var_name] = resource
@@ -131,12 +145,16 @@ def _resource_to_variable(
         variables[var_name] = resource
         return f"type::table(${var_name})"
 
-    if any(c in resource for c in ";\n\r"):
-        raise SurrealError(
-            "Resource string contains unsafe characters (';', newline). "
-            "Use a RecordID or Table instance instead of a raw string."
-        )
-    return resource
+    if _RANGE_PATTERN.match(resource):
+        # Strictly-validated range literal; inline is safe because the
+        # allow-list excludes every SurrealQL meta-character.
+        return resource
+
+    raise SurrealError(
+        f"Cannot use raw string {resource!r} as a SurrealDB resource target. "
+        "Pass a RecordID, Table, or Range instance, or simplify the string "
+        "to a bare identifier or 'table:id' form."
+    )
 
 
 def _is_single_record_operation(resource: RecordIdType) -> bool:
@@ -623,11 +641,20 @@ class _SyncBuilderMixin:
 class _SyncCrudBuilder(_CrudState, _SyncBuilderMixin, Generic[T]):
     """Lazy CRUD builder for sync connections.
 
-    Clause methods (``content``/``replace``/``merge``/``patch``) are terminal:
-    they execute immediately and return the result. The plain
-    ``db.create(record)`` form returns this builder; use ``.execute()`` or
-    just access the result via dict/list operations to trigger execution.
-    Multiple consumes return the same cached result.
+    Important - sync vs async difference:
+
+    - On **async** connections the clause methods (``content`` / ``replace``
+      / ``merge`` / ``patch``) return ``self`` so the builder remains
+      awaitable: ``await db.create(rec).merge({"x": 1})``.
+    - On **sync** connections the clause methods are **terminal**: they run
+      the operation immediately and return the result value. There is no
+      sync ``await`` to defer execution to, so chaining further would have
+      no effect.
+
+    For the no-clause case (plain ``db.create(record)``) the sync builder
+    is lazy and only runs once the result is consumed (indexed, iterated,
+    compared, etc.) or ``.execute()`` is called explicitly. Repeat consumes
+    return the same cached result.
     """
 
     def __init__(

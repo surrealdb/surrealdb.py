@@ -180,7 +180,8 @@ The builder is **typed** via `@overload`:
 - `str` target     -> `Value` (a record-id string returns a dict; a table-name
   string returns a list - the type checker can't tell them apart, so falls back to `Value`)
 
-Sync usage is identical, just without `await`:
+Sync usage is similar, but the clause methods are **terminal** (there is
+no `await` to defer to, so they run immediately and return the result):
 
 ```python
 from surrealdb import Surreal
@@ -189,13 +190,22 @@ with Surreal("ws://localhost:8000/rpc") as db:
     db.signin({"username": "root", "password": "root"})
     db.use("ns", "db")
 
+    # Terminal: .merge runs the UPDATE and returns the result dict.
     out = db.create(RecordID("person", "tobie")).merge({"name": "Tobie"})
-    # out behaves like the resulting dict (auto-executes on attribute / item access)
+
+    # No-clause form: lazy builder; auto-executes the first time you
+    # consume it (indexing, iteration, ==, attribute access, ...).
+    builder = db.create(RecordID("person", "alice"))
+    print(builder["id"])  # <- triggers execution, returns the dict's "id"
+
+    # Fire-and-forget: call .execute() because no consumption happens.
+    db.query("DELETE temp_data;").execute()
 ```
 
-For sync builders that you discard without consuming (for example
-`db.query("DELETE foo")` for a fire-and-forget statement), call
-`.execute()` to run the operation.
+> Note: `__repr__` and `__str__` on a pending sync builder return a
+> `"<...pending>"` placeholder rather than executing the operation, so
+> debuggers, loggers, and `print()` cannot accidentally fire pending
+> queries or mutations.
 
 ## Multi-statement queries and transactions (issue #232 fix)
 

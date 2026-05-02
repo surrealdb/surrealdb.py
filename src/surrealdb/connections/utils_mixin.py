@@ -1,14 +1,19 @@
-import re
 from typing import Any
 
+from surrealdb.connections.builders import _resource_to_variable
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.errors import SurrealError, parse_query_error, parse_rpc_error
 
-# See builders._TABLE_ID_PATTERN - kept here as a sibling so both the legacy
-# select() path and the new builder pipeline use the exact same safe-binding
-# rules for plain string targets.
-_TABLE_ID_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# These are re-exported for backwards compatibility with downstream code
+# that imported them via ``surrealdb.connections.utils_mixin``.
+__all__ = [
+    "RecordID",
+    "RecordIdType",
+    "SurrealError",
+    "Table",
+    "UtilsMixin",
+]
 
 
 class UtilsMixin:
@@ -79,41 +84,9 @@ class UtilsMixin:
     ) -> str:
         """Render *resource* as a variable reference inside generated SurrealQL.
 
-        Parameter binding is used for every code path so user-supplied
-        record-id or table-name strings cannot inject SurrealQL. See
-        :func:`surrealdb.connections.builders._resource_to_variable` for the
-        full rules - this implementation matches it exactly.
+        Single source of truth: this method delegates to
+        :func:`surrealdb.connections.builders._resource_to_variable` so the
+        legacy ``select()`` code path and the new builder pipeline can never
+        diverge in their parameterisation rules.
         """
-        if isinstance(resource, RecordID):
-            variables[var_name] = resource
-            return f"${var_name}"
-
-        if isinstance(resource, Table):
-            variables[var_name] = resource.table_name
-            return f"type::table(${var_name})"
-
-        if ":" in resource and ".." not in resource:
-            table, _, ident = resource.partition(":")
-            if not table or not ident:
-                raise SurrealError(
-                    f"Invalid record-id string {resource!r} for resource '{var_name}'"
-                )
-            if ident.lstrip("-").isdigit():
-                try:
-                    variables[var_name] = RecordID(table, int(ident))
-                except ValueError:  # pragma: no cover - defensive
-                    variables[var_name] = RecordID(table, ident)
-            else:
-                variables[var_name] = RecordID(table, ident)
-            return f"${var_name}"
-
-        if _TABLE_ID_PATTERN.match(resource):
-            variables[var_name] = resource
-            return f"type::table(${var_name})"
-
-        if any(c in resource for c in ";\n\r"):
-            raise SurrealError(
-                "Resource string contains unsafe characters (';', newline). "
-                "Use a RecordID or Table instance instead of a raw string."
-            )
-        return resource
+        return _resource_to_variable(resource, variables, var_name)
