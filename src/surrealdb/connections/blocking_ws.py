@@ -14,9 +14,9 @@ import websockets.sync.client as ws_sync
 from websockets.sync.client import ClientConnection
 
 from surrealdb.connections.builders import (
-    _SyncCrudBuilder,
-    _SyncInsertBuilder,
-    _SyncQueryBuilder,
+    SyncCrudBuilder,
+    SyncInsertBuilder,
+    SyncQueryBuilder,
 )
 from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.url import Url
@@ -164,8 +164,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         vars: dict[str, Value] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> _SyncQueryBuilder:
-        return _SyncQueryBuilder(
+    ) -> SyncQueryBuilder:
+        return SyncQueryBuilder(
             executor=self._make_executor(session_id, txn_id),
             query=query,
             variables=vars,
@@ -270,7 +270,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def create(
         self,
@@ -279,7 +279,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def create(
         self,
@@ -288,7 +288,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     def create(
         self,
         record: RecordIdType,
@@ -296,8 +296,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> _SyncCrudBuilder[Any]:
-        return _SyncCrudBuilder(
+    ) -> SyncCrudBuilder[Any]:
+        return SyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
             operation="CREATE",
             record=record,
@@ -314,7 +314,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def update(
         self,
@@ -323,7 +323,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> _SyncCrudBuilder[list[Value]]: ...
+    ) -> SyncCrudBuilder[list[Value]]: ...
     @overload
     def update(
         self,
@@ -332,7 +332,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> _SyncCrudBuilder[Value]: ...
+    ) -> SyncCrudBuilder[Value]: ...
     def update(
         self,
         record: RecordIdType,
@@ -340,8 +340,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> _SyncCrudBuilder[Any]:
-        return _SyncCrudBuilder(
+    ) -> SyncCrudBuilder[Any]:
+        return SyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
             operation="UPDATE",
             record=record,
@@ -357,7 +357,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def upsert(
         self,
@@ -366,7 +366,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> _SyncCrudBuilder[list[Value]]: ...
+    ) -> SyncCrudBuilder[list[Value]]: ...
     @overload
     def upsert(
         self,
@@ -375,7 +375,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> _SyncCrudBuilder[Value]: ...
+    ) -> SyncCrudBuilder[Value]: ...
     def upsert(
         self,
         record: RecordIdType,
@@ -383,8 +383,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> _SyncCrudBuilder[Any]:
-        return _SyncCrudBuilder(
+    ) -> SyncCrudBuilder[Any]:
+        return SyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
             operation="UPSERT",
             record=record,
@@ -399,7 +399,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def delete(
         self,
@@ -407,7 +407,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> _SyncCrudBuilder[list[Value]]: ...
+    ) -> SyncCrudBuilder[list[Value]]: ...
     @overload
     def delete(
         self,
@@ -415,15 +415,15 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> _SyncCrudBuilder[Value]: ...
+    ) -> SyncCrudBuilder[Value]: ...
     def delete(
         self,
         record: RecordIdType,
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> _SyncCrudBuilder[Any]:
-        return _SyncCrudBuilder(
+    ) -> SyncCrudBuilder[Any]:
+        return SyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
             operation="DELETE",
             record=record,
@@ -438,8 +438,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         relation: bool = False,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> _SyncInsertBuilder:
-        return _SyncInsertBuilder(
+    ) -> SyncInsertBuilder:
+        return SyncInsertBuilder(
             executor=self._make_executor(session_id, txn_id),
             table=table,
             data=data,
@@ -629,7 +629,7 @@ class BlockingSurrealSession:
         self,
         query: str,
         vars: dict[str, Value] | None = None,
-    ) -> _SyncQueryBuilder:
+    ) -> SyncQueryBuilder:
         return self._connection.query(query, vars, session_id=self._session_id)
 
     def signin(self, vars: dict[str, Value]) -> Tokens:
@@ -657,24 +657,24 @@ class BlockingSurrealSession:
         self,
         record: RecordIdType,
         data: Value | None = None,
-    ) -> _SyncCrudBuilder[Any]:
+    ) -> SyncCrudBuilder[Any]:
         return self._connection.create(record, data, session_id=self._session_id)
 
     def update(
         self,
         record: RecordIdType,
         data: Value | None = None,
-    ) -> _SyncCrudBuilder[Any]:
+    ) -> SyncCrudBuilder[Any]:
         return self._connection.update(record, data, session_id=self._session_id)
 
     def upsert(
         self,
         record: RecordIdType,
         data: Value | None = None,
-    ) -> _SyncCrudBuilder[Any]:
+    ) -> SyncCrudBuilder[Any]:
         return self._connection.upsert(record, data, session_id=self._session_id)
 
-    def delete(self, record: RecordIdType) -> _SyncCrudBuilder[Any]:
+    def delete(self, record: RecordIdType) -> SyncCrudBuilder[Any]:
         return self._connection.delete(record, session_id=self._session_id)
 
     def insert(
@@ -683,7 +683,7 @@ class BlockingSurrealSession:
         data: Value | None = None,
         *,
         relation: bool = False,
-    ) -> _SyncInsertBuilder:
+    ) -> SyncInsertBuilder:
         return self._connection.insert(
             table, data, relation=relation, session_id=self._session_id
         )
@@ -694,9 +694,7 @@ class BlockingSurrealSession:
         args: list[Value] | None = None,
         version: str | None = None,
     ) -> Value:
-        return self._connection.run(
-            name, args, version, session_id=self._session_id
-        )
+        return self._connection.run(name, args, version, session_id=self._session_id)
 
     def live(
         self,
@@ -731,7 +729,7 @@ class BlockingSurrealTransaction:
         self,
         query: str,
         vars: dict[str, Value] | None = None,
-    ) -> _SyncQueryBuilder:
+    ) -> SyncQueryBuilder:
         return self._connection.query(
             query,
             vars,
@@ -750,7 +748,7 @@ class BlockingSurrealTransaction:
         self,
         record: RecordIdType,
         data: Value | None = None,
-    ) -> _SyncCrudBuilder[Any]:
+    ) -> SyncCrudBuilder[Any]:
         return self._connection.create(
             record,
             data,
@@ -762,7 +760,7 @@ class BlockingSurrealTransaction:
         self,
         record: RecordIdType,
         data: Value | None = None,
-    ) -> _SyncCrudBuilder[Any]:
+    ) -> SyncCrudBuilder[Any]:
         return self._connection.update(
             record,
             data,
@@ -774,7 +772,7 @@ class BlockingSurrealTransaction:
         self,
         record: RecordIdType,
         data: Value | None = None,
-    ) -> _SyncCrudBuilder[Any]:
+    ) -> SyncCrudBuilder[Any]:
         return self._connection.upsert(
             record,
             data,
@@ -782,7 +780,7 @@ class BlockingSurrealTransaction:
             txn_id=self._txn_id,
         )
 
-    def delete(self, record: RecordIdType) -> _SyncCrudBuilder[Any]:
+    def delete(self, record: RecordIdType) -> SyncCrudBuilder[Any]:
         return self._connection.delete(
             record,
             session_id=self._session_id,
@@ -795,7 +793,7 @@ class BlockingSurrealTransaction:
         data: Value | None = None,
         *,
         relation: bool = False,
-    ) -> _SyncInsertBuilder:
+    ) -> SyncInsertBuilder:
         return self._connection.insert(
             table,
             data,
@@ -824,9 +822,7 @@ class BlockingSurrealTransaction:
         )
 
     def unset(self, key: str) -> None:
-        self._connection.unset(
-            key, session_id=self._session_id, txn_id=self._txn_id
-        )
+        self._connection.unset(key, session_id=self._session_id, txn_id=self._txn_id)
 
     def commit(self) -> None:
         self._connection.commit(self._txn_id, session_id=self._session_id)

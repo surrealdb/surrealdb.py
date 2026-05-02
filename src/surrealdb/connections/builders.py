@@ -81,11 +81,11 @@ _TABLE_ID_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 # in the bound positions so the inline fallback path cannot smuggle in
 # arbitrary SurrealQL.
 _RANGE_PATTERN = re.compile(
-    r"^[A-Za-z_][A-Za-z0-9_]*"   # table identifier
+    r"^[A-Za-z_][A-Za-z0-9_]*"  # table identifier
     r":"
-    r"[A-Za-z0-9_\-]*"           # optional start bound
-    r"\.\.=?"                    # `..` or `..=`
-    r"[A-Za-z0-9_\-]*$"          # optional end bound
+    r"[A-Za-z0-9_\-]*"  # optional start bound
+    r"\.\.=?"  # `..` or `..=`
+    r"[A-Za-z0-9_\-]*$"  # optional end bound
 )
 
 
@@ -110,9 +110,7 @@ def _string_to_record_id(s: str, var_name: str) -> RecordID:
         )
     table, _, ident = s.partition(":")
     if not table or not ident:
-        raise SurrealError(
-            f"Invalid record-id string {s!r} for resource '{var_name}'"
-        )
+        raise SurrealError(f"Invalid record-id string {s!r} for resource '{var_name}'")
     if ident.lstrip("-").isdigit():
         try:
             return RecordID(table, int(ident))
@@ -364,7 +362,7 @@ def _map_to_class(cls: type[T], values: list[Any]) -> T:
                 f"results to match dataclass fields, got {len(values)}"
             )
         kwargs = {f.name: v for f, v in zip(field_list, values, strict=True)}
-        return cls(**kwargs)  # type: ignore[return-value]
+        return cls(**kwargs)
 
     try:
         sig = inspect.signature(cls.__init__)
@@ -396,7 +394,7 @@ def _map_to_class(cls: type[T], values: list[Any]) -> T:
 # ---------------------------------------------------------------------------
 
 
-def _suppress_unretrieved_exception(future: asyncio.Future) -> None:
+def _suppress_unretrieved_exception(future: asyncio.Future[Any]) -> None:
     """``add_done_callback`` helper that pre-reads ``exception()``.
 
     This prevents asyncio from logging "Future exception was never
@@ -430,6 +428,11 @@ class _AsyncCachedRunner:
 
     def __init__(self) -> None:
         self._future: asyncio.Future[Any] | None = None
+
+    @property
+    def has_started(self) -> bool:
+        """``True`` once :meth:`run` has been entered at least once."""
+        return self._future is not None
 
     async def run(self, coro_factory: Callable[[], Awaitable[Any]]) -> Any:
         if self._future is not None:
@@ -471,7 +474,7 @@ class _AsyncCachedRunner:
 # ---------------------------------------------------------------------------
 
 
-class _AsyncCrudBuilder(_CrudState, Generic[T]):
+class AsyncCrudBuilder(_CrudState, Generic[T]):
     """Awaitable CRUD builder for async connections.
 
     Awaiting the same builder twice (or from concurrent tasks) only issues
@@ -497,25 +500,25 @@ class _AsyncCrudBuilder(_CrudState, Generic[T]):
             self._data = data
 
     def _check_not_executed(self) -> None:
-        if self._runner._future is not None:
+        if self._runner.has_started:
             raise SurrealError(
                 f"Cannot reconfigure a {self.__class__.__name__} after it has "
                 "executed. Create a new builder for a fresh operation."
             )
 
-    def content(self, data: Value) -> "_AsyncCrudBuilder[T]":
+    def content(self, data: Value) -> AsyncCrudBuilder[T]:
         self._set_clause(_Clause.CONTENT, data)
         return self
 
-    def replace(self, data: Value) -> "_AsyncCrudBuilder[T]":
+    def replace(self, data: Value) -> AsyncCrudBuilder[T]:
         self._set_clause(_Clause.REPLACE, data)
         return self
 
-    def merge(self, data: Value) -> "_AsyncCrudBuilder[T]":
+    def merge(self, data: Value) -> AsyncCrudBuilder[T]:
         self._set_clause(_Clause.MERGE, data)
         return self
 
-    def patch(self, data: Value) -> "_AsyncCrudBuilder[T]":
+    def patch(self, data: Value) -> AsyncCrudBuilder[T]:
         self._set_clause(_Clause.PATCH, data)
         return self
 
@@ -531,7 +534,7 @@ class _AsyncCrudBuilder(_CrudState, Generic[T]):
         return self.execute().__await__()
 
 
-class _AsyncInsertBuilder(_InsertState):
+class AsyncInsertBuilder(_InsertState):
     """Awaitable INSERT builder for async connections (idempotent).
 
     Re-configuring the builder *after* it has executed raises rather than
@@ -550,18 +553,18 @@ class _AsyncInsertBuilder(_InsertState):
         self._runner = _AsyncCachedRunner()
 
     def _check_not_executed(self) -> None:
-        if self._runner._future is not None:
+        if self._runner.has_started:
             raise SurrealError(
                 f"Cannot reconfigure a {self.__class__.__name__} after it has "
                 "executed. Create a new builder for a fresh operation."
             )
 
-    def relation(self) -> "_AsyncInsertBuilder":
+    def relation(self) -> AsyncInsertBuilder:
         self._check_not_executed()
         self._relation = True
         return self
 
-    def content(self, data: Value) -> "_AsyncInsertBuilder":
+    def content(self, data: Value) -> AsyncInsertBuilder:
         self._check_not_executed()
         self._data = data
         return self
@@ -578,7 +581,7 @@ class _AsyncInsertBuilder(_InsertState):
         return self.execute().__await__()
 
 
-class _AsyncQueryBuilder(_QueryState):
+class AsyncQueryBuilder(_QueryState):
     """Awaitable QUERY builder for async connections.
 
     Returns a single Value when the server returned exactly one statement
@@ -606,11 +609,11 @@ class _AsyncQueryBuilder(_QueryState):
 
         return cast(list[Any], await self._runner.run(_do))
 
-    def into(self, cls: type[U]) -> "_AsyncQueryIntoBuilder[U]":
+    def into(self, cls: type[U]) -> AsyncQueryIntoBuilder[U]:
         # Hand the into-builder a reference to *self* so it reuses the
         # already-fetched (or about-to-be-fetched) values rather than
         # issuing a second RPC.
-        return _AsyncQueryIntoBuilder(self, cls)
+        return AsyncQueryIntoBuilder(self, cls)
 
     async def execute(self) -> Value | tuple[Value, ...]:
         values = await self._fetch_values()
@@ -622,20 +625,20 @@ class _AsyncQueryBuilder(_QueryState):
         return self.execute().__await__()
 
 
-class _AsyncQueryIntoBuilder(Generic[T]):
+class AsyncQueryIntoBuilder(Generic[T]):
     """Async query builder that maps results onto a user-supplied class.
 
-    Reuses the parent :class:`_AsyncQueryBuilder`'s cached fetch so that
+    Reuses the parent :class:`AsyncQueryBuilder`'s cached fetch so that
     ``await q`` and ``await q.into(T)`` together still only round-trip
     once.
     """
 
-    def __init__(self, parent: _AsyncQueryBuilder, cls: type[T]) -> None:
+    def __init__(self, parent: AsyncQueryBuilder, cls: type[T]) -> None:
         self._parent = parent
         self._cls = cls
 
     async def execute(self) -> T:
-        values = await self._parent._fetch_values()
+        values = await self._parent._fetch_values()  # pyright: ignore[reportPrivateUsage]
         return _map_to_class(self._cls, values)
 
     def __await__(self) -> Generator[Any, None, T]:
@@ -692,9 +695,11 @@ class _SyncBuilderMixin:
         result between threads, not the builder itself.
     """
 
-    _executed: bool
-    _cached_result: Any
-    _lock: threading.Lock
+    # Subclass __init__ overrides the lock with a per-instance Lock; the
+    # other two are safe class-level defaults that subclasses also reset.
+    _executed: bool = False
+    _cached_result: Any = None
+    _lock: threading.Lock = threading.Lock()  # noqa: RUF012
 
     def _run_once(self) -> Any:  # pragma: no cover - abstract
         raise NotImplementedError
@@ -723,7 +728,9 @@ class _SyncBuilderMixin:
     def __repr__(self) -> str:
         if self._executed:
             return repr(self._cached_result)
-        return f"<{self.__class__.__name__} pending - call .execute() or consume to run>"
+        return (
+            f"<{self.__class__.__name__} pending - call .execute() or consume to run>"
+        )
 
     def __str__(self) -> str:
         if self._executed:
@@ -739,7 +746,7 @@ class _SyncBuilderMixin:
         return getattr(self._run_once(), name)
 
 
-class _SyncCrudBuilder(_CrudState, _SyncBuilderMixin, Generic[T]):
+class SyncCrudBuilder(_CrudState, _SyncBuilderMixin, Generic[T]):
     """Lazy CRUD builder for sync connections.
 
     Important - sync vs async difference:
@@ -814,7 +821,7 @@ class _SyncCrudBuilder(_CrudState, _SyncBuilderMixin, Generic[T]):
             return self._cached_result
 
 
-class _SyncInsertBuilder(_InsertState, _SyncBuilderMixin):
+class SyncInsertBuilder(_InsertState, _SyncBuilderMixin):
     """Lazy INSERT builder for sync connections (idempotent).
 
     Reconfiguring the builder *after* it has executed raises rather than
@@ -841,7 +848,7 @@ class _SyncInsertBuilder(_InsertState, _SyncBuilderMixin):
                 "executed. Create a new builder for a fresh operation."
             )
 
-    def relation(self) -> "_SyncInsertBuilder":
+    def relation(self) -> SyncInsertBuilder:
         self._check_not_executed()
         self._relation = True
         return self
@@ -864,7 +871,7 @@ class _SyncInsertBuilder(_InsertState, _SyncBuilderMixin):
             return self._cached_result
 
 
-class _SyncQueryBuilder(_QueryState, _SyncBuilderMixin):
+class SyncQueryBuilder(_QueryState, _SyncBuilderMixin):
     """Lazy QUERY builder for sync connections.
 
     Idempotent: ``.execute()``, magic-method consumption, and
@@ -914,11 +921,11 @@ class _SyncQueryBuilder(_QueryState, _SyncBuilderMixin):
 
 
 __all__ = [
-    "_AsyncCrudBuilder",
-    "_AsyncInsertBuilder",
-    "_AsyncQueryBuilder",
-    "_AsyncQueryIntoBuilder",
-    "_SyncCrudBuilder",
-    "_SyncInsertBuilder",
-    "_SyncQueryBuilder",
+    "AsyncCrudBuilder",
+    "AsyncInsertBuilder",
+    "AsyncQueryBuilder",
+    "AsyncQueryIntoBuilder",
+    "SyncCrudBuilder",
+    "SyncInsertBuilder",
+    "SyncQueryBuilder",
 ]

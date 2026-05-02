@@ -77,7 +77,10 @@ async def test_async_query_transaction_block_surfaces_all_results(
     """Reproduction for issue #232.
 
     The transaction should expose the UPDATE result rather than silently
-    returning only the BEGIN acknowledgement.
+    dropping it. SurrealDB 3.x returns one entry per statement (the
+    builder packages those into a tuple); older versions collapse the
+    block to the last statement's result. Either way, the UPDATE
+    result must be observable - it must not be silently discarded.
     """
     await async_ws_connection.query(
         "CREATE multi_q:1 SET status = 'pending';"
@@ -87,15 +90,22 @@ async def test_async_query_transaction_block_surfaces_all_results(
         " UPDATE multi_q:1 SET status = 'running';"
         " COMMIT TRANSACTION;"
     )
-    # Tuple of statement results (BEGIN, UPDATE, COMMIT). The UPDATE result
-    # is in there - we no longer silently drop it.
-    assert isinstance(result, tuple)
-    update_results = [
-        item for item in result
-        if isinstance(item, list) and item and isinstance(item[0], dict)
-        and item[0].get("status") == "running"
-    ]
-    assert len(update_results) == 1
+
+    def _is_update_result(item: object) -> bool:
+        return (
+            isinstance(item, list)
+            and len(item) > 0
+            and isinstance(item[0], dict)
+            and item[0].get("status") == "running"
+        )
+
+    if isinstance(result, tuple):
+        # v3: tuple of (BEGIN, UPDATE, COMMIT) statement results.
+        assert any(_is_update_result(item) for item in result), result
+    else:
+        # v2: server collapses the block to the last statement's result;
+        # query() returns that single value directly.
+        assert _is_update_result(result), result
 
 
 @pytest.mark.asyncio

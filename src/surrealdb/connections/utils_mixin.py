@@ -1,6 +1,8 @@
 from typing import Any
 
-from surrealdb.connections.builders import _resource_to_variable
+from surrealdb.connections.builders import (
+    _resource_to_variable,  # pyright: ignore[reportPrivateUsage]
+)
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.errors import SurrealError, parse_query_error, parse_rpc_error

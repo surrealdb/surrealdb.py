@@ -1,11 +1,11 @@
 from collections.abc import AsyncGenerator
-from typing import overload
+from typing import Any, overload
 from uuid import UUID
 
 from surrealdb.connections.builders import (
-    _AsyncCrudBuilder,
-    _AsyncInsertBuilder,
-    _AsyncQueryBuilder,
+    AsyncCrudBuilder,
+    AsyncInsertBuilder,
+    AsyncQueryBuilder,
 )
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
@@ -114,7 +114,7 @@ class AsyncTemplate:
 
     def query(
         self, query: str, vars: dict[str, Value] | None = None
-    ) -> _AsyncQueryBuilder:
+    ) -> AsyncQueryBuilder:
         """Run one or more SurrealQL statements against the database.
 
         Returns an awaitable builder. Awaiting the builder returns:
@@ -149,18 +149,18 @@ class AsyncTemplate:
     @overload
     def create(
         self, record: RecordID, data: Value | None = None
-    ) -> _AsyncCrudBuilder[dict[str, Value]]: ...
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def create(
         self, record: Table, data: Value | None = None
-    ) -> _AsyncCrudBuilder[dict[str, Value]]: ...
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def create(
         self, record: str, data: Value | None = None
-    ) -> _AsyncCrudBuilder[dict[str, Value]]: ...
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     def create(
         self, record: RecordIdType, data: Value | None = None
-    ) -> _AsyncCrudBuilder:
+    ) -> AsyncCrudBuilder[Any]:
         """Create a record.
 
         Returns an awaitable builder. Optional clause methods:
@@ -181,18 +181,18 @@ class AsyncTemplate:
     @overload
     def update(
         self, record: RecordID, data: Value | None = None
-    ) -> _AsyncCrudBuilder[dict[str, Value]]: ...
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def update(
         self, record: Table, data: Value | None = None
-    ) -> _AsyncCrudBuilder[list[Value]]: ...
+    ) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
     def update(
         self, record: str, data: Value | None = None
-    ) -> _AsyncCrudBuilder[Value]: ...
+    ) -> AsyncCrudBuilder[Value]: ...
     def update(
         self, record: RecordIdType, data: Value | None = None
-    ) -> _AsyncCrudBuilder:
+    ) -> AsyncCrudBuilder[Any]:
         """Update records (replacing the existing data by default).
 
         Returns an awaitable builder. Optional clause methods:
@@ -203,18 +203,18 @@ class AsyncTemplate:
     @overload
     def upsert(
         self, record: RecordID, data: Value | None = None
-    ) -> _AsyncCrudBuilder[dict[str, Value]]: ...
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def upsert(
         self, record: Table, data: Value | None = None
-    ) -> _AsyncCrudBuilder[list[Value]]: ...
+    ) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
     def upsert(
         self, record: str, data: Value | None = None
-    ) -> _AsyncCrudBuilder[Value]: ...
+    ) -> AsyncCrudBuilder[Value]: ...
     def upsert(
         self, record: RecordIdType, data: Value | None = None
-    ) -> _AsyncCrudBuilder:
+    ) -> AsyncCrudBuilder[Any]:
         """Insert or update records.
 
         Returns an awaitable builder. Optional clause methods:
@@ -223,12 +223,12 @@ class AsyncTemplate:
         raise NotImplementedError(f"upsert not implemented for: {self}")
 
     @overload
-    def delete(self, record: RecordID) -> _AsyncCrudBuilder[dict[str, Value]]: ...
+    def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
-    def delete(self, record: Table) -> _AsyncCrudBuilder[list[Value]]: ...
+    def delete(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
-    def delete(self, record: str) -> _AsyncCrudBuilder[Value]: ...
-    def delete(self, record: RecordIdType) -> _AsyncCrudBuilder:
+    def delete(self, record: str) -> AsyncCrudBuilder[Value]: ...
+    def delete(self, record: RecordIdType) -> AsyncCrudBuilder[Any]:
         """Delete records.
 
         Returns an awaitable builder. ``DELETE`` does not support clause methods.
@@ -245,7 +245,7 @@ class AsyncTemplate:
         data: Value | None = None,
         *,
         relation: bool = False,
-    ) -> _AsyncInsertBuilder:
+    ) -> AsyncInsertBuilder:
         """Insert one or multiple records (or relations) into a table.
 
         Pass ``relation=True`` to issue ``INSERT RELATION INTO``, or chain

@@ -5,9 +5,9 @@ from typing import Any, cast, overload
 import requests
 
 from surrealdb.connections.builders import (
-    _SyncCrudBuilder,
-    _SyncInsertBuilder,
-    _SyncQueryBuilder,
+    SyncCrudBuilder,
+    SyncInsertBuilder,
+    SyncQueryBuilder,
 )
 from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.url import Url
@@ -134,8 +134,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
 
     def query(
         self, query: str, vars: dict[str, Value] | None = None
-    ) -> _SyncQueryBuilder:
-        return _SyncQueryBuilder(
+    ) -> SyncQueryBuilder:
+        return SyncQueryBuilder(
             executor=self._make_executor(),
             query=query,
             variables=vars,
@@ -168,19 +168,19 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def create(
         self, record: RecordID, data: Value | None = None
-    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def create(
         self, record: Table, data: Value | None = None
-    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def create(
         self, record: str, data: Value | None = None
-    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     def create(
         self, record: RecordIdType, data: Value | None = None
-    ) -> _SyncCrudBuilder[Any]:
-        return _SyncCrudBuilder(
+    ) -> SyncCrudBuilder[Any]:
+        return SyncCrudBuilder(
             executor=self._make_executor(),
             operation="CREATE",
             record=record,
@@ -192,19 +192,19 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def update(
         self, record: RecordID, data: Value | None = None
-    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def update(
         self, record: Table, data: Value | None = None
-    ) -> _SyncCrudBuilder[list[Value]]: ...
+    ) -> SyncCrudBuilder[list[Value]]: ...
     @overload
     def update(
         self, record: str, data: Value | None = None
-    ) -> _SyncCrudBuilder[Value]: ...
+    ) -> SyncCrudBuilder[Value]: ...
     def update(
         self, record: RecordIdType, data: Value | None = None
-    ) -> _SyncCrudBuilder[Any]:
-        return _SyncCrudBuilder(
+    ) -> SyncCrudBuilder[Any]:
+        return SyncCrudBuilder(
             executor=self._make_executor(),
             operation="UPDATE",
             record=record,
@@ -215,19 +215,19 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def upsert(
         self, record: RecordID, data: Value | None = None
-    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def upsert(
         self, record: Table, data: Value | None = None
-    ) -> _SyncCrudBuilder[list[Value]]: ...
+    ) -> SyncCrudBuilder[list[Value]]: ...
     @overload
     def upsert(
         self, record: str, data: Value | None = None
-    ) -> _SyncCrudBuilder[Value]: ...
+    ) -> SyncCrudBuilder[Value]: ...
     def upsert(
         self, record: RecordIdType, data: Value | None = None
-    ) -> _SyncCrudBuilder[Any]:
-        return _SyncCrudBuilder(
+    ) -> SyncCrudBuilder[Any]:
+        return SyncCrudBuilder(
             executor=self._make_executor(),
             operation="UPSERT",
             record=record,
@@ -236,13 +236,13 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         )
 
     @overload
-    def delete(self, record: RecordID) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    def delete(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
-    def delete(self, record: Table) -> _SyncCrudBuilder[list[Value]]: ...
+    def delete(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
-    def delete(self, record: str) -> _SyncCrudBuilder[Value]: ...
-    def delete(self, record: RecordIdType) -> _SyncCrudBuilder[Any]:
-        return _SyncCrudBuilder(
+    def delete(self, record: str) -> SyncCrudBuilder[Value]: ...
+    def delete(self, record: RecordIdType) -> SyncCrudBuilder[Any]:
+        return SyncCrudBuilder(
             executor=self._make_executor(),
             operation="DELETE",
             record=record,
@@ -255,8 +255,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         data: Value | None = None,
         *,
         relation: bool = False,
-    ) -> _SyncInsertBuilder:
-        return _SyncInsertBuilder(
+    ) -> SyncInsertBuilder:
+        return SyncInsertBuilder(
             executor=self._make_executor(),
             table=table,
             data=data,

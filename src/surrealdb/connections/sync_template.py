@@ -1,11 +1,11 @@
 from collections.abc import Generator
-from typing import overload
+from typing import Any, overload
 from uuid import UUID
 
 from surrealdb.connections.builders import (
-    _SyncCrudBuilder,
-    _SyncInsertBuilder,
-    _SyncQueryBuilder,
+    SyncCrudBuilder,
+    SyncInsertBuilder,
+    SyncQueryBuilder,
 )
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
@@ -47,7 +47,7 @@ class SyncTemplate:
 
     def query(
         self, query: str, vars: dict[str, Value] | None = None
-    ) -> _SyncQueryBuilder:
+    ) -> SyncQueryBuilder:
         """Run one or more SurrealQL statements against the database.
 
         Returns a lazy builder. Triggering execution (e.g. by indexing,
@@ -70,18 +70,18 @@ class SyncTemplate:
     @overload
     def create(
         self, record: RecordID, data: Value | None = None
-    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def create(
         self, record: Table, data: Value | None = None
-    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def create(
         self, record: str, data: Value | None = None
-    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     def create(
         self, record: RecordIdType, data: Value | None = None
-    ) -> _SyncCrudBuilder:
+    ) -> SyncCrudBuilder[Any]:
         """Create a record.
 
         Returns a lazy builder. Optional terminal clause methods:
@@ -98,46 +98,46 @@ class SyncTemplate:
     @overload
     def update(
         self, record: RecordID, data: Value | None = None
-    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def update(
         self, record: Table, data: Value | None = None
-    ) -> _SyncCrudBuilder[list[Value]]: ...
+    ) -> SyncCrudBuilder[list[Value]]: ...
     @overload
     def update(
         self, record: str, data: Value | None = None
-    ) -> _SyncCrudBuilder[Value]: ...
+    ) -> SyncCrudBuilder[Value]: ...
     def update(
         self, record: RecordIdType, data: Value | None = None
-    ) -> _SyncCrudBuilder:
+    ) -> SyncCrudBuilder[Any]:
         """Update records (replacing the existing data by default)."""
         raise NotImplementedError(f"update not implemented for: {self}")
 
     @overload
     def upsert(
         self, record: RecordID, data: Value | None = None
-    ) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def upsert(
         self, record: Table, data: Value | None = None
-    ) -> _SyncCrudBuilder[list[Value]]: ...
+    ) -> SyncCrudBuilder[list[Value]]: ...
     @overload
     def upsert(
         self, record: str, data: Value | None = None
-    ) -> _SyncCrudBuilder[Value]: ...
+    ) -> SyncCrudBuilder[Value]: ...
     def upsert(
         self, record: RecordIdType, data: Value | None = None
-    ) -> _SyncCrudBuilder:
+    ) -> SyncCrudBuilder[Any]:
         """Insert or update records."""
         raise NotImplementedError(f"upsert not implemented for: {self}")
 
     @overload
-    def delete(self, record: RecordID) -> _SyncCrudBuilder[dict[str, Value]]: ...
+    def delete(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
-    def delete(self, record: Table) -> _SyncCrudBuilder[list[Value]]: ...
+    def delete(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
-    def delete(self, record: str) -> _SyncCrudBuilder[Value]: ...
-    def delete(self, record: RecordIdType) -> _SyncCrudBuilder:
+    def delete(self, record: str) -> SyncCrudBuilder[Value]: ...
+    def delete(self, record: RecordIdType) -> SyncCrudBuilder[Any]:
         """Delete records."""
         raise NotImplementedError(f"delete not implemented for: {self}")
 
@@ -151,7 +151,7 @@ class SyncTemplate:
         data: Value | None = None,
         *,
         relation: bool = False,
-    ) -> _SyncInsertBuilder:
+    ) -> SyncInsertBuilder:
         """Insert one or multiple records (or relations) into a table.
 
         Pass ``relation=True`` to issue ``INSERT RELATION INTO``, or chain

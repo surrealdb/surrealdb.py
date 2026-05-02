@@ -6,9 +6,9 @@ import aiohttp
 
 from surrealdb.connections.async_template import AsyncTemplate
 from surrealdb.connections.builders import (
-    _AsyncCrudBuilder,
-    _AsyncInsertBuilder,
-    _AsyncQueryBuilder,
+    AsyncCrudBuilder,
+    AsyncInsertBuilder,
+    AsyncQueryBuilder,
 )
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import UtilsMixin
@@ -147,8 +147,8 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     def query(
         self, query: str, vars: dict[str, Value] | None = None
-    ) -> _AsyncQueryBuilder:
-        return _AsyncQueryBuilder(
+    ) -> AsyncQueryBuilder:
+        return AsyncQueryBuilder(
             executor=self._make_executor(),
             query=query,
             variables=vars,
@@ -181,19 +181,19 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     @overload
     def create(
         self, record: RecordID, data: Value | None = None
-    ) -> _AsyncCrudBuilder[dict[str, Value]]: ...
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def create(
         self, record: Table, data: Value | None = None
-    ) -> _AsyncCrudBuilder[dict[str, Value]]: ...
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def create(
         self, record: str, data: Value | None = None
-    ) -> _AsyncCrudBuilder[dict[str, Value]]: ...
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     def create(
         self, record: RecordIdType, data: Value | None = None
-    ) -> _AsyncCrudBuilder[Any]:
-        return _AsyncCrudBuilder(
+    ) -> AsyncCrudBuilder[Any]:
+        return AsyncCrudBuilder(
             executor=self._make_executor(),
             operation="CREATE",
             record=record,
@@ -205,19 +205,19 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     @overload
     def update(
         self, record: RecordID, data: Value | None = None
-    ) -> _AsyncCrudBuilder[dict[str, Value]]: ...
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def update(
         self, record: Table, data: Value | None = None
-    ) -> _AsyncCrudBuilder[list[Value]]: ...
+    ) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
     def update(
         self, record: str, data: Value | None = None
-    ) -> _AsyncCrudBuilder[Value]: ...
+    ) -> AsyncCrudBuilder[Value]: ...
     def update(
         self, record: RecordIdType, data: Value | None = None
-    ) -> _AsyncCrudBuilder[Any]:
-        return _AsyncCrudBuilder(
+    ) -> AsyncCrudBuilder[Any]:
+        return AsyncCrudBuilder(
             executor=self._make_executor(),
             operation="UPDATE",
             record=record,
@@ -228,19 +228,19 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     @overload
     def upsert(
         self, record: RecordID, data: Value | None = None
-    ) -> _AsyncCrudBuilder[dict[str, Value]]: ...
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def upsert(
         self, record: Table, data: Value | None = None
-    ) -> _AsyncCrudBuilder[list[Value]]: ...
+    ) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
     def upsert(
         self, record: str, data: Value | None = None
-    ) -> _AsyncCrudBuilder[Value]: ...
+    ) -> AsyncCrudBuilder[Value]: ...
     def upsert(
         self, record: RecordIdType, data: Value | None = None
-    ) -> _AsyncCrudBuilder[Any]:
-        return _AsyncCrudBuilder(
+    ) -> AsyncCrudBuilder[Any]:
+        return AsyncCrudBuilder(
             executor=self._make_executor(),
             operation="UPSERT",
             record=record,
@@ -249,13 +249,13 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         )
 
     @overload
-    def delete(self, record: RecordID) -> _AsyncCrudBuilder[dict[str, Value]]: ...
+    def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
-    def delete(self, record: Table) -> _AsyncCrudBuilder[list[Value]]: ...
+    def delete(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
-    def delete(self, record: str) -> _AsyncCrudBuilder[Value]: ...
-    def delete(self, record: RecordIdType) -> _AsyncCrudBuilder[Any]:
-        return _AsyncCrudBuilder(
+    def delete(self, record: str) -> AsyncCrudBuilder[Value]: ...
+    def delete(self, record: RecordIdType) -> AsyncCrudBuilder[Any]:
+        return AsyncCrudBuilder(
             executor=self._make_executor(),
             operation="DELETE",
             record=record,
@@ -268,8 +268,8 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         data: Value | None = None,
         *,
         relation: bool = False,
-    ) -> _AsyncInsertBuilder:
-        return _AsyncInsertBuilder(
+    ) -> AsyncInsertBuilder:
+        return AsyncInsertBuilder(
             executor=self._make_executor(),
             table=table,
             data=data,
