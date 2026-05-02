@@ -74,6 +74,27 @@ async def async_ws_connection(
 
 
 @pytest.fixture
+async def async_ws_connection_secondary(
+    connection_params: dict[str, Any],
+) -> AsyncGenerator[AsyncWsSurrealConnection, None]:
+    """Second independent async WebSocket (same auth/ns/db). Use when a test needs two sockets."""
+    connection = AsyncWsSurrealConnection(connection_params["ws_url"])
+    try:
+        await connection.signin(connection_params["vars_params"])
+        await connection.use(
+            namespace=connection_params["namespace"],
+            database=connection_params["database_name"],
+        )
+        await connection.query(_DEFINE_TABLES)
+        yield connection
+    finally:
+        try:
+            await connection.close()
+        except Exception:
+            pass
+
+
+@pytest.fixture
 def blocking_http_connection(
     connection_params: dict[str, Any],
 ) -> Generator[BlockingHttpSurrealConnection, None, None]:
@@ -93,6 +114,23 @@ def blocking_ws_connection(
     connection_params: dict[str, Any],
 ) -> Generator[BlockingWsSurrealConnection, None, None]:
     """Blocking WebSocket connection fixture"""
+    connection = BlockingWsSurrealConnection(connection_params["ws_url"])
+    connection.signin(connection_params["vars_params"])
+    connection.use(
+        namespace=connection_params["namespace"],
+        database=connection_params["database_name"],
+    )
+    connection.query(_DEFINE_TABLES)
+    yield connection
+    if connection.socket:
+        connection.socket.close()
+
+
+@pytest.fixture
+def blocking_ws_connection_secondary(
+    connection_params: dict[str, Any],
+) -> Generator[BlockingWsSurrealConnection, None, None]:
+    """Second independent blocking WebSocket (same auth/ns/db). Use when a test needs two sockets."""
     connection = BlockingWsSurrealConnection(connection_params["ws_url"])
     connection.signin(connection_params["vars_params"])
     connection.use(
