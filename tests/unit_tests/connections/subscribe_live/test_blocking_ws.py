@@ -8,7 +8,7 @@ from surrealdb.data import RecordID
 
 def test_live_subscription(
     blocking_ws_connection_with_user: BlockingWsSurrealConnection,
-    blocking_ws_connection: BlockingWsSurrealConnection,
+    blocking_ws_connection_secondary: BlockingWsSurrealConnection,
 ) -> None:
     # Start the live query
     query_uuid = blocking_ws_connection_with_user.live("user")
@@ -17,8 +17,9 @@ def test_live_subscription(
     # Start the live subscription
     subscription = blocking_ws_connection_with_user.subscribe_live(query_uuid)
 
-    # Push an update
-    blocking_ws_connection.query(
+    # Push an update on a second socket so the live connection is not interleaved
+    # with live notifications (same socket would race QUERY vs notification).
+    blocking_ws_connection_secondary.query(
         "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', password = 'password456', enabled = true;"
     )
 
@@ -31,4 +32,4 @@ def test_live_subscription(
     except Exception as e:
         pytest.fail(f"Error waiting for live subscription update: {e}")
 
-    blocking_ws_connection.kill(query_uuid)
+    blocking_ws_connection_secondary.kill(query_uuid)
