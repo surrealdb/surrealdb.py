@@ -419,15 +419,6 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self,
         query_uuid: str | UUID,
     ) -> Generator[dict[str, Value], None, None]:
-        """
-        Subscribe to live updates for a given query UUID.
-
-        Args:
-            query_uuid (Union[str, UUID]): The query UUID to subscribe to.
-
-        Yields:
-            dict: The results of live updates.
-        """
         try:
             while True:
                 try:
@@ -442,9 +433,11 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                         data if isinstance(data, bytes) else data.encode()
                     )
 
-                    # Check if the response matches the query UUID
-                    if response.get("result", {}).get("id") == query_uuid:
-                        yield response["result"]["result"]
+                    notif = response.get("result")
+                    if isinstance(notif, dict):
+                        nid = notif.get("id")
+                        if nid is not None and str(nid) == str(query_uuid):
+                            yield notif
                 except Exception as e:
                     # Handle WebSocket or decoding errors
                     print("Error in live subscription:", e)
