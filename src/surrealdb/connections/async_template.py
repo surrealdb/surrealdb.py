@@ -382,8 +382,12 @@ class AsyncTemplate:
     ) -> AsyncGenerator[dict[str, Value], None]:
         """Iterate live notifications for the given live query id.
 
-        Yields the full notification dict from the server (``action``, ``result``, ``id``,
-        ``record``, …), not only the changed record document.
+        Args:
+            query_uuid (Union[str, UUID]): The query UUID to subscribe to.
+
+        Yields:
+            dict: Each live notification from the server (``action``, ``result``, ``id``,
+            ``record``, etc.), not only the changed record payload.
         """
         raise NotImplementedError(f"subscribe_live not implemented for: {self}")
 
