@@ -206,6 +206,13 @@ with Surreal("ws://localhost:8000/rpc") as db:
 > `"<...pending>"` placeholder rather than executing the operation, so
 > debuggers, loggers, and `print()` cannot accidentally fire pending
 > queries or mutations.
+>
+> ⚠ **Truthiness and comparison** auto-execute though.
+> `if db.query("DELETE foo;")`, `bool(db.create(...))`, and
+> `db.create(...) == something` will all run the operation. If you want
+> fire-and-forget, call `.execute()` explicitly. The full list of
+> auto-executing magic methods is `__getitem__`, `__iter__`, `__len__`,
+> `__contains__`, `__eq__`, `__ne__`, `__bool__`, and `__getattr__`.
 
 ## Multi-statement queries and transactions (issue #232 fix)
 

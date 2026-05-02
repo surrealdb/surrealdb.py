@@ -321,3 +321,96 @@ def test_sync_query_into_marks_executed(
     assert "pending" not in repr(builder)
     # And re-executing returns the same cached tuple without re-fetching.
     assert builder.execute() == (10, 20)
+
+
+# ---------------------------------------------------------------------------
+# Compound record-id strings are rejected
+# ---------------------------------------------------------------------------
+
+
+def test_string_record_id_with_extra_colons_rejected(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    _sync_setup: None,
+) -> None:
+    """`"table:part:rest"` is ambiguous - require an explicit RecordID.
+
+    Single-colon partition can't reliably round-trip with the server's
+    literal-parsing rules for compound IDs, so we refuse to guess.
+    """
+    with pytest.raises(SurrealError, match="Ambiguous record-id"):
+        blocking_ws_connection.delete("counter:part:rest").execute()
+
+
+# ---------------------------------------------------------------------------
+# Truthiness / equality auto-execute behaviour
+# ---------------------------------------------------------------------------
+
+
+def test_sync_builder_bool_triggers_execution(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    _sync_setup: None,
+) -> None:
+    """`bool(builder)` runs the operation - this is documented but tested.
+
+    The point of the test is to *pin* the behaviour so a future refactor
+    that silently changes it will break this test and force an explicit
+    decision (and a docs update).
+    """
+    blocking_ws_connection.query("CREATE counter:bool_check SET n = 5").execute()
+    builder = blocking_ws_connection.query(
+        "UPDATE counter:bool_check SET n = n + 1 RETURN AFTER"
+    )
+    assert "pending" in repr(builder)
+    assert bool(builder)  # auto-executes
+    assert "pending" not in repr(builder)
+    after = blocking_ws_connection.query("SELECT n FROM counter:bool_check")
+    assert after[0]["n"] == 6  # update ran exactly once
+
+
+# ---------------------------------------------------------------------------
+# Async cancellation does not leak CancelledError to peer awaiters
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_async_cancellation_does_not_poison_peer_awaiters(
+    async_ws_connection: AsyncWsSurrealConnection,
+    _async_setup: None,
+    _sync_setup: None,
+) -> None:
+    """Cancelling the initiating awaiter must not cancel concurrent peers.
+
+    Peer tasks awaiting the same builder should see a regular
+    SurrealError describing the cancellation rather than a phantom
+    CancelledError from a cancellation they didn't request.
+    """
+    await async_ws_connection.query("CREATE counter:cancel_test SET n = 1")
+    builder = async_ws_connection.query(
+        "UPDATE counter:cancel_test SET n = n + 1 RETURN AFTER"
+    )
+
+    # Create the cache by directly attaching to the runner without a
+    # real RPC: install a future the runner is "blocked on", then
+    # cancel the originating wait.
+    initiator = asyncio.create_task(builder.execute())
+    peer = asyncio.create_task(builder.execute())
+    # Yield once so both tasks reach the await point on the shared future.
+    await asyncio.sleep(0)
+    initiator.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await initiator
+
+    # Peer must NOT see CancelledError - it should see either the
+    # successful result (if the RPC completed first) or a SurrealError
+    # describing the cancellation. It must not propagate the cancellation.
+    try:
+        result = await peer
+    except SurrealError:
+        pass  # expected when initiator was cancelled mid-flight
+    except asyncio.CancelledError:  # pragma: no cover - regression guard
+        pytest.fail(
+            "Peer awaiter was cancelled, but it never requested cancellation"
+        )
+    else:
+        # Race: RPC finished before the cancel was processed - fine.
+        assert result is not None

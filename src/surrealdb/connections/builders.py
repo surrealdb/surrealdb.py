@@ -94,7 +94,19 @@ def _string_to_record_id(s: str, var_name: str) -> RecordID:
     Mirrors SurrealQL's parsing of bare record-id literals: a pure-digit id
     is coerced to ``int`` so ``"user:1234"`` and the inline literal
     ``user:1234`` resolve to the same record.
+
+    Strings with more than one ``:`` are rejected because the partitioning
+    rule (split on the first colon) cannot reliably round-trip with the
+    server's literal-parsing rules for compound identifiers - the user
+    should construct a :class:`RecordID` explicitly so the id type and
+    encoding are unambiguous.
     """
+    if s.count(":") != 1:
+        raise SurrealError(
+            f"Ambiguous record-id string {s!r} for resource '{var_name}': "
+            "strings with more than one ':' cannot be safely parsed - pass "
+            "an explicit RecordID instance instead."
+        )
     table, _, ident = s.partition(":")
     if not table or not ident:
         raise SurrealError(
@@ -403,6 +415,16 @@ class _AsyncCachedRunner:
     concurrent ones) await the same future, so we issue exactly one RPC
     regardless of how many times the builder is awaited or how many tasks
     consume it.
+
+    Cancellation:
+        If the *initiating* awaiter is cancelled while the operation is
+        still in flight, we deliberately do **not** propagate
+        :class:`asyncio.CancelledError` onto the shared future - other
+        awaiters did not request cancellation and shouldn't see phantom
+        cancellation semantics. Instead the runner resets its cache so a
+        subsequent call retries from scratch, and any awaiters already
+        blocked on the original future receive a
+        :class:`SurrealError` explaining what happened.
     """
 
     def __init__(self) -> None:
@@ -413,19 +435,33 @@ class _AsyncCachedRunner:
             return await self._future
 
         loop = asyncio.get_running_loop()
-        self._future = loop.create_future()
+        active = loop.create_future()
+        self._future = active
         # Pre-consume any exception so a discarded failed builder does not
         # trip asyncio's "Future exception was never retrieved" warning.
-        self._future.add_done_callback(_suppress_unretrieved_exception)
+        active.add_done_callback(_suppress_unretrieved_exception)
         try:
             value = await coro_factory()
+        except asyncio.CancelledError:
+            # Cancellation belongs to the initiating awaiter only.
+            if not active.done():
+                active.set_exception(
+                    SurrealError(
+                        "Cached async builder operation was cancelled by its "
+                        "initiating awaiter; please retry."
+                    )
+                )
+            # Reset so subsequent (uncancelled) callers can retry cleanly.
+            if self._future is active:
+                self._future = None
+            raise
         except BaseException as exc:
-            if not self._future.done():
-                self._future.set_exception(exc)
+            if not active.done():
+                active.set_exception(exc)
             raise
         else:
-            if not self._future.done():
-                self._future.set_result(value)
+            if not active.done():
+                active.set_result(value)
             return value
 
 
@@ -615,9 +651,25 @@ class _SyncBuilderMixin:
 
     Subclasses must define ``_run_once()`` returning the cached result.
 
-    Builders are *lazy*: the operation only runs when you consume the
-    result (via indexing, iteration, comparison, attribute access, etc.) or
-    call ``.execute()`` explicitly.
+    Builders are *lazy* — the operation only runs when you ask for the
+    result. The methods that auto-execute are:
+
+    - ``__getitem__`` (``builder[key]``)
+    - ``__iter__`` (``for x in builder``)
+    - ``__len__`` (``len(builder)``)
+    - ``__contains__`` (``x in builder``)
+    - ``__eq__`` / ``__ne__`` (``builder == other``)
+    - ``__bool__`` (``if builder:`` or ``not builder``)
+    - ``__getattr__`` (any unknown attribute lookup)
+
+    .. warning::
+
+        ``__bool__`` and ``__eq__`` mean that **any** truthiness check or
+        comparison fires the operation, including idioms like
+        ``if db.query("DELETE foo;"): ...`` or
+        ``assert db.create(...)``. If you don't intend to consume the
+        result, call ``.execute()`` explicitly (for fire-and-forget) or
+        bind the builder to a name and only access it conditionally.
 
     ``__repr__`` / ``__str__`` deliberately do **not** trigger execution -
     they return a ``"<...pending>"`` placeholder when the builder has not
