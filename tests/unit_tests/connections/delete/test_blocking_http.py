@@ -27,8 +27,10 @@ def test_debug_delete(blocking_http_connection: BlockingHttpSurrealConnection) -
     blocking_http_connection.query("DELETE user;").execute()
     blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()
 
-    # Debug: Check what delete actually returns
-    outcome = blocking_http_connection.delete("user:tobie")
+    # Debug: Check what delete actually returns. `.execute()` is required
+    # because lazy builders never trigger execution from `repr()`/`str()`
+    # (so debuggers and loggers don't accidentally fire pending operations).
+    outcome = blocking_http_connection.delete("user:tobie").execute()
     print(f"DEBUG: Delete outcome: {outcome}")
     print(f"DEBUG: Type: {type(outcome)}")
 

@@ -35,9 +35,6 @@ from surrealdb.connections.builders import (
 from surrealdb.connections.builders import (
     _SyncQueryBuilder as SyncQueryBuilder,
 )
-from surrealdb.connections.builders import (
-    _SyncQueryIntoBuilder as SyncQueryIntoBuilder,
-)
 from surrealdb.connections.url import Url, UrlScheme
 from surrealdb.data.types.constants import (
     TAG_BOUND_EXCLUDED,
@@ -122,7 +119,6 @@ __all__ = [
     "SyncCrudBuilder",
     "SyncInsertBuilder",
     "SyncQueryBuilder",
-    "SyncQueryIntoBuilder",
     # Data types
     "Table",
     "Duration",

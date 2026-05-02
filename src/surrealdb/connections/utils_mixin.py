@@ -1,8 +1,14 @@
+import re
 from typing import Any
 
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.errors import SurrealError, parse_query_error, parse_rpc_error
+
+# See builders._TABLE_ID_PATTERN - kept here as a sibling so both the legacy
+# select() path and the new builder pipeline use the exact same safe-binding
+# rules for plain string targets.
+_TABLE_ID_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class UtilsMixin:
@@ -71,27 +77,43 @@ class UtilsMixin:
     def _resource_to_variable(
         resource: RecordIdType, variables: dict[str, Any], var_name: str
     ) -> str:
-        """
-        Converts a resource (Table, RecordID, or string) into a variable reference for SQL queries.
-        Similar to Rust SDK's for_sql_query method.
+        """Render *resource* as a variable reference inside generated SurrealQL.
 
-        Args:
-            resource: The resource to convert (Table, RecordID, or string)
-            variables: Dictionary to store the variable value
-            var_name: Name of the variable to use
-
-        Returns:
-            Variable reference string (e.g., "$_table") or raw string for complex queries
+        Parameter binding is used for every code path so user-supplied
+        record-id or table-name strings cannot inject SurrealQL. See
+        :func:`surrealdb.connections.builders._resource_to_variable` for the
+        full rules - this implementation matches it exactly.
         """
-        if isinstance(resource, Table):
-            # Table objects should use their table_name directly in SQL
-            # since they don't have CBOR serialization
-            return resource.table_name
-        elif isinstance(resource, RecordID):
+        if isinstance(resource, RecordID):
             variables[var_name] = resource
             return f"${var_name}"
-        else:
-            # For strings, use them directly in SQL without converting to variables
-            # This avoids issues with SurrealDB not properly handling RecordID/Table variables
-            # in certain contexts (like DELETE)
-            return resource
+
+        if isinstance(resource, Table):
+            variables[var_name] = resource.table_name
+            return f"type::table(${var_name})"
+
+        if ":" in resource and ".." not in resource:
+            table, _, ident = resource.partition(":")
+            if not table or not ident:
+                raise SurrealError(
+                    f"Invalid record-id string {resource!r} for resource '{var_name}'"
+                )
+            if ident.lstrip("-").isdigit():
+                try:
+                    variables[var_name] = RecordID(table, int(ident))
+                except ValueError:  # pragma: no cover - defensive
+                    variables[var_name] = RecordID(table, ident)
+            else:
+                variables[var_name] = RecordID(table, ident)
+            return f"${var_name}"
+
+        if _TABLE_ID_PATTERN.match(resource):
+            variables[var_name] = resource
+            return f"type::table(${var_name})"
+
+        if any(c in resource for c in ";\n\r"):
+            raise SurrealError(
+                "Resource string contains unsafe characters (';', newline). "
+                "Use a RecordID or Table instance instead of a raw string."
+            )
+        return resource

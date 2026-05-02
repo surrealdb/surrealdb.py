@@ -12,11 +12,37 @@ Sync builders implement magic methods so the returned object behaves like
 the result it produces; clause methods on sync builders are *terminal* and
 execute immediately, returning the underlying result. An explicit
 ``execute()`` method is also available for callers that want to be explicit.
+
+Idempotency
+-----------
+Builders cache their result. Awaiting (or consuming) the same instance
+twice runs the operation **once**:
+
+- Async builders use an ``asyncio.Future`` so concurrent awaits all wait on
+  the same in-flight operation rather than firing duplicate RPC calls.
+- Sync builders use a simple ``_executed`` flag plus cached result.
+
+In both cases ``query().into(MyResult)`` shares the cached fetch with the
+parent ``query()`` builder, so ``await q.into(T)`` followed by ``await q``
+issues only one server round-trip.
+
+Safety
+------
+- ``__repr__`` and ``__str__`` on sync builders return a ``"<...pending>"``
+  placeholder when the operation has not yet been triggered, so debuggers,
+  loggers, or pytest introspection cannot accidentally execute a pending
+  query / mutation.
+- Plain ``str`` resource targets are bound through ``type::thing()`` /
+  ``type::table()`` (parameterised) rather than concatenated into the SQL,
+  guarding against the classic injection footgun where untrusted input
+  flows into a record-id or table-name string.
 """
 
 from __future__ import annotations
 
+import asyncio
 import inspect
+import re
 from collections.abc import Awaitable, Callable, Generator, Iterator
 from dataclasses import fields, is_dataclass
 from typing import Any, Generic, TypeVar, cast
@@ -39,18 +65,77 @@ SyncExecutor = Callable[[str, dict[str, Any]], dict[str, Any]]
 
 
 # ---------------------------------------------------------------------------
-# Helpers (replicated from UtilsMixin to avoid coupling)
+# Helpers
 # ---------------------------------------------------------------------------
+
+
+# Conservative identifier pattern. SurrealDB allows broader syntax (escaped
+# identifiers ``⟨...⟩`` etc.) but we deliberately accept only the common safe
+# subset for inline use; anything else is parameter-bound through ``RecordID``
+# / ``type::table()`` so user-supplied strings can never be concatenated into
+# the generated SurrealQL.
+_TABLE_ID_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _string_to_record_id(s: str, var_name: str) -> RecordID:
+    """Parse a ``"table:id"`` string into a :class:`RecordID`.
+
+    Mirrors SurrealQL's parsing of bare record-id literals: a pure-digit id
+    is coerced to ``int`` so ``"user:1234"`` and the inline literal
+    ``user:1234`` resolve to the same record.
+    """
+    table, _, ident = s.partition(":")
+    if not table or not ident:
+        raise SurrealError(
+            f"Invalid record-id string {s!r} for resource '{var_name}'"
+        )
+    if ident.lstrip("-").isdigit():
+        try:
+            return RecordID(table, int(ident))
+        except ValueError:  # pragma: no cover - defensive
+            pass
+    return RecordID(table, ident)
 
 
 def _resource_to_variable(
     resource: RecordIdType, variables: dict[str, Any], var_name: str
 ) -> str:
-    if isinstance(resource, Table):
-        return resource.table_name
+    """Render *resource* as a variable reference inside generated SurrealQL.
+
+    Parameter binding is used for every code path so user-supplied
+    record-id or table-name strings cannot inject SurrealQL:
+
+    - ``RecordID`` is bound directly as a CBOR-typed value.
+    - ``Table`` is wrapped in ``type::table($var)`` so the table name is
+      a parameter rather than concatenated into the SQL.
+    - ``"table:id"`` strings are parsed client-side into a ``RecordID``
+      (matching SurrealQL's bare-literal semantics) and bound directly.
+    - Bare table-name strings (``"user"``) use ``type::table($var)``.
+    - Range syntax (``"user:1..10"``) is left inline because there is no
+      runtime helper that parses it; obviously unsafe characters in this
+      fallback path raise rather than being executed verbatim.
+    """
     if isinstance(resource, RecordID):
         variables[var_name] = resource
         return f"${var_name}"
+
+    if isinstance(resource, Table):
+        variables[var_name] = resource.table_name
+        return f"type::table(${var_name})"
+
+    if ":" in resource and ".." not in resource:
+        variables[var_name] = _string_to_record_id(resource, var_name)
+        return f"${var_name}"
+
+    if _TABLE_ID_PATTERN.match(resource):
+        variables[var_name] = resource
+        return f"type::table(${var_name})"
+
+    if any(c in resource for c in ";\n\r"):
+        raise SurrealError(
+            "Resource string contains unsafe characters (';', newline). "
+            "Use a RecordID or Table instance instead of a raw string."
+        )
     return resource
 
 
@@ -100,9 +185,6 @@ class _Clause:
     REPLACE = "replace"
     MERGE = "merge"
     PATCH = "patch"
-
-
-_CRUD_OPERATIONS = {"CREATE", "UPDATE", "UPSERT"}
 
 
 # ---------------------------------------------------------------------------
@@ -188,12 +270,26 @@ class _InsertState:
 
     def _build(self) -> tuple[str, dict[str, Any]]:
         if self._data is None:
-            raise SurrealError("INSERT requires data; pass via insert(table, data) or .content(data)")
-        variables: dict[str, Any] = {}
-        table_ref = _resource_to_variable(self._table, variables, "_table")
-        variables["_data"] = self._data
+            raise SurrealError(
+                "INSERT requires data; pass via insert(table, data) or .content(data)"
+            )
+        # INSERT does not accept `type::table(...)` or arbitrary parameter
+        # binding for its target across all SurrealDB versions, so we
+        # validate the table name strictly client-side and only inline
+        # values matching the safe identifier pattern. Anything else is
+        # rejected up-front rather than risking SQL injection.
+        if isinstance(self._table, Table):
+            table_name: str = self._table.table_name
+        else:
+            table_name = self._table
+        if not _TABLE_ID_PATTERN.match(table_name):
+            raise SurrealError(
+                f"INSERT requires a simple identifier for the target table "
+                f"(got {table_name!r}). Use query_raw() for non-trivial cases."
+            )
+        variables: dict[str, Any] = {"_data": self._data}
         rel = "RELATION " if self._relation else ""
-        return f"INSERT {rel}INTO {table_ref} $_data", variables
+        return f"INSERT {rel}INTO {table_name} $_data", variables
 
     def _extract(self, response: dict[str, Any]) -> Any:
         op_name = "insert_relation" if self._relation else "insert"
@@ -208,7 +304,7 @@ class _QueryState:
         self._query = query
         self._variables: dict[str, Any] = dict(variables) if variables else {}
 
-    def _execute_results(self, response: dict[str, Any]) -> list[Any]:
+    def _statement_values(self, response: dict[str, Any]) -> list[Any]:
         stmts = _check_response(response, "query")
         for stmt in stmts:
             if stmt.get("status") == "ERR":
@@ -254,12 +350,67 @@ def _map_to_class(cls: type[T], values: list[Any]) -> T:
 
 
 # ---------------------------------------------------------------------------
+# Async idempotent execution helpers
+# ---------------------------------------------------------------------------
+
+
+def _suppress_unretrieved_exception(future: asyncio.Future) -> None:
+    """``add_done_callback`` helper that pre-reads ``exception()``.
+
+    This prevents asyncio from logging "Future exception was never
+    retrieved" when an idempotent builder fails on its first await and
+    no further task ever awaits the cached future. Real awaiters still
+    receive the exception via ``await future``.
+    """
+    if not future.cancelled():
+        future.exception()
+
+
+class _AsyncCachedRunner:
+    """Future-based "run once" cache for async builders.
+
+    The first call to :meth:`run` schedules the wrapped coroutine and caches
+    the resulting :class:`asyncio.Future`. Subsequent calls (including
+    concurrent ones) await the same future, so we issue exactly one RPC
+    regardless of how many times the builder is awaited or how many tasks
+    consume it.
+    """
+
+    def __init__(self) -> None:
+        self._future: asyncio.Future[Any] | None = None
+
+    async def run(self, coro_factory: Callable[[], Awaitable[Any]]) -> Any:
+        if self._future is not None:
+            return await self._future
+
+        loop = asyncio.get_running_loop()
+        self._future = loop.create_future()
+        # Pre-consume any exception so a discarded failed builder does not
+        # trip asyncio's "Future exception was never retrieved" warning.
+        self._future.add_done_callback(_suppress_unretrieved_exception)
+        try:
+            value = await coro_factory()
+        except BaseException as exc:
+            if not self._future.done():
+                self._future.set_exception(exc)
+            raise
+        else:
+            if not self._future.done():
+                self._future.set_result(value)
+            return value
+
+
+# ---------------------------------------------------------------------------
 # Async builders
 # ---------------------------------------------------------------------------
 
 
 class _AsyncCrudBuilder(_CrudState, Generic[T]):
-    """Awaitable CRUD builder for async connections."""
+    """Awaitable CRUD builder for async connections.
+
+    Awaiting the same builder twice (or from concurrent tasks) only issues
+    one RPC; the cached result is returned thereafter.
+    """
 
     def __init__(
         self,
@@ -272,6 +423,7 @@ class _AsyncCrudBuilder(_CrudState, Generic[T]):
     ) -> None:
         super().__init__(operation, record, op_name, always_unwrap)
         self._executor = executor
+        self._runner = _AsyncCachedRunner()
         if data is not None:
             self._mode = _Clause.CONTENT
             self._data = data
@@ -292,17 +444,20 @@ class _AsyncCrudBuilder(_CrudState, Generic[T]):
         self._set_clause(_Clause.PATCH, data)
         return self
 
-    async def execute(self) -> T:
+    async def _do_execute(self) -> T:
         query, variables = self._build()
         response = await self._executor(query, variables)
         return cast(T, self._extract(response))
+
+    async def execute(self) -> T:
+        return cast(T, await self._runner.run(self._do_execute))
 
     def __await__(self) -> Generator[Any, None, T]:
         return self.execute().__await__()
 
 
 class _AsyncInsertBuilder(_InsertState):
-    """Awaitable INSERT builder for async connections."""
+    """Awaitable INSERT builder for async connections (idempotent)."""
 
     def __init__(
         self,
@@ -313,6 +468,7 @@ class _AsyncInsertBuilder(_InsertState):
     ) -> None:
         super().__init__(table, data, relation)
         self._executor = executor
+        self._runner = _AsyncCachedRunner()
 
     def relation(self) -> "_AsyncInsertBuilder":
         self._relation = True
@@ -322,10 +478,13 @@ class _AsyncInsertBuilder(_InsertState):
         self._data = data
         return self
 
-    async def execute(self) -> list[Value]:
+    async def _do_execute(self) -> list[Value]:
         query, variables = self._build()
         response = await self._executor(query, variables)
         return cast(list[Value], self._extract(response))
+
+    async def execute(self) -> list[Value]:
+        return cast(list[Value], await self._runner.run(self._do_execute))
 
     def __await__(self) -> Generator[Any, None, list[Value]]:
         return self.execute().__await__()
@@ -337,6 +496,9 @@ class _AsyncQueryBuilder(_QueryState):
     Returns a single Value when the server returned exactly one statement
     result, otherwise a tuple of all statement results (fixes the historic
     silent-discard behaviour - GH issue #232).
+
+    Idempotent: the underlying RPC fires once, and ``.into(cls)`` shares
+    the same cached fetch.
     """
 
     def __init__(
@@ -347,13 +509,23 @@ class _AsyncQueryBuilder(_QueryState):
     ) -> None:
         super().__init__(query, variables)
         self._executor = executor
+        self._runner = _AsyncCachedRunner()
+
+    async def _fetch_values(self) -> list[Any]:
+        async def _do() -> list[Any]:
+            response = await self._executor(self._query, self._variables)
+            return self._statement_values(response)
+
+        return cast(list[Any], await self._runner.run(_do))
 
     def into(self, cls: type[U]) -> "_AsyncQueryIntoBuilder[U]":
-        return _AsyncQueryIntoBuilder(self._executor, self._query, self._variables, cls)
+        # Hand the into-builder a reference to *self* so it reuses the
+        # already-fetched (or about-to-be-fetched) values rather than
+        # issuing a second RPC.
+        return _AsyncQueryIntoBuilder(self, cls)
 
     async def execute(self) -> Value | tuple[Value, ...]:
-        response = await self._executor(self._query, self._variables)
-        values = self._execute_results(response)
+        values = await self._fetch_values()
         if len(values) == 1:
             return values[0]
         return tuple(values)
@@ -362,23 +534,20 @@ class _AsyncQueryBuilder(_QueryState):
         return self.execute().__await__()
 
 
-class _AsyncQueryIntoBuilder(_QueryState, Generic[T]):
-    """Async query builder that maps results onto a user-supplied class."""
+class _AsyncQueryIntoBuilder(Generic[T]):
+    """Async query builder that maps results onto a user-supplied class.
 
-    def __init__(
-        self,
-        executor: AsyncExecutor,
-        query: str,
-        variables: dict[str, Value] | None,
-        cls: type[T],
-    ) -> None:
-        super().__init__(query, variables)
-        self._executor = executor
+    Reuses the parent :class:`_AsyncQueryBuilder`'s cached fetch so that
+    ``await q`` and ``await q.into(T)`` together still only round-trip
+    once.
+    """
+
+    def __init__(self, parent: _AsyncQueryBuilder, cls: type[T]) -> None:
+        self._parent = parent
         self._cls = cls
 
     async def execute(self) -> T:
-        response = await self._executor(self._query, self._variables)
-        values = self._execute_results(response)
+        values = await self._parent._fetch_values()
         return _map_to_class(self._cls, values)
 
     def __await__(self) -> Generator[Any, None, T]:
@@ -396,10 +565,13 @@ class _SyncBuilderMixin:
     Subclasses must define ``_run_once()`` returning the cached result.
 
     Builders are *lazy*: the operation only runs when you consume the
-    result (via indexing, iteration, comparison, etc.) or call
-    ``.execute()`` explicitly. This means ``db.query("DELETE foo")`` on a
-    sync connection does **not** execute - call ``.execute()`` (or capture
-    and use the result) to trigger the operation.
+    result (via indexing, iteration, comparison, attribute access, etc.) or
+    call ``.execute()`` explicitly.
+
+    ``__repr__`` / ``__str__`` deliberately do **not** trigger execution -
+    they return a ``"<...pending>"`` placeholder when the builder has not
+    yet been run. This keeps loggers, debuggers, and test introspection
+    from accidentally firing pending queries.
     """
 
     _executed: bool
@@ -430,18 +602,14 @@ class _SyncBuilderMixin:
         return bool(self._run_once())
 
     def __repr__(self) -> str:
-        # Eagerly execute so ``print(builder)`` shows the real result
-        # rather than a pending placeholder. Use a try/except so the repr
-        # itself never raises - debugging tools (logging, pytest output)
-        # commonly call repr() and we shouldn't break those if the operation
-        # would fail.
-        try:
-            return repr(self._run_once())
-        except Exception as exc:  # noqa: BLE001 - safe repr fallback
-            return f"<{self.__class__.__name__} error: {exc}>"
+        if self._executed:
+            return repr(self._cached_result)
+        return f"<{self.__class__.__name__} pending - call .execute() or consume to run>"
 
     def __str__(self) -> str:
-        return str(self._run_once())
+        if self._executed:
+            return str(self._cached_result)
+        return self.__repr__()
 
     def __getattr__(self, name: str) -> Any:
         # __getattr__ is only invoked when the attribute is missing on the
@@ -459,6 +627,7 @@ class _SyncCrudBuilder(_CrudState, _SyncBuilderMixin, Generic[T]):
     they execute immediately and return the result. The plain
     ``db.create(record)`` form returns this builder; use ``.execute()`` or
     just access the result via dict/list operations to trigger execution.
+    Multiple consumes return the same cached result.
     """
 
     def __init__(
@@ -507,7 +676,7 @@ class _SyncCrudBuilder(_CrudState, _SyncBuilderMixin, Generic[T]):
 
 
 class _SyncInsertBuilder(_InsertState, _SyncBuilderMixin):
-    """Lazy INSERT builder for sync connections."""
+    """Lazy INSERT builder for sync connections (idempotent)."""
 
     def __init__(
         self,
@@ -542,7 +711,11 @@ class _SyncInsertBuilder(_InsertState, _SyncBuilderMixin):
 
 
 class _SyncQueryBuilder(_QueryState, _SyncBuilderMixin):
-    """Lazy QUERY builder for sync connections."""
+    """Lazy QUERY builder for sync connections.
+
+    Idempotent: ``.execute()``, magic-method consumption, and
+    ``.into(cls)`` all share a single cached fetch.
+    """
 
     def __init__(
         self,
@@ -554,46 +727,33 @@ class _SyncQueryBuilder(_QueryState, _SyncBuilderMixin):
         self._executor = executor
         self._executed = False
         self._cached_result: Any = None
+        self._cached_values: list[Any] | None = None
+
+    def _fetch_values(self) -> list[Any]:
+        if self._cached_values is None:
+            response = self._executor(self._query, self._variables)
+            self._cached_values = self._statement_values(response)
+        return self._cached_values
 
     def into(self, cls: type[T]) -> T:
-        builder = _SyncQueryIntoBuilder(
-            self._executor, self._query, self._variables, cls
-        )
-        return builder.execute()
+        # Reuse this builder's cached fetch so `db.query("...")` followed
+        # by `db.query("...").into(T)` (or vice versa via the same instance)
+        # only issues one RPC.
+        values = self._fetch_values()
+        return _map_to_class(cls, values)
 
     def execute(self) -> Value | tuple[Value, ...]:
         return cast("Value | tuple[Value, ...]", self._run_once())
 
     def _run_once(self) -> Any:
         if not self._executed:
-            response = self._executor(self._query, self._variables)
-            values = self._execute_results(response)
+            values = self._fetch_values()
             if len(values) == 1:
                 self._cached_result = values[0]
             else:
                 self._cached_result = tuple(values)
             self._executed = True
         return self._cached_result
-
-
-class _SyncQueryIntoBuilder(_QueryState, Generic[T]):
-    """Sync query builder that maps results onto a user-supplied class."""
-
-    def __init__(
-        self,
-        executor: SyncExecutor,
-        query: str,
-        variables: dict[str, Value] | None,
-        cls: type[T],
-    ) -> None:
-        super().__init__(query, variables)
-        self._executor = executor
-        self._cls = cls
-
-    def execute(self) -> T:
-        response = self._executor(self._query, self._variables)
-        values = self._execute_results(response)
-        return _map_to_class(self._cls, values)
 
 
 __all__ = [
@@ -604,5 +764,4 @@ __all__ = [
     "_SyncCrudBuilder",
     "_SyncInsertBuilder",
     "_SyncQueryBuilder",
-    "_SyncQueryIntoBuilder",
 ]
