@@ -494,7 +494,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         async def _iter() -> AsyncGenerator[dict[str, Any], None]:
             while True:
                 ret = await result_queue.get()
-                yield ret["result"]
+                yield ret
 
         return _iter()
 

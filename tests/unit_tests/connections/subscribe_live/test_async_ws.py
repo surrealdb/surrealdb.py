@@ -26,8 +26,10 @@ async def test_live_subscription(
 
     try:
         update = await asyncio.wait_for(subscription.__anext__(), timeout=10)
-        assert update["name"] == "Jaime"
-        assert update["id"] == RecordID("user", "jaime")
+        assert update["action"] == "CREATE"
+        record = update["result"]
+        assert record["name"] == "Jaime"
+        assert record["id"] == RecordID("user", "jaime")
     except TimeoutError:
         pytest.fail("Timed out waiting for live subscription update")
 
@@ -54,8 +56,10 @@ async def test_live_subscription_via_query(
 
     try:
         update = await asyncio.wait_for(subscription.__anext__(), timeout=10)
-        assert update["name"] == "John"
-        assert update["id"] == RecordID("user", "john")
+        assert update["action"] == "CREATE"
+        record = update["result"]
+        assert record["name"] == "John"
+        assert record["id"] == RecordID("user", "john")
     except TimeoutError:
         pytest.fail("Timed out waiting for live subscription update")
 
