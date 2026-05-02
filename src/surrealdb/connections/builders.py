@@ -43,6 +43,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import re
+import threading
 from collections.abc import Awaitable, Callable, Generator, Iterator
 from dataclasses import fields, is_dataclass
 from typing import Any, Generic, TypeVar, cast
@@ -649,7 +650,11 @@ class _AsyncQueryIntoBuilder(Generic[T]):
 class _SyncBuilderMixin:
     """Magic methods that auto-execute the builder when used as a result.
 
-    Subclasses must define ``_run_once()`` returning the cached result.
+    Subclasses must define ``_run_once()`` returning the cached result and
+    a ``_lock: threading.Lock`` attribute. Subclasses' ``_run_once()``
+    implementations must acquire ``self._lock`` around their cache check
+    so two threads consuming the same builder don't issue duplicate RPCs
+    or corrupt cached state.
 
     Builders are *lazy* — the operation only runs when you ask for the
     result. The methods that auto-execute are:
@@ -675,10 +680,21 @@ class _SyncBuilderMixin:
     they return a ``"<...pending>"`` placeholder when the builder has not
     yet been run. This keeps loggers, debuggers, and test introspection
     from accidentally firing pending queries.
+
+    Thread safety:
+        ``_run_once()`` is guarded by a per-builder lock so that
+        consuming the same builder from multiple threads issues exactly
+        one RPC. The builder is **not** safe for concurrent
+        *reconfiguration* across threads though - calling ``.merge()``
+        on one thread while another consumes the result is a race on
+        ``_mode`` / ``_data`` that the lock does not cover. Treat
+        builders as single-shot, single-owner values; pass the realised
+        result between threads, not the builder itself.
     """
 
     _executed: bool
     _cached_result: Any
+    _lock: threading.Lock
 
     def _run_once(self) -> Any:  # pragma: no cover - abstract
         raise NotImplementedError
@@ -757,6 +773,7 @@ class _SyncCrudBuilder(_CrudState, _SyncBuilderMixin, Generic[T]):
         self._executor = executor
         self._executed = False
         self._cached_result: Any = None
+        self._lock = threading.Lock()
         if data is not None:
             self._mode = _Clause.CONTENT
             self._data = data
@@ -788,12 +805,13 @@ class _SyncCrudBuilder(_CrudState, _SyncBuilderMixin, Generic[T]):
         return cast(T, self._run_once())
 
     def _run_once(self) -> Any:
-        if not self._executed:
-            query, variables = self._build()
-            response = self._executor(query, variables)
-            self._cached_result = self._extract(response)
-            self._executed = True
-        return self._cached_result
+        with self._lock:
+            if not self._executed:
+                query, variables = self._build()
+                response = self._executor(query, variables)
+                self._cached_result = self._extract(response)
+                self._executed = True
+            return self._cached_result
 
 
 class _SyncInsertBuilder(_InsertState, _SyncBuilderMixin):
@@ -814,6 +832,7 @@ class _SyncInsertBuilder(_InsertState, _SyncBuilderMixin):
         self._executor = executor
         self._executed = False
         self._cached_result: Any = None
+        self._lock = threading.Lock()
 
     def _check_not_executed(self) -> None:
         if self._executed:
@@ -836,12 +855,13 @@ class _SyncInsertBuilder(_InsertState, _SyncBuilderMixin):
         return cast(list[Value], self._run_once())
 
     def _run_once(self) -> Any:
-        if not self._executed:
-            query, variables = self._build()
-            response = self._executor(query, variables)
-            self._cached_result = self._extract(response)
-            self._executed = True
-        return self._cached_result
+        with self._lock:
+            if not self._executed:
+                query, variables = self._build()
+                response = self._executor(query, variables)
+                self._cached_result = self._extract(response)
+                self._executed = True
+            return self._cached_result
 
 
 class _SyncQueryBuilder(_QueryState, _SyncBuilderMixin):
@@ -864,6 +884,7 @@ class _SyncQueryBuilder(_QueryState, _SyncBuilderMixin):
         self._executed = False
         self._cached_result: Any = None
         self._cached_values: list[Any] | None = None
+        self._lock = threading.Lock()
 
     def into(self, cls: type[T]) -> T:
         # Reuse this builder's cached fetch so `await q` plus `q.into(T)`
@@ -879,16 +900,17 @@ class _SyncQueryBuilder(_QueryState, _SyncBuilderMixin):
         return cast("Value | tuple[Value, ...]", self._run_once())
 
     def _run_once(self) -> Any:
-        if not self._executed:
-            response = self._executor(self._query, self._variables)
-            values = self._statement_values(response)
-            self._cached_values = values
-            if len(values) == 1:
-                self._cached_result = values[0]
-            else:
-                self._cached_result = tuple(values)
-            self._executed = True
-        return self._cached_result
+        with self._lock:
+            if not self._executed:
+                response = self._executor(self._query, self._variables)
+                values = self._statement_values(response)
+                self._cached_values = values
+                if len(values) == 1:
+                    self._cached_result = values[0]
+                else:
+                    self._cached_result = tuple(values)
+                self._executed = True
+            return self._cached_result
 
 
 __all__ = [

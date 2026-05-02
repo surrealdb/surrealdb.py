@@ -214,6 +214,34 @@ with Surreal("ws://localhost:8000/rpc") as db:
 > auto-executing magic methods is `__getitem__`, `__iter__`, `__len__`,
 > `__contains__`, `__eq__`, `__ne__`, `__bool__`, and `__getattr__`.
 
+### Thread safety
+
+Sync builders guard their cache with a per-builder lock so consuming the
+same builder from multiple threads issues exactly one RPC. They are
+**not** safe for concurrent *reconfiguration* though — calling `.merge()`
+on one thread while another consumes the result is a race on the
+builder's clause/data state that the lock does not cover. Treat builders
+as single-shot, single-owner values; pass the realised result between
+threads, not the builder itself.
+
+The underlying `BlockingWsSurrealConnection` is itself thread-safe (it
+serialises send/recv with an internal lock), so sharing a connection
+across threads and creating per-thread builders against it is fine.
+
+### Async cancellation and server truth
+
+If you `cancel()` an async task that's awaiting an in-flight builder,
+the SDK does the right thing on the *client* side: the cache is reset so
+fresh callers retry, and concurrent peer awaiters see a `SurrealError`
+rather than a phantom `CancelledError` they didn't request.
+
+What it cannot do is roll back the *server*. Once an RPC has reached
+SurrealDB, the operation may still complete server-side even after the
+client cancels. For mutations this means cancellation is **not** an
+abort — re-read the affected records before assuming "nothing happened",
+or wrap mutations in a `BEGIN ... COMMIT` block via `query()` if you
+need atomic rollback semantics.
+
 ## Multi-statement queries and transactions (issue #232 fix)
 
 `query()` now surfaces every statement result. When the server returns a

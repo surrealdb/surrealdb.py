@@ -8,6 +8,7 @@ Tests for the v3.0 builder safety properties:
 """
 
 import asyncio
+import threading
 from collections.abc import AsyncGenerator, Generator
 from dataclasses import dataclass
 
@@ -365,6 +366,51 @@ def test_sync_builder_bool_triggers_execution(
     assert "pending" not in repr(builder)
     after = blocking_ws_connection.query("SELECT n FROM counter:bool_check")
     assert after[0]["n"] == 6  # update ran exactly once
+
+
+# ---------------------------------------------------------------------------
+# Sync builders are thread-safe for cache reads
+# ---------------------------------------------------------------------------
+
+
+def test_sync_builder_thread_safe_run_once(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    _sync_setup: None,
+) -> None:
+    """Consuming the same builder from N threads must issue exactly 1 RPC.
+
+    Without the per-builder lock, multiple threads racing through
+    ``_run_once`` would each see ``_executed=False`` and fire the
+    operation independently - corrupting the cache and (for mutations)
+    duplicating side effects.
+    """
+    blocking_ws_connection.query(
+        "CREATE counter:thread_safe SET n = 0"
+    ).execute()
+    builder = blocking_ws_connection.query(
+        "UPDATE counter:thread_safe SET n = n + 1 RETURN AFTER"
+    )
+
+    results: list[object] = []
+    barrier = threading.Barrier(8)
+
+    def consume() -> None:
+        barrier.wait()  # release all threads simultaneously
+        results.append(builder.execute())
+
+    threads = [threading.Thread(target=consume) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    # Every thread sees the *same* cached result.
+    assert all(r == results[0] for r in results)
+    # And the UPDATE ran exactly once - n is 1, not 8.
+    after = blocking_ws_connection.query(
+        "SELECT n FROM counter:thread_safe"
+    )
+    assert after[0]["n"] == 1
 
 
 # ---------------------------------------------------------------------------
