@@ -229,3 +229,95 @@ async def test_table_string_with_safe_chars_works(
     rows = await async_ws_connection.select("counter")
     assert isinstance(rows, list)
     assert len(rows) >= 1
+
+
+# ---------------------------------------------------------------------------
+# Reconfiguration after execution must raise
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_async_crud_reconfigure_after_execute_raises(
+    async_ws_connection: AsyncWsSurrealConnection,
+    _async_setup: None,
+    _sync_setup: None,
+) -> None:
+    """Calling another clause method after `await` must raise.
+
+    Without this check a re-awaited builder would silently return the
+    *first* cached result, ignoring the new clause, which is one of the
+    most insidious shapes of a stale-cache bug.
+    """
+    builder = async_ws_connection.create("counter:reconfig", {"n": 1})
+    await builder
+    with pytest.raises(SurrealError, match="Cannot reconfigure"):
+        builder.merge({"n": 2})
+    with pytest.raises(SurrealError, match="Cannot reconfigure"):
+        builder.content({"n": 3})
+
+
+@pytest.mark.asyncio
+async def test_async_insert_reconfigure_after_execute_raises(
+    async_ws_connection: AsyncWsSurrealConnection,
+    _async_setup: None,
+    _sync_setup: None,
+) -> None:
+    builder = async_ws_connection.insert("counter", {"n": 1})
+    await builder
+    with pytest.raises(SurrealError, match="Cannot reconfigure"):
+        builder.relation()
+    with pytest.raises(SurrealError, match="Cannot reconfigure"):
+        builder.content({"n": 2})
+
+
+def test_sync_crud_reconfigure_after_execute_raises(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    _sync_setup: None,
+) -> None:
+    builder = blocking_ws_connection.create("counter:sync_reconfig", {"n": 1})
+    builder.execute()  # explicit consumption
+    with pytest.raises(SurrealError, match="Cannot reconfigure"):
+        builder.merge({"n": 2})
+
+
+def test_sync_insert_reconfigure_after_execute_raises(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    _sync_setup: None,
+) -> None:
+    builder = blocking_ws_connection.insert("counter", {"n": 1})
+    builder.execute()
+    with pytest.raises(SurrealError, match="Cannot reconfigure"):
+        builder.relation()
+
+
+# ---------------------------------------------------------------------------
+# Sync `query().into()` keeps `_executed` / repr in lockstep
+# ---------------------------------------------------------------------------
+
+
+def test_sync_query_into_marks_executed(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    _sync_setup: None,
+) -> None:
+    """After `.into(cls)` the builder must report executed, not pending.
+
+    Previously `.into()` populated the values cache without flipping
+    `_executed`, so `repr(builder)` after a successful `.into()` would
+    misleadingly print "pending" even though the RPC had already run.
+    """
+
+    @dataclass
+    class Pair:
+        a: int
+        b: int
+
+    blocking_ws_connection.query(
+        "CREATE counter:into_repr SET n = 1"
+    ).execute()
+    builder = blocking_ws_connection.query("RETURN 10; RETURN 20;")
+    assert "pending" in repr(builder)
+    mapped = builder.into(Pair)
+    assert mapped == Pair(a=10, b=20)
+    assert "pending" not in repr(builder)
+    # And re-executing returns the same cached tuple without re-fetching.
+    assert builder.execute() == (10, 20)

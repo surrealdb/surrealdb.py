@@ -228,7 +228,15 @@ class _CrudState:
         self._mode: str = _Clause.DEFAULT
         self._data: Value | None = None
 
+    def _check_not_executed(self) -> None:
+        """Raise if this builder has already been executed.
+
+        Subclasses override to consult their own execution state. The
+        default no-op keeps :class:`_CrudState` usable on its own.
+        """
+
     def _set_clause(self, mode: str, data: Value | None) -> None:
+        self._check_not_executed()
         if self._operation == "DELETE":
             raise SurrealError(
                 "DELETE does not support .content/.replace/.merge/.patch clauses"
@@ -285,6 +293,9 @@ class _InsertState:
         self._table = table
         self._data = data
         self._relation = relation
+
+    def _check_not_executed(self) -> None:
+        """Subclasses override to consult their own execution state."""
 
     def _build(self) -> tuple[str, dict[str, Any]]:
         if self._data is None:
@@ -427,7 +438,9 @@ class _AsyncCrudBuilder(_CrudState, Generic[T]):
     """Awaitable CRUD builder for async connections.
 
     Awaiting the same builder twice (or from concurrent tasks) only issues
-    one RPC; the cached result is returned thereafter.
+    one RPC; the cached result is returned thereafter. Re-configuring the
+    builder *after* it has executed (calling another clause method)
+    raises - cached results would otherwise silently mask the new clause.
     """
 
     def __init__(
@@ -445,6 +458,13 @@ class _AsyncCrudBuilder(_CrudState, Generic[T]):
         if data is not None:
             self._mode = _Clause.CONTENT
             self._data = data
+
+    def _check_not_executed(self) -> None:
+        if self._runner._future is not None:
+            raise SurrealError(
+                f"Cannot reconfigure a {self.__class__.__name__} after it has "
+                "executed. Create a new builder for a fresh operation."
+            )
 
     def content(self, data: Value) -> "_AsyncCrudBuilder[T]":
         self._set_clause(_Clause.CONTENT, data)
@@ -475,7 +495,11 @@ class _AsyncCrudBuilder(_CrudState, Generic[T]):
 
 
 class _AsyncInsertBuilder(_InsertState):
-    """Awaitable INSERT builder for async connections (idempotent)."""
+    """Awaitable INSERT builder for async connections (idempotent).
+
+    Re-configuring the builder *after* it has executed raises rather than
+    silently returning the cached result.
+    """
 
     def __init__(
         self,
@@ -488,11 +512,20 @@ class _AsyncInsertBuilder(_InsertState):
         self._executor = executor
         self._runner = _AsyncCachedRunner()
 
+    def _check_not_executed(self) -> None:
+        if self._runner._future is not None:
+            raise SurrealError(
+                f"Cannot reconfigure a {self.__class__.__name__} after it has "
+                "executed. Create a new builder for a fresh operation."
+            )
+
     def relation(self) -> "_AsyncInsertBuilder":
+        self._check_not_executed()
         self._relation = True
         return self
 
     def content(self, data: Value) -> "_AsyncInsertBuilder":
+        self._check_not_executed()
         self._data = data
         return self
 
@@ -654,7 +687,9 @@ class _SyncCrudBuilder(_CrudState, _SyncBuilderMixin, Generic[T]):
     For the no-clause case (plain ``db.create(record)``) the sync builder
     is lazy and only runs once the result is consumed (indexed, iterated,
     compared, etc.) or ``.execute()`` is called explicitly. Repeat consumes
-    return the same cached result.
+    return the same cached result; calling another clause method after the
+    builder has executed raises rather than silently returning the stale
+    result.
     """
 
     def __init__(
@@ -673,6 +708,13 @@ class _SyncCrudBuilder(_CrudState, _SyncBuilderMixin, Generic[T]):
         if data is not None:
             self._mode = _Clause.CONTENT
             self._data = data
+
+    def _check_not_executed(self) -> None:
+        if self._executed:
+            raise SurrealError(
+                f"Cannot reconfigure a {self.__class__.__name__} after it has "
+                "executed. Create a new builder for a fresh operation."
+            )
 
     def content(self, data: Value) -> T:
         self._set_clause(_Clause.CONTENT, data)
@@ -703,7 +745,11 @@ class _SyncCrudBuilder(_CrudState, _SyncBuilderMixin, Generic[T]):
 
 
 class _SyncInsertBuilder(_InsertState, _SyncBuilderMixin):
-    """Lazy INSERT builder for sync connections (idempotent)."""
+    """Lazy INSERT builder for sync connections (idempotent).
+
+    Reconfiguring the builder *after* it has executed raises rather than
+    silently returning the cached result.
+    """
 
     def __init__(
         self,
@@ -717,11 +763,20 @@ class _SyncInsertBuilder(_InsertState, _SyncBuilderMixin):
         self._executed = False
         self._cached_result: Any = None
 
+    def _check_not_executed(self) -> None:
+        if self._executed:
+            raise SurrealError(
+                f"Cannot reconfigure a {self.__class__.__name__} after it has "
+                "executed. Create a new builder for a fresh operation."
+            )
+
     def relation(self) -> "_SyncInsertBuilder":
+        self._check_not_executed()
         self._relation = True
         return self
 
     def content(self, data: Value) -> list[Value]:
+        self._check_not_executed()
         self._data = data
         return cast(list[Value], self._run_once())
 
@@ -741,7 +796,9 @@ class _SyncQueryBuilder(_QueryState, _SyncBuilderMixin):
     """Lazy QUERY builder for sync connections.
 
     Idempotent: ``.execute()``, magic-method consumption, and
-    ``.into(cls)`` all share a single cached fetch.
+    ``.into(cls)`` all share a single cached fetch and update
+    ``_executed`` consistently, so ``repr(builder)`` after any of them
+    no longer shows ``"pending"``.
     """
 
     def __init__(
@@ -756,25 +813,24 @@ class _SyncQueryBuilder(_QueryState, _SyncBuilderMixin):
         self._cached_result: Any = None
         self._cached_values: list[Any] | None = None
 
-    def _fetch_values(self) -> list[Any]:
-        if self._cached_values is None:
-            response = self._executor(self._query, self._variables)
-            self._cached_values = self._statement_values(response)
-        return self._cached_values
-
     def into(self, cls: type[T]) -> T:
-        # Reuse this builder's cached fetch so `db.query("...")` followed
-        # by `db.query("...").into(T)` (or vice versa via the same instance)
-        # only issues one RPC.
-        values = self._fetch_values()
-        return _map_to_class(cls, values)
+        # Reuse this builder's cached fetch so `await q` plus `q.into(T)`
+        # on the same instance only issues one RPC. Going through
+        # ``_run_once`` (rather than ``_fetch_values`` directly) keeps
+        # ``_executed`` and ``_cached_result`` in lockstep so subsequent
+        # ``repr(builder)`` shows the real result, not "pending".
+        self._run_once()
+        assert self._cached_values is not None  # set by _run_once
+        return _map_to_class(cls, self._cached_values)
 
     def execute(self) -> Value | tuple[Value, ...]:
         return cast("Value | tuple[Value, ...]", self._run_once())
 
     def _run_once(self) -> Any:
         if not self._executed:
-            values = self._fetch_values()
+            response = self._executor(self._query, self._variables)
+            values = self._statement_values(response)
+            self._cached_values = values
             if len(values) == 1:
                 self._cached_result = values[0]
             else:
