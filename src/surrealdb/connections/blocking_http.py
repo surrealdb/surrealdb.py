@@ -108,12 +108,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
                 and error.get("code") == -32000
                 and "No result found" in error.get("message", "")
             ):
-                auth_response = self.query("SELECT * FROM $auth")
-                if (
-                    auth_response
-                    and isinstance(auth_response, list)
-                    and len(auth_response) > 0
-                ):
+                auth_response = self.query("SELECT * FROM $auth").execute()
+                if isinstance(auth_response, list) and len(auth_response) > 0:
                     return auth_response[0]
             if error is not None:
                 raise parse_rpc_error(error)

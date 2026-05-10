@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `db.patch(record, data)` — use `db.update(record).patch(data)`.
 - **Breaking:** `db.insert_relation(table, data)` — use `db.insert(table, data, relation=True)` or `db.insert(table).relation().content(data)`.
 
+### Fixed
+- Restored the record-level auth fallback in `BlockingHttpSurrealConnection.info()`. When the server returned `No result found` from `INFO` (record-auth scenario), the SDK now retries via `SELECT * FROM $auth` and returns the resolved record; the fallback was inadvertently dead in the initial v3 builder migration because `query()` returns a lazy builder.
+
 ## [2.0.1]
 ### Changed
 - **Breaking:** WebSocket `subscribe_live()` now yields the full live-notification object (`action`, `result`, `id`, …) from the server instead of only the inner record ([#247](https://github.com/surrealdb/surrealdb.py/issues/247)).
