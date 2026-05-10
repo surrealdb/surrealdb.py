@@ -22,9 +22,9 @@ def create_data() -> dict[str, Any]:
 def setup_user(
     blocking_ws_connection: BlockingWsSurrealConnection,
 ) -> Generator[None, None, None]:
-    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query("DELETE user;").execute()
     yield
-    blocking_ws_connection.query("DELETE user;")
+    blocking_ws_connection.query("DELETE user;").execute()
 
 
 def test_create_string(

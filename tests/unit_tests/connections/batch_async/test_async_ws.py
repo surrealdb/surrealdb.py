@@ -28,7 +28,7 @@ async def test_batch(async_ws_connection: AsyncWsSurrealConnection) -> None:
                     async_ws_connection.query(
                         f"RETURN sleep({sleep_fn}($d)) or $p**2",
                         dict(d=10 if num % 2 else 0, p=num),
-                    )
+                    ).execute()
                 )
                 for num in range(5)
             ]

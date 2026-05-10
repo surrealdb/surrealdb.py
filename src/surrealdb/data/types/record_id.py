@@ -20,6 +20,35 @@ if TYPE_CHECKING:
 RecordIdType = Union[str, "RecordID", Table]
 
 
+def escape_identifier(identifier: str) -> str:
+    """Escape a string identifier for use inside SurrealQL.
+
+    Wraps the identifier in ``⟨...⟩`` (with any ``⟩`` inside replaced by
+    ``\\⟩``) when it contains characters outside the safe-identifier
+    subset - i.e. anything other than alphanumerics or underscore, OR
+    a name that is all-digit / all-symbol (no alphabetic char) and would
+    otherwise be ambiguous with a numeric id. Plain identifiers are
+    returned unchanged.
+
+    Used by :meth:`RecordID.__str__` for record-id rendering and by the
+    v3 CRUD builders for ``INSERT`` target inlining (SurrealDB rejects
+    parameter binding such as ``type::table($x)`` on INSERT targets, so
+    the SDK escapes the target identifier instead).
+    """
+    if not identifier:
+        return f"⟨{identifier}⟩"
+
+    has_special_chars = any(not c.isalnum() and c != "_" for c in identifier)
+    # All-digit or all-symbol names need escaping to disambiguate from
+    # numeric IDs in SurrealQL's record-id literal syntax.
+    has_no_alpha = not any(c.isalpha() for c in identifier)
+
+    if has_special_chars or has_no_alpha:
+        escaped = identifier.replace("⟩", "\\⟩")
+        return f"⟨{escaped}⟩"
+    return identifier
+
+
 class RecordID:
     """
     An identifier of the record. This class houses the ID of the row, and the table name.
@@ -42,49 +71,12 @@ class RecordID:
         self.table_name: str = table_name
         self.id: Value = cast(Value, identifier)
 
-    @staticmethod
-    def _escape_identifier(identifier: str) -> str:
-        """
-        Escapes a string identifier if needed, following SurrealDB's EscapeRid logic.
-
-        Identifiers need escaping if:
-        - Empty string
-        - Contains non-alphanumeric characters (except underscore)
-        - Contains only digits and underscores (no alphabetic characters)
-
-        Args:
-            identifier: The string identifier to potentially escape
-
-        Returns:
-            The escaped identifier with angle brackets if needed, or the original if not
-        """
-        # Empty string needs escaping
-        if not identifier:
-            return f"⟨{identifier}⟩"
-
-        # Check if contains any non-alphanumeric character (excluding underscore)
-        has_special_chars = any(not c.isalnum() and c != "_" for c in identifier)
-
-        # Check if all characters are digits or underscores (no alphabetic characters)
-        # This means it needs escaping to distinguish from numeric IDs
-        has_no_alpha = not any(c.isalpha() for c in identifier)
-
-        # Apply escaping if any condition is met
-        if has_special_chars or has_no_alpha:
-            # Escape any angle brackets in the identifier itself
-            escaped = identifier.replace("⟩", "\\⟩")
-            return f"⟨{escaped}⟩"
-
-        return identifier
-
     def __str__(self) -> str:
         # Only escape if the identifier is a string
         if isinstance(self.id, str):
-            escaped_id = self._escape_identifier(self.id)
-            return f"{self.table_name}:{escaped_id}"
+            return f"{self.table_name}:{escape_identifier(self.id)}"
         if isinstance(self.id, bytes):
-            escaped_id = self._escape_identifier(self.id.decode())
-            return f"{self.table_name}:{escaped_id}"
+            return f"{self.table_name}:{escape_identifier(self.id.decode())}"
         return f"{self.table_name}:{self.id}"
 
     def __repr__(self) -> str:

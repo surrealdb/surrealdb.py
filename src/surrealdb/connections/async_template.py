@@ -1,7 +1,13 @@
 from collections.abc import AsyncGenerator
+from typing import Any, overload
 from uuid import UUID
 
-from surrealdb.data.types.record_id import RecordIdType
+from surrealdb.connections.builders import (
+    AsyncCrudBuilder,
+    AsyncInsertBuilder,
+    AsyncQueryBuilder,
+)
+from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.types import Tokens, Value
 
@@ -12,11 +18,9 @@ class AsyncTemplate:
 
         Args:
             url: The url of the database endpoint to connect to.
-            options: An object with options to initiate the connection to SurrealDB.
 
         Example:
-            # Connect to a remote endpoint
-            await db.connect('https://cloud.surrealdb.com/rpc');
+            await db.connect('https://cloud.surrealdb.com/rpc')
         """
         raise NotImplementedError(f"connect not implemented for: {self}")
 
@@ -66,19 +70,9 @@ class AsyncTemplate:
         Args:
             vars: Variables used in a signup query (namespace, database, access,
                 variables for record auth; or user/pass for system auth).
-                With TYPE RECORD and WITH REFRESH (SurrealDB v3+), the server
-                returns both access and refresh tokens.
 
         Returns:
             Tokens with optional access and refresh. Use access with authenticate().
-
-        Example:
-            await db.signup({
-                namespace: 'surrealdb',
-                database: 'docs',
-                access: 'user',
-                variables: { email: 'info@surrealdb.com', pass: '123456' },
-            })
         """
         raise NotImplementedError(f"signup not implemented for: {self}")
 
@@ -94,10 +88,6 @@ class AsyncTemplate:
 
         Returns:
             Tokens with optional access and refresh. Use access with authenticate().
-
-        Example:
-            await db.signin({ username: 'root', password: 'surrealdb' })
-            await db.signin({ namespace: 'ns', database: 'db', access: 'api', key: bearer_key })
         """
         raise NotImplementedError(f"signin not implemented for: {self}")
 
@@ -109,13 +99,7 @@ class AsyncTemplate:
             value: Assigns the value to the variable name.
 
         Example:
-            # Assign the variable on the connection
-            await db.let('name', {
-                first: 'Tobie',
-                last: 'Morgan Hitchcock',
-            })
-
-            # Use the variable in a subsequent query
+            await db.let('name', {'first': 'Tobie', 'last': 'Morgan Hitchcock'})
             await db.query('CREATE person SET name = $name')
         """
         raise NotImplementedError(f"let not implemented for: {self}")
@@ -125,280 +109,192 @@ class AsyncTemplate:
 
         Args:
             key: Specifies the name of the variable.
-
-        Example:
-            await db.unset('name')
         """
         raise NotImplementedError(f"unset not implemented for: {self}")
 
-    # TODO: Query can return any Value type depending on the query
-    async def query(self, query: str, vars: dict[str, Value] | None = None) -> Value:
-        """Run a unset of SurrealQL statements against the database.
+    def query(
+        self, query: str, vars: dict[str, Value] | None = None
+    ) -> AsyncQueryBuilder:
+        """Run one or more SurrealQL statements against the database.
+
+        Returns an awaitable builder. Awaiting the builder returns:
+
+        - The result Value when the server returned exactly one statement result
+        - A ``tuple[Value, ...]`` of all statement results when N>1 statements ran
+          (this is the v3.0 fix for issue #232 - earlier versions silently
+          dropped every result after the first).
+
+        Use ``.into(MyResult)`` to map the N statement results positionally onto
+        a dataclass or any class accepting keyword arguments.
 
         Args:
-            query: Specifies the SurrealQL statements.
-            vars: Assigns variables which can be used in the query.
+            query: SurrealQL statement(s).
+            vars: Variables referenced in the query.
 
         Example:
-            await db.query(
-                'CREATE person SET name = "John"; SELECT * FROM type::table($tb);',
-                { tb: 'person' }
-            )
+            single = await db.query('SELECT * FROM person')
+            many = await db.query('SELECT * FROM person; SELECT count() FROM person GROUP ALL')
+            mapped = await db.query('CREATE ...; SELECT ...').into(MyResult)
         """
         raise NotImplementedError(f"query not implemented for: {self}")
 
     async def select(self, record: RecordIdType) -> Value:
-        """Select all records in a table (or other entity),
-        or a specific record, in the database.
-
-        This function will run the following query in the database:
-        `select * from $record`
+        """Select all records in a table or a specific record.
 
         Args:
             record: The table or record ID to select.
-
-        Example:
-            db.select('person')
         """
         raise NotImplementedError(f"select not implemented for: {self}")
 
-    async def create(
-        self,
-        record: RecordIdType,
-        data: Value | None = None,
-    ) -> Value:
-        """Create a record in the database.
+    @overload
+    def create(
+        self, record: RecordID, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def create(
+        self, record: Table, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def create(
+        self, record: str, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    def create(
+        self, record: RecordIdType, data: Value | None = None
+    ) -> AsyncCrudBuilder[Any]:
+        """Create a record.
 
-        This function will run the following query in the database:
-        `create $record content $data`
+        Returns an awaitable builder. Optional clause methods:
 
-        Args:
-            record: The table or record ID.
-            data (optional): The document / record data to insert.
+        - ``.content(data)``  -> ``CREATE ... CONTENT $data``
+        - ``.replace(data)``  -> ``CREATE ... REPLACE $data``
+        - ``.merge(data)``    -> ``CREATE ... MERGE $data``
+        - ``.patch(data)``    -> ``CREATE ... PATCH $data``
+
+        ``db.create(record, data)`` is sugar for ``db.create(record).content(data)``.
 
         Example:
-            db.create
+            await db.create(RecordID('person', 'tobie'), {'name': 'Tobie'})
+            await db.create(RecordID('person', 'tobie')).merge({'name': 'Tobie'})
         """
         raise NotImplementedError(f"create not implemented for: {self}")
 
-    async def update(self, record: RecordIdType, data: Value | None = None) -> Value:
-        """Update all records in a table, or a specific record, in the database.
+    @overload
+    def update(
+        self, record: RecordID, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def update(
+        self, record: Table, data: Value | None = None
+    ) -> AsyncCrudBuilder[list[Value]]: ...
+    @overload
+    def update(
+        self, record: str, data: Value | None = None
+    ) -> AsyncCrudBuilder[Value]: ...
+    def update(
+        self, record: RecordIdType, data: Value | None = None
+    ) -> AsyncCrudBuilder[Any]:
+        """Update records (replacing the existing data by default).
 
-        This function replaces the current document / record data with the
-        specified data.
-
-        This function will run the following query in the database:
-        `update $record content $data`
-
-        Args:
-            record: The table or record ID.
-            data (optional): The document / record data to insert.
-
-        Example:
-            Update all records in a table
-                person = await db.update('person')
-
-            Update a record with a specific ID
-                record = await db.update('person:tobie', {
-                    'name': 'Tobie',
-                    'settings': {
-                        'active': true,
-                        'marketing': true,
-                        },
-                })
+        Returns an awaitable builder. Optional clause methods:
+        ``.content(data)``, ``.replace(data)``, ``.merge(data)``, ``.patch(data)``.
         """
         raise NotImplementedError(f"update not implemented for: {self}")
 
-    async def upsert(self, record: RecordIdType, data: Value | None = None) -> Value:
-        """Insert records into the database, or to update them if they exist.
+    @overload
+    def upsert(
+        self, record: RecordID, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def upsert(
+        self, record: Table, data: Value | None = None
+    ) -> AsyncCrudBuilder[list[Value]]: ...
+    @overload
+    def upsert(
+        self, record: str, data: Value | None = None
+    ) -> AsyncCrudBuilder[Value]: ...
+    def upsert(
+        self, record: RecordIdType, data: Value | None = None
+    ) -> AsyncCrudBuilder[Any]:
+        """Insert or update records.
 
-
-        This function will run the following query in the database:
-        `upsert $record content $data`
-
-        Args:
-            record: The table or record ID.
-            data (optional): The document / record data to insert.
-
-        Example:
-            Insert or update all records in a table
-                person = await db.upsert('person')
-
-            Insert or update a record with a specific ID
-                record = await db.upsert('person:tobie', {
-                    'name': 'Tobie',
-                    'settings': {
-                        'active': true,
-                        'marketing': true,
-                        },
-                })
+        Returns an awaitable builder. Optional clause methods:
+        ``.content(data)``, ``.replace(data)``, ``.merge(data)``, ``.patch(data)``.
         """
         raise NotImplementedError(f"upsert not implemented for: {self}")
 
-    async def merge(self, record: RecordIdType, data: Value | None = None) -> Value:
-        """Modify by deep merging all records in a table, or a specific record, in the database.
+    @overload
+    def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def delete(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
+    @overload
+    def delete(self, record: str) -> AsyncCrudBuilder[Value]: ...
+    def delete(self, record: RecordIdType) -> AsyncCrudBuilder[Any]:
+        """Delete records.
 
-        This function merges the current document / record data with the
-        specified data.
-
-        This function will run the following query in the database:
-        `update $record merge $data`
-
-        Args:
-            record: The table name or the specific record ID to change.
-            data (optional): The document / record data to insert.
-
-        Example:
-            Update all records in a table
-                people = await db.merge('person', {
-                    'updated_at':  str(datetime.datetime.utcnow())
-                    })
-
-            Update a record with a specific ID
-                person = await db.merge('person:tobie', {
-                    'updated_at': str(datetime.datetime.utcnow()),
-                    'settings': {
-                        'active': True,
-                        },
-                    })
-
-        """
-        raise NotImplementedError(f"merge not implemented for: {self}")
-
-    async def patch(self, record: RecordIdType, data: Value | None = None) -> Value:
-        """Apply JSON Patch changes to all records, or a specific record, in the database.
-
-        This function patches the current document / record data with
-        the specified JSON Patch data.
-
-        This function will run the following query in the database:
-        `update $record patch $data`
-
-        Args:
-            record: The table or record ID.
-            data: The data to modify the record with.
-
-        Example:
-            Update all records in a table
-                people = await db.patch('person', [
-                    { 'op': "replace", 'path': "/created_at", 'value': str(datetime.datetime.utcnow()) }])
-
-            Update a record with a specific ID
-            person = await db.patch('person:tobie', [
-                { 'op': "replace", 'path': "/settings/active", 'value': False },
-                { 'op': "add", "path": "/tags", "value": ["developer", "engineer"] },
-                { 'op': "remove", "path": "/temp" },
-            ])
-        """
-        raise NotImplementedError(f"patch not implemented for: {self}")
-
-    async def delete(self, record: RecordIdType) -> Value:
-        """Delete all records in a table, or a specific record, from the database.
-
-        This function will run the following query in the database:
-        `delete $record`
-
-        Args:
-            record: The table name or a RecordID to delete.
-
-        Example:
-            Delete a specific record from a table
-                await db.delete(RecordID('person', 'h5wxrf2ewk8xjxosxtyc'))
-
-            Delete all records from a table
-                await db.delete('person')
+        Returns an awaitable builder. ``DELETE`` does not support clause methods.
         """
         raise NotImplementedError(f"delete not implemented for: {self}")
 
     async def info(self) -> Value:
-        """This returns the record of an authenticated record user.
-
-        Example:
-            await db.info()
-        """
+        """Return the record of the authenticated record user."""
         raise NotImplementedError(f"info not implemented for: {self}")
 
-    async def insert(
+    def insert(
         self,
         table: str | Table,
-        data: Value,
-    ) -> Value:
-        """
-        Inserts one or multiple records in the database.
+        data: Value | None = None,
+        *,
+        relation: bool = False,
+    ) -> AsyncInsertBuilder:
+        """Insert one or multiple records (or relations) into a table.
 
-        This function will run the following query in the database:
-        `INSERT INTO $record $data`
-
-        Args:
-            table: The table name to insert records in to
-            data: Either a single document/record or an array of documents/records to insert
+        Pass ``relation=True`` to issue ``INSERT RELATION INTO``, or chain
+        ``.relation()`` on the returned builder.
 
         Example:
-            await db.insert('person', [{ name: 'Tobie'}, { name: 'Jaime'}])
-
+            await db.insert(Table('person'), [{...}, {...}])
+            await db.insert(Table('likes'), {...}, relation=True)
+            await db.insert(Table('likes')).relation().content({...})
         """
         raise NotImplementedError(f"insert not implemented for: {self}")
 
-    async def insert_relation(
+    async def run(
         self,
-        table: str | Table,
-        data: Value,
+        name: str,
+        args: list[Value] | None = None,
+        version: str | None = None,
     ) -> Value:
-        """
-        Inserts one or multiple relations in the database.
-
-        This function will run the following query in the database:
-        `INSERT RELATION INTO $table $data`
+        """Run a SurrealDB function and return its result.
 
         Args:
-            table: The table name to insert records in to
-            data: Either a single document/record or an array of documents/records to insert
+            name: Function name (e.g. ``"fn::increment"``).
+            args: Positional arguments forwarded to the function.
+            version: Optional function version selector.
 
         Example:
-            await db.insert_relation('likes', { in: person:1, id: 'object', out: person:2})
-
+            await db.run('fn::increment', [1])
         """
-        raise NotImplementedError(f"insert_relation not implemented for: {self}")
+        raise NotImplementedError(f"run not implemented for: {self}")
 
     async def live(self, table: str | Table, diff: bool = False) -> UUID:
-        """Initiates a live query for a specified table name.
+        """Initiate a live query on the given table.
 
         Args:
-            table: The table name to listen for changes for.
-            diff: If unset to true, live notifications will include
-            an array of JSON Patch objects, rather than
-            the entire record for each notification. Defaults to false.
+            table: The table name to listen for changes on.
+            diff: If True, notifications include JSON Patch diffs rather than
+                full records. Defaults to False.
 
         Returns:
-            The live query uuid
-
-        Example:
-            await db.live('person')
+            The live query UUID.
         """
         raise NotImplementedError(f"live not implemented for: {self}")
 
     async def subscribe_live(
         self, query_uuid: str | UUID
     ) -> AsyncGenerator[dict[str, Value], None]:
-        """Iterate live notifications for the given live query id.
-
-        Args:
-            query_uuid (Union[str, UUID]): The query UUID to subscribe to.
-
-        Yields:
-            dict: Each live notification from the server (``action``, ``result``, ``id``,
-            ``record``, etc.), not only the changed record payload.
-        """
+        """Iterate live notifications for the given live query id."""
         raise NotImplementedError(f"subscribe_live not implemented for: {self}")
 
     async def kill(self, query_uuid: str | UUID) -> None:
-        """Kills a running live query by it's UUID.
-
-        Args:
-            query_uuid: The UUID of the live query you wish to kill.
-
-        Example:
-            await db.kill(UUID)
-
-        """
+        """Kill a running live query by its UUID."""
         raise NotImplementedError(f"kill not implemented for: {self}")

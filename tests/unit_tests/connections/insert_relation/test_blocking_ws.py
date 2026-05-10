@@ -11,17 +11,17 @@ from surrealdb.data.types.record_id import RecordID
 def setup_data(
     blocking_ws_connection: BlockingWsSurrealConnection,
 ) -> Generator[None, None, None]:
-    blocking_ws_connection.query("DELETE user;")
-    blocking_ws_connection.query("DELETE likes;")
+    blocking_ws_connection.query("DELETE user;").execute()
+    blocking_ws_connection.query("DELETE likes;").execute()
     blocking_ws_connection.query(
         "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', password = 'password123', enabled = true;"
-    )
+    ).execute()
     blocking_ws_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password456', enabled = true;"
-    )
+    ).execute()
     yield
-    blocking_ws_connection.query("DELETE user;")
-    blocking_ws_connection.query("DELETE likes;")
+    blocking_ws_connection.query("DELETE user;").execute()
+    blocking_ws_connection.query("DELETE likes;").execute()
 
 
 def check_outcome(outcome: list[Any]) -> None:
@@ -44,7 +44,7 @@ def test_insert_relation_record_ids(
             "out": RecordID("likes", 400),
         },
     ]
-    outcome = blocking_ws_connection.insert_relation("likes", data)
+    outcome = blocking_ws_connection.insert("likes", data, relation=True)
     assert RecordID("user", "tobie") == outcome[0]["in"]
     assert RecordID("likes", 123) == outcome[0]["out"]
     assert RecordID("user", "jaime") == outcome[1]["in"]
@@ -58,6 +58,6 @@ def test_insert_relation_record_id(
         "in": RecordID("user", "tobie"),
         "out": RecordID("likes", 123),
     }
-    outcome = blocking_ws_connection.insert_relation("likes", data)
+    outcome = blocking_ws_connection.insert("likes", data, relation=True)
     assert RecordID("user", "tobie") == outcome[0]["in"]
     assert RecordID("likes", 123) == outcome[0]["out"]

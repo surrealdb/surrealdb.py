@@ -21,7 +21,7 @@ def test_live_subscription(
     # with live notifications (same socket would race QUERY vs notification).
     blocking_ws_connection_secondary.query(
         "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', password = 'password456', enabled = true;"
-    )
+    ).execute()
 
     # Wait for the live subscription update
     try:

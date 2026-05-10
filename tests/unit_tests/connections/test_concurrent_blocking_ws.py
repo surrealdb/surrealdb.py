@@ -24,9 +24,9 @@ def setup_data(
     blocking_ws_connection.query_raw("DELETE likes;")
     blocking_ws_connection.query_raw("DELETE document;")
     blocking_ws_connection.query_raw("REMOVE TABLE user;")
-    blocking_ws_connection.query("DEFINE TABLE IF NOT EXISTS user SCHEMALESS;")
-    blocking_ws_connection.query("CREATE user:1 SET name = 'User 1';")
-    blocking_ws_connection.query("CREATE user:2 SET name = 'User 2';")
+    blocking_ws_connection.query("DEFINE TABLE IF NOT EXISTS user SCHEMALESS;").execute()
+    blocking_ws_connection.query("CREATE user:1 SET name = 'User 1';").execute()
+    blocking_ws_connection.query("CREATE user:2 SET name = 'User 2';").execute()
     yield
     blocking_ws_connection.query_raw("DELETE user;")
     blocking_ws_connection.query_raw("DELETE likes;")
@@ -48,12 +48,13 @@ def test_concurrent_insert_relation(
     def insert_relation_task(task_id: int):
         """Execute an insert_relation and verify the response."""
         try:
-            result = blocking_ws_connection.insert_relation(
+            result = blocking_ws_connection.insert(
                 "likes",
                 {
                     "in": RecordID("user", str(task_id % 2 + 1)),
                     "out": RecordID("likes", task_id),
                 },
+                relation=True,
             )
 
             # Verify we got the correct response for this specific request
@@ -134,9 +135,10 @@ def test_concurrent_mixed_operations(
     def insert_relation_task(task_id: int):
         """Execute an insert_relation."""
         try:
-            result = blocking_ws_connection.insert_relation(
+            result = blocking_ws_connection.insert(
                 "likes",
                 {"in": RecordID("user", "1"), "out": RecordID("likes", task_id)},
+                relation=True,
             )
 
             expected_out = RecordID("likes", task_id)
@@ -195,8 +197,10 @@ def test_sequential_operations_still_work(
     assert doc["content"] == "Test"
 
     # Create a relation
-    relation = blocking_ws_connection.insert_relation(
-        "likes", {"in": RecordID("user", "1"), "out": RecordID("document", 100)}
+    relation = blocking_ws_connection.insert(
+        "likes",
+        {"in": RecordID("user", "1"), "out": RecordID("document", 100)},
+        relation=True,
     )
     assert relation[0]["in"] == RecordID("user", "1")
     assert relation[0]["out"] == RecordID("document", 100)

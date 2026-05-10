@@ -1,8 +1,21 @@
 from typing import Any
 
+from surrealdb.connections.builders import (
+    _resource_to_variable,  # pyright: ignore[reportPrivateUsage]
+)
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.errors import SurrealError, parse_query_error, parse_rpc_error
+
+# These are re-exported for backwards compatibility with downstream code
+# that imported them via ``surrealdb.connections.utils_mixin``.
+__all__ = [
+    "RecordID",
+    "RecordIdType",
+    "SurrealError",
+    "Table",
+    "UtilsMixin",
+]
 
 
 class UtilsMixin:
@@ -71,27 +84,11 @@ class UtilsMixin:
     def _resource_to_variable(
         resource: RecordIdType, variables: dict[str, Any], var_name: str
     ) -> str:
-        """
-        Converts a resource (Table, RecordID, or string) into a variable reference for SQL queries.
-        Similar to Rust SDK's for_sql_query method.
+        """Render *resource* as a variable reference inside generated SurrealQL.
 
-        Args:
-            resource: The resource to convert (Table, RecordID, or string)
-            variables: Dictionary to store the variable value
-            var_name: Name of the variable to use
-
-        Returns:
-            Variable reference string (e.g., "$_table") or raw string for complex queries
+        Single source of truth: this method delegates to
+        :func:`surrealdb.connections.builders._resource_to_variable` so the
+        legacy ``select()`` code path and the new builder pipeline can never
+        diverge in their parameterisation rules.
         """
-        if isinstance(resource, Table):
-            # Table objects should use their table_name directly in SQL
-            # since they don't have CBOR serialization
-            return resource.table_name
-        elif isinstance(resource, RecordID):
-            variables[var_name] = resource
-            return f"${var_name}"
-        else:
-            # For strings, use them directly in SQL without converting to variables
-            # This avoids issues with SurrealDB not properly handling RecordID/Table variables
-            # in certain contexts (like DELETE)
-            return resource
+        return _resource_to_variable(resource, variables, var_name)

@@ -35,7 +35,7 @@ async def test_merge_string(
     async_ws_connection: AsyncWsSurrealConnection, setup_user: None
 ) -> None:
     record_id = RecordID("user", "tobie")
-    outcome = await async_ws_connection.merge("user:tobie")
+    outcome = await async_ws_connection.update("user:tobie").merge({})
     assert outcome["id"] == record_id
     assert outcome["name"] == "Tobie"
     result = await async_ws_connection.query("SELECT * FROM user;")
@@ -50,7 +50,7 @@ async def test_merge_string_with_data(
     setup_user: None,
 ) -> None:
     record_id = RecordID("user", "tobie")
-    first_outcome = await async_ws_connection.merge("user:tobie", merge_data)
+    first_outcome = await async_ws_connection.update("user:tobie").merge(merge_data)
     assert first_outcome["id"] == record_id
     assert first_outcome["name"] == "Jaime"
     assert first_outcome["email"] == "jaime@example.com"
@@ -67,7 +67,7 @@ async def test_merge_record_id(
     async_ws_connection: AsyncWsSurrealConnection, setup_user: None
 ) -> None:
     record_id = RecordID("user", "tobie")
-    first_outcome = await async_ws_connection.merge(record_id)
+    first_outcome = await async_ws_connection.update(record_id).merge({})
     assert first_outcome["id"] == record_id
     assert first_outcome["name"] == "Tobie"
     result = await async_ws_connection.query("SELECT * FROM user;")
@@ -82,7 +82,7 @@ async def test_merge_record_id_with_data(
     setup_user: None,
 ) -> None:
     record_id = RecordID("user", "tobie")
-    outcome = await async_ws_connection.merge(record_id, merge_data)
+    outcome = await async_ws_connection.update(record_id).merge(merge_data)
     assert outcome["id"] == record_id
     assert outcome["name"] == "Jaime"
     assert outcome["email"] == "jaime@example.com"
@@ -100,7 +100,7 @@ async def test_merge_table(
 ) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")
-    first_outcome = await async_ws_connection.merge(table)
+    first_outcome = await async_ws_connection.update(table).merge({})
     assert first_outcome[0]["id"] == record_id
     assert first_outcome[0]["name"] == "Tobie"
     result = await async_ws_connection.query("SELECT * FROM user;")
@@ -116,7 +116,7 @@ async def test_merge_table_with_data(
 ) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")
-    outcome = await async_ws_connection.merge(table, merge_data)
+    outcome = await async_ws_connection.update(table).merge(merge_data)
     assert outcome[0]["id"] == record_id
     assert outcome[0]["name"] == "Jaime"
     assert outcome[0]["email"] == "jaime@example.com"

@@ -20,27 +20,27 @@ def setup_blocking_http_signin() -> None:
     _ = connection.use(namespace=namespace, database=database_name)
     _ = connection.query_raw("DELETE user;")
     _ = connection.query_raw("REMOVE TABLE user;")
-    _ = connection.query(
+    connection.query(
         "DEFINE TABLE user SCHEMAFULL PERMISSIONS FOR select, update, delete WHERE id = $auth.id;"
         "DEFINE FIELD name ON user TYPE string;"
         "DEFINE FIELD email ON user TYPE string;"
         "DEFINE FIELD password ON user TYPE string;"
         "DEFINE FIELD enabled ON user TYPE bool;"
         "DEFINE INDEX email ON user FIELDS email UNIQUE;"
-    )
+    ).execute()
     _ = connection.query_raw("REMOVE ACCESS user ON DATABASE;")
-    _ = connection.query(
+    connection.query(
         "DEFINE ACCESS user ON DATABASE TYPE RECORD "
         "SIGNUP ( CREATE user SET name = $name, email = $email, password = crypto::argon2::generate($password), enabled = true ) "
         "SIGNIN ( SELECT * FROM user WHERE email = $email AND crypto::argon2::compare(password, $password) );"
-    )
-    _ = connection.query(
+    ).execute()
+    connection.query(
         'DEFINE USER IF NOT EXISTS test ON NAMESPACE PASSWORD "test" ROLES OWNER; '
         'DEFINE USER IF NOT EXISTS test ON DATABASE PASSWORD "test" ROLES OWNER;'
-    )
-    _ = connection.query(
+    ).execute()
+    connection.query(
         "CREATE user SET name = 'test', email = 'test@gmail.com', password = crypto::argon2::generate('test'), enabled = true"
-    )
+    ).execute()
 
     yield {
         "url": url,

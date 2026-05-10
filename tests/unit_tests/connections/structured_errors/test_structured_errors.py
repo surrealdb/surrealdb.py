@@ -57,7 +57,7 @@ class TestStructuredServerErrors:
 
     def test_invalid_syntax(self, conn: BlockingWsSurrealConnection) -> None:
         with pytest.raises(ServerError) as exc_info:
-            conn.query("SEL ECT * FORM person")
+            conn.query("SEL ECT * FORM person").execute()
 
         err = exc_info.value
         assert isinstance(err, ValidationError)
@@ -69,8 +69,8 @@ class TestStructuredServerErrors:
     # --------------------------------------------------------- #
 
     def test_schema_violation(self, conn: BlockingWsSurrealConnection) -> None:
-        conn.query("DEFINE TABLE IF NOT EXISTS se_person SCHEMALESS")
-        conn.query("DEFINE FIELD IF NOT EXISTS age ON se_person TYPE int")
+        conn.query("DEFINE TABLE IF NOT EXISTS se_person SCHEMALESS").execute()
+        conn.query("DEFINE FIELD IF NOT EXISTS age ON se_person TYPE int").execute()
         conn.query_raw("DELETE se_person:1")
 
         raw = conn.query_raw('CREATE se_person:1 SET age = "not a number"')
@@ -121,9 +121,9 @@ class TestStructuredServerErrors:
     # --------------------------------------------------------- #
 
     def test_duplicate_record(self, conn: BlockingWsSurrealConnection) -> None:
-        conn.query("DEFINE TABLE IF NOT EXISTS se_dup_person SCHEMALESS")
+        conn.query("DEFINE TABLE IF NOT EXISTS se_dup_person SCHEMALESS").execute()
         conn.query_raw("DELETE se_dup_person")
-        conn.query('CREATE se_dup_person:dup SET name = "first"')
+        conn.query('CREATE se_dup_person:dup SET name = "first"').execute()
 
         raw = conn.query_raw('CREATE se_dup_person:dup SET name = "second"')
         result = raw["result"][0]
@@ -142,7 +142,7 @@ class TestStructuredServerErrors:
 
     def test_query_throws_server_error(self, conn: BlockingWsSurrealConnection) -> None:
         with pytest.raises(ServerError) as exc_info:
-            conn.query('THROW "direct throw error"')
+            conn.query('THROW "direct throw error"').execute()
 
         err = exc_info.value
         assert isinstance(err, ThrownError)

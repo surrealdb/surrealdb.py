@@ -251,6 +251,8 @@ class WsCborDescriptor:
             return self.prep_commit(obj)
         elif obj.method == RequestMethod.CANCEL:
             return self.prep_cancel(obj)
+        elif obj.method == RequestMethod.RUN:
+            return self.prep_run(obj)
 
         raise ValueError(f"Invalid method for Cbor WS encoding: {obj.method}")
 
@@ -527,6 +529,28 @@ class WsCborDescriptor:
         session = obj.kwargs.get("session")
         if session is not None:
             data["session"] = str(session) if isinstance(session, UUID) else session
+        return encode(data)
+
+    def prep_run(self, obj: RequestMessage) -> bytes:
+        name = obj.kwargs.get("name")
+        if name is None:
+            raise ValueError("run requires name (str)")
+        params: list[Any] = [name]
+        version = obj.kwargs.get("version")
+        if version is not None:
+            params.append(version)
+        args = obj.kwargs.get("args")
+        if args is not None:
+            # Pad version slot with None when args provided without version
+            if version is None:
+                params.append(None)
+            params.append(args)
+        data = {
+            "id": obj.id,
+            "method": obj.method.value,
+            "params": params,
+        }
+        _inject_session_txn(data, obj)
         return encode(data)
 
     def prep_cancel(self, obj: RequestMessage) -> bytes:
