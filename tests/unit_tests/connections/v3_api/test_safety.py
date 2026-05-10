@@ -573,3 +573,19 @@ def test_string_record_id_negative_int_kept_as_string() -> None:
     rec_pos = _string_to_record_id("counter:42", "_resource")
     assert rec_pos.id == 42
     assert isinstance(rec_pos.id, int)
+
+
+def test_string_record_id_unicode_digits_kept_as_string() -> None:
+    """``"counter:²"`` (unicode digit) is NOT coerced to int.
+
+    ``str.isdigit()`` returns True for unicode digits like ``²`` but
+    ``int()`` rejects most of them. The previous coercion path used
+    just ``isdigit()``; the new ``isascii() and isdigit()`` check keeps
+    pathological unicode-digit strings as string ids without crashing.
+    """
+    from surrealdb.connections.builders import _string_to_record_id
+
+    rec = _string_to_record_id("counter:²", "_resource")
+    assert rec.table_name == "counter"
+    assert rec.id == "²"
+    assert isinstance(rec.id, str)

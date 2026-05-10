@@ -6,7 +6,7 @@ import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data import cbor
-from surrealdb.data.types.record_id import RecordID
+from surrealdb.data.types.record_id import RecordID, escape_identifier
 from surrealdb.errors import InvalidRecordIdError
 
 
@@ -446,3 +446,61 @@ async def test_create_with_object_record_id(surrealdb_connection: Any) -> None:
     assert result["id"] == record_id
     assert result["settings"]["active"] is True
     assert result["settings"]["marketing"] is True
+
+
+# ---------------------------------------------------------------------------
+# escape_identifier — module-level public helper used by RecordID.__str__
+# and the v3 INSERT builder. Pin its input/output contract so callers can
+# reason about what gets concatenated into SurrealQL.
+# ---------------------------------------------------------------------------
+
+
+class TestEscapeIdentifier:
+    """Pin the input/output contract of ``escape_identifier``.
+
+    These tests document what the function does on the inputs the SDK
+    actually generates (alphanumerics, hyphens, spaces, ``⟨/⟩`` from
+    pathological ``Table(...)`` names). Anything that changes the output
+    here breaks ``RecordID.__str__`` and the INSERT-target rendering.
+    """
+
+    def test_plain_identifier_unchanged(self) -> None:
+        assert escape_identifier("users") == "users"
+        assert escape_identifier("user_table") == "user_table"
+
+    def test_empty_string_wrapped(self) -> None:
+        assert escape_identifier("") == "⟨⟩"
+
+    def test_hyphen_wrapped(self) -> None:
+        assert escape_identifier("hyphen-table") == "⟨hyphen-table⟩"
+
+    def test_space_wrapped(self) -> None:
+        assert escape_identifier("with space") == "⟨with space⟩"
+
+    def test_all_digits_wrapped(self) -> None:
+        # All-digit names must be escaped to disambiguate from numeric
+        # ids in SurrealQL's record-id literal grammar.
+        assert escape_identifier("123") == "⟨123⟩"
+
+    def test_digits_and_underscores_only_wrapped(self) -> None:
+        assert escape_identifier("_") == "⟨_⟩"
+        assert escape_identifier("123_456") == "⟨123_456⟩"
+
+    def test_closing_bracket_inside_is_escaped(self) -> None:
+        # ``⟩`` inside a name must be escaped as ``\⟩`` so it doesn't
+        # close the wrapping ``⟨...⟩`` early.
+        assert escape_identifier("foo⟩bar") == "⟨foo\\⟩bar⟩"
+
+    def test_opening_bracket_inside_is_left_unescaped(self) -> None:
+        # ``⟨`` inside a name is not escaped; SurrealQL's parser
+        # matches the first unescaped ``⟩`` so this round-trips, but
+        # only because there's no nested-bracket interpretation. Pin
+        # the current behaviour so callers know what we emit.
+        assert escape_identifier("foo⟨bar") == "⟨foo⟨bar⟩"
+
+    def test_backslash_inside_is_left_unescaped(self) -> None:
+        # Backslashes are not escaped by ``escape_identifier``. Names
+        # containing ``\`` are passed through; consumers that need
+        # round-trip safety with ``Table(...)`` for arbitrary unicode
+        # should pre-validate or escape before constructing ``Table``.
+        assert escape_identifier("foo\\bar") == "⟨foo\\bar⟩"

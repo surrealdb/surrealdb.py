@@ -48,7 +48,7 @@ from collections.abc import Awaitable, Callable, Generator, Iterator
 from dataclasses import fields, is_dataclass
 from typing import Any, Generic, TypeVar, cast
 
-from surrealdb.data.types.record_id import RecordID, RecordIdType
+from surrealdb.data.types.record_id import RecordID, RecordIdType, escape_identifier
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     SurrealError,
@@ -114,7 +114,12 @@ def _string_to_record_id(s: str, var_name: str) -> RecordID:
     table, _, ident = s.partition(":")
     if not table or not ident:
         raise SurrealError(f"Invalid record-id string {s!r} for resource '{var_name}'")
-    if ident.isdigit():
+    # Both checks matter: ``str.isdigit()`` returns True for unicode
+    # digits like ``"²"`` which would round-trip through ``int()`` for
+    # most but not all unicode digit forms; restricting to ASCII digits
+    # keeps the coercion predictable and matches SurrealQL's bare-int
+    # literal grammar.
+    if ident.isascii() and ident.isdigit():
         return RecordID(table, int(ident))
     return RecordID(table, ident)
 
@@ -324,7 +329,7 @@ class _InsertState:
         # other non-ASCII-identifier characters (any ``⟩`` inside the name
         # is escaped as ``\⟩``).
         if isinstance(self._table, Table):
-            escaped = RecordID._escape_identifier(self._table.table_name)  # pyright: ignore[reportPrivateUsage]
+            escaped = escape_identifier(self._table.table_name)
             return f"INSERT {rel}INTO {escaped} $_data", variables
         # Raw string: keep the strict identifier check so user-supplied
         # strings can never be concatenated into SurrealQL. Point users
