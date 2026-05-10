@@ -1,3 +1,5 @@
+#![recursion_limit = "512"]
+
 use pyo3::prelude::*;
 
 mod async_db;
