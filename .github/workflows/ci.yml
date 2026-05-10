@@ -185,9 +185,6 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
-      - name: Install maturin
-        run: uv pip install maturin
-
       - name: Build and install embedded extension
         run: cd embedded && uv run maturin develop --release
 
