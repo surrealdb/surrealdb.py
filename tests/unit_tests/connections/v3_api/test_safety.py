@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
+from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.connections.builders import (
     AsyncCrudBuilder,
@@ -23,6 +24,7 @@ from surrealdb.connections.builders import (
 )
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.errors import SurrealError
+from surrealdb.request_message.message import RequestMessage
 
 
 @pytest.fixture(autouse=True)
@@ -589,3 +591,56 @@ def test_string_record_id_unicode_digits_kept_as_string() -> None:
     assert rec.table_name == "counter"
     assert rec.id == "²"
     assert isinstance(rec.id, str)
+
+
+# ---------------------------------------------------------------------------
+# info() record-auth fallback regression guard
+# ---------------------------------------------------------------------------
+
+
+def test_blocking_http_info_record_auth_fallback(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``info()`` must fall back to ``SELECT * FROM $auth`` when ``INFO``
+    returns ``"No result found"`` (record-auth scenario).
+
+    Pin the regression: the v3 builder migration broke this once because
+    ``self.query(...)`` returns a lazy ``SyncQueryBuilder``, not a list,
+    so the ``isinstance(auth_response, list)`` guard always evaluated
+    False and the fallback became dead code. Without ``.execute()`` on
+    the builder, record-auth users see ``parse_rpc_error`` instead of
+    their ``$auth`` record.
+    """
+    auth_record = {"id": "user:tobie", "name": "Tobie"}
+    seen: list[str] = []
+
+    def fake_send(
+        message: RequestMessage,
+        operation: str,
+        bypass: bool = False,
+    ) -> dict[str, Any]:
+        seen.append(operation)
+        if operation == "getting database information":
+            # Reproduce the record-auth signal SurrealDB sends when INFO
+            # has nothing to return: error code -32000, "No result found".
+            return {
+                "id": message.id,
+                "error": {"code": -32000, "message": "No result found"},
+            }
+        if operation == "query":
+            # The fallback ``SELECT * FROM $auth`` lands here via
+            # ``query_raw`` -> ``_send``.
+            return {
+                "id": message.id,
+                "result": [{"status": "OK", "result": [auth_record]}],
+            }
+        raise AssertionError(f"unexpected _send operation: {operation!r}")
+
+    monkeypatch.setattr(blocking_http_connection, "_send", fake_send)
+
+    result = blocking_http_connection.info()
+    assert result == auth_record
+    # Both calls happened, in the right order: INFO first, then the
+    # fallback SELECT.
+    assert seen == ["getting database information", "query"]
