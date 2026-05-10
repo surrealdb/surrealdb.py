@@ -92,9 +92,12 @@ _RANGE_PATTERN = re.compile(
 def _string_to_record_id(s: str, var_name: str) -> RecordID:
     """Parse a ``"table:id"`` string into a :class:`RecordID`.
 
-    Mirrors SurrealQL's parsing of bare record-id literals: a pure-digit id
-    is coerced to ``int`` so ``"user:1234"`` and the inline literal
-    ``user:1234`` resolve to the same record.
+    Mirrors SurrealQL's parsing of bare record-id literals: a non-negative
+    pure-digit id is coerced to ``int`` so ``"user:1234"`` and the inline
+    literal ``user:1234`` resolve to the same record. Negative numeric ids
+    fall through to the string-id branch - the SurrealQL literal parser's
+    semantics for negative ints are version-dependent, so we don't guess;
+    pass an explicit ``RecordID(table, -5)`` if you need an int id.
 
     Strings with more than one ``:`` are rejected because the partitioning
     rule (split on the first colon) cannot reliably round-trip with the
@@ -111,11 +114,8 @@ def _string_to_record_id(s: str, var_name: str) -> RecordID:
     table, _, ident = s.partition(":")
     if not table or not ident:
         raise SurrealError(f"Invalid record-id string {s!r} for resource '{var_name}'")
-    if ident.lstrip("-").isdigit():
-        try:
-            return RecordID(table, int(ident))
-        except ValueError:  # pragma: no cover - defensive
-            pass
+    if ident.isdigit():
+        return RecordID(table, int(ident))
     return RecordID(table, ident)
 
 
@@ -508,6 +508,13 @@ class AsyncCrudBuilder(_CrudState, Generic[T]):
             self._data = data
 
     def _check_not_executed(self) -> None:
+        """Raise if the builder has already completed an execution.
+
+        After a cancellation the runner resets its cache, so reconfiguration
+        IS permitted in that case (the operation never reached completion -
+        the user should be able to retry with the same builder). See
+        ``_AsyncCachedRunner.run`` for the full cancellation contract.
+        """
         if self._runner.has_started:
             raise SurrealError(
                 f"Cannot reconfigure a {self.__class__.__name__} after it has "
@@ -561,6 +568,13 @@ class AsyncInsertBuilder(_InsertState):
         self._runner = _AsyncCachedRunner()
 
     def _check_not_executed(self) -> None:
+        """Raise if the builder has already completed an execution.
+
+        After a cancellation the runner resets its cache, so reconfiguration
+        IS permitted in that case (the operation never reached completion -
+        the user should be able to retry with the same builder). See
+        ``_AsyncCachedRunner.run`` for the full cancellation contract.
+        """
         if self._runner.has_started:
             raise SurrealError(
                 f"Cannot reconfigure a {self.__class__.__name__} after it has "
@@ -687,6 +701,15 @@ class _SyncBuilderMixin:
         result, call ``.execute()`` explicitly (for fire-and-forget) or
         bind the builder to a name and only access it conditionally.
 
+    .. warning::
+
+        ``__getattr__`` forwards any non-underscore attribute access to
+        the realised result. A typo
+        (``builder.contnet({"x": 1})`` instead of ``.content``) will
+        silently fire the operation and *then* raise ``AttributeError``
+        from the result. A type checker (``mypy`` / ``pyright``) catches
+        these statically.
+
     ``__repr__`` / ``__str__`` deliberately do **not** trigger execution -
     they return a ``"<...pending>"`` placeholder when the builder has not
     yet been run. This keeps loggers, debuggers, and test introspection
@@ -703,11 +726,16 @@ class _SyncBuilderMixin:
         result between threads, not the builder itself.
     """
 
-    # Subclass __init__ overrides the lock with a per-instance Lock; the
-    # other two are safe class-level defaults that subclasses also reset.
+    # The bool/None defaults are immutable and safe at class level.
+    # ``_lock`` deliberately has NO class-level default: subclasses MUST
+    # initialise a per-instance ``threading.Lock()`` in __init__.
+    # Without this guard a forgotten override would silently share one
+    # global lock across every builder instance, defeating the per-builder
+    # cache contract; with the type-only declaration, a forgotten override
+    # raises ``AttributeError`` at first ``_run_once`` call instead.
     _executed: bool = False
     _cached_result: Any = None
-    _lock: threading.Lock = threading.Lock()  # noqa: RUF012
+    _lock: threading.Lock  # pyright: ignore[reportUninitializedInstanceVariable]
 
     def _run_once(self) -> Any:  # pragma: no cover - abstract
         raise NotImplementedError

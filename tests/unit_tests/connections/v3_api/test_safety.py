@@ -11,11 +11,17 @@ import asyncio
 import threading
 from collections.abc import AsyncGenerator, Generator
 from dataclasses import dataclass
+from typing import Any
 
 import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+from surrealdb.connections.builders import (
+    AsyncCrudBuilder,
+    AsyncQueryBuilder,
+)
+from surrealdb.data.types.record_id import RecordID
 from surrealdb.errors import SurrealError
 
 
@@ -419,44 +425,151 @@ def test_sync_builder_thread_safe_run_once(
 
 
 @pytest.mark.asyncio
-async def test_async_cancellation_does_not_poison_peer_awaiters(
-    async_ws_connection: AsyncWsSurrealConnection,
-    _async_setup: None,
-    _sync_setup: None,
-) -> None:
+async def test_async_cancellation_does_not_poison_peer_awaiters() -> None:
     """Cancelling the initiating awaiter must not cancel concurrent peers.
 
-    Peer tasks awaiting the same builder should see a regular
-    SurrealError describing the cancellation rather than a phantom
-    CancelledError from a cancellation they didn't request.
-    """
-    await async_ws_connection.query("CREATE counter:cancel_test SET n = 1")
-    builder = async_ws_connection.query(
-        "UPDATE counter:cancel_test SET n = n + 1 RETURN AFTER"
-    )
+    Stub-executor variant: holds the RPC blocked on an ``asyncio.Event``
+    so the cancellation point is deterministic - no event-loop ordering
+    races. This actually exercises ``_AsyncCachedRunner.run``'s
+    ``except CancelledError`` branch every run, instead of relying on
+    timing to catch the initiator mid-flight.
 
-    # Create the cache by directly attaching to the runner without a
-    # real RPC: install a future the runner is "blocked on", then
-    # cancel the originating wait.
+    Peer tasks awaiting the same builder must see a ``SurrealError``
+    describing the cancellation, never a phantom ``CancelledError`` from
+    a cancellation they did not request.
+    """
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def stub_executor(query: str, params: dict[str, Any]) -> dict[str, Any]:
+        started.set()
+        await release.wait()
+        return {"result": [{"status": "OK", "result": 42}]}
+
+    builder = AsyncQueryBuilder(executor=stub_executor, query="RETURN 42")
     initiator = asyncio.create_task(builder.execute())
     peer = asyncio.create_task(builder.execute())
-    # Yield once so both tasks reach the await point on the shared future.
+
+    # Wait until the executor is actually running, then yield once more
+    # so the peer task has had a chance to attach to the shared future.
+    await started.wait()
     await asyncio.sleep(0)
+
     initiator.cancel()
     with pytest.raises(asyncio.CancelledError):
         await initiator
 
-    # Peer must NOT see CancelledError - it should see either the
-    # successful result (if the RPC completed first) or a SurrealError
-    # describing the cancellation. It must not propagate the cancellation.
-    try:
-        result = await peer
-    except SurrealError:
-        pass  # expected when initiator was cancelled mid-flight
-    except asyncio.CancelledError:  # pragma: no cover - regression guard
-        pytest.fail(
-            "Peer awaiter was cancelled, but it never requested cancellation"
-        )
-    else:
-        # Race: RPC finished before the cancel was processed - fine.
-        assert result is not None
+    # Peer must see SurrealError, never CancelledError.
+    with pytest.raises(SurrealError, match="cancel"):
+        await peer
+
+    # Defensive cleanup; the stub coroutine was abandoned at cancel time
+    # but `release.set()` keeps the test free of "coroutine was never
+    # awaited" warnings on some asyncio implementations.
+    release.set()
+
+
+# ---------------------------------------------------------------------------
+# Reconfigure-after-cancellation IS allowed (cache was reset)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_async_reconfigure_after_cancellation_is_allowed() -> None:
+    """Cancelled builders reset their runner cache - reconfigure IS permitted.
+
+    Pin the behaviour: a cancelled-and-retried builder accepts a fresh
+    clause method without raising. This is the deliberate flip-side of
+    the after-execute reconfigure ban
+    (test_async_crud_reconfigure_after_execute_raises). If we ever
+    change the policy, this test forces an explicit decision and a docs
+    update.
+    """
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def stub(query: str, params: dict[str, Any]) -> dict[str, Any]:
+        started.set()
+        await release.wait()
+        return {"result": [{"status": "OK", "result": [{"id": "t:1"}]}]}
+
+    builder: AsyncCrudBuilder[Any] = AsyncCrudBuilder(
+        executor=stub,
+        operation="UPDATE",
+        record=RecordID("t", 1),
+        op_name="update",
+        data={"x": 1},
+    )
+    task = asyncio.create_task(builder.execute())
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    # Cache was reset on cancellation → reconfigure must NOT raise.
+    builder.merge({"y": 2})
+
+    release.set()
+
+
+# ---------------------------------------------------------------------------
+# Reverse-order .into() then await also shares the cached fetch
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_async_into_then_await_shares_fetch(
+    async_ws_connection: AsyncWsSurrealConnection,
+    _async_setup: None,
+    _sync_setup: None,
+) -> None:
+    """``.into()`` first, then ``await`` - must share the cached fetch.
+
+    The companion ``test_async_into_shares_parent_fetch`` test covers
+    ``await q`` first then ``await q.into(T)``; this pins the reverse
+    direction so the cache contract is symmetric in both orderings.
+    """
+
+    @dataclass
+    class Pair:
+        a: int
+        b: int
+
+    await async_ws_connection.query("CREATE counter:reverse SET n = 3")
+    builder = async_ws_connection.query(
+        "UPDATE counter:reverse SET n = n + 1 RETURN AFTER;RETURN 77;"
+    )
+    mapped = await builder.into(Pair)
+    direct = await builder
+    assert isinstance(direct, tuple)
+    assert direct[0] == mapped.a
+    assert direct[1] == mapped.b
+    after = await async_ws_connection.query("SELECT n FROM counter:reverse")
+    assert isinstance(after, list)
+    assert after[0]["n"] == 4  # update ran exactly once
+
+
+# ---------------------------------------------------------------------------
+# Negative-int record-id strings are NOT silently coerced to int
+# ---------------------------------------------------------------------------
+
+
+def test_string_record_id_negative_int_kept_as_string() -> None:
+    """``"user:-5"`` becomes a string-id ``RecordID``, not an int.
+
+    The numeric-coercion path only fires for non-negative digit ids;
+    negative-int literal semantics in SurrealQL are version-dependent
+    so we don't guess. Users who genuinely want an int id pass
+    ``RecordID("user", -5)`` explicitly.
+    """
+    from surrealdb.connections.builders import _string_to_record_id
+
+    rec = _string_to_record_id("counter:-5", "_resource")
+    assert rec.table_name == "counter"
+    assert rec.id == "-5"
+    assert isinstance(rec.id, str)
+
+    # Sanity: non-negative numeric ids still coerce to int.
+    rec_pos = _string_to_record_id("counter:42", "_resource")
+    assert rec_pos.id == 42
+    assert isinstance(rec_pos.id, int)
