@@ -9,12 +9,12 @@ path = "src/surrealdb_ext/lib.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
-arc-swap = "1.7"
-pyo3 = { version = "0.27.1", features = ["extension-module", "abi3-py39"] }
+arc-swap = "1.9"
+pyo3 = { version = "0.27.2", features = ["extension-module", "abi3-py39"] }
 pyo3-async-runtimes = { version = "0.27.0", features = ["tokio-runtime"] }
 surrealdb = { version = "2", default-features = false, features = ["kv-mem", "kv-surrealkv"] }
 tokio = { version = "1", features = ["full"] }
-uuid = "1.11"
+uuid = "1.23"
 
 [profile.release]
 lto = true
