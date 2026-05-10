@@ -24,12 +24,15 @@ async def _async_setup(
         "REMOVE TABLE IF EXISTS bld; DEFINE TABLE bld SCHEMALESS;"
         "REMOVE TABLE IF EXISTS rel_x; DEFINE TABLE rel_x SCHEMALESS;"
         "REMOVE TABLE IF EXISTS rel_y; DEFINE TABLE rel_y SCHEMALESS;"
+        "REMOVE TABLE IF EXISTS ⟨hyphen-table⟩;"
+        "DEFINE TABLE ⟨hyphen-table⟩ SCHEMALESS;"
     )
     yield
     await async_ws_connection.query(
         "REMOVE TABLE IF EXISTS bld;"
         "REMOVE TABLE IF EXISTS rel_x;"
         "REMOVE TABLE IF EXISTS rel_y;"
+        "REMOVE TABLE IF EXISTS ⟨hyphen-table⟩;"
     )
 
 
@@ -40,11 +43,14 @@ def _sync_setup(
     blocking_ws_connection.query(
         "REMOVE TABLE IF EXISTS bld; DEFINE TABLE bld SCHEMALESS;"
         "REMOVE TABLE IF EXISTS rel_z; DEFINE TABLE rel_z SCHEMALESS;"
+        "REMOVE TABLE IF EXISTS ⟨hyphen-table⟩;"
+        "DEFINE TABLE ⟨hyphen-table⟩ SCHEMALESS;"
     ).execute()
     yield
     blocking_ws_connection.query(
         "REMOVE TABLE IF EXISTS bld;"
         "REMOVE TABLE IF EXISTS rel_z;"
+        "REMOVE TABLE IF EXISTS ⟨hyphen-table⟩;"
     ).execute()
 
 
@@ -203,3 +209,59 @@ def test_sync_insert_relation_kwarg(
         relation=True,
     )
     assert len(out) == 1
+
+
+# ---------------------------------------------------------------------------
+# INSERT with a Table object trusts its name (hyphens, etc.)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_async_insert_table_with_hyphen(
+    async_ws_connection: AsyncWsSurrealConnection,
+    _async_setup: None,
+    _sync_setup: None,
+) -> None:
+    """``Table('hyphen-table')`` is a typed boundary - INSERT must accept it.
+
+    The bare-string variant still rejects hyphens (raw strings are not a
+    trusted boundary, see ``test_*_unsafe_string_record_rejected``), but
+    a ``Table`` object's ``table_name`` is parameter-bound through
+    ``type::table($var)`` like every other CRUD path.
+    """
+    out = await async_ws_connection.insert(
+        Table("hyphen-table"),
+        {"name": "alice"},
+    )
+    assert isinstance(out, list)
+    assert len(out) == 1
+    assert out[0]["name"] == "alice"
+
+
+def test_sync_insert_table_with_hyphen(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    _sync_setup: None,
+) -> None:
+    out = blocking_ws_connection.insert(
+        Table("hyphen-table"),
+        {"name": "bob"},
+    ).execute()
+    assert isinstance(out, list)
+    assert len(out) == 1
+    assert out[0]["name"] == "bob"
+
+
+def test_sync_insert_raw_string_with_hyphen_rejected(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    _sync_setup: None,
+) -> None:
+    """Raw string targets keep the strict identifier check.
+
+    ``Table(...)`` is the trusted-boundary escape hatch; bare strings
+    must still match the safe-identifier pattern so user-supplied
+    untrusted strings can't be concatenated into SurrealQL.
+    """
+    from surrealdb.errors import SurrealError
+
+    with pytest.raises(SurrealError, match="raw string target"):
+        blocking_ws_connection.insert("hyphen-table", {"name": "charlie"}).execute()

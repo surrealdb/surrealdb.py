@@ -313,23 +313,31 @@ class _InsertState:
             raise SurrealError(
                 "INSERT requires data; pass via insert(table, data) or .content(data)"
             )
-        # INSERT does not accept `type::table(...)` or arbitrary parameter
-        # binding for its target across all SurrealDB versions, so we
-        # validate the table name strictly client-side and only inline
-        # values matching the safe identifier pattern. Anything else is
-        # rejected up-front rather than risking SQL injection.
-        if isinstance(self._table, Table):
-            table_name: str = self._table.table_name
-        else:
-            table_name = self._table
-        if not _TABLE_ID_PATTERN.match(table_name):
-            raise SurrealError(
-                f"INSERT requires a simple identifier for the target table "
-                f"(got {table_name!r}). Use query_raw() for non-trivial cases."
-            )
         variables: dict[str, Any] = {"_data": self._data}
         rel = "RELATION " if self._relation else ""
-        return f"INSERT {rel}INTO {table_name} $_data", variables
+        # SurrealDB does not accept ``type::table(...)`` (or any parameter
+        # binding) for the INSERT target across the supported server
+        # versions - the parser rejects ``INSERT INTO type::table($x)`` at
+        # the ``::``. So we inline the table name, but for ``Table`` we
+        # trust the typed boundary and use the same ``⟨...⟩`` escape as
+        # ``RecordID.__str__`` to safely pass through hyphens, spaces, and
+        # other non-ASCII-identifier characters (any ``⟩`` inside the name
+        # is escaped as ``\⟩``).
+        if isinstance(self._table, Table):
+            escaped = RecordID._escape_identifier(self._table.table_name)  # pyright: ignore[reportPrivateUsage]
+            return f"INSERT {rel}INTO {escaped} $_data", variables
+        # Raw string: keep the strict identifier check so user-supplied
+        # strings can never be concatenated into SurrealQL. Point users
+        # at ``Table(...)`` for non-trivial names rather than risking
+        # round-tripping unknown escape rules.
+        if not _TABLE_ID_PATTERN.match(self._table):
+            raise SurrealError(
+                f"INSERT requires a simple identifier for a raw string target "
+                f"(got {self._table!r}). Wrap the name in `Table(...)` for "
+                "non-trivial names, or use `query()` with an escaped "
+                "identifier `INSERT INTO ⟨...⟩ $data`."
+            )
+        return f"INSERT {rel}INTO {self._table} $_data", variables
 
     def _extract(self, response: dict[str, Any]) -> Any:
         op_name = "insert_relation" if self._relation else "insert"

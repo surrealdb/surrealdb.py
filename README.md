@@ -328,6 +328,13 @@ v3.0 is a breaking change. Highlights:
 | n/a                                              | `db.run("fn::name", [args])`                              |
 | n/a                                              | `db.query("...").into(MyDataclass)`                       |
 | Sync `db.query("DELETE foo")` runs immediately   | Sync `db.query("DELETE foo").execute()` (lazy builder)     |
+| `db.delete("my-table")` (silently inlined)       | `db.delete(Table("my-table"))` (raw string rejected)      |
+
+> Bare-string resource targets are now strictly validated against the
+> safe-identifier pattern (`[A-Za-z_][A-Za-z0-9_]*`) so user-supplied
+> strings can never be concatenated into the generated SurrealQL. Names
+> with hyphens, spaces, or other special characters must be wrapped in
+> `Table(...)` or `RecordID(...)`, both of which are parameter-bound.
 
 ## Embedded Database
 

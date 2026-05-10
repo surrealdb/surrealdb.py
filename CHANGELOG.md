@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `query()` now surfaces every statement result. A single-statement query returns the result `Value`; a multi-statement query (or `BEGIN ... COMMIT` block) returns `tuple[Value, ...]`. Fixes the silent-discard behaviour reported in [#232](https://github.com/surrealdb/surrealdb.py/issues/232).
 - **Breaking:** Sync `query()` / CRUD methods return a lazy builder. The operation runs when the result is consumed (indexed, iterated, compared, printed, etc.) or when `.execute()` is called explicitly. Fire-and-forget statements like `db.query("DELETE foo")` must call `.execute()` to run.
 - **Breaking:** `create`, `update`, `upsert`, `delete`, and `insert` are typed via `@overload` so type checkers infer `dict[str, Value]` for `RecordID` targets and `list[Value]` for `Table` targets.
+- **Breaking:** Raw-string resource targets are now strictly validated against the safe-identifier pattern (`[A-Za-z_][A-Za-z0-9_]*`). Names with hyphens or other special characters must be wrapped in `Table(...)` or `RecordID(...)` so the SDK can safely route them through parameter binding (CRUD ops use `type::table($var)`) or SurrealQL's `⟨...⟩` escape (`INSERT`, where the server doesn't accept `type::table()`).
 - The session and transaction classes (`AsyncSurrealSession` / `BlockingSurrealSession`, `AsyncSurrealTransaction` / `BlockingSurrealTransaction`) expose the same builder API and forward `session_id` / `txn_id` through to every operation.
 
 ### Removed
