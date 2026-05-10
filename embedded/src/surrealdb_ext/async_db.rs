@@ -1,15 +1,13 @@
-use arc_swap::ArcSwap;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3_async_runtimes::tokio::future_into_py;
-use std::collections::BTreeMap;
 use std::sync::Arc;
-use surrealdb::dbs::Session;
-use surrealdb::kvs::Datastore;
-use surrealdb::rpc::format::cbor;
-use surrealdb::rpc::{Data, RpcContext, RpcProtocolV1, RpcProtocolV2};
-use surrealdb::sql::Value;
-use tokio::sync::Semaphore;
+use surrealdb_core::dbs::Session;
+use surrealdb_core::kvs::Datastore;
+use surrealdb_core::rpc::format::cbor;
+use surrealdb_core::rpc::{DbResponse, DbResult, RpcProtocol, Request};
+use surrealdb_types::{HashMap, Value as PublicValue};
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 #[pyclass]
@@ -21,7 +19,6 @@ pub struct AsyncEmbeddedDB {
 impl AsyncEmbeddedDB {
     #[new]
     fn new(url: String) -> PyResult<Self> {
-        // Determine endpoint
         let endpoint = if url.starts_with("mem://") {
             "memory".to_string()
         } else if url.starts_with("memory") {
@@ -37,27 +34,24 @@ impl AsyncEmbeddedDB {
                 "Unsupported URL scheme: {url}. Use 'mem://', 'memory', 'file://', 'surrealkv://', or 'surrealkv+versioned://'"
             )));
         };
-        // Create the runtime
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .map_err(|e| {
                 PyErr::new::<PyRuntimeError, _>(format!("Failed to create runtime: {e}"))
             })?;
-        // Create the Datastore
         let kvs = runtime.block_on(async {
             Datastore::new(&endpoint).await.map_err(|e| {
                 PyErr::new::<PyRuntimeError, _>(format!("Failed to create datastore: {e}"))
             })
         })?;
-        // Create the default session
+        let sessions: HashMap<Option<Uuid>, Arc<RwLock<Session>>> = HashMap::new();
         let sess = Session::default().with_rt(true);
-        // Return the embedded database
+        sessions.insert(None, Arc::new(RwLock::new(sess)));
         Ok(AsyncEmbeddedDB {
             inner: Arc::new(AsyncEmbeddedDBInner {
                 kvs: Arc::new(kvs),
-                session: ArcSwap::new(Arc::new(sess.into())),
-                lock: Arc::new(Semaphore::new(1)),
+                sessions,
             }),
         })
     }
@@ -76,47 +70,51 @@ impl AsyncEmbeddedDB {
     }
 
     fn connect<'a>(&self, py: Python<'a>) -> PyResult<Bound<'a, PyAny>> {
-        // Already connected in new(), this is a no-op for compatibility
         future_into_py::<_, ()>(py, async move { Ok(()) })
     }
 
     fn close<'a>(&self, py: Python<'a>) -> PyResult<Bound<'a, PyAny>> {
-        // Datastore cleanup happens on drop, this is a no-op for compatibility
         future_into_py::<_, ()>(py, async move { Ok(()) })
     }
 
     fn execute<'a>(&self, py: Python<'a>, cbor_request: &[u8]) -> PyResult<Bound<'a, PyAny>> {
-        // Convert the request to a vector
         let data = cbor_request.to_vec();
-        // Clone the inner database
         let inner = self.inner.clone();
-        // Execute the request asynchronously
         future_into_py(py, async move {
-            // Decode CBOR request
-            let req = cbor::req(data).map_err(|e| {
+            let value = cbor::decode(&data).map_err(|e| {
                 PyErr::new::<PyValueError, _>(format!("Failed to decode CBOR request: {e}"))
             })?;
-            // Extract the request ID
-            let rid = req.id.clone().unwrap_or_else(|| Value::None);
-            // Execute via RpcContext
-            let res = RpcContext::execute(inner.as_ref(), req.version, req.method, req.params)
-                .await
-                .map_err(|e| PyErr::new::<PyRuntimeError, _>(e.to_string()))?;
-            // Convert response to Value
-            let value: Value = res.try_into().map_err(|e| {
-                PyErr::new::<PyRuntimeError, _>(format!("Failed to convert response: {e}"))
+            let obj = match value {
+                PublicValue::Object(o) => o,
+                _ => {
+                    return Err(PyErr::new::<PyValueError, _>(
+                        "Expected CBOR object for request",
+                    ))
+                }
+            };
+            let req = Request::from_object(obj).map_err(|e| {
+                PyErr::new::<PyValueError, _>(format!("Failed to parse request: {e}"))
             })?;
-            // Build the RPC response
-            let mut out = BTreeMap::new();
-            out.insert("id".to_string(), rid);
-            out.insert("result".to_string(), value);
-            // Convert to a SurrealDBValue
-            let res = Value::from(out);
-            // Encode response to CBOR
-            let out = cbor::res(res).map_err(|e| {
+            let rid = req.id.clone();
+            let session_id = req.session_id.map(Uuid::from);
+            let txn = req.txn.map(Uuid::from);
+            let response = match RpcProtocol::execute(
+                inner.as_ref(),
+                txn,
+                session_id,
+                req.method,
+                req.params,
+            )
+            .await
+            {
+                Ok(result) => DbResponse::success(rid, session_id, result),
+                Err(error) => DbResponse::failure(rid, session_id, error),
+            };
+            let response_value: PublicValue =
+                surrealdb_types::SurrealValue::into_value(response);
+            let out = cbor::encode(response_value).map_err(|e| {
                 PyErr::new::<PyValueError, _>(format!("Failed to encode CBOR response: {e}"))
             })?;
-            // Return the response as Vec<u8>
             Ok::<Vec<u8>, PyErr>(out)
         })
     }
@@ -124,41 +122,46 @@ impl AsyncEmbeddedDB {
 
 pub struct AsyncEmbeddedDBInner {
     kvs: Arc<Datastore>,
-    lock: Arc<Semaphore>,
-    session: ArcSwap<Session>,
+    sessions: HashMap<Option<Uuid>, Arc<RwLock<Session>>>,
 }
 
-impl RpcContext for AsyncEmbeddedDBInner {
+impl RpcProtocol for AsyncEmbeddedDBInner {
     fn kvs(&self) -> &Datastore {
         &self.kvs
     }
 
-    fn lock(&self) -> Arc<Semaphore> {
-        self.lock.clone()
+    fn version_data(&self) -> DbResult {
+        DbResult::Other(PublicValue::String(
+            format!("surrealdb-{}", env!("CARGO_PKG_VERSION")).into(),
+        ))
     }
 
-    fn session(&self) -> Arc<Session> {
-        self.session.load_full()
+    fn session_map(&self) -> &HashMap<Option<Uuid>, Arc<RwLock<Session>>> {
+        &self.sessions
     }
 
-    fn set_session(&self, session: Arc<Session>) {
-        self.session.store(session);
-    }
+    const LQ_SUPPORT: bool = false;
 
-    fn version_data(&self) -> Data {
-        Value::Strand(format!("surrealdb-{}", env!("CARGO_PKG_VERSION")).into()).into()
-    }
-
-    const LQ_SUPPORT: bool = true;
-
-    fn handle_live(&self, _lqid: &Uuid) -> impl std::future::Future<Output = ()> + Send {
-        async { () }
+    fn handle_live(
+        &self,
+        _lqid: &Uuid,
+        _session_id: Option<Uuid>,
+    ) -> impl std::future::Future<Output = ()> + Send {
+        async {}
     }
 
     fn handle_kill(&self, _lqid: &Uuid) -> impl std::future::Future<Output = ()> + Send {
-        async { () }
+        async {}
+    }
+
+    fn cleanup_lqs(
+        &self,
+        _session_id: Option<&Uuid>,
+    ) -> impl std::future::Future<Output = ()> + Send {
+        async {}
+    }
+
+    fn cleanup_all_lqs(&self) -> impl std::future::Future<Output = ()> + Send {
+        async {}
     }
 }
-
-impl RpcProtocolV1 for AsyncEmbeddedDBInner {}
-impl RpcProtocolV2 for AsyncEmbeddedDBInner {}

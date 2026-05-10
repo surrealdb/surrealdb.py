@@ -1,13 +1,25 @@
-from typing import Any, Union
+from __future__ import annotations
 
-from surrealdb.connections.async_embedded import AsyncEmbeddedSurrealConnection
+from typing import TYPE_CHECKING, Any, Union
+
+_EMBEDDED_AVAILABLE = False
+try:
+    from surrealdb.connections.async_embedded import AsyncEmbeddedSurrealConnection
+    from surrealdb.connections.blocking_embedded import BlockingEmbeddedSurrealConnection
+    _EMBEDDED_AVAILABLE = True  # pyright: ignore[reportConstantRedefinition]
+except ImportError:
+    pass
+
+if TYPE_CHECKING:
+    from surrealdb.connections.async_embedded import AsyncEmbeddedSurrealConnection as AsyncEmbeddedSurrealConnection
+    from surrealdb.connections.blocking_embedded import BlockingEmbeddedSurrealConnection as BlockingEmbeddedSurrealConnection
+
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import (
     AsyncSurrealSession,
     AsyncSurrealTransaction,
     AsyncWsSurrealConnection,
 )
-from surrealdb.connections.blocking_embedded import BlockingEmbeddedSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import (
     BlockingSurrealSession,
@@ -173,10 +185,12 @@ __all__ = [
     "TAG_UUID_STRING",
 ]
 
+_EMBEDDED_SCHEMES = (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV, UrlScheme.SURREALKV_VERSIONED)
+
 
 class AsyncSurrealDBMeta(type):
 
-    def __call__(cls, *args: Any, **kwargs: Any) -> Union[AsyncEmbeddedSurrealConnection, AsyncHttpSurrealConnection, AsyncWsSurrealConnection]:
+    def __call__(cls, *args: Any, **kwargs: Any) -> Union["AsyncEmbeddedSurrealConnection", AsyncHttpSurrealConnection, AsyncWsSurrealConnection]:
         if len(args) > 0:
             url = args[0]
         else:
@@ -187,7 +201,9 @@ class AsyncSurrealDBMeta(type):
 
         constructed_url = Url(url)
 
-        if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV, UrlScheme.SURREALKV_VERSIONED):
+        if constructed_url.scheme in _EMBEDDED_SCHEMES:
+            if not _EMBEDDED_AVAILABLE:
+                raise UnsupportedEngineError(url)
             return AsyncEmbeddedSurrealConnection(url=url)
         elif (
             constructed_url.scheme == UrlScheme.HTTP
@@ -205,7 +221,7 @@ class AsyncSurrealDBMeta(type):
 
 class BlockingSurrealDBMeta(type):
 
-    def __call__(cls, *args: Any, **kwargs: Any) -> Union[BlockingEmbeddedSurrealConnection, BlockingHttpSurrealConnection, BlockingWsSurrealConnection]:
+    def __call__(cls, *args: Any, **kwargs: Any) -> Union["BlockingEmbeddedSurrealConnection", BlockingHttpSurrealConnection, BlockingWsSurrealConnection]:
         if len(args) > 0:
             url = args[0]
         else:
@@ -216,7 +232,9 @@ class BlockingSurrealDBMeta(type):
 
         constructed_url = Url(url)
 
-        if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV, UrlScheme.SURREALKV_VERSIONED):
+        if constructed_url.scheme in _EMBEDDED_SCHEMES:
+            if not _EMBEDDED_AVAILABLE:
+                raise UnsupportedEngineError(url)
             return BlockingEmbeddedSurrealConnection(url=url)
         elif (
             constructed_url.scheme == UrlScheme.HTTP
@@ -234,9 +252,11 @@ class BlockingSurrealDBMeta(type):
 
 def Surreal(
     url: str,
-) -> Union[BlockingEmbeddedSurrealConnection, BlockingWsSurrealConnection, BlockingHttpSurrealConnection]:
+) -> Union["BlockingEmbeddedSurrealConnection", BlockingWsSurrealConnection, BlockingHttpSurrealConnection]:
     constructed_url = Url(url)
-    if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV, UrlScheme.SURREALKV_VERSIONED):
+    if constructed_url.scheme in _EMBEDDED_SCHEMES:
+        if not _EMBEDDED_AVAILABLE:
+            raise UnsupportedEngineError(url)
         return BlockingEmbeddedSurrealConnection(url=url)
     elif (
         constructed_url.scheme == UrlScheme.HTTP
@@ -254,9 +274,11 @@ def Surreal(
 
 def AsyncSurreal(
     url: str,
-) -> Union[AsyncEmbeddedSurrealConnection, AsyncWsSurrealConnection, AsyncHttpSurrealConnection]:
+) -> Union["AsyncEmbeddedSurrealConnection", AsyncWsSurrealConnection, AsyncHttpSurrealConnection]:
     constructed_url = Url(url)
-    if constructed_url.scheme in (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV, UrlScheme.SURREALKV_VERSIONED):
+    if constructed_url.scheme in _EMBEDDED_SCHEMES:
+        if not _EMBEDDED_AVAILABLE:
+            raise UnsupportedEngineError(url)
         return AsyncEmbeddedSurrealConnection(url=url)
     elif (
         constructed_url.scheme == UrlScheme.HTTP

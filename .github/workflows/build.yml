@@ -9,6 +9,38 @@ on:
   workflow_dispatch:
 
 jobs:
+  # -----------------------------------------------
+  # Pure Python package (surrealdb)
+  # -----------------------------------------------
+
+  build-python:
+    name: Build pure Python package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Python
+        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4
+        with:
+          python-version: "3.13"
+
+      - name: Install build tool
+        run: pip install build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Upload package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: python-package
+          path: dist
+
+  # -----------------------------------------------
+  # Native extension package (surrealdb-embedded)
+  # -----------------------------------------------
+
   linux:
     name: Build Linux wheels (${{ matrix.target }})
     runs-on: ubuntu-latest
@@ -36,12 +68,13 @@ jobs:
           args: --release --out dist --interpreter 3.10 3.11 3.12 3.13
           sccache: "true"
           manylinux: ${{ matrix.manylinux }}
+          working-directory: embedded
 
       - name: Upload wheels
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: wheels-linux-${{ matrix.target }}
-          path: dist
+          path: embedded/dist
 
   linux-aarch64:
     name: Build Linux wheels (${{ matrix.target }})
@@ -70,12 +103,13 @@ jobs:
           args: --release --out dist --interpreter 3.10 3.11 3.12 3.13
           sccache: "true"
           manylinux: ${{ matrix.manylinux }}
+          working-directory: embedded
 
       - name: Upload wheels
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: wheels-linux-${{ matrix.target }}
-          path: dist
+          path: embedded/dist
 
   macos:
     name: Build macOS wheels (${{ matrix.target }})
@@ -96,12 +130,13 @@ jobs:
           target: ${{ matrix.target }}
           args: --release --out dist --interpreter 3.10 3.11 3.12 3.13
           sccache: "true"
+          working-directory: embedded
 
       - name: Upload wheels
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: wheels-macos-${{ matrix.target }}
-          path: dist
+          path: embedded/dist
 
   windows:
     name: Build Windows wheels
@@ -122,15 +157,16 @@ jobs:
           target: ${{ matrix.target }}
           args: --release --out dist --interpreter 3.10 3.11 3.12 3.13
           sccache: "true"
+          working-directory: embedded
 
       - name: Upload wheels
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: wheels-windows-${{ matrix.target }}
-          path: dist
+          path: embedded/dist
 
   sdist:
-    name: Build source distribution
+    name: Build embedded source distribution
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -144,21 +180,48 @@ jobs:
         with:
           command: sdist
           args: --out dist
+          working-directory: embedded
 
       - name: Upload sdist
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: sdist
+          path: embedded/dist
+
+  # -----------------------------------------------
+  # Release both packages to PyPI
+  # -----------------------------------------------
+
+  release-python:
+    name: Release surrealdb to PyPI
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'published'
+    needs: [build-python]
+    environment:
+      name: pypi
+      url: https://pypi.org/p/surrealdb
+    permissions:
+      id-token: write
+    steps:
+      - name: Download Python package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: python-package
           path: dist
 
-  release:
-    name: Release to PyPI
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@76f52bc884231f62b54f72e44af3bbc36a592153 # v1
+        with:
+          skip-existing: true
+
+  release-embedded:
+    name: Release surrealdb-embedded to PyPI
     runs-on: ubuntu-latest
     if: github.event_name == 'release' && github.event.action == 'published'
     needs: [linux, linux-aarch64, macos, windows, sdist]
     environment:
-      name: pypi
-      url: https://pypi.org/p/surrealdb
+      name: pypi-embedded
+      url: https://pypi.org/p/surrealdb-embedded
     permissions:
       id-token: write
     steps:
@@ -167,9 +230,15 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+          pattern: wheels-*
+
+      - name: Download sdist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: sdist
+          path: dist
 
       - name: Publish to PyPI
-        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1
+        uses: pypa/gh-action-pypi-publish@76f52bc884231f62b54f72e44af3bbc36a592153 # v1
         with:
-          command: upload
-          args: --skip-existing dist/*
+          skip-existing: true
