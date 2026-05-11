@@ -1,6 +1,7 @@
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use std::sync::Arc;
+use std::sync::Mutex;
 use surrealdb_core::dbs::Session;
 use surrealdb_core::kvs::Datastore;
 use surrealdb_core::rpc::format::cbor;
@@ -10,10 +11,14 @@ use tokio::runtime::Runtime;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
+struct SyncState {
+    runtime: Runtime,
+    inner: Arc<SyncEmbeddedDBInner>,
+}
+
 #[pyclass]
 pub struct SyncEmbeddedDB {
-    runtime: Runtime,
-    inner: SyncEmbeddedDBInner,
+    state: Mutex<Option<SyncState>>,
 }
 
 #[pymethods]
@@ -42,19 +47,25 @@ impl SyncEmbeddedDB {
                 PyErr::new::<PyRuntimeError, _>(format!("Failed to create runtime: {e}"))
             })?;
         let kvs = runtime.block_on(async {
-            Datastore::new(&endpoint).await.map_err(|e| {
+            let ds = Datastore::new(&endpoint).await.map_err(|e| {
                 PyErr::new::<PyRuntimeError, _>(format!("Failed to create datastore: {e}"))
-            })
+            })?;
+            ds.bootstrap().await.map_err(|e| {
+                PyErr::new::<PyRuntimeError, _>(format!("Failed to bootstrap datastore: {e}"))
+            })?;
+            Ok::<Datastore, PyErr>(ds)
         })?;
         let sessions: HashMap<Option<Uuid>, Arc<RwLock<Session>>> = HashMap::new();
         let sess = Session::default().with_rt(false);
         sessions.insert(None, Arc::new(RwLock::new(sess)));
         Ok(SyncEmbeddedDB {
-            runtime,
-            inner: SyncEmbeddedDBInner {
-                kvs: Arc::new(kvs),
-                sessions,
-            },
+            state: Mutex::new(Some(SyncState {
+                runtime,
+                inner: Arc::new(SyncEmbeddedDBInner {
+                    kvs: Arc::new(kvs),
+                    sessions,
+                }),
+            })),
         })
     }
 
@@ -76,12 +87,28 @@ impl SyncEmbeddedDB {
     }
 
     fn close(&self) -> PyResult<()> {
+        let mut guard = self.state.lock().map_err(|e| {
+            PyErr::new::<PyRuntimeError, _>(format!("Lock poisoned: {e}"))
+        })?;
+        if let Some(state) = guard.take() {
+            let kvs = state.inner.kvs.clone();
+            state.runtime.block_on(async move {
+                let _ = kvs.shutdown().await;
+            });
+        }
         Ok(())
     }
 
     fn execute(&self, py: Python, cbor_request: &[u8]) -> PyResult<Py<PyAny>> {
         let data = cbor_request.to_vec();
-        let result = self.runtime.block_on(async move {
+        let guard = self.state.lock().map_err(|e| {
+            PyErr::new::<PyRuntimeError, _>(format!("Lock poisoned: {e}"))
+        })?;
+        let state = guard.as_ref().ok_or_else(|| {
+            PyErr::new::<PyRuntimeError, _>("Database connection is closed")
+        })?;
+        let inner = state.inner.clone();
+        let result = state.runtime.block_on(async move {
             let value = cbor::decode(&data).map_err(|e| {
                 PyErr::new::<PyValueError, _>(format!("Failed to decode CBOR request: {e}"))
             })?;
@@ -100,7 +127,7 @@ impl SyncEmbeddedDB {
             let session_id = req.session_id.map(Uuid::from);
             let txn = req.txn.map(Uuid::from);
             let response = match RpcProtocol::execute(
-                &self.inner,
+                inner.as_ref(),
                 txn,
                 session_id,
                 req.method,

@@ -10,11 +10,9 @@ def test_mem_connection() -> None:
     with Surreal("mem://") as db:
         db.use("test", "test")
 
-        # Create a record
-        result = db.create("person", {"name": "Alice", "age": 30})
+        result = db.create("person", {"name": "Alice", "age": 30}).execute()
         assert result is not None
 
-        # Select the record
         people = db.select("person")
         assert people is not None
 
@@ -24,11 +22,9 @@ def test_create_and_select() -> None:
     with Surreal("mem://") as db:
         db.use("test", "test")
 
-        # Create
-        created = db.create("user", {"name": "Bob", "email": "bob@example.com"})
+        created = db.create("user", {"name": "Bob", "email": "bob@example.com"}).execute()
         assert created is not None
 
-        # Select all
         users = db.select("user")
         assert users is not None
 
@@ -38,11 +34,9 @@ def test_update_operation() -> None:
     with Surreal("mem://") as db:
         db.use("test", "test")
 
-        # Create
-        db.create("product", {"name": "Widget", "price": 10})
+        db.create("product", {"name": "Widget", "price": 10}).execute()
 
-        # Update
-        updated = db.update("product", {"name": "Widget", "price": 15})
+        updated = db.update("product", {"name": "Widget", "price": 15}).execute()
         assert updated is not None
 
 
@@ -51,11 +45,9 @@ def test_delete_operation() -> None:
     with Surreal("mem://") as db:
         db.use("test", "test")
 
-        # Create
-        db.create("temp", {"data": "test"})
+        db.create("temp", {"data": "test"}).execute()
 
-        # Delete
-        deleted = db.delete("temp")
+        deleted = db.delete("temp").execute()
         assert deleted is not None
 
 
@@ -64,11 +56,9 @@ def test_query_operation() -> None:
     with Surreal("mem://") as db:
         db.use("test", "test")
 
-        # Query
         result = db.query("CREATE person SET name = 'Charlie', age = 25")
         assert result is not None
 
-        # Query with variables
         result = db.query("SELECT * FROM person WHERE age > $min_age", {"min_age": 20})
         assert result is not None
 
@@ -78,14 +68,11 @@ def test_let_and_unset() -> None:
     with Surreal("mem://") as db:
         db.use("test", "test")
 
-        # Let
         db.let("name", "David")
 
-        # Use variable in query
         result = db.query("CREATE person SET name = $name")
         assert result is not None
 
-        # Unset
         db.unset("name")
 
 
@@ -94,10 +81,8 @@ def test_merge_operation() -> None:
     with Surreal("mem://") as db:
         db.use("test", "test")
 
-        # Create
-        db.create("item", {"name": "Item1", "quantity": 5})
+        db.create("item", {"name": "Item1", "quantity": 5}).execute()
 
-        # Merge
         merged = db.update("item").merge({"quantity": 10})
         assert merged is not None
 
@@ -107,12 +92,10 @@ def test_upsert_operation() -> None:
     with Surreal("mem://") as db:
         db.use("test", "test")
 
-        # Upsert (insert)
-        upserted = db.upsert("record:1", {"value": "first"})
+        upserted = db.upsert("record:1", {"value": "first"}).execute()
         assert upserted is not None
 
-        # Upsert (update)
-        upserted = db.upsert("record:1", {"value": "second"})
+        upserted = db.upsert("record:1", {"value": "second"}).execute()
         assert upserted is not None
 
 
@@ -121,11 +104,9 @@ def test_insert_operation() -> None:
     with Surreal("mem://") as db:
         db.use("test", "test")
 
-        # Insert single
         inserted = db.insert("entry", {"data": "test"})
         assert inserted is not None
 
-        # Insert multiple
         inserted = db.insert("entry", [{"data": "test1"}, {"data": "test2"}])
         assert inserted is not None
 
@@ -134,14 +115,11 @@ def test_connection_lifecycle() -> None:
     """Test connection lifecycle management."""
     db = Surreal("mem://")
 
-    # Connect
     db.connect("mem://")
     db.use("test", "test")
 
-    # Use
-    db.create("test", {"value": 1})
+    db.create("test", {"value": 1}).execute()
 
-    # Close
     db.close()
 
 
@@ -150,5 +128,4 @@ def test_invalidate() -> None:
     with Surreal("mem://") as db:
         db.use("test", "test")
 
-        # Invalidate session
         db.invalidate()

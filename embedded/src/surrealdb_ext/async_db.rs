@@ -2,6 +2,7 @@ use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3_async_runtimes::tokio::future_into_py;
 use std::sync::Arc;
+use std::sync::Mutex;
 use surrealdb_core::dbs::Session;
 use surrealdb_core::kvs::Datastore;
 use surrealdb_core::rpc::format::cbor;
@@ -12,7 +13,7 @@ use uuid::Uuid;
 
 #[pyclass]
 pub struct AsyncEmbeddedDB {
-    inner: Arc<AsyncEmbeddedDBInner>,
+    inner: Mutex<Option<Arc<AsyncEmbeddedDBInner>>>,
 }
 
 #[pymethods]
@@ -23,9 +24,9 @@ impl AsyncEmbeddedDB {
             "memory".to_string()
         } else if url.starts_with("memory") {
             "memory".to_string()
-        } else if url.starts_with("surrealkv+versioned://") {
-            url
         } else if url.starts_with("surrealkv://") {
+            url
+        } else if url.starts_with("surrealkv+versioned://") {
             url
         } else if url.starts_with("file://") {
             url.replace("file://", "surrealkv://").to_string()
@@ -41,18 +42,22 @@ impl AsyncEmbeddedDB {
                 PyErr::new::<PyRuntimeError, _>(format!("Failed to create runtime: {e}"))
             })?;
         let kvs = runtime.block_on(async {
-            Datastore::new(&endpoint).await.map_err(|e| {
+            let ds = Datastore::new(&endpoint).await.map_err(|e| {
                 PyErr::new::<PyRuntimeError, _>(format!("Failed to create datastore: {e}"))
-            })
+            })?;
+            ds.bootstrap().await.map_err(|e| {
+                PyErr::new::<PyRuntimeError, _>(format!("Failed to bootstrap datastore: {e}"))
+            })?;
+            Ok::<Datastore, PyErr>(ds)
         })?;
         let sessions: HashMap<Option<Uuid>, Arc<RwLock<Session>>> = HashMap::new();
         let sess = Session::default().with_rt(false);
         sessions.insert(None, Arc::new(RwLock::new(sess)));
         Ok(AsyncEmbeddedDB {
-            inner: Arc::new(AsyncEmbeddedDBInner {
+            inner: Mutex::new(Some(Arc::new(AsyncEmbeddedDBInner {
                 kvs: Arc::new(kvs),
                 sessions,
-            }),
+            }))),
         })
     }
 
@@ -74,12 +79,30 @@ impl AsyncEmbeddedDB {
     }
 
     fn close<'a>(&self, py: Python<'a>) -> PyResult<Bound<'a, PyAny>> {
-        future_into_py::<_, ()>(py, async move { Ok(()) })
+        let kvs = {
+            let mut guard = self.inner.lock().map_err(|e| {
+                PyErr::new::<PyRuntimeError, _>(format!("Lock poisoned: {e}"))
+            })?;
+            guard.take().map(|inner| inner.kvs.clone())
+        };
+        future_into_py::<_, ()>(py, async move {
+            if let Some(kvs) = kvs {
+                let _ = kvs.shutdown().await;
+            }
+            Ok(())
+        })
     }
 
     fn execute<'a>(&self, py: Python<'a>, cbor_request: &[u8]) -> PyResult<Bound<'a, PyAny>> {
         let data = cbor_request.to_vec();
-        let inner = self.inner.clone();
+        let inner = {
+            let guard = self.inner.lock().map_err(|e| {
+                PyErr::new::<PyRuntimeError, _>(format!("Lock poisoned: {e}"))
+            })?;
+            guard.as_ref().ok_or_else(|| {
+                PyErr::new::<PyRuntimeError, _>("Database connection is closed")
+            })?.clone()
+        };
         future_into_py(py, async move {
             let value = cbor::decode(&data).map_err(|e| {
                 PyErr::new::<PyValueError, _>(format!("Failed to decode CBOR request: {e}"))
