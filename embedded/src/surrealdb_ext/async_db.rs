@@ -46,7 +46,7 @@ impl AsyncEmbeddedDB {
             })
         })?;
         let sessions: HashMap<Option<Uuid>, Arc<RwLock<Session>>> = HashMap::new();
-        let sess = Session::default().with_rt(true);
+        let sess = Session::default().with_rt(false);
         sessions.insert(None, Arc::new(RwLock::new(sess)));
         Ok(AsyncEmbeddedDB {
             inner: Arc::new(AsyncEmbeddedDBInner {
