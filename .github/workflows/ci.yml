@@ -186,7 +186,7 @@ jobs:
         run: uv sync --group dev
 
       - name: Build and install embedded extension
-        run: cd embedded && uv run maturin develop --release
+        run: uv run maturin develop --release --manifest-path embedded/Cargo.toml
 
       - name: Run embedded tests
         run: uv run pytest tests/unit_tests/connections/embedded
