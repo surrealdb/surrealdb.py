@@ -11,14 +11,10 @@ use tokio::runtime::Runtime;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-struct SyncState {
-    runtime: Runtime,
-    inner: Arc<SyncEmbeddedDBInner>,
-}
-
 #[pyclass]
 pub struct SyncEmbeddedDB {
-    state: Mutex<Option<SyncState>>,
+    runtime: Runtime,
+    inner: Mutex<Option<Arc<SyncEmbeddedDBInner>>>,
 }
 
 #[pymethods]
@@ -59,13 +55,11 @@ impl SyncEmbeddedDB {
         let sess = Session::default().with_rt(false);
         sessions.insert(None, Arc::new(RwLock::new(sess)));
         Ok(SyncEmbeddedDB {
-            state: Mutex::new(Some(SyncState {
-                runtime,
-                inner: Arc::new(SyncEmbeddedDBInner {
-                    kvs: Arc::new(kvs),
-                    sessions,
-                }),
-            })),
+            runtime,
+            inner: Mutex::new(Some(Arc::new(SyncEmbeddedDBInner {
+                kvs: Arc::new(kvs),
+                sessions,
+            }))),
         })
     }
 
@@ -87,12 +81,14 @@ impl SyncEmbeddedDB {
     }
 
     fn close(&self) -> PyResult<()> {
-        let mut guard = self.state.lock().map_err(|e| {
-            PyErr::new::<PyRuntimeError, _>(format!("Lock poisoned: {e}"))
-        })?;
-        if let Some(state) = guard.take() {
-            let kvs = state.inner.kvs.clone();
-            state.runtime.block_on(async move {
+        let kvs = {
+            let mut guard = self.inner.lock().map_err(|e| {
+                PyErr::new::<PyRuntimeError, _>(format!("Lock poisoned: {e}"))
+            })?;
+            guard.take().map(|inner| inner.kvs.clone())
+        };
+        if let Some(kvs) = kvs {
+            self.runtime.block_on(async move {
                 let _ = kvs.shutdown().await;
             });
         }
@@ -101,14 +97,15 @@ impl SyncEmbeddedDB {
 
     fn execute(&self, py: Python, cbor_request: &[u8]) -> PyResult<Py<PyAny>> {
         let data = cbor_request.to_vec();
-        let guard = self.state.lock().map_err(|e| {
-            PyErr::new::<PyRuntimeError, _>(format!("Lock poisoned: {e}"))
-        })?;
-        let state = guard.as_ref().ok_or_else(|| {
-            PyErr::new::<PyRuntimeError, _>("Database connection is closed")
-        })?;
-        let inner = state.inner.clone();
-        let result = state.runtime.block_on(async move {
+        let inner = {
+            let guard = self.inner.lock().map_err(|e| {
+                PyErr::new::<PyRuntimeError, _>(format!("Lock poisoned: {e}"))
+            })?;
+            guard.as_ref().ok_or_else(|| {
+                PyErr::new::<PyRuntimeError, _>("Database connection is closed")
+            })?.clone()
+        };
+        let result = self.runtime.block_on(async move {
             let value = cbor::decode(&data).map_err(|e| {
                 PyErr::new::<PyValueError, _>(format!("Failed to decode CBOR request: {e}"))
             })?;
