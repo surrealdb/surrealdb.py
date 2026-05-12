@@ -1367,6 +1367,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+embedded = [
+    { name = "surrealdb-embedded" },
+]
 pydantic = [
     { name = "pydantic" },
 ]
@@ -1399,16 +1402,17 @@ requires-dist = [
     { name = "pydantic", marker = "extra == 'pydantic'", specifier = ">=2.12.0" },
     { name = "pydantic-core", specifier = ">=2.0.1" },
     { name = "requests", specifier = ">=2.25.0" },
+    { name = "surrealdb-embedded", marker = "extra == 'embedded'", editable = "embedded" },
     { name = "typing-extensions", marker = "python_full_version < '3.12'", specifier = ">=4.0.0" },
     { name = "websockets", specifier = ">=10.0" },
 ]
-provides-extras = ["pydantic"]
+provides-extras = ["embedded", "pydantic"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "coverage", specifier = ">=7.0.0" },
     { name = "hypothesis", specifier = ">=6.135.16" },
-    { name = "maturin", specifier = ">=1.10.0" },
+    { name = "maturin", specifier = ">=1.0" },
     { name = "mypy", specifier = ">=1.18.2" },
     { name = "pyright", specifier = ">=1.1.407" },
     { name = "pytest", specifier = ">=7.0.0" },
@@ -1425,6 +1429,11 @@ test = [
     { name = "pytest-asyncio", specifier = ">=0.21.0" },
     { name = "pytest-cov", specifier = ">=4.0.0" },
 ]
+
+[[package]]
+name = "surrealdb-embedded"
+version = "3.0.0"
+source = { editable = "embedded" }
 
 [[package]]
 name = "tomli"

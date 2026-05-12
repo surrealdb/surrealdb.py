@@ -1,0 +1,193 @@
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
+use pyo3::prelude::*;
+use std::sync::Arc;
+use std::sync::Mutex;
+use surrealdb_core::dbs::Session;
+use surrealdb_core::kvs::Datastore;
+use surrealdb_core::rpc::format::cbor;
+use surrealdb_core::rpc::{DbResponse, DbResult, RpcProtocol, Request};
+use surrealdb_types::{HashMap, Value as PublicValue};
+use tokio::runtime::Runtime;
+use tokio::sync::RwLock;
+use uuid::Uuid;
+
+#[pyclass]
+pub struct SyncEmbeddedDB {
+    runtime: Runtime,
+    inner: Mutex<Option<Arc<SyncEmbeddedDBInner>>>,
+}
+
+#[pymethods]
+impl SyncEmbeddedDB {
+    #[new]
+    fn new(url: String) -> PyResult<Self> {
+        let endpoint = if url.starts_with("mem://") {
+            "memory".to_string()
+        } else if url.starts_with("memory") {
+            "memory".to_string()
+        } else if url.starts_with("surrealkv+versioned://") {
+            url
+        } else if url.starts_with("surrealkv://") {
+            url
+        } else if url.starts_with("file://") {
+            url.replace("file://", "surrealkv://").to_string()
+        } else {
+            return Err(PyErr::new::<PyValueError, _>(format!(
+                "Unsupported URL scheme: {url}. Use 'mem://', 'memory', 'file://', 'surrealkv://', or 'surrealkv+versioned://'"
+            )));
+        };
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| {
+                PyErr::new::<PyRuntimeError, _>(format!("Failed to create runtime: {e}"))
+            })?;
+        let kvs = runtime.block_on(async {
+            let ds = Datastore::new(&endpoint).await.map_err(|e| {
+                PyErr::new::<PyRuntimeError, _>(format!("Failed to create datastore: {e}"))
+            })?;
+            ds.bootstrap().await.map_err(|e| {
+                PyErr::new::<PyRuntimeError, _>(format!("Failed to bootstrap datastore: {e}"))
+            })?;
+            Ok::<Datastore, PyErr>(ds)
+        })?;
+        let sessions: HashMap<Option<Uuid>, Arc<RwLock<Session>>> = HashMap::new();
+        let sess = Session::default().with_rt(false);
+        sessions.insert(None, Arc::new(RwLock::new(sess)));
+        Ok(SyncEmbeddedDB {
+            runtime,
+            inner: Mutex::new(Some(Arc::new(SyncEmbeddedDBInner {
+                kvs: Arc::new(kvs),
+                sessions,
+            }))),
+        })
+    }
+
+    fn __enter__<'a>(slf: Bound<'a, Self>) -> PyResult<Bound<'a, Self>> {
+        Ok(slf)
+    }
+
+    fn __exit__<'a>(
+        &self,
+        _exc_type: &Bound<'a, PyAny>,
+        _exc_value: &Bound<'a, PyAny>,
+        _traceback: &Bound<'a, PyAny>,
+    ) -> PyResult<()> {
+        self.close()
+    }
+
+    fn connect(&self) -> PyResult<()> {
+        Ok(())
+    }
+
+    fn close(&self) -> PyResult<()> {
+        let kvs = {
+            let mut guard = self.inner.lock().map_err(|e| {
+                PyErr::new::<PyRuntimeError, _>(format!("Lock poisoned: {e}"))
+            })?;
+            guard.take().map(|inner| inner.kvs.clone())
+        };
+        if let Some(kvs) = kvs {
+            self.runtime.block_on(async move {
+                let _ = kvs.shutdown().await;
+            });
+        }
+        Ok(())
+    }
+
+    fn execute(&self, py: Python, cbor_request: &[u8]) -> PyResult<Py<PyAny>> {
+        let data = cbor_request.to_vec();
+        let inner = {
+            let guard = self.inner.lock().map_err(|e| {
+                PyErr::new::<PyRuntimeError, _>(format!("Lock poisoned: {e}"))
+            })?;
+            guard.as_ref().ok_or_else(|| {
+                PyErr::new::<PyRuntimeError, _>("Database connection is closed")
+            })?.clone()
+        };
+        let result = self.runtime.block_on(async move {
+            let value = cbor::decode(&data).map_err(|e| {
+                PyErr::new::<PyValueError, _>(format!("Failed to decode CBOR request: {e}"))
+            })?;
+            let obj = match value {
+                PublicValue::Object(o) => o,
+                _ => {
+                    return Err(PyErr::new::<PyValueError, _>(
+                        "Expected CBOR object for request",
+                    ))
+                }
+            };
+            let req = Request::from_object(obj).map_err(|e| {
+                PyErr::new::<PyValueError, _>(format!("Failed to parse request: {e}"))
+            })?;
+            let rid = req.id.clone();
+            let session_id = req.session_id.map(Uuid::from);
+            let txn = req.txn.map(Uuid::from);
+            let response = match RpcProtocol::execute(
+                inner.as_ref(),
+                txn,
+                session_id,
+                req.method,
+                req.params,
+            )
+            .await
+            {
+                Ok(result) => DbResponse::success(rid, session_id, result),
+                Err(error) => DbResponse::failure(rid, session_id, error),
+            };
+            let response_value: PublicValue =
+                surrealdb_types::SurrealValue::into_value(response);
+            let out = cbor::encode(response_value).map_err(|e| {
+                PyErr::new::<PyValueError, _>(format!("Failed to encode CBOR response: {e}"))
+            })?;
+            Ok::<Vec<u8>, PyErr>(out)
+        })?;
+        Ok(pyo3::types::PyBytes::new(py, &result).into())
+    }
+}
+
+pub struct SyncEmbeddedDBInner {
+    kvs: Arc<Datastore>,
+    sessions: HashMap<Option<Uuid>, Arc<RwLock<Session>>>,
+}
+
+impl RpcProtocol for SyncEmbeddedDBInner {
+    fn kvs(&self) -> &Datastore {
+        &self.kvs
+    }
+
+    fn version_data(&self) -> DbResult {
+        DbResult::Other(PublicValue::String(
+            format!("surrealdb-{}", env!("CARGO_PKG_VERSION")).into(),
+        ))
+    }
+
+    fn session_map(&self) -> &HashMap<Option<Uuid>, Arc<RwLock<Session>>> {
+        &self.sessions
+    }
+
+    const LQ_SUPPORT: bool = false;
+
+    fn handle_live(
+        &self,
+        _lqid: &Uuid,
+        _session_id: Option<Uuid>,
+    ) -> impl std::future::Future<Output = ()> + Send {
+        async {}
+    }
+
+    fn handle_kill(&self, _lqid: &Uuid) -> impl std::future::Future<Output = ()> + Send {
+        async {}
+    }
+
+    fn cleanup_lqs(
+        &self,
+        _session_id: Option<&Uuid>,
+    ) -> impl std::future::Future<Output = ()> + Send {
+        async {}
+    }
+
+    fn cleanup_all_lqs(&self) -> impl std::future::Future<Output = ()> + Send {
+        async {}
+    }
+}

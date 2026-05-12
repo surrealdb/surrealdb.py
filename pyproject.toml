@@ -1,6 +1,6 @@
 [build-system]
-requires = ["maturin>=1.0,<2.0"]
-build-backend = "maturin"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "surrealdb"
@@ -40,6 +40,9 @@ repository = "https://github.com/surrealdb/surrealdb.py"
 documentation = "https://surrealdb.com/docs/sdk/python"
 
 [project.optional-dependencies]
+embedded = [
+    "surrealdb-embedded==3.0.0",
+]
 pydantic = [
     "pydantic>=2.12.0",
 ]
@@ -48,7 +51,7 @@ pydantic = [
 dev = [
     { include-group = "test" },
     "surrealdb[pydantic]",
-    "maturin>=1.10.0",
+    "maturin>=1.0",
     "mypy>=1.18.2",
     "pyright>=1.1.407",
     "ruff>=0.14.6",
@@ -63,13 +66,18 @@ test = [
 ]
 
 # --------------------------------------------------
-# maturin
+# uv
 # --------------------------------------------------
 
-[tool.maturin]
-python-source = "src"
-module-name = "surrealdb._surrealdb_ext"
-features = ["pyo3/extension-module"]
+[tool.uv.sources]
+surrealdb-embedded = { path = "embedded", editable = true }
+
+# --------------------------------------------------
+# hatch
+# --------------------------------------------------
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/surrealdb"]
 
 # --------------------------------------------------
 # ruff
@@ -126,6 +134,10 @@ python_version = "3.13"
 
 # Third-party library stubs
 [[tool.mypy.overrides]]
+module = "surrealdb_embedded.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 module = "aiohttp.*"
 ignore_missing_imports = true
 
@@ -164,6 +176,7 @@ typeCheckingMode = "strict"
 
 # Source configuration
 include = ["src"]
+extraPaths = ["embedded/src"]
 exclude = [
     "**/__pycache__",
     "**/.pytest_cache",

@@ -40,7 +40,7 @@ def test_sync_file_persistence() -> None:
         with Surreal(db_url) as db:
             db.use("test", "test")
 
-            created = db.create("persistent", {"name": "Bob", "value": 100})
+            created = db.create("persistent", {"name": "Bob", "value": 100}).execute()
             assert created is not None
 
         # Second connection: verify data persisted

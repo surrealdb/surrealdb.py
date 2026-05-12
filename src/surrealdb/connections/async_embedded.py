@@ -9,7 +9,8 @@ from types import TracebackType
 from typing import Any
 from uuid import UUID
 
-from surrealdb._surrealdb_ext import AsyncEmbeddedDB
+from surrealdb_embedded import AsyncEmbeddedDB
+
 from surrealdb.connections.async_ws import AsyncSurrealSession, AsyncWsSurrealConnection
 from surrealdb.connections.url import Url
 from surrealdb.data.cbor import decode

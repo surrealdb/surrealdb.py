@@ -1,4 +1,4 @@
-"""Type stubs for the _surrealdb_ext Rust extension module."""
+"""Type stubs for the surrealdb_embedded._ext Rust extension module."""
 
 from typing import Any
 
@@ -9,7 +9,7 @@ class AsyncEmbeddedDB:
         """Initialize the async embedded database.
 
         Args:
-            url: Database URL (mem:// or file://).
+            url: Database URL (mem://, file://, surrealkv://).
         """
         ...
 
@@ -43,7 +43,7 @@ class SyncEmbeddedDB:
         """Initialize the blocking embedded database.
 
         Args:
-            url: Database URL (mem:// or file://).
+            url: Database URL (mem://, file://, surrealkv://).
         """
         ...
 

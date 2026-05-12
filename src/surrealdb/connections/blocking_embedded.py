@@ -9,7 +9,8 @@ import uuid
 from typing import Any
 from uuid import UUID
 
-from surrealdb._surrealdb_ext import SyncEmbeddedDB
+from surrealdb_embedded import SyncEmbeddedDB
+
 from surrealdb.connections.blocking_ws import (
     BlockingSurrealSession,
     BlockingWsSurrealConnection,

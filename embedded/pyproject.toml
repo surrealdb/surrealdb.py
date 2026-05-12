@@ -1,0 +1,35 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "surrealdb-embedded"
+version = "3.0.0"
+description = "SurrealDB embedded database extension for the surrealdb Python SDK"
+authors = [{ name = "SurrealDB" }]
+license = "Apache-2.0"
+keywords = ["SurrealDB", "Database", "Embedded"]
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Rust",
+    "Topic :: Database",
+    "Topic :: Database :: Database Engines/Servers",
+]
+
+[project.urls]
+homepage = "https://github.com/surrealdb/surrealdb.py"
+repository = "https://github.com/surrealdb/surrealdb.py"
+documentation = "https://surrealdb.com/docs/sdk/python"
+
+[tool.maturin]
+python-source = "src"
+module-name = "surrealdb_embedded._ext"
+features = ["pyo3/extension-module"]
