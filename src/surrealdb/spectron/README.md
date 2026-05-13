@@ -1,6 +1,6 @@
 # Spectron SDK
 
-Python client for the [Spectron](https://github.com/surrealdb/spectron) memory + knowledge service, shipped as an in-tree subpackage of `surrealdb`.
+Python client for the Spectron memory + knowledge service, shipped as an in-tree subpackage of `surrealdb`.
 
 ```python
 from surrealdb import Spectron
@@ -21,7 +21,7 @@ No extra install step: the SDK is bundled with `pip install surrealdb`.
 - [Errors](#errors)
 - [Retries & timeouts](#retries--timeouts)
 - [Scope](#scope)
-- [Reference](#reference)
+- [Wire-shape types](#wire-shape-types)
 
 ## Clients
 
@@ -65,8 +65,6 @@ Constructor arguments (identical across all four):
 Pass `api_key=` explicitly or set `SPECTRON_API_KEY` in the environment. The transport adds `Authorization: Bearer <key>` to every request and does not pre-check principal type; the server returns `403` if the key's principal or scope floor rejects the call.
 
 ## Knowledge
-
-The `client.knowledge` namespace mirrors `enduser.swagger.json` and is the most fully specified surface.
 
 ### Documents
 
@@ -167,8 +165,6 @@ siblings = memory.knowledge.traverse_siblings(
 ```
 
 ## Memory
-
-The memory surface (sessions, turns, state, profile, entities, traces, lifecycle) follows the [Spectron design doc](https://github.com/surrealdb/spectron/blob/main/doc/design/design-sdk.md); the server-side OpenAPI for these endpoints is still landing.
 
 ### Sessions
 
@@ -344,10 +340,6 @@ wire = serialise_scope({"org": "anneal"})           # [{"key": "org", "value": "
 back = deserialise_scope(wire)                      # {"org": "anneal"}
 ```
 
-## Reference
+## Wire-shape types
 
-- Design doc: <https://github.com/surrealdb/spectron/blob/main/doc/design/design-sdk.md>
-- End-user OpenAPI: <https://github.com/surrealdb/spectron/blob/main/doc/spec/enduser.swagger.json>
-- Management OpenAPI: <https://github.com/surrealdb/spectron/blob/main/doc/spec/management.swagger.json>
-
-The subpackage re-exports every wire-shape dataclass under `surrealdb.spectron.*` (e.g. `DocumentJson`, `QueryResponseJson`, `ContextResponse`, `SessionInfo`, `ExtractionResult`, `TraceStats`, …) for callers that want typed access without going through the namespaces.
+Every dataclass is re-exported under `surrealdb.spectron.*` (e.g. `DocumentJson`, `QueryResponseJson`, `ContextResponse`, `SessionInfo`, `ExtractionResult`, `TraceStats`, ...) for callers that want typed access without going through the namespaces.
