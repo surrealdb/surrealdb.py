@@ -1,62 +1,48 @@
-# Spectron SDK
+# Spectron
 
-Python client for the Spectron memory + knowledge service, shipped as an in-tree subpackage of `surrealdb`.
+Python client for Spectron, bundled with `surrealdb`.
 
 ```python
 from surrealdb import Spectron
 
-memory = Spectron(context="acme-prod", api_key=os.environ["SPECTRON_API_KEY"])
+memory = Spectron(context="acme-prod", api_key="sk-spec-...")
 hits = memory.knowledge.query("returns policy", k=5)
 ```
 
-No extra install step: the SDK is bundled with `pip install surrealdb`.
+## Install
 
-## Contents
-
-- [Clients](#clients)
-- [Authentication](#authentication)
-- [Knowledge: documents, query, keywords, nodes, traversal](#knowledge)
-- [Memory: sessions, retrieval, state, profile, entities, traces](#memory)
-- [Errors](#errors)
-- [Retries & timeouts](#retries--timeouts)
-- [Scope](#scope)
-- [Wire-shape types](#wire-shape-types)
+```
+pip install surrealdb
+```
 
 ## Clients
-
-Two top-level facades, both importable from `surrealdb`:
-
-| Class | Transport |
-|---|---|
-| `Spectron` | blocking (`requests`) |
-| `AsyncSpectron` | async (`aiohttp`) |
-
-Each client is bound to a single context id and targets `/api/v1/{context_id}/...`.
 
 ```python
 from surrealdb import Spectron, AsyncSpectron
 
-with Spectron(context="acme-prod", api_key="sk-spec-...") as memory:
+with Spectron(context="acme-prod", api_key="sk-...") as memory:
     state = memory.state()
 
-async with AsyncSpectron(context="acme-prod", api_key="sk-spec-...") as memory:
+async with AsyncSpectron(context="acme-prod", api_key="sk-...") as memory:
     state = await memory.state()
 ```
 
-Constructor arguments:
+`Spectron` uses `requests`. `AsyncSpectron` uses `aiohttp`. Same method names on both; add `await` for the async one.
 
-| Arg | Default | Notes |
+Both clients are pinned to one context and hit `/api/v1/{context}/...`.
+
+### Constructor
+
+| Arg | Default | |
 |---|---|---|
-| `context` (positional) | required | Context id, e.g. `"acme-prod"`. |
+| `context` | required | Context id, e.g. `"acme-prod"`. |
+| `api_key` | required | Bearer token, as a string. |
 | `base_url` | `https://api.spectron.dev` | Override for self-hosted. |
-| `api_key` | required | Bearer token. Pass any string. |
-| `timeout` | `30.0` seconds | Per-request. |
-| `max_retries` | `3` | GET-only, see [Retries](#retries--timeouts). |
-| `transport` | `None` | Inject a custom transport for testing. |
+| `timeout` | `30.0` | Seconds per request. |
+| `max_retries` | `3` | GET-only retries. |
+| `transport` | `None` | Inject your own for testing. |
 
-## Authentication
-
-Pass `api_key=` explicitly. The transport adds `Authorization: Bearer <key>` to every request and does not pre-check principal type; the server returns `403` if the key's principal or scope floor rejects the call.
+The SDK never reads environment variables. Pass `api_key` as a string from wherever you keep secrets.
 
 ## Knowledge
 
@@ -64,21 +50,23 @@ Pass `api_key=` explicitly. The transport adds `Authorization: Bearer <key>` to 
 
 ```python
 doc = memory.knowledge.upload(
-    file="returns.pdf",                  # path | bytes | file-like
+    file="returns.pdf",
     title="Returns Policy",
-    profile="multimodal_balanced",       # text_only | text_plus_ocr | multimodal_balanced | multimodal_full
+    profile="multimodal_balanced",
     scope={"org": "anneal"},
 )
-# doc.id, doc.status, doc.content_hash, doc.deduplicated
 
-doc = memory.knowledge.get(doc.id)
+memory.knowledge.get(doc.id)
 memory.knowledge.replace(doc.id, file=open("returns_v2.pdf", "rb"))
-raw_bytes = memory.knowledge.raw(doc.id)
-chunks = memory.knowledge.chunks(doc.id, page=0, page_size=50)
-docs = memory.knowledge.list(status="ready", mime_type="application/pdf")
-related = memory.knowledge.related(doc.id)
+memory.knowledge.raw(doc.id)
+memory.knowledge.chunks(doc.id, page=0, page_size=50)
+memory.knowledge.list(status="ready", mime_type="application/pdf")
+memory.knowledge.related(doc.id)
 memory.knowledge.delete(doc.id)
 ```
+
+`file` accepts a path, bytes, or a file-like object.
+`profile` is one of `text_only`, `text_plus_ocr`, `multimodal_balanced`, `multimodal_full`.
 
 ### Query
 
@@ -87,7 +75,7 @@ from surrealdb import SpectronQueryMode
 
 hits = memory.knowledge.query(
     "what is the return window for unopened items?",
-    mode=SpectronQueryMode.HYBRID_GRAPH,  # vector | bm25 | hybrid | hybrid_graph
+    mode=SpectronQueryMode.HYBRID_GRAPH,
     k=10,
     threshold=0.5,
     vector_weight=0.5,
@@ -98,20 +86,21 @@ hits = memory.knowledge.query(
     expand_graph=True,
     filter={"mime_type": ["application/pdf"], "scope": {"org": "anneal"}},
 )
-# hits.query_ms, hits.results[].score, .chunk, .document, .graph_evidence
 ```
 
-### Keyword graph
+`mode` is `vector`, `bm25`, `hybrid`, or `hybrid_graph`.
+
+### Keywords
 
 ```python
-keywords = memory.knowledge.keywords.list(min_document_count=2, sort="-document_count", q="return")
-detail   = memory.knowledge.keywords.get("RETURN POLICY")
-similar  = memory.knowledge.keywords.search("refund policies", k=10, threshold=0.6)
-related  = memory.knowledge.keywords.related("RETURN POLICY")
-for_doc  = memory.knowledge.keywords.for_document(doc.id)
+memory.knowledge.keywords.list(min_document_count=2, sort="-document_count", q="return")
+memory.knowledge.keywords.get("RETURN POLICY")
+memory.knowledge.keywords.search("refund policies", k=10, threshold=0.6)
+memory.knowledge.keywords.related("RETURN POLICY")
+memory.knowledge.keywords.for_document(doc.id)
 ```
 
-### Typed nodes
+### Nodes
 
 ```python
 from surrealdb.spectron import KnowledgeNodeUpsertRow, KnowledgeLinkUpsert, KnowledgeLinkTarget
@@ -130,165 +119,148 @@ memory.knowledge.nodes.upsert(
     scope={"org": "apple"},
 )
 
-nodes   = memory.knowledge.nodes.list(kind="product")
-hits    = memory.knowledge.nodes.search("audio products", k=10)
-node    = memory.knowledge.nodes.get("product", "airpods_pro_2")
-related = memory.knowledge.nodes.related("product", "airpods_pro_2")
+memory.knowledge.nodes.list(kind="product")
+memory.knowledge.nodes.search("audio products", k=10)
+memory.knowledge.nodes.get("product", "airpods_pro_2")
+memory.knowledge.nodes.related("product", "airpods_pro_2")
 memory.knowledge.nodes.delete("product", "airpods_pro_2")
 ```
 
-### Graph traversal
+### Traversal
 
 ```python
-walk = memory.knowledge.traverse(
+memory.knowledge.traverse(
     start=[{"type": "document", "id": doc.id}],
     edges=["knowledge_has_keyword", "knowledge_relates_to"],
     max_depth=2,
 )
 
-recursive = memory.knowledge.traverse_recursive(
+memory.knowledge.traverse_recursive(
     start={"type": "knowledge", "kind": "product", "slug": "airpods_pro_2"},
     edge="knowledge_relates_to",
     max_depth=3,
 )
 
-siblings = memory.knowledge.traverse_siblings(
+memory.knowledge.traverse_siblings(
     start={"type": "knowledge", "kind": "product", "slug": "airpods_pro_2"},
     edge="knowledge_relates_to",
 )
 ```
 
-## Memory
+## Sessions
 
-### Sessions
-
-Two integration shapes: Spectron drives the loop, or the caller does.
-
-**Spectron drives:**
+Let Spectron run the chat loop:
 
 ```python
 session = memory.sessions.create(scope={"user": "tobie"})
 reply = session.chat("What do you know about me?")
-# reply.reply (assistant text), reply.memory_updates (ExtractionResult)
 session.close()
 ```
 
-**Caller drives:**
+Or drive it yourself:
 
 ```python
 session = memory.sessions.create(scope={"user": "tobie"})
 
-diff = session.turn("user", "I just got promoted to CTO")
-# diff.entities, diff.attributes, diff.relations, diff.instructions, ...
+session.turn("user", "I just got promoted to CTO")
 
 ctx = session.context(query="What is Tobie's role?")
-# Inject ctx.context into your own LLM prompt
 reply = my_llm.chat(system=ctx.context, user=user_message)
-
 session.turn("assistant", reply)
 
-turns = session.turns()
+session.turns()
 session.close()
 ```
 
-### One-shot retrieval
+## One-shot retrieval
 
 ```python
-hits = memory.query("What role does Christian have?", k=10)
-# hits.tier, hits.hits[], hits.query_ms, hits.trace
-
-ctx = memory.context("brief on tobie", k=10)
-# ctx.context (string ready for system-prompt injection)
+memory.query("What role does Christian have?", k=10)
+memory.context("brief on tobie", k=10)
 ```
 
-### State, profile, entities
+## State, profile, entities
 
 ```python
-state = memory.state()         # StructuredState: identity / knowledge / context / instructions / unknowns
-profile = memory.profile()     # ProfileResponse: static / dynamic / preferences / instructions
+memory.state()
+memory.profile()
 
-entities = memory.entities.list(type="Person")
-entity   = memory.entities.get("Person", "christian_battaglia")
-history  = memory.entities.history("Person", "christian_battaglia", key="role")
-memory.entities.delete("Person", "christian_battaglia")  # soft-delete
+memory.entities.list(type="Person")
+memory.entities.get("Person", "christian_battaglia")
+memory.entities.history("Person", "christian_battaglia", key="role")
+memory.entities.delete("Person", "christian_battaglia")
 ```
 
-### Reflection, forget, lifecycle
+`entities.delete` is a soft delete.
+
+## Reflect, forget, lifecycle
 
 ```python
-out = memory.reflect("patterns in customer complaints this month?", persist=True)
-# out.reflection, out.evidence, out.persisted_attributes
+memory.reflect("patterns in customer complaints this month?", persist=True)
 
-result = memory.forget("anything about my old job")
-# result.deleted = number of memories soft-deleted by similarity match
+memory.forget("anything about my old job")
 
-memory.lifecycle.expire()   # context-category expiry sweep
-memory.lifecycle.decay()    # importance decay sweep
+memory.lifecycle.expire()
+memory.lifecycle.decay()
 ```
 
-### Traces
+## Traces
 
 ```python
-traces = memory.traces.list(limit=50)
-trace  = memory.traces.get("decision_trace:abc123")
-stats  = memory.traces.stats()
-# stats.total_queries, stats.cache_hits, stats.avg_latency_ms, stats.tier_counts
+memory.traces.list(limit=50)
+memory.traces.get("decision_trace:abc123")
+memory.traces.stats()
 ```
 
 ## Errors
-
-The server returns RFC 7807 problem details; the SDK maps them to a typed hierarchy. Top-level aliases are prefixed with `Spectron` to avoid clashing with `surrealdb.errors`.
-
-| Class (subpackage) | Top-level alias | HTTP | When |
-|---|---|---|---|
-| `SpectronError` | `SpectronError` | any | Base for every transport-level error. |
-| `AuthError` | `SpectronAuthError` | 401 | Missing or invalid bearer token. |
-| `ScopeError` | `SpectronScopeError` | 403 | Principal type or scope floor rejected the call. |
-| `NotFoundError` | `SpectronNotFoundError` | 404 | Resource does not exist. |
-| `ValidationError` | `SpectronValidationError` | 400 / 422 | Malformed body, unknown enum, invalid context id. |
-| `RateLimitError` | `SpectronRateLimitError` | 429 | Per-context rate or token budget exceeded. Carries `retry_after`. |
-| `ServerError` | `SpectronServerError` | 5xx | Retried for idempotent reads. |
-
-Every exception carries `status`, `title`, `detail`, `type_uri`, `instance`, and `extensions` parsed from the problem-details body.
 
 ```python
 from surrealdb import SpectronNotFoundError, SpectronRateLimitError
 
 try:
-    doc = memory.knowledge.get("doc:missing")
+    memory.knowledge.get("doc:missing")
 except SpectronNotFoundError as e:
     print(e.status, e.detail)
 except SpectronRateLimitError as e:
     print("retry after", e.retry_after, "seconds")
 ```
 
-## Retries & timeouts
+| Exception | HTTP |
+|---|---|
+| `SpectronError` | base |
+| `SpectronAuthError` | 401 |
+| `SpectronScopeError` | 403 |
+| `SpectronNotFoundError` | 404 |
+| `SpectronValidationError` | 400, 422 |
+| `SpectronRateLimitError` | 429 (with `retry_after`) |
+| `SpectronServerError` | 5xx |
 
-- Idempotent reads (`GET`) auto-retry on connection failures and 5xx with exponential backoff `[250ms, 500ms, 1s]`, max 3 attempts. Tune via `max_retries=`.
-- Writes (`POST` / `PUT` / `PATCH` / `DELETE`) never auto-retry; the caller decides.
-- Default per-request timeout is 30 seconds. Override via `timeout=` on the constructor or on individual `transport.request(...)` calls.
+Each carries `status`, `title`, `detail`, `type_uri`, `instance`, `extensions`.
+
+## Retries and timeouts
+
+- `GET` retries on connection errors and 5xx: 250ms, 500ms, 1s. Up to `max_retries` (default 3).
+- Writes never retry. You handle it.
+- Default timeout is 30s. Override with `timeout=` on the constructor.
 
 ## Scope
 
-Scope is a plain dict in user code; the SDK serialises it to the `set<scope_attribute>` wire shape. Subset-matching and floor enforcement are server-side; the SDK does not pre-check.
+Scope is a plain dict. The SDK serialises it to the wire format. Server enforces matching and floors.
 
 ```python
-session_a = memory.sessions.create(scope={"org": "anneal"})
-
-session_b = memory.sessions.create(
-    scope={"org": "anneal", "user": "tobie", "project": "spectron"}
-)
+memory.sessions.create(scope={"org": "anneal"})
+memory.sessions.create(scope={"org": "anneal", "user": "tobie", "project": "spectron"})
 ```
 
-Manual helpers if you need them:
+If you need the raw conversion:
 
 ```python
 from surrealdb.spectron import serialise_scope, deserialise_scope
 
-wire = serialise_scope({"org": "anneal"})           # [{"key": "org", "value": "anneal"}]
-back = deserialise_scope(wire)                      # {"org": "anneal"}
+serialise_scope({"org": "anneal"})    # [{"key": "org", "value": "anneal"}]
+deserialise_scope([...])              # {"org": "anneal"}
 ```
 
-## Wire-shape types
+## Types
 
-Every dataclass is re-exported under `surrealdb.spectron.*` (e.g. `DocumentJson`, `QueryResponseJson`, `SessionInfo`, `ExtractionResult`, `TraceStats`, ...) for callers that want typed access without going through the namespaces.
+Every wire shape is a dataclass under `surrealdb.spectron`: `DocumentJson`, `QueryResponseJson`, `SessionInfo`, `ExtractionResult`, `TraceStats`, and so on. Use them directly if you want the types without going through the client methods.
