@@ -7,7 +7,7 @@ from surrealdb import Spectron
 
 memory = Spectron(
     context="acme-prod",
-    base_url="https://api.spectron.example",
+    endpoint="https://api.spectron.example",
     api_key="sk-spec-...",
 )
 hits = memory.knowledge.query("returns policy", k=5)

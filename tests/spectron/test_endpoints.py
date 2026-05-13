@@ -19,9 +19,9 @@ def client() -> Spectron:
     return Spectron(context=CTX, endpoint=BASE, api_key=API_KEY)
 
 
-def test_base_url_and_api_key_readable():
+def test_endpoint_and_api_key_readable():
     c = Spectron(context=CTX, endpoint=BASE, api_key=API_KEY)
-    assert c.base_url == BASE
+    assert c.endpoint == BASE
     assert c.api_key == API_KEY
 
 
