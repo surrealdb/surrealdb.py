@@ -22,14 +22,9 @@ _USER_AGENT = "surrealdb-py-spectron/1.0"
 
 
 def _resolve_api_key(api_key: str | None) -> str:
-    if api_key is not None and api_key != "":
-        return api_key
-    env = os.environ.get("SPECTRON_API_KEY")
-    if env:
-        return env
-    raise ValueError(
-        "Spectron API key is required. Pass api_key=... or set SPECTRON_API_KEY."
-    )
+    if api_key is None or api_key == "":
+        raise ValueError("Spectron API key is required. Pass api_key=...")
+    return api_key
 
 
 def _build_url(base_url: str, path: str) -> str:

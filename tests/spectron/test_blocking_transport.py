@@ -119,13 +119,17 @@ def test_no_content_returns_none(transport: BlockingTransport):
     assert transport.delete("/api/v1/x/r") is None
 
 
-def test_api_key_falls_back_to_env(monkeypatch):
+def test_api_key_ignores_environment(monkeypatch):
     monkeypatch.setenv("SPECTRON_API_KEY", "env-key")
-    t = BlockingTransport(base_url=BASE)
-    assert t.api_key == "env-key"
-
-
-def test_api_key_required(monkeypatch):
-    monkeypatch.delenv("SPECTRON_API_KEY", raising=False)
     with pytest.raises(ValueError, match="API key"):
         BlockingTransport(base_url=BASE)
+
+
+def test_api_key_required():
+    with pytest.raises(ValueError, match="API key"):
+        BlockingTransport(base_url=BASE)
+
+
+def test_api_key_empty_string_rejected():
+    with pytest.raises(ValueError, match="API key"):
+        BlockingTransport(base_url=BASE, api_key="")

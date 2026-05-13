@@ -55,14 +55,14 @@ Constructor arguments (identical across all four):
 |---|---|---|
 | `context` (positional, end-user only) | required | Context id, e.g. `"acme-prod"`. |
 | `base_url` | `https://api.spectron.dev` | Override for self-hosted. |
-| `api_key` | env `SPECTRON_API_KEY` | Bearer token. |
+| `api_key` | required | Bearer token. |
 | `timeout` | `30.0` seconds | Per-request. |
 | `max_retries` | `3` | GET-only, see [Retries](#retries--timeouts). |
 | `transport` | `None` | Inject a custom transport for testing. |
 
 ## Authentication
 
-Pass `api_key=` explicitly or set `SPECTRON_API_KEY` in the environment. The transport adds `Authorization: Bearer <key>` to every request and does not pre-check principal type; the server returns `403` if the key's principal or scope floor rejects the call.
+Pass `api_key=` explicitly. The transport adds `Authorization: Bearer <key>` to every request and does not pre-check principal type; the server returns `403` if the key's principal or scope floor rejects the call.
 
 ## Knowledge
 
