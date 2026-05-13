@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 from collections.abc import Mapping
 from typing import Any
 
@@ -115,7 +116,9 @@ class BlockingSessions:
     ) -> BlockingSession:
         body = self._t.post(self._base, json=_session_create_payload(scope, metadata))
         if not isinstance(body, dict):
-            raise ValueError(f"Expected JSON object from session create, got {type(body).__name__}")
+            raise ValueError(
+                f"Expected JSON object from session create, got {type(body).__name__}"
+            )
         info = SessionInfo.from_dict(body)
         return BlockingSession(self._t, self._context_id, info)
 
@@ -137,7 +140,9 @@ class BlockingEntities:
         body = self._t.get(f"{self._base}/{quote_path(type)}/{quote_path(name)}")
         return Entity.from_dict(body)
 
-    def history(self, type: str, name: str, key: str) -> list[EntityHistoryEntry]:
+    def history(
+        self, type: str, name: str, key: str
+    ) -> builtins.list[EntityHistoryEntry]:
         body = self._t.get(
             f"{self._base}/{quote_path(type)}/{quote_path(name)}/history/{quote_path(key)}"
         )
@@ -258,7 +263,9 @@ class AsyncSession:
         await self._t.delete(self._base)
 
     async def turn(self, role: TurnRole | str, content: str) -> ExtractionResult:
-        body = await self._t.post(f"{self._base}/turns", json=_turn_payload(role, content))
+        body = await self._t.post(
+            f"{self._base}/turns", json=_turn_payload(role, content)
+        )
         return ExtractionResult.from_dict(body)
 
     async def turns(self) -> list[Turn]:
@@ -270,7 +277,9 @@ class AsyncSession:
         return [Turn.from_dict(t) for t in body]
 
     async def context(self, query: str, *, k: int | None = None) -> ContextResult:
-        body = await self._t.post(f"{self._base}/context", json=_context_payload(query, k))
+        body = await self._t.post(
+            f"{self._base}/context", json=_context_payload(query, k)
+        )
         return ContextResult.from_dict(body)
 
     async def chat(self, message: str) -> ChatReply:
@@ -290,9 +299,13 @@ class AsyncSessions:
         scope: Mapping[str, str] | None = None,
         metadata: Mapping[str, Any] | None = None,
     ) -> AsyncSession:
-        body = await self._t.post(self._base, json=_session_create_payload(scope, metadata))
+        body = await self._t.post(
+            self._base, json=_session_create_payload(scope, metadata)
+        )
         if not isinstance(body, dict):
-            raise ValueError(f"Expected JSON object from session create, got {type(body).__name__}")
+            raise ValueError(
+                f"Expected JSON object from session create, got {type(body).__name__}"
+            )
         info = SessionInfo.from_dict(body)
         return AsyncSession(self._t, self._context_id, info)
 
@@ -314,7 +327,9 @@ class AsyncEntities:
         body = await self._t.get(f"{self._base}/{quote_path(type)}/{quote_path(name)}")
         return Entity.from_dict(body)
 
-    async def history(self, type: str, name: str, key: str) -> list[EntityHistoryEntry]:
+    async def history(
+        self, type: str, name: str, key: str
+    ) -> builtins.list[EntityHistoryEntry]:
         body = await self._t.get(
             f"{self._base}/{quote_path(type)}/{quote_path(name)}/history/{quote_path(key)}"
         )
@@ -388,7 +403,9 @@ class AsyncMemory:
         return MemoryQueryResponse.from_dict(body)
 
     async def context(self, query: str, *, k: int | None = None) -> ContextResult:
-        body = await self._t.post(f"{self._base}/context", json=_context_payload(query, k))
+        body = await self._t.post(
+            f"{self._base}/context", json=_context_payload(query, k)
+        )
         return ContextResult.from_dict(body)
 
     async def state(self) -> StructuredState:

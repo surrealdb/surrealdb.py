@@ -80,8 +80,7 @@ class _BaseTransport:
             headers["Content-Type"] = content_type
         if extra:
             for k, v in extra.items():
-                if v is not None:
-                    headers[k] = v
+                headers[k] = v
         return headers
 
 
@@ -165,7 +164,9 @@ class BlockingTransport(_BaseTransport):
                 continue
 
             status = response.status_code
-            if status >= 400 and should_retry(method_upper, status, attempt, self.max_retries):
+            if status >= 400 and should_retry(
+                method_upper, status, attempt, self.max_retries
+            ):
                 time.sleep(schedule[attempt])
                 attempt += 1
                 continue
@@ -265,7 +266,9 @@ class AsyncTransport(_BaseTransport):
         h = self._headers(extra=headers, content_type=content_type)
         if params is not None:
             params = {k: v for k, v in params.items() if v is not None}
-        req_timeout = aiohttp.ClientTimeout(total=timeout if timeout is not None else self.timeout)
+        req_timeout = aiohttp.ClientTimeout(
+            total=timeout if timeout is not None else self.timeout
+        )
 
         while True:
             try:
@@ -291,7 +294,9 @@ class AsyncTransport(_BaseTransport):
                 continue
 
             status = response.status
-            if status >= 400 and should_retry(method_upper, status, attempt, self.max_retries):
+            if status >= 400 and should_retry(
+                method_upper, status, attempt, self.max_retries
+            ):
                 response.release()
                 await asyncio.sleep(schedule[attempt])
                 attempt += 1

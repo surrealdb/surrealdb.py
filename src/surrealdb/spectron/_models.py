@@ -48,7 +48,7 @@ class Model:
             field_type = hints.get(f.name, f.type)
             has_default = (
                 f.default is not dataclasses.MISSING
-                or f.default_factory is not dataclasses.MISSING  # type: ignore[misc]
+                or f.default_factory is not dataclasses.MISSING
             )
             if not has_default:
                 required_fields += 1
@@ -70,14 +70,14 @@ class Model:
                 f.name
                 for f in dataclasses.fields(cls)  # type: ignore[arg-type]
                 if f.default is dataclasses.MISSING
-                and f.default_factory is dataclasses.MISSING  # type: ignore[misc]
+                and f.default_factory is dataclasses.MISSING
                 and f.name not in kwargs
             ]
             if missing:
                 raise ValueError(
                     f"Missing required fields {missing!r} for {cls.__name__}"
                 )
-        return cls(**kwargs)  # type: ignore[call-arg]
+        return cls(**kwargs)
 
     def to_dict(self, *, omit_none: bool = True) -> dict[str, Any]:
         out: dict[str, Any] = {}
@@ -112,8 +112,8 @@ def _decode(type_hint: Any, value: Any) -> Any:
     if origin is dict:
         if not isinstance(value, dict):
             return value
-        args = get_args(type_hint)
-        v_type = args[1] if len(args) == 2 else Any
+        dict_args = get_args(type_hint)
+        v_type = dict_args[1] if len(dict_args) == 2 else Any
         return {k: _decode(v_type, v) for k, v in value.items()}
     if isinstance(type_hint, type):
         if issubclass(type_hint, Model) and isinstance(value, dict):

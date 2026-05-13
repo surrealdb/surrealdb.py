@@ -8,7 +8,9 @@ def backoff_schedule(max_retries: int = 3) -> tuple[float, ...]:
     return _BACKOFF_SECONDS[:capped]
 
 
-def should_retry(method: str, status: int | None, attempt: int, max_retries: int) -> bool:
+def should_retry(
+    method: str, status: int | None, attempt: int, max_retries: int
+) -> bool:
     if attempt >= max_retries:
         return False
     if method.upper() != "GET":

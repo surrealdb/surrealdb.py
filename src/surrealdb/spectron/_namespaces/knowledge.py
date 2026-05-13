@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import io
 from collections.abc import Iterable, Mapping
 from typing import Any
@@ -7,10 +8,10 @@ from typing import Any
 from surrealdb.spectron._models import (
     ChunkPageJson,
     DocumentJson,
+    DocumentKeywordJson,
     DocumentKeywordsResponse,
     DocumentPageJson,
     KeywordDetailJson,
-    KeywordJson,
     KeywordPageJson,
     KeywordSearchResponseJson,
     KnowledgeLinkUpsert,
@@ -70,7 +71,9 @@ def _query_request_payload(
     if expand_graph is not None:
         payload["expandGraph"] = expand_graph
     if filter is not None:
-        payload["filter"] = filter.to_dict() if isinstance(filter, QueryFilter) else dict(filter)
+        payload["filter"] = (
+            filter.to_dict() if isinstance(filter, QueryFilter) else dict(filter)
+        )
     return payload
 
 
@@ -164,10 +167,10 @@ class _BlockingKeywords:
         body = self._t.get(f"{self._base}/{quote_path(normalised)}/related")
         return TraverseApiResponse.from_dict(body)
 
-    def for_document(self, document_id: str) -> list[KeywordJson]:
+    def for_document(self, document_id: str) -> builtins.list[DocumentKeywordJson]:
         base = self._base.rsplit("/keywords", 1)[0]
         body = self._t.get(f"{base}/{quote_path(document_id)}/keywords")
-        return DocumentKeywordsResponse.from_dict(body).keywords  # type: ignore[return-value]
+        return DocumentKeywordsResponse.from_dict(body).keywords
 
 
 class _BlockingNodes:
@@ -237,7 +240,12 @@ class _BlockingNodes:
         return KnowledgeNodeFullJson.from_dict(body)
 
     def related(
-        self, kind: str, slug: str, *, label: str | None = None, depth: int | None = None
+        self,
+        kind: str,
+        slug: str,
+        *,
+        label: str | None = None,
+        depth: int | None = None,
     ) -> TraverseApiResponse:
         params = {"label": label, "depth": depth}
         body = self._t.get(
@@ -287,7 +295,9 @@ class _BlockingTraverse:
         direction: str | None = None,
     ) -> TraverseApiResponse:
         payload: dict[str, Any] = {
-            "start": start.to_dict() if isinstance(start, TraverseStartJson) else dict(start),
+            "start": start.to_dict()
+            if isinstance(start, TraverseStartJson)
+            else dict(start),
             "edge": edge,
             "maxDepth": max_depth,
         }
@@ -303,7 +313,9 @@ class _BlockingTraverse:
         edge: str,
     ) -> TraverseApiResponse:
         payload: dict[str, Any] = {
-            "start": start.to_dict() if isinstance(start, TraverseStartJson) else dict(start),
+            "start": start.to_dict()
+            if isinstance(start, TraverseStartJson)
+            else dict(start),
             "edge": edge,
         }
         body = self._t.post(f"{self._base}/siblings", json=payload)
@@ -318,7 +330,6 @@ class BlockingKnowledge:
         self.keywords = _BlockingKeywords(transport, context_id)
         self.nodes = _BlockingNodes(transport, context_id)
         self._traverse_helper = _BlockingTraverse(transport, context_id)
-
 
     def upload(
         self,
@@ -360,8 +371,12 @@ class BlockingKnowledge:
             files=files,
             data=data,
         )
-        return UploadResponse.from_dict(body) if body else UploadResponse(  # type: ignore[return-value]
-            content_hash="", deduplicated=False, id=document_id, status="queued"
+        return (
+            UploadResponse.from_dict(body)
+            if body
+            else UploadResponse(
+                content_hash="", deduplicated=False, id=document_id, status="queued"
+            )
         )
 
     def get(self, document_id: str) -> DocumentJson:
@@ -369,7 +384,9 @@ class BlockingKnowledge:
         return DocumentJson.from_dict(body)
 
     def raw(self, document_id: str) -> bytes:
-        chunks = list(self._t.stream_bytes(f"{self._base}/{quote_path(document_id)}/raw"))
+        chunks = list(
+            self._t.stream_bytes(f"{self._base}/{quote_path(document_id)}/raw")
+        )
         return b"".join(chunks)
 
     def chunks(
@@ -394,7 +411,12 @@ class BlockingKnowledge:
         page: int | None = None,
         page_size: int | None = None,
     ) -> DocumentPageJson:
-        params = {"status": status, "mime_type": mime_type, "page": page, "page_size": page_size}
+        params = {
+            "status": status,
+            "mime_type": mime_type,
+            "page": page,
+            "page_size": page_size,
+        }
         body = self._t.get(self._base, params=params)
         return DocumentPageJson.from_dict(body)
 
@@ -415,7 +437,7 @@ class BlockingKnowledge:
         vector_weight: float | None = None,
         rrf_k: float | None = None,
         graph_alpha: float | None = None,
-        graph_edges: list[str] | None = None,
+        graph_edges: builtins.list[str] | None = None,
         graph_depth: int | None = None,
         expand_graph: bool | None = None,
         filter: QueryFilter | Mapping[str, Any] | None = None,
@@ -435,7 +457,6 @@ class BlockingKnowledge:
         )
         body = self._t.post(f"{self._base}/query", json=payload)
         return QueryResponseJson.from_dict(body)
-
 
     def traverse(self, **kw: Any) -> TraverseApiResponse:
         return self._traverse_helper(**kw)
@@ -490,10 +511,12 @@ class _AsyncKeywords:
         body = await self._t.get(f"{self._base}/{quote_path(normalised)}/related")
         return TraverseApiResponse.from_dict(body)
 
-    async def for_document(self, document_id: str) -> list[KeywordJson]:
+    async def for_document(
+        self, document_id: str
+    ) -> builtins.list[DocumentKeywordJson]:
         base = self._base.rsplit("/keywords", 1)[0]
         body = await self._t.get(f"{base}/{quote_path(document_id)}/keywords")
-        return DocumentKeywordsResponse.from_dict(body).keywords  # type: ignore[return-value]
+        return DocumentKeywordsResponse.from_dict(body).keywords
 
 
 class _AsyncNodes:
@@ -563,7 +586,12 @@ class _AsyncNodes:
         return KnowledgeNodeFullJson.from_dict(body)
 
     async def related(
-        self, kind: str, slug: str, *, label: str | None = None, depth: int | None = None
+        self,
+        kind: str,
+        slug: str,
+        *,
+        label: str | None = None,
+        depth: int | None = None,
     ) -> TraverseApiResponse:
         params = {"label": label, "depth": depth}
         body = await self._t.get(
@@ -613,7 +641,9 @@ class _AsyncTraverse:
         direction: str | None = None,
     ) -> TraverseApiResponse:
         payload: dict[str, Any] = {
-            "start": start.to_dict() if isinstance(start, TraverseStartJson) else dict(start),
+            "start": start.to_dict()
+            if isinstance(start, TraverseStartJson)
+            else dict(start),
             "edge": edge,
             "maxDepth": max_depth,
         }
@@ -629,7 +659,9 @@ class _AsyncTraverse:
         edge: str,
     ) -> TraverseApiResponse:
         payload: dict[str, Any] = {
-            "start": start.to_dict() if isinstance(start, TraverseStartJson) else dict(start),
+            "start": start.to_dict()
+            if isinstance(start, TraverseStartJson)
+            else dict(start),
             "edge": edge,
         }
         body = await self._t.post(f"{self._base}/siblings", json=payload)
@@ -681,8 +713,12 @@ class AsyncKnowledge:
             fields=_upload_fields(title=title, profile=profile, scope=None),
         )
         body = await self._t.put(f"{self._base}/{quote_path(document_id)}", data=form)
-        return UploadResponse.from_dict(body) if body else UploadResponse(  # type: ignore[return-value]
-            content_hash="", deduplicated=False, id=document_id, status="queued"
+        return (
+            UploadResponse.from_dict(body)
+            if body
+            else UploadResponse(
+                content_hash="", deduplicated=False, id=document_id, status="queued"
+            )
         )
 
     async def get(self, document_id: str) -> DocumentJson:
@@ -723,7 +759,12 @@ class AsyncKnowledge:
         page: int | None = None,
         page_size: int | None = None,
     ) -> DocumentPageJson:
-        params = {"status": status, "mime_type": mime_type, "page": page, "page_size": page_size}
+        params = {
+            "status": status,
+            "mime_type": mime_type,
+            "page": page,
+            "page_size": page_size,
+        }
         body = await self._t.get(self._base, params=params)
         return DocumentPageJson.from_dict(body)
 
@@ -744,7 +785,7 @@ class AsyncKnowledge:
         vector_weight: float | None = None,
         rrf_k: float | None = None,
         graph_alpha: float | None = None,
-        graph_edges: list[str] | None = None,
+        graph_edges: builtins.list[str] | None = None,
         graph_depth: int | None = None,
         expand_graph: bool | None = None,
         filter: QueryFilter | Mapping[str, Any] | None = None,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import Any
 
 
 def serialise_scope(scope: Mapping[str, str] | None) -> list[dict[str, str]] | None:
@@ -9,7 +10,7 @@ def serialise_scope(scope: Mapping[str, str] | None) -> list[dict[str, str]] | N
     return [{"key": str(k), "value": str(v)} for k, v in scope.items()]
 
 
-def deserialise_scope(wire: list[dict[str, str]] | None) -> dict[str, str]:
+def deserialise_scope(wire: list[Any] | None) -> dict[str, str]:
     if not wire:
         return {}
     out: dict[str, str] = {}

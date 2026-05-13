@@ -42,7 +42,9 @@ class ValidationError(SpectronError):
 
 
 class RateLimitError(SpectronError):
-    def __init__(self, *args: Any, retry_after: float | None = None, **kwargs: Any) -> None:
+    def __init__(
+        self, *args: Any, retry_after: float | None = None, **kwargs: Any
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.retry_after = retry_after
 
@@ -77,7 +79,9 @@ def error_from_response(
         title = str(body.get("title") or body.get("message") or title)
         detail = body.get("detail") if isinstance(body.get("detail"), str) else None
         type_uri = body.get("type") if isinstance(body.get("type"), str) else None
-        instance = body.get("instance") if isinstance(body.get("instance"), str) else None
+        instance = (
+            body.get("instance") if isinstance(body.get("instance"), str) else None
+        )
         for key, value in body.items():
             if key not in {"status", "title", "detail", "type", "instance", "message"}:
                 extensions[key] = value

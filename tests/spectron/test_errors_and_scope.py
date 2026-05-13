@@ -33,7 +33,7 @@ def test_serialise_scope_none_passthrough():
 
 
 def test_serialise_scope_coerces_non_string_values():
-    payload = serialise_scope({"version": 3})  # type: ignore[arg-type]
+    payload = serialise_scope({"version": 3})  # type: ignore[dict-item]
     assert payload == [{"key": "version", "value": "3"}]
 
 
