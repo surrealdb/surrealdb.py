@@ -42,7 +42,17 @@ Both clients are pinned to one context and hit `/api/v1/{context}/...`.
 | `max_retries` | `3` | GET-only retries. |
 | `transport` | `None` | Inject your own for testing. |
 
-The SDK never reads environment variables. Pass `api_key` as a string from wherever you keep secrets.
+Pass `api_key` as a string from wherever you keep secrets.
+
+`base_url` and `api_key` are also editable after construction:
+
+```python
+memory = Spectron(context="acme-prod", api_key="sk-...")
+memory.base_url = "https://other.spectron.test"
+memory.api_key = "sk-rotated-..."
+```
+
+Changes take effect on the next request.
 
 ## Knowledge
 

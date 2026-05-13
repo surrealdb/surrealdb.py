@@ -48,6 +48,24 @@ class Spectron:
     def memory(self) -> BlockingMemory:
         return self._memory
 
+    @property
+    def base_url(self) -> str:
+        return self._transport.base_url
+
+    @base_url.setter
+    def base_url(self, value: str) -> None:
+        self._transport.base_url = value.rstrip("/")
+
+    @property
+    def api_key(self) -> str:
+        return self._transport.api_key
+
+    @api_key.setter
+    def api_key(self, value: str) -> None:
+        if not value:
+            raise ValueError("api_key must be a non-empty string")
+        self._transport.api_key = value
+
     def query(self, *args: Any, **kw: Any) -> Any:
         return self._memory.query(*args, **kw)
 
@@ -111,6 +129,24 @@ class AsyncSpectron:
     @property
     def memory(self) -> AsyncMemory:
         return self._memory
+
+    @property
+    def base_url(self) -> str:
+        return self._transport.base_url
+
+    @base_url.setter
+    def base_url(self, value: str) -> None:
+        self._transport.base_url = value.rstrip("/")
+
+    @property
+    def api_key(self) -> str:
+        return self._transport.api_key
+
+    @api_key.setter
+    def api_key(self, value: str) -> None:
+        if not value:
+            raise ValueError("api_key must be a non-empty string")
+        self._transport.api_key = value
 
     async def query(self, *args: Any, **kw: Any) -> Any:
         return await self._memory.query(*args, **kw)
