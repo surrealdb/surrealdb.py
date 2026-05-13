@@ -63,6 +63,25 @@ from surrealdb.data.types.geometry import Geometry
 from surrealdb.data.types.range import Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
+from surrealdb.spectron import (
+    AsyncSpectron,
+    AsyncSpectronManagement,
+    Spectron,
+    SpectronError,
+    SpectronManagement,
+)
+from surrealdb.spectron import AuthError as SpectronAuthError
+from surrealdb.spectron import DocumentStatus as SpectronDocumentStatus
+from surrealdb.spectron import IngestProfile as SpectronIngestProfile
+from surrealdb.spectron import MemoryCategory as SpectronMemoryCategory
+from surrealdb.spectron import NotFoundError as SpectronNotFoundError
+from surrealdb.spectron import PrincipalType as SpectronPrincipalType
+from surrealdb.spectron import QueryMode as SpectronQueryMode
+from surrealdb.spectron import RateLimitError as SpectronRateLimitError
+from surrealdb.spectron import ScopeError as SpectronScopeError
+from surrealdb.spectron import ServerError as SpectronServerError
+from surrealdb.spectron import TurnRole as SpectronTurnRole
+from surrealdb.spectron import ValidationError as SpectronValidationError
 from surrealdb.errors import (
     AlreadyExistsDetailKind,
     AlreadyExistsError,
@@ -183,6 +202,26 @@ __all__ = [
     "TAG_RECORD_ID",
     "TAG_TABLE_NAME",
     "TAG_UUID_STRING",
+    # Spectron clients
+    "Spectron",
+    "AsyncSpectron",
+    "SpectronManagement",
+    "AsyncSpectronManagement",
+    # Spectron exceptions (prefixed to avoid clashes with surrealdb.* errors)
+    "SpectronError",
+    "SpectronAuthError",
+    "SpectronScopeError",
+    "SpectronNotFoundError",
+    "SpectronValidationError",
+    "SpectronRateLimitError",
+    "SpectronServerError",
+    # Spectron enums (prefixed)
+    "SpectronQueryMode",
+    "SpectronDocumentStatus",
+    "SpectronIngestProfile",
+    "SpectronTurnRole",
+    "SpectronMemoryCategory",
+    "SpectronPrincipalType",
 ]
 
 _EMBEDDED_SCHEMES = (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV, UrlScheme.SURREALKV_VERSIONED)
