@@ -15,7 +15,7 @@ BASE = "https://api.spectron.test"
 
 @pytest.fixture
 def transport() -> BlockingTransport:
-    return BlockingTransport(base_url=BASE, api_key=API_KEY, max_retries=3)
+    return BlockingTransport(endpoint=BASE, api_key=API_KEY, max_retries=3)
 
 
 @responses.activate
@@ -122,17 +122,17 @@ def test_no_content_returns_none(transport: BlockingTransport):
 def test_api_key_ignores_environment(monkeypatch):
     monkeypatch.setenv("SPECTRON_API_KEY", "env-key")
     with pytest.raises(ValueError, match="API key"):
-        BlockingTransport(base_url=BASE)
+        BlockingTransport(endpoint=BASE)
 
 
 def test_api_key_required():
     with pytest.raises(ValueError, match="API key"):
-        BlockingTransport(base_url=BASE)
+        BlockingTransport(endpoint=BASE)
 
 
 def test_api_key_empty_string_rejected():
     with pytest.raises(ValueError, match="API key"):
-        BlockingTransport(base_url=BASE, api_key="")
+        BlockingTransport(endpoint=BASE, api_key="")
 
 
 def test_base_url_required():
@@ -142,4 +142,4 @@ def test_base_url_required():
 
 def test_base_url_empty_string_rejected():
     with pytest.raises(ValueError, match="base_url"):
-        BlockingTransport(base_url="", api_key=API_KEY)
+        BlockingTransport(endpoint="", api_key=API_KEY)

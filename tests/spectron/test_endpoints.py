@@ -16,11 +16,11 @@ CTX = "acme-prod"
 
 @pytest.fixture
 def client() -> Spectron:
-    return Spectron(context=CTX, base_url=BASE, api_key=API_KEY)
+    return Spectron(context=CTX, endpoint=BASE, api_key=API_KEY)
 
 
 def test_base_url_and_api_key_readable():
-    c = Spectron(context=CTX, base_url=BASE, api_key=API_KEY)
+    c = Spectron(context=CTX, endpoint=BASE, api_key=API_KEY)
     assert c.base_url == BASE
     assert c.api_key == API_KEY
 

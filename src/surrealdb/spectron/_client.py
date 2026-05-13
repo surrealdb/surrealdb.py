@@ -17,7 +17,7 @@ class Spectron:
         self,
         context: str,
         *,
-        base_url: str | None = None,
+        endpoint: str | None = None,
         api_key: str | None = None,
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
@@ -25,7 +25,7 @@ class Spectron:
     ) -> None:
         self._context_id = context
         self._transport = transport or BlockingTransport(
-            base_url=base_url,
+            endpoint=endpoint,
             api_key=api_key,
             timeout=timeout,
             max_retries=max_retries,
@@ -48,8 +48,8 @@ class Spectron:
         return self._memory
 
     @property
-    def base_url(self) -> str:
-        return self._transport.base_url
+    def endpoint(self) -> str:
+        return self._transport.endpoint
 
     @property
     def api_key(self) -> str:
@@ -89,7 +89,7 @@ class AsyncSpectron:
         self,
         context: str,
         *,
-        base_url: str | None = None,
+        endpoint: str | None = None,
         api_key: str | None = None,
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
@@ -97,7 +97,7 @@ class AsyncSpectron:
     ) -> None:
         self._context_id = context
         self._transport = transport or AsyncTransport(
-            base_url=base_url,
+            endpoint=endpoint,
             api_key=api_key,
             timeout=timeout,
             max_retries=max_retries,
@@ -120,8 +120,8 @@ class AsyncSpectron:
         return self._memory
 
     @property
-    def base_url(self) -> str:
-        return self._transport.base_url
+    def endpoint(self) -> str:
+        return self._transport.endpoint
 
     @property
     def api_key(self) -> str:

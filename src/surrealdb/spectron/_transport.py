@@ -26,16 +26,16 @@ def _resolve_api_key(api_key: str | None) -> str:
     return api_key
 
 
-def _resolve_base_url(base_url: str | None) -> str:
-    if base_url is None or base_url == "":
-        raise ValueError("Spectron base_url is required. Pass base_url=...")
-    return base_url.rstrip("/")
+def _resolve_endpoint(endpoint: str | None) -> str:
+    if endpoint is None or endpoint == "":
+        raise ValueError("Spectron endpoint is required. Pass endpoint=...")
+    return endpoint.rstrip("/")
 
 
-def _build_url(base_url: str, path: str) -> str:
+def _build_url(endpoint: str, path: str) -> str:
     if path.startswith("http://") or path.startswith("https://"):
         return path
-    return base_url.rstrip("/") + "/" + path.lstrip("/")
+    return endpoint.rstrip("/") + "/" + path.lstrip("/")
 
 
 def quote_path(value: str) -> str:
@@ -60,12 +60,12 @@ class _BaseTransport:
     def __init__(
         self,
         *,
-        base_url: str | None = None,
+        endpoint: str | None = None,
         api_key: str | None = None,
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
     ) -> None:
-        self.base_url = _resolve_base_url(base_url)
+        self.endpoint = _resolve_endpoint(endpoint)
         self.api_key = _resolve_api_key(api_key)
         self.timeout = timeout
         self.max_retries = max_retries
@@ -93,14 +93,14 @@ class BlockingTransport(_BaseTransport):
     def __init__(
         self,
         *,
-        base_url: str | None = None,
+        endpoint: str | None = None,
         api_key: str | None = None,
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
         session: requests.Session | None = None,
     ) -> None:
         super().__init__(
-            base_url=base_url,
+            endpoint=endpoint,
             api_key=api_key,
             timeout=timeout,
             max_retries=max_retries,
@@ -133,7 +133,7 @@ class BlockingTransport(_BaseTransport):
         allow_redirects: bool = True,
         return_raw: bool = False,
     ) -> Any:
-        url = _build_url(self.base_url, path)
+        url = _build_url(self.endpoint, path)
         attempt = 0
         schedule = backoff_schedule(self.max_retries)
         method_upper = method.upper()
@@ -215,14 +215,14 @@ class AsyncTransport(_BaseTransport):
     def __init__(
         self,
         *,
-        base_url: str | None = None,
+        endpoint: str | None = None,
         api_key: str | None = None,
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
         session: aiohttp.ClientSession | None = None,
     ) -> None:
         super().__init__(
-            base_url=base_url,
+            endpoint=endpoint,
             api_key=api_key,
             timeout=timeout,
             max_retries=max_retries,
@@ -261,7 +261,7 @@ class AsyncTransport(_BaseTransport):
         return_raw: bool = False,
     ) -> Any:
         session = await self._ensure_session()
-        url = _build_url(self.base_url, path)
+        url = _build_url(self.endpoint, path)
         attempt = 0
         schedule = backoff_schedule(self.max_retries)
         method_upper = method.upper()
