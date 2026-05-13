@@ -5,7 +5,11 @@ Python client for Spectron, bundled with `surrealdb`.
 ```python
 from surrealdb import Spectron
 
-memory = Spectron(context="acme-prod", api_key="sk-spec-...")
+memory = Spectron(
+    context="acme-prod",
+    base_url="https://api.spectron.example",
+    api_key="sk-spec-...",
+)
 hits = memory.knowledge.query("returns policy", k=5)
 ```
 
@@ -20,10 +24,10 @@ pip install surrealdb
 ```python
 from surrealdb import Spectron, AsyncSpectron
 
-with Spectron(context="acme-prod", api_key="sk-...") as memory:
+with Spectron(context="acme-prod", base_url="https://api.spectron.example", api_key="sk-...") as memory:
     state = memory.state()
 
-async with AsyncSpectron(context="acme-prod", api_key="sk-...") as memory:
+async with AsyncSpectron(context="acme-prod", base_url="https://api.spectron.example", api_key="sk-...") as memory:
     state = await memory.state()
 ```
 
@@ -36,23 +40,13 @@ Both clients are pinned to one context and hit `/api/v1/{context}/...`.
 | Arg | Default | |
 |---|---|---|
 | `context` | required | Context id, e.g. `"acme-prod"`. |
+| `base_url` | required | Full URL of the Spectron host, e.g. `"https://api.spectron.example"`. No default. |
 | `api_key` | required | Bearer token, as a string. |
-| `base_url` | `https://api.spectron.dev` | Override for self-hosted. |
 | `timeout` | `30.0` | Seconds per request. |
 | `max_retries` | `3` | GET-only retries. |
 | `transport` | `None` | Inject your own for testing. |
 
-Pass `api_key` as a string from wherever you keep secrets.
-
-`base_url` and `api_key` are also editable after construction:
-
-```python
-memory = Spectron(context="acme-prod", api_key="sk-...")
-memory.base_url = "https://other.spectron.test"
-memory.api_key = "sk-rotated-..."
-```
-
-Changes take effect on the next request.
+Pass `api_key` as a string from wherever you keep secrets. The SDK never reads environment variables.
 
 ## Knowledge
 

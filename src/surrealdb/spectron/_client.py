@@ -5,7 +5,6 @@ from typing import Any
 from surrealdb.spectron._namespaces.knowledge import AsyncKnowledge, BlockingKnowledge
 from surrealdb.spectron._namespaces.memory import AsyncMemory, BlockingMemory
 from surrealdb.spectron._transport import (
-    DEFAULT_BASE_URL,
     DEFAULT_MAX_RETRIES,
     DEFAULT_TIMEOUT,
     AsyncTransport,
@@ -18,7 +17,7 @@ class Spectron:
         self,
         context: str,
         *,
-        base_url: str = DEFAULT_BASE_URL,
+        base_url: str | None = None,
         api_key: str | None = None,
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
@@ -52,19 +51,9 @@ class Spectron:
     def base_url(self) -> str:
         return self._transport.base_url
 
-    @base_url.setter
-    def base_url(self, value: str) -> None:
-        self._transport.base_url = value.rstrip("/")
-
     @property
     def api_key(self) -> str:
         return self._transport.api_key
-
-    @api_key.setter
-    def api_key(self, value: str) -> None:
-        if not value:
-            raise ValueError("api_key must be a non-empty string")
-        self._transport.api_key = value
 
     def query(self, *args: Any, **kw: Any) -> Any:
         return self._memory.query(*args, **kw)
@@ -100,7 +89,7 @@ class AsyncSpectron:
         self,
         context: str,
         *,
-        base_url: str = DEFAULT_BASE_URL,
+        base_url: str | None = None,
         api_key: str | None = None,
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
@@ -134,19 +123,9 @@ class AsyncSpectron:
     def base_url(self) -> str:
         return self._transport.base_url
 
-    @base_url.setter
-    def base_url(self, value: str) -> None:
-        self._transport.base_url = value.rstrip("/")
-
     @property
     def api_key(self) -> str:
         return self._transport.api_key
-
-    @api_key.setter
-    def api_key(self, value: str) -> None:
-        if not value:
-            raise ValueError("api_key must be a non-empty string")
-        self._transport.api_key = value
 
     async def query(self, *args: Any, **kw: Any) -> Any:
         return await self._memory.query(*args, **kw)

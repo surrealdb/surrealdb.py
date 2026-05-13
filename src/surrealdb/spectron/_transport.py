@@ -15,7 +15,6 @@ import requests
 from surrealdb.spectron._errors import SpectronError, error_from_response
 from surrealdb.spectron._retry import backoff_schedule, should_retry
 
-DEFAULT_BASE_URL = "https://api.spectron.dev"
 DEFAULT_TIMEOUT = 30.0
 DEFAULT_MAX_RETRIES = 3
 _USER_AGENT = "surrealdb-py-spectron/1.0"
@@ -25,6 +24,12 @@ def _resolve_api_key(api_key: str | None) -> str:
     if api_key is None or api_key == "":
         raise ValueError("Spectron API key is required. Pass api_key=...")
     return api_key
+
+
+def _resolve_base_url(base_url: str | None) -> str:
+    if base_url is None or base_url == "":
+        raise ValueError("Spectron base_url is required. Pass base_url=...")
+    return base_url.rstrip("/")
 
 
 def _build_url(base_url: str, path: str) -> str:
@@ -55,12 +60,12 @@ class _BaseTransport:
     def __init__(
         self,
         *,
-        base_url: str = DEFAULT_BASE_URL,
+        base_url: str | None = None,
         api_key: str | None = None,
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
     ) -> None:
-        self.base_url = base_url.rstrip("/")
+        self.base_url = _resolve_base_url(base_url)
         self.api_key = _resolve_api_key(api_key)
         self.timeout = timeout
         self.max_retries = max_retries
@@ -88,7 +93,7 @@ class BlockingTransport(_BaseTransport):
     def __init__(
         self,
         *,
-        base_url: str = DEFAULT_BASE_URL,
+        base_url: str | None = None,
         api_key: str | None = None,
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
@@ -210,7 +215,7 @@ class AsyncTransport(_BaseTransport):
     def __init__(
         self,
         *,
-        base_url: str = DEFAULT_BASE_URL,
+        base_url: str | None = None,
         api_key: str | None = None,
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
@@ -408,7 +413,6 @@ __all__ = [
     "build_multipart_payload",
     "build_aiohttp_form",
     "quote_path",
-    "DEFAULT_BASE_URL",
     "DEFAULT_TIMEOUT",
     "DEFAULT_MAX_RETRIES",
 ]

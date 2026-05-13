@@ -133,3 +133,13 @@ def test_api_key_required():
 def test_api_key_empty_string_rejected():
     with pytest.raises(ValueError, match="API key"):
         BlockingTransport(base_url=BASE, api_key="")
+
+
+def test_base_url_required():
+    with pytest.raises(ValueError, match="base_url"):
+        BlockingTransport(api_key=API_KEY)
+
+
+def test_base_url_empty_string_rejected():
+    with pytest.raises(ValueError, match="base_url"):
+        BlockingTransport(base_url="", api_key=API_KEY)

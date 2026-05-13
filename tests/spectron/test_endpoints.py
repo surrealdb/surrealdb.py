@@ -19,32 +19,10 @@ def client() -> Spectron:
     return Spectron(context=CTX, base_url=BASE, api_key=API_KEY)
 
 
-def test_base_url_and_api_key_are_editable():
+def test_base_url_and_api_key_readable():
     c = Spectron(context=CTX, base_url=BASE, api_key=API_KEY)
     assert c.base_url == BASE
     assert c.api_key == API_KEY
-
-    c.base_url = "https://other.spectron.test/"
-    c.api_key = "sk-new"
-    assert c.base_url == "https://other.spectron.test"
-    assert c.api_key == "sk-new"
-
-    with pytest.raises(ValueError):
-        c.api_key = ""
-
-
-@responses.activate
-def test_base_url_change_takes_effect_immediately(client: Spectron):
-    new_base = "https://other.spectron.test"
-    responses.add(
-        responses.GET,
-        f"{new_base}/api/v1/{CTX}/state",
-        json={"identity": {}, "instructions": []},
-        status=200,
-    )
-    client.base_url = new_base
-    client.state()
-    assert responses.calls[0].request.url.startswith(new_base)
 
 
 @responses.activate
