@@ -6,8 +6,8 @@ import re
 import pytest
 import responses
 
-from surrealdb import Spectron, SpectronManagement
-from surrealdb.spectron import KnowledgeNodeUpsertRow, PrincipalType, QueryMode
+from surrealdb import Spectron
+from surrealdb.spectron import KnowledgeNodeUpsertRow, QueryMode
 
 BASE = "https://api.spectron.test"
 API_KEY = "test-key"
@@ -17,11 +17,6 @@ CTX = "acme-prod"
 @pytest.fixture
 def client() -> Spectron:
     return Spectron(context=CTX, base_url=BASE, api_key=API_KEY)
-
-
-@pytest.fixture
-def admin() -> SpectronManagement:
-    return SpectronManagement(base_url=BASE, api_key=API_KEY)
 
 
 @responses.activate
@@ -226,50 +221,3 @@ def test_traces_stats(client: Spectron):
     stats = client.traces.stats()
     assert stats.total_queries == 42
     assert stats.cache_hits == 30
-
-
-@responses.activate
-def test_management_create_context(admin: SpectronManagement):
-    responses.add(
-        responses.POST,
-        f"{BASE}/api/v1/contexts/acme-prod",
-        json={
-            "id": "acme-prod",
-            "namespace": "acme",
-            "database": "prod",
-            "config": {"models": {"embedding": "text-embedding-3-small"}},
-        },
-        status=201,
-    )
-    out = admin.contexts.create(
-        "acme-prod",
-        namespace="acme",
-        database="prod",
-        config={"models": {"embedding": "text-embedding-3-small"}},
-    )
-    assert out.namespace == "acme"
-    body = json.loads(responses.calls[0].request.body)
-    assert body == {
-        "namespace": "acme",
-        "database": "prod",
-        "config": {"models": {"embedding": "text-embedding-3-small"}},
-    }
-
-
-@responses.activate
-def test_management_keys_create(admin: SpectronManagement):
-    responses.add(
-        responses.POST,
-        f"{BASE}/api/v1/contexts/acme-prod/keys/planner",
-        json={"key": "sk-spec-planner"},
-        status=201,
-    )
-    out = admin.contexts("acme-prod").keys.create(
-        "planner",
-        principal=PrincipalType.AGENT,
-        scope_floor={"org": "anneal"},
-    )
-    assert out.key == "sk-spec-planner"
-    body = json.loads(responses.calls[0].request.body)
-    assert body["principal"] == "agent"
-    assert body["scopeFloor"] == [{"key": "org", "value": "anneal"}]

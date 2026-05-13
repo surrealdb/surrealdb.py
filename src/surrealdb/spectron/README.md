@@ -17,7 +17,6 @@ No extra install step: the SDK is bundled with `pip install surrealdb`.
 - [Authentication](#authentication)
 - [Knowledge: documents, query, keywords, nodes, traversal](#knowledge)
 - [Memory: sessions, retrieval, state, profile, entities, traces](#memory)
-- [Management: contexts, keys, config](#management)
 - [Errors](#errors)
 - [Retries & timeouts](#retries--timeouts)
 - [Scope](#scope)
@@ -25,37 +24,32 @@ No extra install step: the SDK is bundled with `pip install surrealdb`.
 
 ## Clients
 
-Four top-level facades, all importable from `surrealdb`:
+Two top-level facades, both importable from `surrealdb`:
 
-| Class | Surface | Transport |
-|---|---|---|
-| `Spectron` | end-user, context-scoped | blocking (`requests`) |
-| `AsyncSpectron` | end-user, context-scoped | async (`aiohttp`) |
-| `SpectronManagement` | control plane | blocking |
-| `AsyncSpectronManagement` | control plane | async |
+| Class | Transport |
+|---|---|
+| `Spectron` | blocking (`requests`) |
+| `AsyncSpectron` | async (`aiohttp`) |
 
-End-user clients require a context id and target `/api/v1/{context_id}/...`. Management clients target `/api/v1/contexts/...` and need a management-tier key.
+Each client is bound to a single context id and targets `/api/v1/{context_id}/...`.
 
 ```python
-from surrealdb import Spectron, AsyncSpectron, SpectronManagement, AsyncSpectronManagement
+from surrealdb import Spectron, AsyncSpectron
 
-with Spectron(context="acme-prod", api_key="...") as memory:
+with Spectron(context="acme-prod", api_key="sk-spec-...") as memory:
     state = memory.state()
 
-async with AsyncSpectron(context="acme-prod", api_key="...") as memory:
+async with AsyncSpectron(context="acme-prod", api_key="sk-spec-...") as memory:
     state = await memory.state()
-
-with SpectronManagement(api_key="...") as admin:
-    contexts = admin.contexts.list()
 ```
 
-Constructor arguments (identical across all four):
+Constructor arguments:
 
 | Arg | Default | Notes |
 |---|---|---|
-| `context` (positional, end-user only) | required | Context id, e.g. `"acme-prod"`. |
+| `context` (positional) | required | Context id, e.g. `"acme-prod"`. |
 | `base_url` | `https://api.spectron.dev` | Override for self-hosted. |
-| `api_key` | required | Bearer token. |
+| `api_key` | required | Bearer token. Pass any string. |
 | `timeout` | `30.0` seconds | Per-request. |
 | `max_retries` | `3` | GET-only, see [Retries](#retries--timeouts). |
 | `transport` | `None` | Inject a custom transport for testing. |
@@ -241,51 +235,6 @@ stats  = memory.traces.stats()
 # stats.total_queries, stats.cache_hits, stats.avg_latency_ms, stats.tier_counts
 ```
 
-## Management
-
-Control-plane operations need a management-tier API key.
-
-```python
-from surrealdb import SpectronManagement, SpectronPrincipalType
-
-admin = SpectronManagement(api_key=os.environ["SPECTRON_MGMT_KEY"])
-
-admin.contexts.create(
-    "acme-prod",
-    namespace="acme",
-    database="prod",
-    config={"models": {"extraction": "gpt-4o-mini", "response": "gpt-4o"}},
-)
-admin.contexts.update("acme-prod", config={"models": {"reflection": "gpt-4o"}})
-ctx = admin.contexts.get("acme-prod")
-admin.contexts.list()
-admin.contexts.delete("acme-prod")
-
-# Per-context API keys
-created = admin.contexts("acme-prod").keys.create(
-    name="planner",
-    principal=SpectronPrincipalType.AGENT,
-    scope_floor={"org": "anneal", "agent": "planner"},
-    expires_at="2027-01-01T00:00:00Z",
-)
-# created.key: store it now, it is not retrievable later.
-
-admin.contexts("acme-prod").keys.list()
-admin.contexts("acme-prod").keys.delete("planner")
-```
-
-End-user clients also expose a `config` shortcut that wraps `PATCH /contexts/{id}` (management-key only):
-
-```python
-memory.config.models(extraction="gpt-4o-mini", response="gpt-4o")
-memory.config.providers(openai=os.environ["OPENAI_API_KEY"])
-memory.config.ontology(
-    entity_types=["Customer", "Product", "Ticket"],
-    attribute_keys={"Customer": ["name", "plan", "region"]},
-    relation_labels=["purchased", "raised", "resolved_by"],
-)
-```
-
 ## Errors
 
 The server returns RFC 7807 problem details; the SDK maps them to a typed hierarchy. Top-level aliases are prefixed with `Spectron` to avoid clashing with `surrealdb.errors`.
@@ -342,4 +291,4 @@ back = deserialise_scope(wire)                      # {"org": "anneal"}
 
 ## Wire-shape types
 
-Every dataclass is re-exported under `surrealdb.spectron.*` (e.g. `DocumentJson`, `QueryResponseJson`, `ContextResponse`, `SessionInfo`, `ExtractionResult`, `TraceStats`, ...) for callers that want typed access without going through the namespaces.
+Every dataclass is re-exported under `surrealdb.spectron.*` (e.g. `DocumentJson`, `QueryResponseJson`, `SessionInfo`, `ExtractionResult`, `TraceStats`, ...) for callers that want typed access without going through the namespaces.

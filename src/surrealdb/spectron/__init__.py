@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-from surrealdb.spectron._client import (
-    AsyncSpectron,
-    AsyncSpectronManagement,
-    Spectron,
-    SpectronManagement,
-)
+from surrealdb.spectron._client import AsyncSpectron, Spectron
 from surrealdb.spectron._errors import (
     AuthError,
     NotFoundError,
@@ -16,19 +11,11 @@ from surrealdb.spectron._errors import (
     ValidationError,
 )
 from surrealdb.spectron._models import (
-    ApiKeyInfoResponse,
     AttributeUpdate,
     ChatReply,
     ChunkJson,
     ChunkPageJson,
-    ContextConfig,
-    ContextConfigView,
-    ContextModels,
-    ContextProviders,
-    ContextResponse,
     ContextResult,
-    CreateContextBody,
-    CreatedApiKey,
     DocumentJson,
     DocumentKeywordJson,
     DocumentKeywordsResponse,
@@ -59,7 +46,6 @@ from surrealdb.spectron._models import (
     MemoryCategory,
     MemoryHit,
     MemoryQueryResponse,
-    PrincipalType,
     ProfileResponse,
     QueryFilter,
     QueryHitChunkJson,
@@ -88,8 +74,6 @@ from surrealdb.spectron._transport import AsyncTransport, BlockingTransport
 __all__ = [
     "Spectron",
     "AsyncSpectron",
-    "SpectronManagement",
-    "AsyncSpectronManagement",
     "BlockingTransport",
     "AsyncTransport",
     "SpectronError",
@@ -104,7 +88,6 @@ __all__ = [
     "IngestProfile",
     "TurnRole",
     "MemoryCategory",
-    "PrincipalType",
     "serialise_scope",
     "deserialise_scope",
     "ChunkJson",
@@ -139,14 +122,6 @@ __all__ = [
     "TraverseEdgeJson",
     "TraverseApiResponse",
     "UploadResponse",
-    "ContextModels",
-    "ContextProviders",
-    "ContextConfig",
-    "ContextConfigView",
-    "ContextResponse",
-    "CreateContextBody",
-    "ApiKeyInfoResponse",
-    "CreatedApiKey",
     "SessionInfo",
     "Turn",
     "EntityRef",

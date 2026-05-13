@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from surrealdb.spectron import (
     ChunkPageJson,
-    ContextResponse,
     DocumentJson,
     KnowledgeNodeUpsertRow,
     QueryMode,
@@ -131,20 +130,3 @@ def test_enums_round_trip_through_to_dict():
 def test_query_mode_enum_values():
     assert QueryMode.HYBRID.value == "hybrid"
     assert QueryMode.HYBRID_GRAPH.value == "hybrid_graph"
-
-
-def test_context_response_nested_decoding():
-    payload = {
-        "id": "acme-prod",
-        "namespace": "acme",
-        "database": "prod",
-        "config": {
-            "models": {"embedding": "text-embedding-3-small"},
-            "providers_configured": ["openai"],
-        },
-    }
-    ctx = ContextResponse.from_dict(payload)
-    assert ctx.id == "acme-prod"
-    assert ctx.config.models is not None
-    assert ctx.config.models.embedding == "text-embedding-3-small"
-    assert ctx.config.providers_configured == ["openai"]

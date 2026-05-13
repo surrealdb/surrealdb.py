@@ -180,12 +180,6 @@ class MemoryCategory(str, enum.Enum):
     UNCERTAINTY = "uncertainty"
 
 
-class PrincipalType(str, enum.Enum):
-    MANAGEMENT = "management"
-    AGENT = "agent"
-    SUPERVISOR = "supervisor"
-
-
 @dataclass(slots=True)
 class ChunkJson(Model):
     char_end: int
@@ -457,61 +451,6 @@ class UploadResponse(Model):
 
 
 @dataclass(slots=True)
-class ContextModels(Model):
-    embedding: str | None = None
-    extraction: str | None = None
-    query_understanding: str | None = None
-    response: str | None = None
-    reflection: str | None = None
-    background: str | None = None
-
-
-@dataclass(slots=True)
-class ContextProviders(Model):
-    openai: str | None = None
-    anthropic: str | None = None
-    google: str | None = None
-
-
-@dataclass(slots=True)
-class ContextConfig(Model):
-    models: ContextModels | None = None
-    providers: ContextProviders | None = None
-
-
-@dataclass(slots=True)
-class ContextConfigView(Model):
-    models: ContextModels | None = None
-    providers_configured: list[str] | None = None
-
-
-@dataclass(slots=True)
-class ContextResponse(Model):
-    config: ContextConfigView
-    database: str
-    id: str
-    namespace: str
-
-
-@dataclass(slots=True)
-class CreateContextBody(Model):
-    database: str
-    namespace: str
-    config: ContextConfig | None = None
-
-
-@dataclass(slots=True)
-class ApiKeyInfoResponse(Model):
-    id: str
-    name: str
-
-
-@dataclass(slots=True)
-class CreatedApiKey(Model):
-    key: str
-
-
-@dataclass(slots=True)
 class SessionInfo(Model):
     id: str
     scope: dict[str, str] | None = None
@@ -670,7 +609,6 @@ __all__ = [
     "IngestProfile",
     "TurnRole",
     "MemoryCategory",
-    "PrincipalType",
     "Model",
     "ChunkJson",
     "ChunkPageJson",
@@ -704,14 +642,6 @@ __all__ = [
     "TraverseEdgeJson",
     "TraverseApiResponse",
     "UploadResponse",
-    "ContextModels",
-    "ContextProviders",
-    "ContextConfig",
-    "ContextConfigView",
-    "ContextResponse",
-    "CreateContextBody",
-    "ApiKeyInfoResponse",
-    "CreatedApiKey",
     "SessionInfo",
     "Turn",
     "EntityRef",

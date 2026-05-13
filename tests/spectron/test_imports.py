@@ -2,17 +2,10 @@ from __future__ import annotations
 
 
 def test_top_level_clients_importable():
-    from surrealdb import (
-        AsyncSpectron,
-        AsyncSpectronManagement,
-        Spectron,
-        SpectronManagement,
-    )
+    from surrealdb import AsyncSpectron, Spectron
 
     assert Spectron.__name__ == "Spectron"
     assert AsyncSpectron.__name__ == "AsyncSpectron"
-    assert SpectronManagement.__name__ == "SpectronManagement"
-    assert AsyncSpectronManagement.__name__ == "AsyncSpectronManagement"
 
 
 def test_top_level_exception_aliases_importable():
@@ -42,7 +35,6 @@ def test_top_level_enums_importable():
         SpectronDocumentStatus,
         SpectronIngestProfile,
         SpectronMemoryCategory,
-        SpectronPrincipalType,
         SpectronQueryMode,
         SpectronTurnRole,
     )
@@ -52,17 +44,35 @@ def test_top_level_enums_importable():
     assert SpectronIngestProfile("text_only").value == "text_only"
     assert SpectronTurnRole("user").value == "user"
     assert SpectronMemoryCategory("identity").value == "identity"
-    assert SpectronPrincipalType("agent").value == "agent"
 
 
-def test_subpackage_exports_match_docs():
+def test_management_surface_is_gone():
+    import surrealdb
+    import surrealdb.spectron as spx
+
+    for name in (
+        "SpectronManagement",
+        "AsyncSpectronManagement",
+        "SpectronPrincipalType",
+    ):
+        assert not hasattr(surrealdb, name), f"surrealdb still exposes {name}"
+    for name in (
+        "SpectronManagement",
+        "AsyncSpectronManagement",
+        "PrincipalType",
+        "ContextConfig",
+        "ContextResponse",
+        "CreatedApiKey",
+    ):
+        assert not hasattr(spx, name), f"surrealdb.spectron still exposes {name}"
+
+
+def test_subpackage_exports():
     import surrealdb.spectron as spx
 
     for name in (
         "Spectron",
         "AsyncSpectron",
-        "SpectronManagement",
-        "AsyncSpectronManagement",
         "SpectronError",
         "AuthError",
         "ScopeError",
@@ -75,7 +85,6 @@ def test_subpackage_exports_match_docs():
         "IngestProfile",
         "TurnRole",
         "MemoryCategory",
-        "PrincipalType",
         "serialise_scope",
         "deserialise_scope",
     ):

@@ -65,17 +65,14 @@ from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 from surrealdb.spectron import (
     AsyncSpectron,
-    AsyncSpectronManagement,
     Spectron,
     SpectronError,
-    SpectronManagement,
 )
 from surrealdb.spectron import AuthError as SpectronAuthError
 from surrealdb.spectron import DocumentStatus as SpectronDocumentStatus
 from surrealdb.spectron import IngestProfile as SpectronIngestProfile
 from surrealdb.spectron import MemoryCategory as SpectronMemoryCategory
 from surrealdb.spectron import NotFoundError as SpectronNotFoundError
-from surrealdb.spectron import PrincipalType as SpectronPrincipalType
 from surrealdb.spectron import QueryMode as SpectronQueryMode
 from surrealdb.spectron import RateLimitError as SpectronRateLimitError
 from surrealdb.spectron import ScopeError as SpectronScopeError
@@ -205,8 +202,6 @@ __all__ = [
     # Spectron clients
     "Spectron",
     "AsyncSpectron",
-    "SpectronManagement",
-    "AsyncSpectronManagement",
     # Spectron exceptions (prefixed to avoid clashes with surrealdb.* errors)
     "SpectronError",
     "SpectronAuthError",
@@ -221,7 +216,6 @@ __all__ = [
     "SpectronIngestProfile",
     "SpectronTurnRole",
     "SpectronMemoryCategory",
-    "SpectronPrincipalType",
 ]
 
 _EMBEDDED_SCHEMES = (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV, UrlScheme.SURREALKV_VERSIONED)
