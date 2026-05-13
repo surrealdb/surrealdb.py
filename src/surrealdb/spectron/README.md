@@ -24,10 +24,10 @@ pip install surrealdb
 ```python
 from surrealdb import Spectron, AsyncSpectron
 
-with Spectron(context="acme-prod", base_url="https://api.spectron.example", api_key="sk-...") as memory:
+with Spectron(context="acme-prod", endpoint="https://api.spectron.example", api_key="sk-...") as memory:
     state = memory.state()
 
-async with AsyncSpectron(context="acme-prod", base_url="https://api.spectron.example", api_key="sk-...") as memory:
+async with AsyncSpectron(context="acme-prod", endpoint="https://api.spectron.example", api_key="sk-...") as memory:
     state = await memory.state()
 ```
 
@@ -40,7 +40,7 @@ Both clients are pinned to one context and hit `/api/v1/{context}/...`.
 | Arg | Default | |
 |---|---|---|
 | `context` | required | Context id, e.g. `"acme-prod"`. |
-| `base_url` | required | Full URL of the Spectron host, e.g. `"https://api.spectron.example"`. No default. |
+| `endpoint` | required | Full URL of the Spectron host, e.g. `"https://api.spectron.example"`. No default. |
 | `api_key` | required | Bearer token, as a string. |
 | `timeout` | `30.0` | Seconds per request. |
 | `max_retries` | `3` | GET-only retries. |
