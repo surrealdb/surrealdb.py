@@ -3,78 +3,54 @@ from __future__ import annotations
 import pytest
 
 from surrealdb.spectron import (
-    AuthError,
-    NotFoundError,
-    RateLimitError,
-    ScopeError,
-    ServerError,
+    SpectronAPIError,
+    SpectronAuthError,
     SpectronError,
-    ValidationError,
-    deserialise_scope,
-    serialise_scope,
+    SpectronNotFoundError,
+    SpectronScopeError,
 )
-from surrealdb.spectron._errors import error_from_response
+from surrealdb.spectron._errors import error_for_status, error_from_response
 from surrealdb.spectron._retry import backoff_schedule, should_retry
-
-
-def test_serialise_scope_round_trip():
-    payload = serialise_scope({"org": "anneal", "user": "tobie"})
-    assert payload is not None
-    assert {(e["key"], e["value"]) for e in payload} == {
-        ("org", "anneal"),
-        ("user", "tobie"),
-    }
-    assert deserialise_scope(payload) == {"org": "anneal", "user": "tobie"}
-
-
-def test_serialise_scope_none_passthrough():
-    assert serialise_scope(None) is None
-    assert deserialise_scope(None) == {}
-
-
-def test_serialise_scope_coerces_non_string_values():
-    payload = serialise_scope({"version": 3})  # type: ignore[dict-item]
-    assert payload == [{"key": "version", "value": "3"}]
 
 
 @pytest.mark.parametrize(
     "status, cls",
     [
-        (400, ValidationError),
-        (401, AuthError),
-        (403, ScopeError),
-        (404, NotFoundError),
-        (422, ValidationError),
-        (429, RateLimitError),
-        (500, ServerError),
-        (502, ServerError),
-        (418, SpectronError),  # uncategorised stays on the base.
+        (401, SpectronAuthError),
+        (403, SpectronScopeError),
+        (404, SpectronNotFoundError),
+        (400, SpectronAPIError),
+        (422, SpectronAPIError),
+        (429, SpectronAPIError),
+        (500, SpectronAPIError),
+        (502, SpectronAPIError),
+        (418, SpectronAPIError),
     ],
 )
-def test_error_from_response_status_mapping(status: int, cls: type[SpectronError]):
-    exc = error_from_response(
-        status,
-        {"title": "boom", "detail": "kaboom", "type": "https://example", "extra": "ext"},
-        {},
-    )
+def test_error_for_status_mapping(status: int, cls: type[SpectronAPIError]):
+    exc = error_for_status(status, "boom")
     assert isinstance(exc, cls)
-    assert exc.status == status
-    assert exc.title == "boom"
-    assert exc.detail == "kaboom"
-    assert exc.type_uri == "https://example"
-    assert exc.extensions == {"extra": "ext"}
+    assert isinstance(exc, SpectronError)
+    assert exc.status_code == status
+    assert exc.message == "boom"
 
 
-def test_rate_limit_picks_up_retry_after():
-    exc = error_from_response(429, {"title": "slow down"}, {"Retry-After": "12.5"})
-    assert isinstance(exc, RateLimitError)
-    assert exc.retry_after == 12.5
+def test_error_from_response_extracts_dict_message():
+    exc = error_from_response(404, {"message": "no such doc"})
+    assert isinstance(exc, SpectronNotFoundError)
+    assert exc.message == "no such doc"
+    assert exc.body == {"message": "no such doc"}
 
 
-def test_error_from_response_falls_back_for_non_dict_bodies():
-    exc = error_from_response(500, "internal explosion", {})
-    assert isinstance(exc, ServerError)
-    assert exc.detail == "internal explosion"
+def test_error_from_response_falls_back_to_string_body():
+    exc = error_from_response(500, "internal explosion")
+    assert isinstance(exc, SpectronAPIError)
+    assert exc.message == "internal explosion"
+
+
+def test_error_from_response_picks_up_trace_header():
+    exc = error_from_response(500, {"message": "boom"}, {"x-trace-id": "tr:1"})
+    assert exc.trace_id == "tr:1"
 
 
 def test_backoff_schedule_capped():
@@ -92,3 +68,9 @@ def test_should_retry_rules():
     assert should_retry("POST", 500, 0, 3) is False
     assert should_retry("PUT", 502, 0, 3) is False
     assert should_retry("GET", 500, 3, 3) is False
+
+
+def test_idempotent_post_can_retry():
+    assert should_retry("POST", 503, 0, 3, idempotent=True) is True
+    assert should_retry("POST", None, 0, 3, idempotent=True) is True
+    assert should_retry("POST", 404, 0, 3, idempotent=True) is False

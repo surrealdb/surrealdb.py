@@ -10,61 +10,32 @@ def test_top_level_clients_importable():
 
 def test_top_level_exception_aliases_importable():
     from surrealdb import (
+        SpectronAPIError,
         SpectronAuthError,
         SpectronError,
         SpectronNotFoundError,
-        SpectronRateLimitError,
         SpectronScopeError,
-        SpectronServerError,
-        SpectronValidationError,
     )
 
-    for cls in (
-        SpectronAuthError,
-        SpectronNotFoundError,
-        SpectronRateLimitError,
-        SpectronScopeError,
-        SpectronServerError,
-        SpectronValidationError,
-    ):
-        assert issubclass(cls, SpectronError)
+    assert issubclass(SpectronAPIError, SpectronError)
+    for cls in (SpectronAuthError, SpectronNotFoundError, SpectronScopeError):
+        assert issubclass(cls, SpectronAPIError)
 
 
-def test_top_level_enums_importable():
-    from surrealdb import (
-        SpectronDocumentStatus,
-        SpectronIngestProfile,
-        SpectronMemoryCategory,
-        SpectronQueryMode,
-        SpectronTurnRole,
-    )
-
-    assert SpectronQueryMode("hybrid").value == "hybrid"
-    assert SpectronDocumentStatus("ready").value == "ready"
-    assert SpectronIngestProfile("text_only").value == "text_only"
-    assert SpectronTurnRole("user").value == "user"
-    assert SpectronMemoryCategory("identity").value == "identity"
-
-
-def test_management_surface_is_gone():
+def test_removed_aliases_no_longer_exposed():
     import surrealdb
-    import surrealdb.spectron as spx
 
     for name in (
-        "SpectronManagement",
-        "AsyncSpectronManagement",
-        "SpectronPrincipalType",
+        "SpectronValidationError",
+        "SpectronRateLimitError",
+        "SpectronServerError",
+        "SpectronQueryMode",
+        "SpectronDocumentStatus",
+        "SpectronIngestProfile",
+        "SpectronTurnRole",
+        "SpectronMemoryCategory",
     ):
         assert not hasattr(surrealdb, name), f"surrealdb still exposes {name}"
-    for name in (
-        "SpectronManagement",
-        "AsyncSpectronManagement",
-        "PrincipalType",
-        "ContextConfig",
-        "ContextResponse",
-        "CreatedApiKey",
-    ):
-        assert not hasattr(spx, name), f"surrealdb.spectron still exposes {name}"
 
 
 def test_subpackage_exports():
@@ -73,22 +44,46 @@ def test_subpackage_exports():
     for name in (
         "Spectron",
         "AsyncSpectron",
+        "BlockingTransport",
+        "AsyncTransport",
+        "BlockingDocuments",
+        "AsyncDocuments",
         "SpectronError",
+        "SpectronAPIError",
+        "SpectronAuthError",
+        "SpectronScopeError",
+        "SpectronNotFoundError",
+        "ChatChunk",
+        "ChatResponse",
+        "ExtractionResult",
+        "ForgetResponse",
+        "RecallHit",
+        "RecallResponse",
+        "RememberBatchResponse",
+        "RememberResponse",
+        "UploadResponse",
+    ):
+        assert hasattr(spx, name), f"surrealdb.spectron missing {name}"
+
+
+def test_old_namespaces_are_gone():
+    import surrealdb.spectron as spx
+
+    for name in (
+        "knowledge",
+        "memory",
         "AuthError",
-        "ScopeError",
         "NotFoundError",
+        "ScopeError",
         "ValidationError",
         "RateLimitError",
         "ServerError",
         "QueryMode",
         "DocumentStatus",
-        "IngestProfile",
-        "TurnRole",
-        "MemoryCategory",
         "serialise_scope",
         "deserialise_scope",
     ):
-        assert hasattr(spx, name), f"surrealdb.spectron missing {name}"
+        assert not hasattr(spx, name), f"surrealdb.spectron still exposes {name}"
 
 
 def test_existing_surrealdb_exports_still_work():

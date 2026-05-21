@@ -9,11 +9,16 @@ def backoff_schedule(max_retries: int = 3) -> tuple[float, ...]:
 
 
 def should_retry(
-    method: str, status: int | None, attempt: int, max_retries: int
+    method: str,
+    status: int | None,
+    attempt: int,
+    max_retries: int,
+    *,
+    idempotent: bool = False,
 ) -> bool:
     if attempt >= max_retries:
         return False
-    if method.upper() != "GET":
+    if method.upper() != "GET" and not idempotent:
         return False
     if status is None:
         return True

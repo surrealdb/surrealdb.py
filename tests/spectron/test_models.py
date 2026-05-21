@@ -1,132 +1,134 @@
 from __future__ import annotations
 
 from surrealdb.spectron import (
-    ChunkPageJson,
-    DocumentJson,
-    KnowledgeNodeUpsertRow,
-    QueryMode,
-    QueryResponseJson,
-    TraverseApiResponse,
+    ChatResponse,
+    ExtractionResult,
+    ForgetResponse,
+    RecallResponse,
+    RememberBatchResponse,
+    RememberResponse,
+    UploadResponse,
 )
 
 
-def test_document_decodes_camel_case_optional_fields():
-    payload = {
-        "id": "doc:returns",
-        "title": "Returns",
-        "source": "returns.pdf",
-        "status": "ready",
-        "mimeType": "application/pdf",
-        "sizeBytes": 4096,
-        "contentHash": "abc",
-        "version": 2,
-        "createdAt": "2026-01-01T00:00:00Z",
-        "updatedAt": "2026-01-02T00:00:00Z",
-        "chunkCount": 12,
-        "keywordCount": 7,
-        "language": "en",
-        "processingStartedAt": None,
-        "processingCompletedAt": None,
-        "error": None,
-    }
-    doc = DocumentJson.from_dict(payload)
-    assert doc.id == "doc:returns"
-    assert doc.mime_type == "application/pdf"
-    assert doc.size_bytes == 4096
-    assert doc.chunk_count == 12
-    assert doc.language == "en"
-
-    encoded = doc.to_dict()
-    assert encoded["mimeType"] == "application/pdf"
-    assert encoded["sizeBytes"] == 4096
-    assert encoded["chunkCount"] == 12
-    assert "error" not in encoded
-
-
-def test_chunk_page_decodes_nested_list():
-    page = ChunkPageJson.from_dict(
+def test_remember_response_decodes_camel_case():
+    resp = RememberResponse.from_dict(
         {
-            "chunks": [
-                {
-                    "id": "chunk:1",
-                    "document": "doc:1",
-                    "charStart": 0,
-                    "charEnd": 100,
-                    "position": 0,
-                    "text": "hello",
-                    "section": None,
-                    "tokenCount": 20,
-                }
-            ],
-            "page": 0,
-            "pageSize": 50,
-            "total": 1,
+            "mode": "infer",
+            "sessionId": "sess:abc",
+            "chunkId": "chunk:1",
+            "preview": False,
+            "turnId": "turn:1",
+            "extraction": {
+                "turnId": "turn:1",
+                "entities": [],
+                "attributes": [],
+                "corrections": [],
+                "instructions": [],
+                "relations": [],
+                "uncertainties": [],
+            },
         }
     )
-    assert page.total == 1
-    assert page.chunks[0].id == "chunk:1"
-    assert page.chunks[0].char_end == 100
-    assert page.chunks[0].token_count == 20
+    assert resp.mode == "infer"
+    assert resp.session_id == "sess:abc"
+    assert resp.chunk_id == "chunk:1"
+    assert resp.preview is False
+    assert isinstance(resp.extraction, ExtractionResult)
+    assert resp.extraction.turn_id == "turn:1"
+
+    encoded = resp.to_dict()
+    assert encoded["sessionId"] == "sess:abc"
+    assert encoded["chunkId"] == "chunk:1"
+    assert encoded["turnId"] == "turn:1"
+    assert encoded["extraction"]["turnId"] == "turn:1"
 
 
-def test_query_response_decodes_graph_evidence():
-    response = QueryResponseJson.from_dict(
+def test_remember_batch_response_decodes_lists():
+    resp = RememberBatchResponse.from_dict(
         {
-            "queryMs": 12,
-            "results": [
+            "sessionId": "sess:abc",
+            "turnIds": ["t1", "t2"],
+            "extractions": [
                 {
-                    "score": 0.91,
-                    "chunk": {
-                        "id": "c:1",
-                        "document": "d:1",
-                        "charStart": 0,
-                        "charEnd": 10,
-                        "position": 0,
-                        "text": "foo",
-                    },
-                    "document": {"id": "d:1", "title": "Doc", "source": "doc.pdf"},
-                    "graphEvidence": [
-                        {"edgeKind": "knowledge_has_keyword", "neighbourLabel": "k", "weight": 0.7}
-                    ],
+                    "turnId": "t1",
+                    "entities": [{"name": "Acme"}],
+                    "attributes": [],
+                    "corrections": [],
+                    "instructions": [],
+                    "relations": [],
+                    "uncertainties": [],
                 }
             ],
         }
     )
-    assert response.query_ms == 12
-    assert response.results[0].score == 0.91
-    assert response.results[0].graph_evidence is not None
-    assert response.results[0].graph_evidence[0].edge_kind == "knowledge_has_keyword"
+    assert resp.session_id == "sess:abc"
+    assert resp.turn_ids == ["t1", "t2"]
+    assert len(resp.extractions) == 1
+    assert resp.extractions[0].entities == [{"name": "Acme"}]
 
 
-def test_traverse_response_decodes_from_alias():
-
-    payload = {
-        "edges": [{"kind": "edge", "from": "node:a", "to": "node:b"}],
-        "nodes": [{"id": "node:a", "type": "document", "depth": 0}],
-    }
-    resp = TraverseApiResponse.from_dict(payload)
-    assert resp.edges[0].from_ == "node:a"
-    assert resp.edges[0].to == "node:b"
-    assert resp.nodes[0].depth == 0
-    assert resp.edges[0].to_dict()["from"] == "node:a"
-
-
-def test_enums_round_trip_through_to_dict():
-    row = KnowledgeNodeUpsertRow(
-        kind="product",
-        slug="airpods",
-        title="AirPods",
-        content={"price": 249},
+def test_recall_response_decodes_hits():
+    resp = RecallResponse.from_dict(
+        {
+            "classificationKind": "hybrid",
+            "hits": [
+                {"id": "h:1", "score": 0.92, "source": "fact", "text": "I work at Acme"}
+            ],
+            "queryMs": 17,
+            "seedEntities": ["Acme"],
+            "tier": "hot",
+            "trace": {"id": "trace:1"},
+        }
     )
-    encoded = row.to_dict()
-    assert encoded == {
-        "kind": "product",
-        "slug": "airpods",
-        "title": "AirPods",
-        "content": {"price": 249},
-    }
+    assert resp.classification_kind == "hybrid"
+    assert resp.tier == "hot"
+    assert resp.query_ms == 17
+    assert resp.seed_entities == ["Acme"]
+    assert resp.hits[0].id == "h:1"
+    assert resp.hits[0].score == 0.92
+    assert resp.hits[0].text == "I work at Acme"
+    assert resp.trace == {"id": "trace:1"}
 
 
-def test_query_mode_enum_values():
-    assert QueryMode.HYBRID.value == "hybrid"
-    assert QueryMode.HYBRID_GRAPH.value == "hybrid_graph"
+def test_chat_response_decodes_nested_extraction():
+    resp = ChatResponse.from_dict(
+        {
+            "reply": "you're the CTO of Acme",
+            "sessionId": "s",
+            "traceId": "t",
+            "memoryUpdates": {
+                "turnId": "tu:1",
+                "entities": [],
+                "attributes": [],
+                "corrections": [],
+                "instructions": [],
+                "relations": [],
+                "uncertainties": [],
+            },
+        }
+    )
+    assert resp.reply == "you're the CTO of Acme"
+    assert resp.session_id == "s"
+    assert resp.trace_id == "t"
+    assert isinstance(resp.memory_updates, ExtractionResult)
+
+
+def test_forget_response_round_trips():
+    resp = ForgetResponse.from_dict({"deleted": 3})
+    assert resp.deleted == 3
+    assert resp.to_dict() == {"deleted": 3}
+
+
+def test_upload_response_round_trips():
+    resp = UploadResponse.from_dict(
+        {
+            "contentHash": "sha:abc",
+            "deduplicated": False,
+            "id": "doc:1",
+            "status": "queued",
+        }
+    )
+    assert resp.id == "doc:1"
+    assert resp.content_hash == "sha:abc"
+    assert resp.to_dict()["contentHash"] == "sha:abc"

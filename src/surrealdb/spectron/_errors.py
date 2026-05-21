@@ -4,130 +4,78 @@ from typing import Any
 
 
 class SpectronError(Exception):
+    """Base class for every error raised by the Spectron SDK."""
+
+
+class SpectronAPIError(SpectronError):
+    """The server returned a non-2xx response we don't have a more specific class for."""
+
     def __init__(
         self,
-        status: int,
-        title: str,
-        detail: str | None = None,
-        type_uri: str | None = None,
-        instance: str | None = None,
-        extensions: dict[str, Any] | None = None,
+        status_code: int,
+        message: str,
+        *,
+        trace_id: str | None = None,
+        body: Any = None,
     ) -> None:
-        self.status = status
-        self.title = title
-        self.detail = detail
-        self.type_uri = type_uri
-        self.instance = instance
-        self.extensions = extensions or {}
-        message = f"[{status}] {title}"
-        if detail:
-            message += f": {detail}"
-        super().__init__(message)
+        super().__init__(f"[{status_code}] {message}")
+        self.status_code = status_code
+        self.message = message
+        self.trace_id = trace_id
+        self.body = body
 
 
-class AuthError(SpectronError):
-    pass
+class SpectronAuthError(SpectronAPIError):
+    """401 — bearer token missing, malformed, or rejected."""
 
 
-class ScopeError(SpectronError):
-    pass
+class SpectronScopeError(SpectronAPIError):
+    """403 — token does not authorize the requested principal scope."""
 
 
-class NotFoundError(SpectronError):
-    pass
+class SpectronNotFoundError(SpectronAPIError):
+    """404 — addressed entity / document / session does not exist."""
 
 
-class ValidationError(SpectronError):
-    pass
-
-
-class RateLimitError(SpectronError):
-    def __init__(
-        self, *args: Any, retry_after: float | None = None, **kwargs: Any
-    ) -> None:
-        super().__init__(*args, **kwargs)
-        self.retry_after = retry_after
-
-
-class ServerError(SpectronError):
-    pass
-
-
-_STATUS_MAP: dict[int, type[SpectronError]] = {
-    400: ValidationError,
-    401: AuthError,
-    403: ScopeError,
-    404: NotFoundError,
-    422: ValidationError,
-    429: RateLimitError,
+_STATUS_CLASSES: dict[int, type[SpectronAPIError]] = {
+    401: SpectronAuthError,
+    403: SpectronScopeError,
+    404: SpectronNotFoundError,
 }
+
+
+def error_for_status(
+    status_code: int,
+    message: str,
+    *,
+    trace_id: str | None = None,
+    body: Any = None,
+) -> SpectronAPIError:
+    cls = _STATUS_CLASSES.get(status_code, SpectronAPIError)
+    return cls(status_code, message, trace_id=trace_id, body=body)
 
 
 def error_from_response(
     status: int,
     body: Any,
     headers: dict[str, str] | None = None,
-) -> SpectronError:
+) -> SpectronAPIError:
     headers = headers or {}
-    title = "Spectron request failed"
-    detail: str | None = None
-    type_uri: str | None = None
-    instance: str | None = None
-    extensions: dict[str, Any] = {}
-
+    message = "Spectron request failed"
     if isinstance(body, dict):
-        title = str(body.get("title") or body.get("message") or title)
-        detail = body.get("detail") if isinstance(body.get("detail"), str) else None
-        type_uri = body.get("type") if isinstance(body.get("type"), str) else None
-        instance = (
-            body.get("instance") if isinstance(body.get("instance"), str) else None
-        )
-        for key, value in body.items():
-            if key not in {"status", "title", "detail", "type", "instance", "message"}:
-                extensions[key] = value
+        message = str(body.get("message") or body.get("title") or body.get("error") or message)
     elif isinstance(body, str) and body:
-        detail = body
-
-    if status >= 500:
-        cls: type[SpectronError] = ServerError
-    else:
-        cls = _STATUS_MAP.get(status, SpectronError)
-
-    if cls is RateLimitError:
-        retry_after: float | None = None
-        raw = headers.get("Retry-After") or headers.get("retry-after")
-        if raw is not None:
-            try:
-                retry_after = float(raw)
-            except (TypeError, ValueError):
-                retry_after = None
-        return RateLimitError(
-            status,
-            title,
-            detail=detail,
-            type_uri=type_uri,
-            instance=instance,
-            extensions=extensions,
-            retry_after=retry_after,
-        )
-
-    return cls(
-        status,
-        title,
-        detail=detail,
-        type_uri=type_uri,
-        instance=instance,
-        extensions=extensions,
-    )
+        message = body
+    trace_id = headers.get("x-trace-id") or headers.get("X-Trace-Id")
+    return error_for_status(status, message, trace_id=trace_id, body=body)
 
 
 __all__ = [
     "SpectronError",
-    "AuthError",
-    "ScopeError",
-    "NotFoundError",
-    "ValidationError",
-    "RateLimitError",
-    "ServerError",
+    "SpectronAPIError",
+    "SpectronAuthError",
+    "SpectronScopeError",
+    "SpectronNotFoundError",
+    "error_for_status",
     "error_from_response",
 ]

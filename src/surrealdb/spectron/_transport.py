@@ -5,15 +5,16 @@ import io
 import json as _json
 import os
 import time
-from collections.abc import Iterator, Mapping
+from collections.abc import AsyncIterator, Iterator, Mapping
 from typing import Any
 from urllib.parse import quote
 
 import aiohttp
 import requests
 
-from surrealdb.spectron._errors import SpectronError, error_from_response
+from surrealdb.spectron._errors import SpectronAPIError, error_from_response
 from surrealdb.spectron._retry import backoff_schedule, should_retry
+from surrealdb.spectron._streaming import ChatChunk, iter_sse_async, iter_sse_blocking
 
 DEFAULT_TIMEOUT = 30.0
 DEFAULT_MAX_RETRIES = 3
@@ -132,6 +133,7 @@ class BlockingTransport(_BaseTransport):
         stream: bool = False,
         allow_redirects: bool = True,
         return_raw: bool = False,
+        idempotent: bool = False,
     ) -> Any:
         url = _build_url(self.endpoint, path)
         attempt = 0
@@ -158,11 +160,16 @@ class BlockingTransport(_BaseTransport):
                     allow_redirects=allow_redirects,
                 )
             except (requests.ConnectionError, requests.Timeout) as exc:
-                if not should_retry(method_upper, None, attempt, self.max_retries):
-                    raise SpectronError(
-                        status=0,
-                        title="Connection failed",
-                        detail=str(exc),
+                if not should_retry(
+                    method_upper,
+                    None,
+                    attempt,
+                    self.max_retries,
+                    idempotent=idempotent,
+                ):
+                    raise SpectronAPIError(
+                        status_code=0,
+                        message=f"Connection failed: {exc}",
                     ) from exc
                 time.sleep(schedule[attempt])
                 attempt += 1
@@ -170,7 +177,11 @@ class BlockingTransport(_BaseTransport):
 
             status = response.status_code
             if status >= 400 and should_retry(
-                method_upper, status, attempt, self.max_retries
+                method_upper,
+                status,
+                attempt,
+                self.max_retries,
+                idempotent=idempotent,
             ):
                 time.sleep(schedule[attempt])
                 attempt += 1
@@ -209,6 +220,28 @@ class BlockingTransport(_BaseTransport):
                     yield chunk
         finally:
             response.close()
+
+    def stream_sse(
+        self,
+        path: str,
+        *,
+        json: Any | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> Iterator[ChatChunk]:
+        extra: dict[str, str] = {"Accept": "text/event-stream"}
+        if headers:
+            extra.update(headers)
+        response = self.request(
+            "POST",
+            path,
+            json=json,
+            headers=extra,
+            timeout=timeout,
+            stream=True,
+            return_raw=True,
+        )
+        return iter_sse_blocking(response)
 
 
 class AsyncTransport(_BaseTransport):
@@ -259,6 +292,7 @@ class AsyncTransport(_BaseTransport):
         headers: Mapping[str, str] | None = None,
         timeout: float | None = None,
         return_raw: bool = False,
+        idempotent: bool = False,
     ) -> Any:
         session = await self._ensure_session()
         url = _build_url(self.endpoint, path)
@@ -288,11 +322,16 @@ class AsyncTransport(_BaseTransport):
                     allow_redirects=True,
                 )
             except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as exc:
-                if not should_retry(method_upper, None, attempt, self.max_retries):
-                    raise SpectronError(
-                        status=0,
-                        title="Connection failed",
-                        detail=str(exc),
+                if not should_retry(
+                    method_upper,
+                    None,
+                    attempt,
+                    self.max_retries,
+                    idempotent=idempotent,
+                ):
+                    raise SpectronAPIError(
+                        status_code=0,
+                        message=f"Connection failed: {exc}",
                     ) from exc
                 await asyncio.sleep(schedule[attempt])
                 attempt += 1
@@ -300,7 +339,11 @@ class AsyncTransport(_BaseTransport):
 
             status = response.status
             if status >= 400 and should_retry(
-                method_upper, status, attempt, self.max_retries
+                method_upper,
+                status,
+                attempt,
+                self.max_retries,
+                idempotent=idempotent,
             ):
                 response.release()
                 await asyncio.sleep(schedule[attempt])
@@ -339,6 +382,28 @@ class AsyncTransport(_BaseTransport):
 
     async def delete(self, path: str, **kw: Any) -> Any:
         return await self.request("DELETE", path, **kw)
+
+    async def stream_sse(
+        self,
+        path: str,
+        *,
+        json: Any | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> AsyncIterator[ChatChunk]:
+        extra: dict[str, str] = {"Accept": "text/event-stream"}
+        if headers:
+            extra.update(headers)
+        response = await self.request(
+            "POST",
+            path,
+            json=json,
+            headers=extra,
+            timeout=timeout,
+            return_raw=True,
+        )
+        async for chunk in iter_sse_async(response):
+            yield chunk
 
 
 def build_multipart_payload(
