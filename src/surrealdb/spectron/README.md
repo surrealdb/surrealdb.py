@@ -69,12 +69,20 @@ reads environment variables.
 ```python
 memory.remember("I work at Acme as CTO")
 memory.remember("Acme acquired Beta", session_id="sess:abc", scope={"org": "acme"})
+memory.remember("Q3 board notes", labels=["topic=board"], memory_category="context")
 
-memory.remember_many([
-    {"role": "user", "content": "I just got promoted to CTO"},
-    {"role": "assistant", "content": "Congratulations!"},
-])
+memory.remember_many(
+    [
+        {"role": "user", "content": "I just got promoted to CTO"},
+        {"role": "assistant", "content": "Congratulations!"},
+    ],
+    extract="whole_conversation",
+)
 ```
+
+`infer` selects the extraction path (`full`, `triples`, `preview`, `none`).
+`remember_many` also takes `extract` (`per_message` or `whole_conversation`).
+`labels` are `key=value` strings recorded on the rows.
 
 `remember` and `remember_many` set an `Idempotency-Key` header derived from
 `sha256(method | path | body | 30s-bucket)`, so a retry inside the bucket
@@ -87,6 +95,12 @@ result = memory.recall("what role do I have at Acme", k=10, mode="hybrid")
 for hit in result.hits:
     print(hit.score, hit.source, hit.text)
 ```
+
+Optional filters: `labels` and `lens` (both `key=value` path lists),
+`scope_view` (`strict` | `merged` | `crossTeam`), `include` (`facts`,
+`passages`), the temporal bounds `as_of` / `at_instant` / `valid_from` /
+`valid_until`, and a `location` geo filter
+(`{"near": {"lat": ..., "lng": ..., "radiusKm": ...}}` or `{"within": "<WKT>"}`).
 
 ### Forget
 
@@ -120,11 +134,17 @@ async for chunk in stream:
 ### Documents
 
 ```python
-result = memory.documents.upload("returns.pdf", content_type="application/pdf")
+result = memory.documents.upload(
+    "returns.pdf",
+    content_type="application/pdf",
+    title="Returns policy",
+    source="kb",
+)
 print(result.id, result.status)
 ```
 
-`path` accepts a filesystem path, bytes, or a file-like object.
+`path` accepts a filesystem path, bytes, or a file-like object. `title` and
+`source` are optional and ride along as the document's metadata.
 
 ## Errors
 
@@ -160,12 +180,15 @@ the decoded `body`.
 
 ## Scope
 
-Scope is a plain dict. The SDK serialises it to the wire format the server
-expects.
+On the wire, scope is a set of `key=value` path strings. You can pass it as a
+dict, a list of `(key, value)` tuples, a single path string, or a list of path
+strings (including nested `team=acme/project=x`). All forms serialise to the
+same string list.
 
 ```python
-memory.remember("...", scope={"org": "acme"})
-memory.documents.upload("returns.pdf", scope={"org": "acme", "user": "tobie"})
+memory.remember("...", scope={"org": "acme"})          # -> ["org=acme"]
+memory.remember("...", scope=["org=acme"])             # passed through
+memory.chat("...", scope=["team=acme/project=x"])      # nested path
 ```
 
 ## Authentication

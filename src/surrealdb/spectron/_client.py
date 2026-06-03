@@ -25,14 +25,32 @@ from surrealdb.spectron._transport import (
     quote_path,
 )
 
-ScopeArg = Mapping[str, str] | Sequence[tuple[str, str]] | None
+ScopeArg = str | Mapping[str, str] | Sequence[str] | Sequence[tuple[str, str]] | None
 
 
-def _scope_pairs(scope: ScopeArg) -> list[dict[str, str]]:
+def _scope_paths(scope: ScopeArg) -> list[str]:
+    """Normalise a scope argument to the wire `ScopeSet` (a list of `key=value`
+    path strings).
+
+    Accepts a single path string, a mapping, a sequence of path strings, or a
+    sequence of `(key, value)` tuples. All forms collapse to `key=value`
+    strings; ready-made path strings (including nested `team=acme/project=x`)
+    pass through untouched.
+    """
     if scope is None:
         return []
-    items = scope.items() if isinstance(scope, Mapping) else scope
-    return [{"key": str(k), "value": str(v)} for k, v in items]
+    if isinstance(scope, str):
+        return [scope]
+    if isinstance(scope, Mapping):
+        return [f"{k}={v}" for k, v in scope.items()]
+    paths: list[str] = []
+    for item in scope:
+        if isinstance(item, str):
+            paths.append(item)
+        else:
+            key, value = item
+            paths.append(f"{key}={value}")
+    return paths
 
 
 def _drop_none(payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -95,16 +113,18 @@ class Spectron:
         scope: ScopeArg = None,
         role: str | None = None,
         memory_category: str | None = None,
+        labels: Sequence[str] | None = None,
         triples: list[dict[str, Any]] | None = None,
     ) -> RememberResponse:
         payload = _drop_none(
             {
                 "text": text,
                 "infer": infer,
-                "sessionId": session_id,
-                "scope": _scope_pairs(scope) or None,
+                "session_id": session_id,
+                "scope": _scope_paths(scope) or None,
                 "role": role,
-                "memoryCategory": memory_category,
+                "memory_category": memory_category,
+                "labels": list(labels) if labels is not None else None,
                 "triples": triples,
             }
         )
@@ -124,12 +144,18 @@ class Spectron:
         *,
         session_id: str | None = None,
         scope: ScopeArg = None,
+        extract: str | None = None,
+        infer: str | None = None,
+        labels: Sequence[str] | None = None,
     ) -> RememberBatchResponse:
         payload = _drop_none(
             {
                 "messages": list(items),
-                "sessionId": session_id,
-                "scope": _scope_pairs(scope) or None,
+                "session_id": session_id,
+                "scope": _scope_paths(scope) or None,
+                "extract": extract,
+                "infer": infer,
+                "labels": list(labels) if labels is not None else None,
             }
         )
         path = f"{self._base}/facts/batch"
@@ -152,6 +178,13 @@ class Spectron:
         include: Sequence[str] | None = None,
         as_of: str | None = None,
         at_instant: str | None = None,
+        labels: Sequence[str] | None = None,
+        lens: Sequence[str] | None = None,
+        scope_view: str | None = None,
+        valid_from: str | None = None,
+        valid_until: str | None = None,
+        source: str | None = None,
+        location: Mapping[str, Any] | None = None,
     ) -> RecallResponse:
         payload = _drop_none(
             {
@@ -162,6 +195,13 @@ class Spectron:
                 "include": list(include) if include is not None else None,
                 "asOf": as_of,
                 "atInstant": at_instant,
+                "labels": list(labels) if labels is not None else None,
+                "lens": list(lens) if lens is not None else None,
+                "scopeView": scope_view,
+                "validFrom": valid_from,
+                "validUntil": valid_until,
+                "source": source,
+                "location": dict(location) if location is not None else None,
             }
         )
         result = self._transport.request(
@@ -189,15 +229,17 @@ class Spectron:
         scope: ScopeArg = None,
         model: str | None = None,
         bypass_cache: bool = False,
+        labels: Sequence[str] | None = None,
     ) -> ChatResponse | Iterator[ChatChunk]:
         payload = _drop_none(
             {
                 "message": message,
                 "stream": stream or None,
                 "sessionId": session_id,
-                "scope": _scope_pairs(scope) or None,
+                "scope": _scope_paths(scope) or None,
                 "model": model,
                 "bypassCache": bypass_cache or None,
+                "labels": list(labels) if labels is not None else None,
             }
         )
         path = f"{self._base}/chat"
@@ -260,16 +302,18 @@ class AsyncSpectron:
         scope: ScopeArg = None,
         role: str | None = None,
         memory_category: str | None = None,
+        labels: Sequence[str] | None = None,
         triples: list[dict[str, Any]] | None = None,
     ) -> RememberResponse:
         payload = _drop_none(
             {
                 "text": text,
                 "infer": infer,
-                "sessionId": session_id,
-                "scope": _scope_pairs(scope) or None,
+                "session_id": session_id,
+                "scope": _scope_paths(scope) or None,
                 "role": role,
-                "memoryCategory": memory_category,
+                "memory_category": memory_category,
+                "labels": list(labels) if labels is not None else None,
                 "triples": triples,
             }
         )
@@ -289,12 +333,18 @@ class AsyncSpectron:
         *,
         session_id: str | None = None,
         scope: ScopeArg = None,
+        extract: str | None = None,
+        infer: str | None = None,
+        labels: Sequence[str] | None = None,
     ) -> RememberBatchResponse:
         payload = _drop_none(
             {
                 "messages": list(items),
-                "sessionId": session_id,
-                "scope": _scope_pairs(scope) or None,
+                "session_id": session_id,
+                "scope": _scope_paths(scope) or None,
+                "extract": extract,
+                "infer": infer,
+                "labels": list(labels) if labels is not None else None,
             }
         )
         path = f"{self._base}/facts/batch"
@@ -317,6 +367,13 @@ class AsyncSpectron:
         include: Sequence[str] | None = None,
         as_of: str | None = None,
         at_instant: str | None = None,
+        labels: Sequence[str] | None = None,
+        lens: Sequence[str] | None = None,
+        scope_view: str | None = None,
+        valid_from: str | None = None,
+        valid_until: str | None = None,
+        source: str | None = None,
+        location: Mapping[str, Any] | None = None,
     ) -> RecallResponse:
         payload = _drop_none(
             {
@@ -327,6 +384,13 @@ class AsyncSpectron:
                 "include": list(include) if include is not None else None,
                 "asOf": as_of,
                 "atInstant": at_instant,
+                "labels": list(labels) if labels is not None else None,
+                "lens": list(lens) if lens is not None else None,
+                "scopeView": scope_view,
+                "validFrom": valid_from,
+                "validUntil": valid_until,
+                "source": source,
+                "location": dict(location) if location is not None else None,
             }
         )
         result = await self._transport.request(
@@ -354,15 +418,17 @@ class AsyncSpectron:
         scope: ScopeArg = None,
         model: str | None = None,
         bypass_cache: bool = False,
+        labels: Sequence[str] | None = None,
     ) -> ChatResponse | AsyncIterator[ChatChunk]:
         payload = _drop_none(
             {
                 "message": message,
                 "stream": stream or None,
                 "sessionId": session_id,
-                "scope": _scope_pairs(scope) or None,
+                "scope": _scope_paths(scope) or None,
                 "model": model,
                 "bypassCache": bypass_cache or None,
+                "labels": list(labels) if labels is not None else None,
             }
         )
         path = f"{self._base}/chat"

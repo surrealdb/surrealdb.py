@@ -455,12 +455,9 @@ def build_aiohttp_form(
         payload = bytes(file)
     else:
         payload = file.read() if hasattr(file, "read") else file
-    form.add_field(
-        "file",
-        payload,
-        filename=filename or "upload",
-        content_type=mime_type or "application/octet-stream",
-    )
+    # Send non-file parts (e.g. `metadata`) before the `file` part: the upload
+    # handler reads fields in declaration order and only falls back to deriving
+    # metadata from the file part when `file` arrives first.
     if fields:
         for k, v in fields.items():
             if v is None:
@@ -469,6 +466,12 @@ def build_aiohttp_form(
                 form.add_field(k, _json.dumps(v), content_type="application/json")
             else:
                 form.add_field(k, str(v))
+    form.add_field(
+        "file",
+        payload,
+        filename=filename or "upload",
+        content_type=mime_type or "application/octet-stream",
+    )
     return form
 
 

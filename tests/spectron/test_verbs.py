@@ -53,7 +53,7 @@ def test_remember_posts_to_facts_with_idempotency_key(client: Spectron):
     assert result.session_id == "sess:1"
     sent = responses.calls[0].request
     body = json.loads(sent.body)
-    assert body == {"text": "I work at Acme as CTO", "sessionId": "sess:1"}
+    assert body == {"text": "I work at Acme as CTO", "session_id": "sess:1"}
     assert sent.headers["Authorization"] == f"Bearer {API_KEY}"
     assert "Idempotency-Key" in sent.headers
     assert len(sent.headers["Idempotency-Key"]) == 64
@@ -75,7 +75,10 @@ def test_remember_many_posts_to_facts_batch(client: Spectron):
     assert result.turn_ids == ["t1"]
     sent = responses.calls[0].request
     body = json.loads(sent.body)
-    assert body == {"messages": [{"role": "user", "content": "hello"}], "sessionId": "s"}
+    assert body == {
+        "messages": [{"role": "user", "content": "hello"}],
+        "session_id": "s",
+    }
     assert "Idempotency-Key" in sent.headers
 
 
@@ -152,15 +155,59 @@ def test_documents_upload_posts_multipart(client: Spectron, tmp_path):
     responses.add(
         responses.POST,
         f"{BASE}/api/v1/{ENC_CONTEXT}/documents",
-        json={"contentHash": "h", "deduplicated": False, "id": "doc:1", "status": "queued"},
+        json={
+            "contentHash": "h",
+            "deduplicated": False,
+            "id": "doc:1",
+            "status": "queued",
+        },
         status=200,
     )
-    result = client.documents.upload(f, content_type="text/plain")
+    result = client.documents.upload(
+        f,
+        content_type="text/plain",
+        title="Returns policy",
+        source="kb",
+    )
     assert isinstance(result, UploadResponse)
     assert result.id == "doc:1"
     sent = responses.calls[0].request
     assert sent.headers["Authorization"] == f"Bearer {API_KEY}"
     assert sent.headers["Content-Type"].startswith("multipart/form-data")
+    raw = sent.body
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8", "replace")
+    # The `metadata` JSON part precedes the `file` part.
+    assert raw.index('name="metadata"') < raw.index('name="file"')
+    assert '"title": "Returns policy"' in raw
+    assert '"source": "kb"' in raw
+
+
+@responses.activate
+def test_scope_serialises_to_path_strings(client: Spectron):
+    responses.add(
+        responses.POST,
+        f"{BASE}/api/v1/{ENC_CONTEXT}/facts",
+        json={"mode": "infer", "sessionId": "s"},
+        status=200,
+    )
+    responses.add(
+        responses.POST,
+        f"{BASE}/api/v1/{ENC_CONTEXT}/chat",
+        json={"reply": "ok", "sessionId": "s", "traceId": "tr"},
+        status=200,
+    )
+
+    # Mapping collapses to key=value strings.
+    client.remember("x", scope={"org": "acme"})
+    assert json.loads(responses.calls[0].request.body)["scope"] == ["org=acme"]
+
+    # A list of ready-made path strings passes through untouched.
+    client.chat("y", scope=["team=acme", "project=x"])
+    assert json.loads(responses.calls[1].request.body)["scope"] == [
+        "team=acme",
+        "project=x",
+    ]
 
 
 def test_context_quotes_special_chars(client: Spectron):
