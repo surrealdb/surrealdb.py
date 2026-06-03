@@ -63,7 +63,9 @@ def error_from_response(
     headers = headers or {}
     message = "Spectron request failed"
     if isinstance(body, dict):
-        message = str(body.get("message") or body.get("title") or body.get("error") or message)
+        message = str(
+            body.get("message") or body.get("title") or body.get("error") or message
+        )
     elif isinstance(body, str) and body:
         message = body
     trace_id = headers.get("x-trace-id") or headers.get("X-Trace-Id")

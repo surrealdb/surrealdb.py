@@ -74,7 +74,7 @@ def _consume(line: str, state: dict[str, Any]) -> ChatChunk | None:
     return None
 
 
-def iter_sse_blocking(response: "requests.Response") -> Iterator[ChatChunk]:
+def iter_sse_blocking(response: requests.Response) -> Iterator[ChatChunk]:
     state: dict[str, Any] = {"event": None, "data_lines": []}
     try:
         for raw_line in response.iter_lines(decode_unicode=False):
@@ -90,7 +90,9 @@ def iter_sse_blocking(response: "requests.Response") -> Iterator[ChatChunk]:
         response.close()
 
 
-async def iter_sse_async(response: "aiohttp.ClientResponse") -> AsyncIterator[ChatChunk]:
+async def iter_sse_async(
+    response: aiohttp.ClientResponse,
+) -> AsyncIterator[ChatChunk]:
     state: dict[str, Any] = {"event": None, "data_lines": []}
     try:
         async for raw_line in response.content:
