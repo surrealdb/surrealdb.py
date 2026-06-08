@@ -6,16 +6,45 @@ from typing import Any
 
 from surrealdb.spectron._idempotency import idempotency_key
 from surrealdb.spectron._models import (
+    AuditResponse,
     ChatResponse,
+    ConsolidateResponse,
+    ContextQueryResponse,
+    ElaborateResponse,
     ForgetResponse,
+    ProfileResponse,
     RecallResponse,
+    ReflectResponse,
     RememberBatchResponse,
     RememberResponse,
+    StateResponse,
+    WhoamiResponse,
 )
 from surrealdb.spectron._namespaces.documents import (
     AsyncDocuments,
     BlockingDocuments,
 )
+from surrealdb.spectron._namespaces.entities import (
+    AsyncEntities,
+    BlockingEntities,
+)
+from surrealdb.spectron._namespaces.keys import AsyncKeys, BlockingKeys
+from surrealdb.spectron._namespaces.lifecycle import (
+    AsyncLifecycle,
+    BlockingLifecycle,
+)
+from surrealdb.spectron._namespaces.principals import (
+    AsyncPrincipals,
+    BlockingPrincipals,
+)
+from surrealdb.spectron._namespaces.scopes import AsyncScopes, BlockingScopes
+from surrealdb.spectron._namespaces.sessions import (
+    AsyncSessions,
+    BlockingSessions,
+)
+from surrealdb.spectron._namespaces.traces import AsyncTraces, BlockingTraces
+from surrealdb.spectron._scope import ScopeArg
+from surrealdb.spectron._scope import scope_paths as _scope_paths
 from surrealdb.spectron._streaming import ChatChunk
 from surrealdb.spectron._transport import (
     DEFAULT_MAX_RETRIES,
@@ -25,37 +54,7 @@ from surrealdb.spectron._transport import (
     on_behalf_of_header,
     quote_path,
 )
-
-ScopeArg = str | Mapping[str, str] | Sequence[str] | Sequence[tuple[str, str]] | None
-
-
-def _scope_paths(scope: ScopeArg) -> list[str]:
-    """Normalise a scope argument to the wire `ScopeSet` (a list of `key=value`
-    path strings).
-
-    Accepts a single path string, a mapping, a sequence of path strings, or a
-    sequence of `(key, value)` tuples. All forms collapse to `key=value`
-    strings; ready-made path strings (including nested `team=acme/project=x`)
-    pass through untouched.
-    """
-    if scope is None:
-        return []
-    if isinstance(scope, str):
-        return [scope]
-    if isinstance(scope, Mapping):
-        return [f"{k}={v}" for k, v in scope.items()]
-    paths: list[str] = []
-    for item in scope:
-        if isinstance(item, str):
-            paths.append(item)
-        else:
-            key, value = item
-            paths.append(f"{key}={value}")
-    return paths
-
-
-def _drop_none(payload: Mapping[str, Any]) -> dict[str, Any]:
-    return {k: v for k, v in payload.items() if v is not None}
+from surrealdb.spectron._util import drop_none as _drop_none
 
 
 def _base_path(context_id: str) -> str:
@@ -92,6 +91,13 @@ class Spectron:
         self._owns_transport = transport is None
         self._base = _base_path(context)
         self.documents = BlockingDocuments(self._transport, context)
+        self.sessions = BlockingSessions(self._transport, context)
+        self.entities = BlockingEntities(self._transport, context)
+        self.scopes = BlockingScopes(self._transport, context)
+        self.principals = BlockingPrincipals(self._transport, context)
+        self.keys = BlockingKeys(self._transport, context)
+        self.traces = BlockingTraces(self._transport, context)
+        self.lifecycle = BlockingLifecycle(self._transport, context)
 
     @property
     def context_id(self) -> str:
@@ -272,6 +278,181 @@ class Spectron:
         )
         return ChatResponse.from_dict(result)
 
+    def consolidate(
+        self,
+        *,
+        dry_run: bool = False,
+        fact_limit: int | None = None,
+        observation_limit: int | None = None,
+        on_behalf_of: str | None = None,
+    ) -> ConsolidateResponse:
+        payload = _drop_none(
+            {
+                "dryRun": dry_run or None,
+                "factLimit": fact_limit,
+                "observationLimit": observation_limit,
+            }
+        )
+        result = self._transport.request(
+            "POST",
+            f"{self._base}/consolidate",
+            json=payload or None,
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
+        return ConsolidateResponse.from_dict(result)
+
+    def audit(
+        self,
+        *,
+        principal: str | None = None,
+        key: str | None = None,
+        kind: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        limit: int | None = None,
+        on_behalf_of: str | None = None,
+    ) -> AuditResponse:
+        params = {
+            "principal": principal,
+            "key": key,
+            "kind": kind,
+            "since": since,
+            "until": until,
+            "limit": limit,
+        }
+        result = self._transport.request(
+            "GET",
+            f"{self._base}/audit",
+            params=params,
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
+        return AuditResponse.from_dict(result)
+
+    def reflect(
+        self, query: str, *, persist: bool = False, on_behalf_of: str | None = None
+    ) -> ReflectResponse:
+        payload = _drop_none({"query": query, "persist": persist or None})
+        result = self._transport.request(
+            "POST",
+            f"{self._base}/reflect",
+            json=payload,
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
+        return ReflectResponse.from_dict(result)
+
+    def elaborate(
+        self,
+        *,
+        entity_ref: str | None = None,
+        budget: int | None = None,
+        dry_run: bool = False,
+        sweep: bool = False,
+        on_behalf_of: str | None = None,
+    ) -> ElaborateResponse:
+        payload = _drop_none(
+            {
+                "entityRef": entity_ref,
+                "budget": budget,
+                "dryRun": dry_run or None,
+                "sweep": sweep or None,
+            }
+        )
+        result = self._transport.request(
+            "POST",
+            f"{self._base}/elaborate",
+            json=payload or None,
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
+        return ElaborateResponse.from_dict(result)
+
+    def inspect(
+        self,
+        ref: str,
+        *,
+        as_of: str | None = None,
+        at_instant: str | None = None,
+        valid_from: str | None = None,
+        valid_until: str | None = None,
+        on_behalf_of: str | None = None,
+    ) -> dict[str, Any]:
+        """Inspect a single memory object by reference.
+
+        The wire grammar for ``ref`` is ``entity:<type>/<name>``,
+        ``attribute:<type>/<name>/<key>``, ``relation:<subject>/<label>/<object>``,
+        or ``trace:<id>``. The response shape varies by the addressed object
+        (discriminated by its ``kind`` field), so it is returned as the decoded
+        payload rather than a fixed model.
+        """
+        params = {
+            "ref": ref,
+            "asOf": as_of,
+            "atInstant": at_instant,
+            "validFrom": valid_from,
+            "validUntil": valid_until,
+        }
+        result = self._transport.request(
+            "GET",
+            f"{self._base}/inspect",
+            params=params,
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
+        return result
+
+    def query_context(
+        self,
+        query: str,
+        *,
+        k: int | None = None,
+        labels: Sequence[str] | None = None,
+        lens: Sequence[str] | None = None,
+        scope_view: str | None = None,
+        on_behalf_of: str | None = None,
+    ) -> ContextQueryResponse:
+        payload = _drop_none(
+            {
+                "query": query,
+                "k": k,
+                "labels": list(labels) if labels is not None else None,
+                "lens": list(lens) if lens is not None else None,
+                "scopeView": scope_view,
+            }
+        )
+        result = self._transport.request(
+            "POST",
+            f"{self._base}/context",
+            json=payload,
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
+        return ContextQueryResponse.from_dict(result)
+
+    def state(self, *, on_behalf_of: str | None = None) -> StateResponse:
+        result = self._transport.request(
+            "GET",
+            f"{self._base}/state",
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
+        return StateResponse.from_dict(result)
+
+    def whoami(self, *, on_behalf_of: str | None = None) -> WhoamiResponse:
+        result = self._transport.request(
+            "GET",
+            f"{self._base}/me",
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
+        return WhoamiResponse.from_dict(result)
+
+    def profile(self, *, on_behalf_of: str | None = None) -> ProfileResponse:
+        result = self._transport.request(
+            "GET",
+            f"{self._base}/profile",
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
+        return ProfileResponse.from_dict(result)
+
+    def health(self) -> dict[str, Any]:
+        """Liveness probe. Not context-scoped — hits ``/api/v1/health``."""
+        return self._transport.request("GET", "/api/v1/health")
+
     def close(self) -> None:
         if self._owns_transport:
             self._transport.close()
@@ -304,6 +485,13 @@ class AsyncSpectron:
         self._owns_transport = transport is None
         self._base = _base_path(context)
         self.documents = AsyncDocuments(self._transport, context)
+        self.sessions = AsyncSessions(self._transport, context)
+        self.entities = AsyncEntities(self._transport, context)
+        self.scopes = AsyncScopes(self._transport, context)
+        self.principals = AsyncPrincipals(self._transport, context)
+        self.keys = AsyncKeys(self._transport, context)
+        self.traces = AsyncTraces(self._transport, context)
+        self.lifecycle = AsyncLifecycle(self._transport, context)
 
     @property
     def context_id(self) -> str:
@@ -483,6 +671,181 @@ class AsyncSpectron:
             headers=on_behalf_of_header(on_behalf_of) or None,
         )
         return ChatResponse.from_dict(result)
+
+    async def consolidate(
+        self,
+        *,
+        dry_run: bool = False,
+        fact_limit: int | None = None,
+        observation_limit: int | None = None,
+        on_behalf_of: str | None = None,
+    ) -> ConsolidateResponse:
+        payload = _drop_none(
+            {
+                "dryRun": dry_run or None,
+                "factLimit": fact_limit,
+                "observationLimit": observation_limit,
+            }
+        )
+        result = await self._transport.request(
+            "POST",
+            f"{self._base}/consolidate",
+            json=payload or None,
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
+        return ConsolidateResponse.from_dict(result)
+
+    async def audit(
+        self,
+        *,
+        principal: str | None = None,
+        key: str | None = None,
+        kind: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        limit: int | None = None,
+        on_behalf_of: str | None = None,
+    ) -> AuditResponse:
+        params = {
+            "principal": principal,
+            "key": key,
+            "kind": kind,
+            "since": since,
+            "until": until,
+            "limit": limit,
+        }
+        result = await self._transport.request(
+            "GET",
+            f"{self._base}/audit",
+            params=params,
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
+        return AuditResponse.from_dict(result)
+
+    async def reflect(
+        self, query: str, *, persist: bool = False, on_behalf_of: str | None = None
+    ) -> ReflectResponse:
+        payload = _drop_none({"query": query, "persist": persist or None})
+        result = await self._transport.request(
+            "POST",
+            f"{self._base}/reflect",
+            json=payload,
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
+        return ReflectResponse.from_dict(result)
+
+    async def elaborate(
+        self,
+        *,
+        entity_ref: str | None = None,
+        budget: int | None = None,
+        dry_run: bool = False,
+        sweep: bool = False,
+        on_behalf_of: str | None = None,
+    ) -> ElaborateResponse:
+        payload = _drop_none(
+            {
+                "entityRef": entity_ref,
+                "budget": budget,
+                "dryRun": dry_run or None,
+                "sweep": sweep or None,
+            }
+        )
+        result = await self._transport.request(
+            "POST",
+            f"{self._base}/elaborate",
+            json=payload or None,
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
+        return ElaborateResponse.from_dict(result)
+
+    async def inspect(
+        self,
+        ref: str,
+        *,
+        as_of: str | None = None,
+        at_instant: str | None = None,
+        valid_from: str | None = None,
+        valid_until: str | None = None,
+        on_behalf_of: str | None = None,
+    ) -> dict[str, Any]:
+        """Inspect a single memory object by reference.
+
+        The wire grammar for ``ref`` is ``entity:<type>/<name>``,
+        ``attribute:<type>/<name>/<key>``, ``relation:<subject>/<label>/<object>``,
+        or ``trace:<id>``. The response shape varies by the addressed object
+        (discriminated by its ``kind`` field), so it is returned as the decoded
+        payload rather than a fixed model.
+        """
+        params = {
+            "ref": ref,
+            "asOf": as_of,
+            "atInstant": at_instant,
+            "validFrom": valid_from,
+            "validUntil": valid_until,
+        }
+        result = await self._transport.request(
+            "GET",
+            f"{self._base}/inspect",
+            params=params,
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
+        return result
+
+    async def query_context(
+        self,
+        query: str,
+        *,
+        k: int | None = None,
+        labels: Sequence[str] | None = None,
+        lens: Sequence[str] | None = None,
+        scope_view: str | None = None,
+        on_behalf_of: str | None = None,
+    ) -> ContextQueryResponse:
+        payload = _drop_none(
+            {
+                "query": query,
+                "k": k,
+                "labels": list(labels) if labels is not None else None,
+                "lens": list(lens) if lens is not None else None,
+                "scopeView": scope_view,
+            }
+        )
+        result = await self._transport.request(
+            "POST",
+            f"{self._base}/context",
+            json=payload,
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
+        return ContextQueryResponse.from_dict(result)
+
+    async def state(self, *, on_behalf_of: str | None = None) -> StateResponse:
+        result = await self._transport.request(
+            "GET",
+            f"{self._base}/state",
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
+        return StateResponse.from_dict(result)
+
+    async def whoami(self, *, on_behalf_of: str | None = None) -> WhoamiResponse:
+        result = await self._transport.request(
+            "GET",
+            f"{self._base}/me",
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
+        return WhoamiResponse.from_dict(result)
+
+    async def profile(self, *, on_behalf_of: str | None = None) -> ProfileResponse:
+        result = await self._transport.request(
+            "GET",
+            f"{self._base}/profile",
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
+        return ProfileResponse.from_dict(result)
+
+    async def health(self) -> dict[str, Any]:
+        """Liveness probe. Not context-scoped — hits ``/api/v1/health``."""
+        return await self._transport.request("GET", "/api/v1/health")
 
     async def close(self) -> None:
         if self._owns_transport:
