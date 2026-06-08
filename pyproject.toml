@@ -58,11 +58,13 @@ dev = [
     "types-requests>=2.32.4",   # Type stubs for requests
 ]
 test = [
+    "aioresponses>=0.7.6",
     "coverage>=7.0.0",
     "hypothesis>=6.135.16",
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
+    "responses>=0.25.0",
 ]
 
 # --------------------------------------------------

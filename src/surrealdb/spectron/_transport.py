@@ -1,0 +1,499 @@
+from __future__ import annotations
+
+import asyncio
+import io
+import json as _json
+import os
+import time
+from collections.abc import AsyncIterator, Iterator, Mapping
+from typing import Any
+from urllib.parse import quote
+
+import aiohttp
+import requests
+
+from surrealdb.spectron._errors import SpectronAPIError, error_from_response
+from surrealdb.spectron._retry import backoff_schedule, should_retry
+from surrealdb.spectron._streaming import ChatChunk, iter_sse_async, iter_sse_blocking
+
+DEFAULT_TIMEOUT = 30.0
+DEFAULT_MAX_RETRIES = 3
+_USER_AGENT = "surrealdb-py-spectron/1.0"
+
+
+def _resolve_api_key(api_key: str | None) -> str:
+    if api_key is None or api_key == "":
+        raise ValueError("Spectron API key is required. Pass api_key=...")
+    return api_key
+
+
+def _resolve_endpoint(endpoint: str | None) -> str:
+    if endpoint is None or endpoint == "":
+        raise ValueError("Spectron endpoint is required. Pass endpoint=...")
+    return endpoint.rstrip("/")
+
+
+def _build_url(endpoint: str, path: str) -> str:
+    if path.startswith("http://") or path.startswith("https://"):
+        return path
+    return endpoint.rstrip("/") + "/" + path.lstrip("/")
+
+
+def quote_path(value: str) -> str:
+    return quote(str(value), safe="")
+
+
+def on_behalf_of_header(on_behalf_of: str | None) -> dict[str, str]:
+    """Build the optional `X-Spectron-On-Behalf-Of` delegation header.
+
+    The server accepts the target as either `principal:<id>` or a bare `<id>`
+    (it strips the `principal:` prefix), so the caller-supplied value is sent
+    verbatim. Returns an empty dict when no delegation target is set.
+    """
+    if not on_behalf_of:
+        return {}
+    return {"X-Spectron-On-Behalf-Of": on_behalf_of}
+
+
+def _decode_json(body: bytes | str | None) -> Any:
+    if body is None or body == b"" or body == "":
+        return None
+    if isinstance(body, bytes):
+        try:
+            body = body.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
+    try:
+        return _json.loads(body)
+    except (ValueError, TypeError):
+        return body
+
+
+class _BaseTransport:
+    def __init__(
+        self,
+        *,
+        endpoint: str | None = None,
+        api_key: str | None = None,
+        timeout: float = DEFAULT_TIMEOUT,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+    ) -> None:
+        self.endpoint = _resolve_endpoint(endpoint)
+        self.api_key = _resolve_api_key(api_key)
+        self.timeout = timeout
+        self.max_retries = max_retries
+
+    def _headers(
+        self,
+        *,
+        extra: Mapping[str, str] | None = None,
+        content_type: str | None = "application/json",
+    ) -> dict[str, str]:
+        headers: dict[str, str] = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Accept": "application/json",
+            "User-Agent": _USER_AGENT,
+        }
+        if content_type:
+            headers["Content-Type"] = content_type
+        if extra:
+            for k, v in extra.items():
+                headers[k] = v
+        return headers
+
+
+class BlockingTransport(_BaseTransport):
+    def __init__(
+        self,
+        *,
+        endpoint: str | None = None,
+        api_key: str | None = None,
+        timeout: float = DEFAULT_TIMEOUT,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        session: requests.Session | None = None,
+    ) -> None:
+        super().__init__(
+            endpoint=endpoint,
+            api_key=api_key,
+            timeout=timeout,
+            max_retries=max_retries,
+        )
+        self._session = session or requests.Session()
+        self._owns_session = session is None
+
+    def close(self) -> None:
+        if self._owns_session:
+            self._session.close()
+
+    def __enter__(self) -> BlockingTransport:
+        return self
+
+    def __exit__(self, *exc_info: Any) -> None:
+        self.close()
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        json: Any | None = None,
+        data: Any | None = None,
+        files: Any | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+        stream: bool = False,
+        allow_redirects: bool = True,
+        return_raw: bool = False,
+        idempotent: bool = False,
+    ) -> Any:
+        url = _build_url(self.endpoint, path)
+        attempt = 0
+        schedule = backoff_schedule(self.max_retries)
+        method_upper = method.upper()
+        content_type: str | None = "application/json" if json is not None else None
+        if files is not None or data is not None:
+            content_type = None
+        h = self._headers(extra=headers, content_type=content_type)
+        if params is not None:
+            params = {k: v for k, v in params.items() if v is not None}
+        while True:
+            try:
+                response = self._session.request(
+                    method_upper,
+                    url,
+                    params=params,
+                    json=json,
+                    data=data,
+                    files=files,
+                    headers=h,
+                    timeout=timeout if timeout is not None else self.timeout,
+                    stream=stream,
+                    allow_redirects=allow_redirects,
+                )
+            except (requests.ConnectionError, requests.Timeout) as exc:
+                if not should_retry(
+                    method_upper,
+                    None,
+                    attempt,
+                    self.max_retries,
+                    idempotent=idempotent,
+                ):
+                    raise SpectronAPIError(
+                        status_code=0,
+                        message=f"Connection failed: {exc}",
+                    ) from exc
+                time.sleep(schedule[attempt])
+                attempt += 1
+                continue
+
+            status = response.status_code
+            if status >= 400 and should_retry(
+                method_upper,
+                status,
+                attempt,
+                self.max_retries,
+                idempotent=idempotent,
+            ):
+                time.sleep(schedule[attempt])
+                attempt += 1
+                continue
+
+            if status >= 400:
+                body = _decode_json(response.content)
+                raise error_from_response(status, body, dict(response.headers))
+
+            if return_raw or stream:
+                return response
+            if status == 204 or not response.content:
+                return None
+            return _decode_json(response.content)
+
+    def get(self, path: str, **kw: Any) -> Any:
+        return self.request("GET", path, **kw)
+
+    def post(self, path: str, **kw: Any) -> Any:
+        return self.request("POST", path, **kw)
+
+    def put(self, path: str, **kw: Any) -> Any:
+        return self.request("PUT", path, **kw)
+
+    def patch(self, path: str, **kw: Any) -> Any:
+        return self.request("PATCH", path, **kw)
+
+    def delete(self, path: str, **kw: Any) -> Any:
+        return self.request("DELETE", path, **kw)
+
+    def stream_bytes(self, path: str, **kw: Any) -> Iterator[bytes]:
+        response = self.request("GET", path, stream=True, return_raw=True, **kw)
+        try:
+            for chunk in response.iter_content(chunk_size=64 * 1024):
+                if chunk:
+                    yield chunk
+        finally:
+            response.close()
+
+    def stream_sse(
+        self,
+        path: str,
+        *,
+        json: Any | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> Iterator[ChatChunk]:
+        extra: dict[str, str] = {"Accept": "text/event-stream"}
+        if headers:
+            extra.update(headers)
+        response = self.request(
+            "POST",
+            path,
+            json=json,
+            headers=extra,
+            timeout=timeout,
+            stream=True,
+            return_raw=True,
+        )
+        return iter_sse_blocking(response)
+
+
+class AsyncTransport(_BaseTransport):
+    def __init__(
+        self,
+        *,
+        endpoint: str | None = None,
+        api_key: str | None = None,
+        timeout: float = DEFAULT_TIMEOUT,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        session: aiohttp.ClientSession | None = None,
+    ) -> None:
+        super().__init__(
+            endpoint=endpoint,
+            api_key=api_key,
+            timeout=timeout,
+            max_retries=max_retries,
+        )
+        self._session = session
+        self._owns_session = session is None
+
+    async def _ensure_session(self) -> aiohttp.ClientSession:
+        if self._session is None:
+            self._session = aiohttp.ClientSession()
+            self._owns_session = True
+        return self._session
+
+    async def close(self) -> None:
+        if self._session is not None and self._owns_session:
+            await self._session.close()
+            self._session = None
+
+    async def __aenter__(self) -> AsyncTransport:
+        await self._ensure_session()
+        return self
+
+    async def __aexit__(self, *exc_info: Any) -> None:
+        await self.close()
+
+    async def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        json: Any | None = None,
+        data: Any | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+        return_raw: bool = False,
+        idempotent: bool = False,
+    ) -> Any:
+        session = await self._ensure_session()
+        url = _build_url(self.endpoint, path)
+        attempt = 0
+        schedule = backoff_schedule(self.max_retries)
+        method_upper = method.upper()
+        content_type: str | None = "application/json" if json is not None else None
+        if data is not None:
+            content_type = None
+        h = self._headers(extra=headers, content_type=content_type)
+        if params is not None:
+            params = {k: v for k, v in params.items() if v is not None}
+        req_timeout = aiohttp.ClientTimeout(
+            total=timeout if timeout is not None else self.timeout
+        )
+
+        while True:
+            try:
+                response = await session.request(
+                    method_upper,
+                    url,
+                    params=params,
+                    json=json,
+                    data=data,
+                    headers=h,
+                    timeout=req_timeout,
+                    allow_redirects=True,
+                )
+            except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as exc:
+                if not should_retry(
+                    method_upper,
+                    None,
+                    attempt,
+                    self.max_retries,
+                    idempotent=idempotent,
+                ):
+                    raise SpectronAPIError(
+                        status_code=0,
+                        message=f"Connection failed: {exc}",
+                    ) from exc
+                await asyncio.sleep(schedule[attempt])
+                attempt += 1
+                continue
+
+            status = response.status
+            if status >= 400 and should_retry(
+                method_upper,
+                status,
+                attempt,
+                self.max_retries,
+                idempotent=idempotent,
+            ):
+                response.release()
+                await asyncio.sleep(schedule[attempt])
+                attempt += 1
+                continue
+
+            if status >= 400:
+                body_bytes = await response.read()
+                headers_dict = {k: v for k, v in response.headers.items()}
+                response.release()
+                body = _decode_json(body_bytes)
+                raise error_from_response(status, body, headers_dict)
+
+            if return_raw:
+                return response
+            if status == 204:
+                response.release()
+                return None
+            body_bytes = await response.read()
+            response.release()
+            if not body_bytes:
+                return None
+            return _decode_json(body_bytes)
+
+    async def get(self, path: str, **kw: Any) -> Any:
+        return await self.request("GET", path, **kw)
+
+    async def post(self, path: str, **kw: Any) -> Any:
+        return await self.request("POST", path, **kw)
+
+    async def put(self, path: str, **kw: Any) -> Any:
+        return await self.request("PUT", path, **kw)
+
+    async def patch(self, path: str, **kw: Any) -> Any:
+        return await self.request("PATCH", path, **kw)
+
+    async def delete(self, path: str, **kw: Any) -> Any:
+        return await self.request("DELETE", path, **kw)
+
+    async def stream_sse(
+        self,
+        path: str,
+        *,
+        json: Any | None = None,
+        headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> AsyncIterator[ChatChunk]:
+        extra: dict[str, str] = {"Accept": "text/event-stream"}
+        if headers:
+            extra.update(headers)
+        response = await self.request(
+            "POST",
+            path,
+            json=json,
+            headers=extra,
+            timeout=timeout,
+            return_raw=True,
+        )
+        async for chunk in iter_sse_async(response):
+            yield chunk
+
+
+def build_multipart_payload(
+    *,
+    file: bytes | bytearray | memoryview | io.IOBase | str,
+    filename: str | None,
+    mime_type: str | None,
+    fields: Mapping[str, Any] | None,
+) -> tuple[Mapping[str, Any], dict[str, Any]]:
+    if isinstance(file, str):
+        fp = open(file, "rb")  # noqa: SIM115
+        if filename is None:
+            filename = os.path.basename(file)
+        payload: Any = fp
+    elif isinstance(file, (bytes, bytearray, memoryview)):
+        payload = bytes(file)
+    else:
+        payload = file
+    files: dict[str, tuple[str | None, Any, str | None]] = {
+        "file": (filename, payload, mime_type),
+    }
+    data: dict[str, Any] = {}
+    if fields:
+        for k, v in fields.items():
+            if v is None:
+                continue
+            if isinstance(v, (dict, list)):
+                data[k] = _json.dumps(v)
+            else:
+                data[k] = str(v)
+    return files, data
+
+
+def build_aiohttp_form(
+    *,
+    file: bytes | bytearray | memoryview | io.IOBase | str,
+    filename: str | None,
+    mime_type: str | None,
+    fields: Mapping[str, Any] | None,
+) -> aiohttp.FormData:
+    form = aiohttp.FormData()
+    payload: Any
+    if isinstance(file, str):
+        with open(file, "rb") as fp:
+            payload = fp.read()
+        if filename is None:
+            filename = os.path.basename(file)
+    elif isinstance(file, (bytes, bytearray, memoryview)):
+        payload = bytes(file)
+    else:
+        payload = file.read() if hasattr(file, "read") else file
+    # Send non-file parts (e.g. `metadata`) before the `file` part: the upload
+    # handler reads fields in declaration order and only falls back to deriving
+    # metadata from the file part when `file` arrives first.
+    if fields:
+        for k, v in fields.items():
+            if v is None:
+                continue
+            if isinstance(v, (dict, list)):
+                form.add_field(k, _json.dumps(v), content_type="application/json")
+            else:
+                form.add_field(k, str(v))
+    form.add_field(
+        "file",
+        payload,
+        filename=filename or "upload",
+        content_type=mime_type or "application/octet-stream",
+    )
+    return form
+
+
+__all__ = [
+    "BlockingTransport",
+    "AsyncTransport",
+    "build_multipart_payload",
+    "build_aiohttp_form",
+    "quote_path",
+    "on_behalf_of_header",
+    "DEFAULT_TIMEOUT",
+    "DEFAULT_MAX_RETRIES",
+]

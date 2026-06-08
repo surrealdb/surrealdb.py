@@ -63,6 +63,15 @@ from surrealdb.data.types.geometry import Geometry
 from surrealdb.data.types.range import Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
+from surrealdb.spectron import (
+    AsyncSpectron,
+    Spectron,
+    SpectronAPIError,
+    SpectronAuthError,
+    SpectronError,
+    SpectronNotFoundError,
+    SpectronScopeError,
+)
 from surrealdb.errors import (
     AlreadyExistsDetailKind,
     AlreadyExistsError,
@@ -183,6 +192,15 @@ __all__ = [
     "TAG_RECORD_ID",
     "TAG_TABLE_NAME",
     "TAG_UUID_STRING",
+    # Spectron clients
+    "Spectron",
+    "AsyncSpectron",
+    # Spectron exceptions (prefixed to avoid clashes with surrealdb.* errors)
+    "SpectronError",
+    "SpectronAPIError",
+    "SpectronAuthError",
+    "SpectronScopeError",
+    "SpectronNotFoundError",
 ]
 
 _EMBEDDED_SCHEMES = (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV, UrlScheme.SURREALKV_VERSIONED)
