@@ -210,6 +210,44 @@ def test_scope_serialises_to_path_strings(client: Spectron):
     ]
 
 
+@responses.activate
+def test_on_behalf_of_sends_delegation_header(client: Spectron):
+    responses.add(
+        responses.POST,
+        f"{BASE}/api/v1/{ENC_CONTEXT}/facts",
+        json={"mode": "infer", "sessionId": "s"},
+        status=200,
+    )
+    responses.add(
+        responses.POST,
+        f"{BASE}/api/v1/{ENC_CONTEXT}/query",
+        json={
+            "classificationKind": "hybrid",
+            "hits": [],
+            "queryMs": 1,
+            "seedEntities": [],
+            "tier": "hot",
+            "trace": {},
+        },
+        status=200,
+    )
+
+    # A write merges delegation with the idempotency header.
+    client.remember("x", on_behalf_of="principal:agent-7")
+    write = responses.calls[0].request
+    assert write.headers["X-Spectron-On-Behalf-Of"] == "principal:agent-7"
+    assert "Idempotency-Key" in write.headers
+
+    # A read sends it too, and omits it when not set.
+    client.recall("q", on_behalf_of="principal:agent-7")
+    assert (
+        responses.calls[1].request.headers["X-Spectron-On-Behalf-Of"]
+        == "principal:agent-7"
+    )
+    client.recall("q")
+    assert "X-Spectron-On-Behalf-Of" not in responses.calls[2].request.headers
+
+
 def test_context_quotes_special_chars(client: Spectron):
     assert client.context_id == CONTEXT
     assert client._base.endswith(f"/api/v1/{ENC_CONTEXT}")

@@ -22,6 +22,7 @@ from surrealdb.spectron._transport import (
     DEFAULT_TIMEOUT,
     AsyncTransport,
     BlockingTransport,
+    on_behalf_of_header,
     quote_path,
 )
 
@@ -115,6 +116,7 @@ class Spectron:
         memory_category: str | None = None,
         labels: Sequence[str] | None = None,
         triples: list[dict[str, Any]] | None = None,
+        on_behalf_of: str | None = None,
     ) -> RememberResponse:
         payload = _drop_none(
             {
@@ -133,7 +135,10 @@ class Spectron:
             "POST",
             path,
             json=payload,
-            headers=_idempotency_header("POST", path, payload),
+            headers={
+                **_idempotency_header("POST", path, payload),
+                **on_behalf_of_header(on_behalf_of),
+            },
             idempotent=True,
         )
         return RememberResponse.from_dict(result)
@@ -147,6 +152,7 @@ class Spectron:
         extract: str | None = None,
         infer: str | None = None,
         labels: Sequence[str] | None = None,
+        on_behalf_of: str | None = None,
     ) -> RememberBatchResponse:
         payload = _drop_none(
             {
@@ -163,7 +169,10 @@ class Spectron:
             "POST",
             path,
             json=payload,
-            headers=_idempotency_header("POST", path, payload),
+            headers={
+                **_idempotency_header("POST", path, payload),
+                **on_behalf_of_header(on_behalf_of),
+            },
             idempotent=True,
         )
         return RememberBatchResponse.from_dict(result)
@@ -185,6 +194,7 @@ class Spectron:
         valid_until: str | None = None,
         source: str | None = None,
         location: Mapping[str, Any] | None = None,
+        on_behalf_of: str | None = None,
     ) -> RecallResponse:
         payload = _drop_none(
             {
@@ -208,15 +218,19 @@ class Spectron:
             "POST",
             f"{self._base}/query",
             json=payload,
+            headers=on_behalf_of_header(on_behalf_of) or None,
         )
         return RecallResponse.from_dict(result)
 
-    def forget(self, query: str, *, purge: bool = False) -> ForgetResponse:
+    def forget(
+        self, query: str, *, purge: bool = False, on_behalf_of: str | None = None
+    ) -> ForgetResponse:
         payload = _drop_none({"query": query, "purge": purge or None})
         result = self._transport.request(
             "POST",
             f"{self._base}/forget",
             json=payload,
+            headers=on_behalf_of_header(on_behalf_of) or None,
         )
         return ForgetResponse.from_dict(result)
 
@@ -230,6 +244,7 @@ class Spectron:
         model: str | None = None,
         bypass_cache: bool = False,
         labels: Sequence[str] | None = None,
+        on_behalf_of: str | None = None,
     ) -> ChatResponse | Iterator[ChatChunk]:
         payload = _drop_none(
             {
@@ -244,8 +259,17 @@ class Spectron:
         )
         path = f"{self._base}/chat"
         if stream:
-            return self._transport.stream_sse(path, json=payload)
-        result = self._transport.request("POST", path, json=payload)
+            return self._transport.stream_sse(
+                path,
+                json=payload,
+                headers=on_behalf_of_header(on_behalf_of) or None,
+            )
+        result = self._transport.request(
+            "POST",
+            path,
+            json=payload,
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
         return ChatResponse.from_dict(result)
 
     def close(self) -> None:
@@ -304,6 +328,7 @@ class AsyncSpectron:
         memory_category: str | None = None,
         labels: Sequence[str] | None = None,
         triples: list[dict[str, Any]] | None = None,
+        on_behalf_of: str | None = None,
     ) -> RememberResponse:
         payload = _drop_none(
             {
@@ -322,7 +347,10 @@ class AsyncSpectron:
             "POST",
             path,
             json=payload,
-            headers=_idempotency_header("POST", path, payload),
+            headers={
+                **_idempotency_header("POST", path, payload),
+                **on_behalf_of_header(on_behalf_of),
+            },
             idempotent=True,
         )
         return RememberResponse.from_dict(result)
@@ -336,6 +364,7 @@ class AsyncSpectron:
         extract: str | None = None,
         infer: str | None = None,
         labels: Sequence[str] | None = None,
+        on_behalf_of: str | None = None,
     ) -> RememberBatchResponse:
         payload = _drop_none(
             {
@@ -352,7 +381,10 @@ class AsyncSpectron:
             "POST",
             path,
             json=payload,
-            headers=_idempotency_header("POST", path, payload),
+            headers={
+                **_idempotency_header("POST", path, payload),
+                **on_behalf_of_header(on_behalf_of),
+            },
             idempotent=True,
         )
         return RememberBatchResponse.from_dict(result)
@@ -374,6 +406,7 @@ class AsyncSpectron:
         valid_until: str | None = None,
         source: str | None = None,
         location: Mapping[str, Any] | None = None,
+        on_behalf_of: str | None = None,
     ) -> RecallResponse:
         payload = _drop_none(
             {
@@ -397,15 +430,19 @@ class AsyncSpectron:
             "POST",
             f"{self._base}/query",
             json=payload,
+            headers=on_behalf_of_header(on_behalf_of) or None,
         )
         return RecallResponse.from_dict(result)
 
-    async def forget(self, query: str, *, purge: bool = False) -> ForgetResponse:
+    async def forget(
+        self, query: str, *, purge: bool = False, on_behalf_of: str | None = None
+    ) -> ForgetResponse:
         payload = _drop_none({"query": query, "purge": purge or None})
         result = await self._transport.request(
             "POST",
             f"{self._base}/forget",
             json=payload,
+            headers=on_behalf_of_header(on_behalf_of) or None,
         )
         return ForgetResponse.from_dict(result)
 
@@ -419,6 +456,7 @@ class AsyncSpectron:
         model: str | None = None,
         bypass_cache: bool = False,
         labels: Sequence[str] | None = None,
+        on_behalf_of: str | None = None,
     ) -> ChatResponse | AsyncIterator[ChatChunk]:
         payload = _drop_none(
             {
@@ -433,8 +471,17 @@ class AsyncSpectron:
         )
         path = f"{self._base}/chat"
         if stream:
-            return self._transport.stream_sse(path, json=payload)
-        result = await self._transport.request("POST", path, json=payload)
+            return self._transport.stream_sse(
+                path,
+                json=payload,
+                headers=on_behalf_of_header(on_behalf_of) or None,
+            )
+        result = await self._transport.request(
+            "POST",
+            path,
+            json=payload,
+            headers=on_behalf_of_header(on_behalf_of) or None,
+        )
         return ChatResponse.from_dict(result)
 
     async def close(self) -> None:

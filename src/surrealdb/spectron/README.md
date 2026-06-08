@@ -193,6 +193,20 @@ memory.chat("...", scope=["team=acme/project=x"])      # nested path
 
 ## Authentication
 
-Every request carries `Authorization: Bearer <api_key>` and no other
-auth-related header. There is no env-var fallback, no URL default, and no
-alternative scheme — pass the key explicitly to the constructor.
+Every request carries `Authorization: Bearer <api_key>`. 
+
+### Delegation (on-behalf-of)
+
+Every verb takes an optional `on_behalf_of` argument. When set, the request
+carries `X-Spectron-On-Behalf-Of: <principal>` and the server runs it as that
+principal, with effective grants narrowed to `caller ∩ target` (the caller can
+only delegate to a principal it is allowed to act for). The value may be a bare
+principal id or the `principal:<id>` form; it is sent verbatim.
+
+```python
+memory.recall("open tickets", on_behalf_of="principal:agent-7")
+memory.remember("ticket triaged", on_behalf_of="principal:agent-7")
+```
+
+Delegation is per call, so a single client can act for different principals on
+different requests.

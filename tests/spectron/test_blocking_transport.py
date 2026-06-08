@@ -41,11 +41,15 @@ def test_get_sends_bearer_header(transport: BlockingTransport):
 
 @responses.activate
 def test_post_only_auth_header_is_bearer(transport: BlockingTransport):
-    responses.add(responses.POST, f"{BASE}/api/v1/x/echo", json={"ok": True}, status=200)
+    responses.add(
+        responses.POST, f"{BASE}/api/v1/x/echo", json={"ok": True}, status=200
+    )
     transport.post("/api/v1/x/echo", json={"hello": "world"})
     sent = responses.calls[0].request
     assert sent.headers["Authorization"] == f"Bearer {API_KEY}"
-    auth_headers = [k for k in sent.headers if "auth" in k.lower() or "key" in k.lower()]
+    auth_headers = [
+        k for k in sent.headers if "auth" in k.lower() or "key" in k.lower()
+    ]
     assert auth_headers == ["Authorization"], auth_headers
 
 
@@ -62,10 +66,14 @@ def test_get_retries_on_5xx_then_succeeds(monkeypatch, transport: BlockingTransp
 
 
 @responses.activate
-def test_get_retries_exhaust_raises_api_error(monkeypatch, transport: BlockingTransport):
+def test_get_retries_exhaust_raises_api_error(
+    monkeypatch, transport: BlockingTransport
+):
     monkeypatch.setattr(time, "sleep", lambda _s: None)
     for _ in range(4):
-        responses.add(responses.GET, f"{BASE}/api/v1/x/y", json={"message": "down"}, status=500)
+        responses.add(
+            responses.GET, f"{BASE}/api/v1/x/y", json={"message": "down"}, status=500
+        )
     with pytest.raises(SpectronAPIError) as info:
         transport.get("/api/v1/x/y")
     assert info.value.status_code == 500
@@ -75,7 +83,9 @@ def test_get_retries_exhaust_raises_api_error(monkeypatch, transport: BlockingTr
 @responses.activate
 def test_post_does_not_retry_on_5xx(monkeypatch, transport: BlockingTransport):
     monkeypatch.setattr(time, "sleep", lambda _s: None)
-    responses.add(responses.POST, f"{BASE}/api/v1/x/z", json={"message": "down"}, status=503)
+    responses.add(
+        responses.POST, f"{BASE}/api/v1/x/z", json={"message": "down"}, status=503
+    )
     with pytest.raises(SpectronAPIError):
         transport.post("/api/v1/x/z", json={"hello": "world"})
     assert len(responses.calls) == 1
@@ -85,7 +95,9 @@ def test_post_does_not_retry_on_5xx(monkeypatch, transport: BlockingTransport):
 def test_idempotent_post_retries_on_5xx(monkeypatch, transport: BlockingTransport):
     monkeypatch.setattr(time, "sleep", lambda _s: None)
     responses.add(responses.POST, f"{BASE}/api/v1/x/facts", json={"e": 1}, status=503)
-    responses.add(responses.POST, f"{BASE}/api/v1/x/facts", json={"ok": True}, status=200)
+    responses.add(
+        responses.POST, f"{BASE}/api/v1/x/facts", json={"ok": True}, status=200
+    )
     body = transport.request(
         "POST",
         "/api/v1/x/facts",
@@ -123,7 +135,9 @@ def test_401_maps_to_auth_error(transport: BlockingTransport):
 
 @responses.activate
 def test_body_json_payload_sent(transport: BlockingTransport):
-    responses.add(responses.POST, f"{BASE}/api/v1/x/echo", json={"ack": True}, status=200)
+    responses.add(
+        responses.POST, f"{BASE}/api/v1/x/echo", json={"ack": True}, status=200
+    )
     transport.post("/api/v1/x/echo", json={"hello": "world"})
     sent = responses.calls[0].request
     assert sent.headers["Content-Type"].startswith("application/json")

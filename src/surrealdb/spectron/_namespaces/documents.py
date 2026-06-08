@@ -10,6 +10,7 @@ from surrealdb.spectron._transport import (
     BlockingTransport,
     build_aiohttp_form,
     build_multipart_payload,
+    on_behalf_of_header,
     quote_path,
 )
 
@@ -57,6 +58,7 @@ class BlockingDocuments:
         filename: str | None = None,
         title: str | None = None,
         source: str | None = None,
+        on_behalf_of: str | None = None,
     ) -> UploadResponse:
         file_payload, resolved_filename = _resolve_file(path, filename)
         files, data = build_multipart_payload(
@@ -70,6 +72,7 @@ class BlockingDocuments:
             _documents_path(self._context_id),
             files=files,
             data=data or None,
+            headers=on_behalf_of_header(on_behalf_of) or None,
         )
         return UploadResponse.from_dict(result)
 
@@ -87,6 +90,7 @@ class AsyncDocuments:
         filename: str | None = None,
         title: str | None = None,
         source: str | None = None,
+        on_behalf_of: str | None = None,
     ) -> UploadResponse:
         file_payload, resolved_filename = _resolve_file(path, filename)
         form = build_aiohttp_form(
@@ -99,6 +103,7 @@ class AsyncDocuments:
             "POST",
             _documents_path(self._context_id),
             data=form,
+            headers=on_behalf_of_header(on_behalf_of) or None,
         )
         return UploadResponse.from_dict(result)
 

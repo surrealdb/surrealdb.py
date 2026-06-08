@@ -65,5 +65,5 @@ def test_comment_lines_are_ignored():
 
 
 def test_multi_line_data_is_joined():
-    chunks = _drain(["data: {\"delta\":", "data:  \"split\"}", ""])
+    chunks = _drain(['data: {"delta":', 'data:  "split"}', ""])
     assert chunks[0].delta == "split"
