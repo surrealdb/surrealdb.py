@@ -55,6 +55,13 @@ reads environment variables.
 
 ## Surface
 
+The client covers the full Spectron end-user API. Headline verbs are methods on
+the client; grouped resources live under namespaces (`memory.documents.…`,
+`memory.sessions.…`, etc.). Both `Spectron` and `AsyncSpectron` expose the same
+names — `await` the async one.
+
+### Memory verbs
+
 | Method | Endpoint |
 | --- | --- |
 | `remember(text, ...)` | `POST /api/v1/{context}/facts` |
@@ -62,7 +69,30 @@ reads environment variables.
 | `recall(query, ...)` | `POST /api/v1/{context}/query` |
 | `forget(query, ...)` | `POST /api/v1/{context}/forget` |
 | `chat(message, stream=…)` | `POST /api/v1/{context}/chat` (SSE if `stream=True`) |
-| `documents.upload(path, ...)` | `POST /api/v1/{context}/documents` (multipart) |
+| `consolidate(...)` | `POST /api/v1/{context}/consolidate` |
+| `reflect(query, ...)` | `POST /api/v1/{context}/reflect` |
+| `elaborate(...)` | `POST /api/v1/{context}/elaborate` |
+| `query_context(query, ...)` | `POST /api/v1/{context}/context` |
+| `inspect(ref, ...)` | `GET /api/v1/{context}/inspect` |
+| `state()` | `GET /api/v1/{context}/state` |
+| `audit(...)` | `GET /api/v1/{context}/audit` |
+| `whoami()` | `GET /api/v1/{context}/me` |
+| `profile()` | `GET /api/v1/{context}/profile` |
+| `health()` | `GET /api/v1/health` (not context-scoped) |
+
+### Namespaces
+
+| Namespace | Methods |
+| --- | --- |
+| `documents` | `upload`, `get`, `delete`, `list`, `query`, `fetch_raw`, `reprocess`, `recompute_links`, `chunks` |
+| `documents.keywords` | `list`, `get`, `search`, `for_document` |
+| `sessions` | `create`, `delete`, `context`, `turns` |
+| `entities` | `list`, `get`, `delete`, `history` |
+| `scopes` | `register`, `list`, `delete`, `forget` |
+| `principals` | `list`, `get`, `grant`, `revoke`, `effective` |
+| `keys` | `create`, `list`, `delete`, `rotate` |
+| `traces` | `list`, `get`, `stats` |
+| `lifecycle` | `decay`, `expire`, `fsck` |
 
 ### Remember
 
@@ -145,6 +175,90 @@ print(result.id, result.status)
 
 `path` accepts a filesystem path, bytes, or a file-like object. `title` and
 `source` are optional and ride along as the document's metadata.
+
+The rest of the document surface manages the corpus:
+
+```python
+page = memory.documents.list(status="Ready", page=1, page_size=20)
+doc = memory.documents.get("document:abc")
+hits = memory.documents.query("refund window", k=5, mode="hybrid")
+raw = memory.documents.fetch_raw("document:abc")          # -> bytes
+memory.documents.reprocess("document:abc")
+memory.documents.recompute_links()
+chunks = memory.documents.chunks("document:abc")
+
+# Keyword index (corpus-level)
+memory.documents.keywords.list(q="refund")
+memory.documents.keywords.get("refund")
+memory.documents.keywords.search("returns policy", k=10)
+memory.documents.keywords.for_document("document:abc")
+```
+
+### Consolidate, reflect, elaborate
+
+```python
+# Pool recent facts into durable observations (preview with dry_run=True).
+outcome = memory.consolidate(dry_run=True)
+print(outcome.created, outcome.superseded, outcome.outcomes)
+
+# Summarise what the store knows, optionally persisting the reflection.
+memory.reflect("what are my preferences", persist=True)
+
+# Expand an entity's relations from existing memory.
+memory.elaborate(entity_ref="entity:person/stu")
+```
+
+### Introspection
+
+```python
+memory.state()                      # working-memory snapshot
+memory.whoami()                     # caller identity + effective grants
+memory.profile()                    # static/dynamic profile entries
+memory.inspect("entity:person/stu") # raw, kind-discriminated payload
+memory.query_context("who is stu")  # composed context string
+```
+
+### Sessions, entities, scopes
+
+```python
+session = memory.sessions.create(scope={"org": "acme"})
+memory.sessions.context(session.id, "recap our last call")
+memory.sessions.turns(session.id, limit=20)
+
+memory.entities.list(entity_type="person")
+memory.entities.get("person", "Stu")
+memory.entities.history("person", "Stu", "role")
+
+memory.scopes.register("org/acme/", display_name="Acme")
+memory.scopes.list()
+memory.scopes.forget("user/stu/")
+```
+
+### Access control: principals & self-service keys
+
+```python
+memory.principals.list()
+memory.principals.grant("agent-7", "org/acme/*", ["memory:read", "memory:write"])
+memory.principals.effective("agent-7", "org/acme/")
+
+minted = memory.keys.create(name="ci", ttl_seconds=3600)
+print(minted.key)                   # full bearer key, shown once
+memory.keys.rotate("ci")
+memory.keys.list()
+```
+
+### Observability & maintenance
+
+```python
+memory.traces.list(limit=50)
+memory.traces.get("trace:xyz")
+memory.traces.stats()
+memory.audit(kind="decision", limit=100)   # access/cost log
+
+memory.lifecycle.decay()                    # age out importance
+memory.lifecycle.expire()                   # drop expired rows
+memory.lifecycle.fsck(check="duplicates")   # integrity report
+```
 
 ## Errors
 

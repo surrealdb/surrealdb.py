@@ -4,7 +4,6 @@ import dataclasses
 import enum
 import types
 import typing
-from dataclasses import dataclass, field
 from typing import Any, ClassVar, TypeVar, get_args, get_origin
 
 _UNION_ORIGINS: tuple[Any, ...] = (typing.Union, types.UnionType)
@@ -120,89 +119,4 @@ def _encode(value: Any) -> Any:
     return value
 
 
-@dataclass(slots=True)
-class ExtractionResult(Model):
-    """Memory-extraction summary returned by /facts, /facts/batch and /chat.
-
-    Nested summary lists (entities, attributes, ...) are intentionally kept as
-    ``list[dict[str, Any]]`` rather than fully typed sub-models — the SurrealDB
-    SDK exposes a slim public model surface and the upstream summary shapes
-    are still evolving.
-    """
-
-    turn_id: str = ""
-    entities: list[dict[str, Any]] = field(default_factory=list)
-    attributes: list[dict[str, Any]] = field(default_factory=list)
-    relations: list[dict[str, Any]] = field(default_factory=list)
-    instructions: list[dict[str, Any]] = field(default_factory=list)
-    uncertainties: list[dict[str, Any]] = field(default_factory=list)
-    corrections: list[dict[str, Any]] = field(default_factory=list)
-
-
-@dataclass(slots=True)
-class RememberResponse(Model):
-    mode: str
-    session_id: str
-    chunk_id: str | None = None
-    extraction: ExtractionResult | None = None
-    preview: bool | None = None
-    turn_id: str | None = None
-
-
-@dataclass(slots=True)
-class RememberBatchResponse(Model):
-    session_id: str
-    turn_ids: list[str] = field(default_factory=list)
-    extractions: list[ExtractionResult] = field(default_factory=list)
-
-
-@dataclass(slots=True)
-class RecallHit(Model):
-    id: str
-    score: float
-    source: str
-    text: str
-
-
-@dataclass(slots=True)
-class RecallResponse(Model):
-    classification_kind: str = ""
-    hits: list[RecallHit] = field(default_factory=list)
-    query_ms: int = 0
-    seed_entities: list[str] = field(default_factory=list)
-    tier: str = ""
-    trace: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(slots=True)
-class ChatResponse(Model):
-    reply: str
-    session_id: str
-    trace_id: str
-    memory_updates: ExtractionResult | None = None
-
-
-@dataclass(slots=True)
-class ForgetResponse(Model):
-    deleted: int = 0
-
-
-@dataclass(slots=True)
-class UploadResponse(Model):
-    content_hash: str
-    deduplicated: bool
-    id: str
-    status: str
-
-
-__all__ = [
-    "Model",
-    "ExtractionResult",
-    "RememberResponse",
-    "RememberBatchResponse",
-    "RecallHit",
-    "RecallResponse",
-    "ChatResponse",
-    "ForgetResponse",
-    "UploadResponse",
-]
+__all__ = ["Model", "_decode", "_encode", "_to_camel", "_wire_name"]
