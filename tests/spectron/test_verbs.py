@@ -198,15 +198,15 @@ def test_scope_serialises_to_path_strings(client: Spectron):
         status=200,
     )
 
-    # Mapping collapses to key=value strings.
+    # Mapping becomes slash-path strings.
     client.remember("x", scope={"org": "acme"})
-    assert json.loads(responses.calls[0].request.body)["scope"] == ["org=acme"]
+    assert json.loads(responses.calls[0].request.body)["scope"] == ["org/acme"]
 
-    # A list of ready-made path strings passes through untouched.
-    client.chat("y", scope=["team=acme", "project=x"])
+    # A list of path strings passes through unchanged.
+    client.chat("y", scope=["team/acme", "project/x"])
     assert json.loads(responses.calls[1].request.body)["scope"] == [
-        "team=acme",
-        "project=x",
+        "team/acme",
+        "project/x",
     ]
 
 

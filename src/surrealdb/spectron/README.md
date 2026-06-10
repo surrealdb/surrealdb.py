@@ -294,15 +294,14 @@ the decoded `body`.
 
 ## Scope
 
-On the wire, scope is a set of `key=value` path strings. You can pass it as a
-dict, a list of `(key, value)` tuples, a single path string, or a list of path
-strings (including nested `team=acme/project=x`). All forms serialise to the
-same string list.
+Scope is a list of slash-path strings, e.g. `["team/eng"]`. Pass a single path,
+a list of paths, or a dict (which becomes `key/value` paths). Omit it to use the
+key's default write region.
 
 ```python
-memory.remember("...", scope={"org": "acme"})          # -> ["org=acme"]
-memory.remember("...", scope=["org=acme"])             # passed through
-memory.chat("...", scope=["team=acme/project=x"])      # nested path
+memory.remember("...", scope="team/eng")
+memory.remember("...", scope=["team/eng", "org/acme"])
+memory.remember("...", scope={"org": "acme"})          # -> ["org/acme"]
 ```
 
 ## Authentication
