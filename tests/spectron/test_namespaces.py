@@ -143,7 +143,7 @@ def test_sessions_lifecycle(client: Spectron):
     responses.add(
         responses.POST,
         f"{ROOT}/sessions",
-        json={"id": "sess:1", "createdAt": "t", "scope": ["org/acme"]},
+        json={"id": "sess:1", "createdAt": "t", "scopes": [["org/acme"]]},
         status=201,
     )
     responses.add(responses.DELETE, f"{ROOT}/sessions/sess%3A1", status=204)
@@ -170,10 +170,10 @@ def test_sessions_lifecycle(client: Spectron):
         },
         status=200,
     )
-    created = client.sessions.create(scope={"org": "acme"})
+    created = client.sessions.create(scopes={"org": "acme"})
     assert isinstance(created, Session)
-    assert created.scope == ["org/acme"]
-    assert json.loads(responses.calls[0].request.body) == {"scope": ["org/acme"]}
+    assert created.scopes == [["org/acme"]]
+    assert json.loads(responses.calls[0].request.body) == {"scopes": [["org/acme"]]}
     assert client.sessions.delete("sess:1") is None
     assert client.sessions.context("sess:1", "recap").context == "summary"
     turns = client.sessions.turns("sess:1", limit=10)

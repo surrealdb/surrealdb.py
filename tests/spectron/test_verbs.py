@@ -168,6 +168,7 @@ def test_documents_upload_posts_multipart(client: Spectron, tmp_path):
         content_type="text/plain",
         title="Returns policy",
         source="kb",
+        scopes={"org": "acme"},
     )
     assert isinstance(result, UploadResponse)
     assert result.id == "doc:1"
@@ -181,10 +182,13 @@ def test_documents_upload_posts_multipart(client: Spectron, tmp_path):
     assert raw.index('name="metadata"') < raw.index('name="file"')
     assert '"title": "Returns policy"' in raw
     assert '"source": "kb"' in raw
+    # The write scopes ride in the metadata part as DNF clauses.
+    metadata_part = raw[raw.index('name="metadata"') : raw.index('name="file"')]
+    assert '[["org/acme"]]' in metadata_part
 
 
 @responses.activate
-def test_scope_serialises_to_path_strings(client: Spectron):
+def test_scopes_serialise_to_dnf_clauses(client: Spectron):
     responses.add(
         responses.POST,
         f"{BASE}/api/v1/{ENC_CONTEXT}/facts",
@@ -197,16 +201,28 @@ def test_scope_serialises_to_path_strings(client: Spectron):
         json={"reply": "ok", "sessionId": "s", "traceId": "tr"},
         status=200,
     )
+    responses.add(
+        responses.POST,
+        f"{BASE}/api/v1/{ENC_CONTEXT}/facts",
+        json={"mode": "infer", "sessionId": "s"},
+        status=200,
+    )
 
-    # Mapping becomes slash-path strings.
-    client.remember("x", scope={"org": "acme"})
-    assert json.loads(responses.calls[0].request.body)["scope"] == ["org/acme"]
+    # A mapping is one AND clause of its slash paths.
+    client.remember("x", scopes={"org": "acme"})
+    assert json.loads(responses.calls[0].request.body)["scopes"] == [["org/acme"]]
 
-    # A list of path strings passes through unchanged.
-    client.chat("y", scope=["team/acme", "project/x"])
-    assert json.loads(responses.calls[1].request.body)["scope"] == [
-        "team/acme",
-        "project/x",
+    # A flat list of paths is an OR of singleton clauses.
+    client.chat("y", scopes=["team/acme", "project/x"])
+    assert json.loads(responses.calls[1].request.body)["scopes"] == [
+        ["team/acme"],
+        ["project/x"],
+    ]
+
+    # A nested clause is an AND of its paths.
+    client.remember("z", scopes=[["team/acme", "project/x"]])
+    assert json.loads(responses.calls[2].request.body)["scopes"] == [
+        ["team/acme", "project/x"],
     ]
 
 

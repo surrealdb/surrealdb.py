@@ -98,7 +98,7 @@ names — `await` the async one.
 
 ```python
 memory.remember("I work at Acme as CTO")
-memory.remember("Acme acquired Beta", session_id="sess:abc", scope={"org": "acme"})
+memory.remember("Acme acquired Beta", session_id="sess:abc", scopes={"org": "acme"})
 memory.remember("Q3 board notes", labels=["topic=board"], memory_category="context")
 
 memory.remember_many(
@@ -126,7 +126,8 @@ for hit in result.hits:
     print(hit.score, hit.source, hit.text)
 ```
 
-Optional filters: `labels` and `lens` (both `key=value` path lists),
+Optional filters: `labels` (a `key=value` path list), `lens` (a read scope
+selector taking the same DNF shape as `scopes`, see [Scope](#scope)),
 `scope_view` (`strict` | `merged` | `crossTeam`), `include` (`facts`,
 `passages`), the temporal bounds `as_of` / `at_instant` / `valid_from` /
 `valid_until`, and a `location` geo filter
@@ -169,12 +170,16 @@ result = memory.documents.upload(
     content_type="application/pdf",
     title="Returns policy",
     source="kb",
+    scopes={"org": "acme"},
 )
 print(result.id, result.status)
 ```
 
-`path` accepts a filesystem path, bytes, or a file-like object. `title` and
-`source` are optional and ride along as the document's metadata.
+`path` accepts a filesystem path, bytes, or a file-like object. `title`,
+`source`, and `scopes` are optional and ride along as the document's metadata.
+`scopes` takes the same DNF shape as the write verbs (see [Scope](#scope)); each
+path must lie within the key's write region, and omitting it falls back to the
+whole write region.
 
 The rest of the document surface manages the corpus:
 
@@ -221,7 +226,7 @@ memory.query_context("who is stu")  # composed context string
 ### Sessions, entities, scopes
 
 ```python
-session = memory.sessions.create(scope={"org": "acme"})
+session = memory.sessions.create(scopes={"org": "acme"})
 memory.sessions.context(session.id, "recap our last call")
 memory.sessions.turns(session.id, limit=20)
 
@@ -294,14 +299,30 @@ the decoded `body`.
 
 ## Scope
 
-Scope is a list of slash-path strings, e.g. `["team/eng"]`. Pass a single path,
-a list of paths, or a dict (which becomes `key/value` paths). Omit it to use the
-key's default write region.
+`scopes` is a DNF (disjunctive-normal-form) selector: an OR of conjunctive
+clauses, serialised on the wire as `array<array<string>>`. The outer list ORs
+across clauses; each inner list ANDs the scope paths within a clause. The same
+shape is used by the write verbs (`scopes`) and the read lens (`lens`). Omit it
+to use the key's default write region.
+
+The facade accepts these input forms:
+
+- A single path string is one singleton clause: `"team/eng"` -> `[["team/eng"]]`.
+- A flat list of paths is an OR of singletons:
+  `["team/eng", "org/acme"]` -> `[["team/eng"], ["org/acme"]]` (eng OR acme).
+- A nested list is an AND clause:
+  `[["team/eng", "org/acme"]]` -> `[["team/eng", "org/acme"]]` (eng AND acme).
+- A dict is one AND clause of its `key/value` paths:
+  `{"team": "eng", "org": "acme"}` -> `[["team/eng", "org/acme"]]`.
+- The string and nested forms mix freely:
+  `["team/eng", ["org/acme", "region/eu"]]` ->
+  `[["team/eng"], ["org/acme", "region/eu"]]`.
 
 ```python
-memory.remember("...", scope="team/eng")
-memory.remember("...", scope=["team/eng", "org/acme"])
-memory.remember("...", scope={"org": "acme"})          # -> ["org/acme"]
+memory.remember("...", scopes="team/eng")
+memory.remember("...", scopes=["team/eng", "org/acme"])     # eng OR acme
+memory.remember("...", scopes=[["team/eng", "org/acme"]])   # eng AND acme
+memory.remember("...", scopes={"org": "acme"})              # -> [["org/acme"]]
 ```
 
 ## Authentication

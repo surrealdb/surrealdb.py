@@ -11,7 +11,7 @@ from surrealdb.spectron import (
 )
 from surrealdb.spectron._errors import error_for_status, error_from_response
 from surrealdb.spectron._retry import backoff_schedule, should_retry
-from surrealdb.spectron._scope import scope_paths
+from surrealdb.spectron._scope import scope_sets
 
 
 @pytest.mark.parametrize(
@@ -77,28 +77,40 @@ def test_idempotent_post_can_retry():
     assert should_retry("POST", 404, 0, 3, idempotent=True) is False
 
 
-def test_scope_paths_none_and_empty():
-    assert scope_paths(None) == []
-    assert scope_paths([]) == []
-    assert scope_paths({}) == []
+def test_scope_sets_none_and_empty():
+    assert scope_sets(None) == []
+    assert scope_sets([]) == []
+    assert scope_sets({}) == []
 
 
-def test_scope_paths_string_passthrough():
-    assert scope_paths("team/eng") == ["team/eng"]
+def test_scope_sets_string_is_singleton_clause():
+    assert scope_sets("team/eng") == [["team/eng"]]
 
 
-def test_scope_paths_mapping_to_slash_path():
-    assert scope_paths({"user": "alex"}) == ["user/alex"]
-    assert scope_paths({"team": "eng", "org": "acme"}) == ["team/eng", "org/acme"]
+def test_scope_sets_flat_list_is_or_of_singletons():
+    assert scope_sets(["a", "b"]) == [["a"], ["b"]]
 
 
-def test_scope_paths_tuples_to_slash_path():
-    assert scope_paths([("team", "eng"), ("org", "acme")]) == ["team/eng", "org/acme"]
+def test_scope_sets_nested_list_is_and_clause():
+    assert scope_sets([["a", "b"]]) == [["a", "b"]]
 
 
-def test_scope_paths_dedup_preserves_order():
-    assert scope_paths(["org/acme", "team/eng", "org/acme"]) == ["org/acme", "team/eng"]
+def test_scope_sets_mapping_is_one_and_clause():
+    assert scope_sets({"user": "alex"}) == [["user/alex"]]
+    assert scope_sets({"team": "eng", "org": "acme"}) == [["team/eng", "org/acme"]]
 
 
-def test_scope_paths_drops_empties():
-    assert scope_paths(["", "team/eng"]) == ["team/eng"]
+def test_scope_sets_mixed_strings_and_clauses():
+    assert scope_sets(["a", ["b", "c"]]) == [["a"], ["b", "c"]]
+
+
+def test_scope_sets_dedup_preserves_order():
+    assert scope_sets(["org/acme", "team/eng", "org/acme"]) == [
+        ["org/acme"],
+        ["team/eng"],
+    ]
+
+
+def test_scope_sets_drops_empty_paths_and_clauses():
+    assert scope_sets(["", "team/eng"]) == [["team/eng"]]
+    assert scope_sets([[], ["team/eng"]]) == [["team/eng"]]

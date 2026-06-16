@@ -2,30 +2,23 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 
-ScopeArg = str | Mapping[str, str] | Sequence[str] | Sequence[tuple[str, str]] | None
+ScopeClause = str | Mapping[str, str] | Sequence[str]
+ScopeArg = str | Mapping[str, str] | Sequence[ScopeClause] | None
 
 
-def scope_paths(scope: ScopeArg) -> list[str]:
-    """Normalise a scope argument to an ordered, de-duplicated list of
-    slash-path strings, e.g. `["team/eng"]`.
+def _clause_paths(clause: ScopeClause) -> list[str]:
+    """Normalise a single clause to its ordered, de-duplicated AND-set of
+    slash-path strings.
 
-    A mapping or `(key, value)` tuple becomes a `key/value` path; path strings
-    pass through. `None` or empty yields `[]` (the key's default write region).
+    A string is a single path; a mapping becomes `key/value` paths (one per
+    entry); a sequence of strings passes through. Empty paths are dropped.
     """
-    if scope is None:
-        return []
-    if isinstance(scope, str):
-        raw: list[str] = [scope]
-    elif isinstance(scope, Mapping):
-        raw = [f"{k}/{v}" for k, v in scope.items()]
+    if isinstance(clause, str):
+        raw: list[str] = [clause]
+    elif isinstance(clause, Mapping):
+        raw = [f"{k}/{v}" for k, v in clause.items()]
     else:
-        raw = []
-        for item in scope:
-            if isinstance(item, str):
-                raw.append(item)
-            else:
-                key, value = item
-                raw.append(f"{key}/{value}")
+        raw = list(clause)
     out: list[str] = []
     for path in raw:
         if path and path not in out:
@@ -33,4 +26,37 @@ def scope_paths(scope: ScopeArg) -> list[str]:
     return out
 
 
-__all__ = ["ScopeArg", "scope_paths"]
+def scope_sets(scope: ScopeArg) -> list[list[str]]:
+    """Normalise a scope argument to a DNF (disjunctive-normal-form) selector:
+    an OR of conjunctive clauses, each clause an AND of slash-path strings.
+
+    The wire shape is `array<array<string>>`. The outer list is an OR across
+    clauses, each inner list an AND of scope paths within a clause:
+
+    - A bare string is one singleton clause: `"team/eng"` -> `[["team/eng"]]`.
+    - A flat list of strings is an OR of singletons:
+      `["a", "b"]` -> `[["a"], ["b"]]`.
+    - A nested list is an AND clause: `[["a", "b"]]` -> `[["a", "b"]]`.
+    - A mapping is one AND clause of all its `key/value` paths:
+      `{"team": "eng", "org": "acme"}` -> `[["team/eng", "org/acme"]]`.
+    - The two forms mix: `["a", ["b", "c"]]` -> `[["a"], ["b", "c"]]`.
+
+    `None` or empty yields `[]` (the key's default write region). Empty paths
+    and empty clauses are dropped, and identical clauses are de-duplicated while
+    preserving order.
+    """
+    if scope is None:
+        return []
+    if isinstance(scope, (str, Mapping)):
+        clauses: Sequence[ScopeClause] = [scope]
+    else:
+        clauses = scope
+    out: list[list[str]] = []
+    for clause in clauses:
+        paths = _clause_paths(clause)
+        if paths and paths not in out:
+            out.append(paths)
+    return out
+
+
+__all__ = ["ScopeArg", "scope_sets"]

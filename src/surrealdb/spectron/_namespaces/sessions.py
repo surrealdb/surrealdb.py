@@ -7,7 +7,7 @@ from surrealdb.spectron._models import (
     SessionContextResponse,
     TurnListResponse,
 )
-from surrealdb.spectron._scope import ScopeArg, scope_paths
+from surrealdb.spectron._scope import ScopeArg, scope_sets
 from surrealdb.spectron._transport import (
     AsyncTransport,
     BlockingTransport,
@@ -29,11 +29,11 @@ class BlockingSessions:
     def create(
         self,
         *,
-        scope: ScopeArg = None,
+        scopes: ScopeArg = None,
         metadata: Any | None = None,
         on_behalf_of: str | None = None,
     ) -> Session:
-        payload = drop_none({"scope": scope_paths(scope) or None, "metadata": metadata})
+        payload = drop_none({"scopes": scope_sets(scopes) or None, "metadata": metadata})
         result = self._transport.request(
             "POST",
             self._base,
@@ -85,11 +85,11 @@ class AsyncSessions:
     async def create(
         self,
         *,
-        scope: ScopeArg = None,
+        scopes: ScopeArg = None,
         metadata: Any | None = None,
         on_behalf_of: str | None = None,
     ) -> Session:
-        payload = drop_none({"scope": scope_paths(scope) or None, "metadata": metadata})
+        payload = drop_none({"scopes": scope_sets(scopes) or None, "metadata": metadata})
         result = await self._transport.request(
             "POST",
             self._base,
