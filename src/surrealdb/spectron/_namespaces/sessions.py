@@ -33,7 +33,9 @@ class BlockingSessions:
         metadata: Any | None = None,
         on_behalf_of: str | None = None,
     ) -> Session:
-        payload = drop_none({"scopes": scope_sets(scopes) or None, "metadata": metadata})
+        payload = drop_none(
+            {"scopes": scope_sets(scopes) or None, "metadata": metadata}
+        )
         result = self._transport.request(
             "POST",
             self._base,
@@ -89,7 +91,9 @@ class AsyncSessions:
         metadata: Any | None = None,
         on_behalf_of: str | None = None,
     ) -> Session:
-        payload = drop_none({"scopes": scope_sets(scopes) or None, "metadata": metadata})
+        payload = drop_none(
+            {"scopes": scope_sets(scopes) or None, "metadata": metadata}
+        )
         result = await self._transport.request(
             "POST",
             self._base,
