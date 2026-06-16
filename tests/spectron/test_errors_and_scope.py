@@ -80,7 +80,6 @@ def test_idempotent_post_can_retry():
 def test_scope_sets_none_and_empty():
     assert scope_sets(None) == []
     assert scope_sets([]) == []
-    assert scope_sets({}) == []
 
 
 def test_scope_sets_string_is_singleton_clause():
@@ -93,11 +92,6 @@ def test_scope_sets_flat_list_is_or_of_singletons():
 
 def test_scope_sets_nested_list_is_and_clause():
     assert scope_sets([["a", "b"]]) == [["a", "b"]]
-
-
-def test_scope_sets_mapping_is_one_and_clause():
-    assert scope_sets({"user": "alex"}) == [["user/alex"]]
-    assert scope_sets({"team": "eng", "org": "acme"}) == [["team/eng", "org/acme"]]
 
 
 def test_scope_sets_mixed_strings_and_clauses():

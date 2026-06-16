@@ -1,24 +1,19 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 
-ScopeClause = str | Mapping[str, str] | Sequence[str]
-ScopeArg = str | Mapping[str, str] | Sequence[ScopeClause] | None
+ScopeClause = str | Sequence[str]
+ScopeArg = str | Sequence[ScopeClause] | None
 
 
 def _clause_paths(clause: ScopeClause) -> list[str]:
     """Normalise a single clause to its ordered, de-duplicated AND-set of
     slash-path strings.
 
-    A string is a single path; a mapping becomes `key/value` paths (one per
-    entry); a sequence of strings passes through. Empty paths are dropped.
+    A string is a single path; a sequence of strings passes through. Empty
+    paths are dropped.
     """
-    if isinstance(clause, str):
-        raw: list[str] = [clause]
-    elif isinstance(clause, Mapping):
-        raw = [f"{k}/{v}" for k, v in clause.items()]
-    else:
-        raw = list(clause)
+    raw = [clause] if isinstance(clause, str) else list(clause)
     out: list[str] = []
     for path in raw:
         if path and path not in out:
@@ -37,8 +32,6 @@ def scope_sets(scope: ScopeArg) -> list[list[str]]:
     - A flat list of strings is an OR of singletons:
       `["a", "b"]` -> `[["a"], ["b"]]`.
     - A nested list is an AND clause: `[["a", "b"]]` -> `[["a", "b"]]`.
-    - A mapping is one AND clause of all its `key/value` paths:
-      `{"team": "eng", "org": "acme"}` -> `[["team/eng", "org/acme"]]`.
     - The two forms mix: `["a", ["b", "c"]]` -> `[["a"], ["b", "c"]]`.
 
     `None` or empty yields `[]` (the key's default write region). Empty paths
@@ -47,10 +40,7 @@ def scope_sets(scope: ScopeArg) -> list[list[str]]:
     """
     if scope is None:
         return []
-    if isinstance(scope, (str, Mapping)):
-        clauses: Sequence[ScopeClause] = [scope]
-    else:
-        clauses = scope
+    clauses: Sequence[ScopeClause] = [scope] if isinstance(scope, str) else scope
     out: list[list[str]] = []
     for clause in clauses:
         paths = _clause_paths(clause)

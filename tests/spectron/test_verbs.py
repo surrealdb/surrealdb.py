@@ -168,7 +168,7 @@ def test_documents_upload_posts_multipart(client: Spectron, tmp_path):
         content_type="text/plain",
         title="Returns policy",
         source="kb",
-        scopes={"org": "acme"},
+        scopes=["org/acme"],
     )
     assert isinstance(result, UploadResponse)
     assert result.id == "doc:1"
@@ -208,8 +208,8 @@ def test_scopes_serialise_to_dnf_clauses(client: Spectron):
         status=200,
     )
 
-    # A mapping is one AND clause of its slash paths.
-    client.remember("x", scopes={"org": "acme"})
+    # A bare string is one singleton clause.
+    client.remember("x", scopes="org/acme")
     assert json.loads(responses.calls[0].request.body)["scopes"] == [["org/acme"]]
 
     # A flat list of paths is an OR of singleton clauses.

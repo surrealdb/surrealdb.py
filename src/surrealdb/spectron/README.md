@@ -98,7 +98,7 @@ names — `await` the async one.
 
 ```python
 memory.remember("I work at Acme as CTO")
-memory.remember("Acme acquired Beta", session_id="sess:abc", scopes={"org": "acme"})
+memory.remember("Acme acquired Beta", session_id="sess:abc", scopes="org/acme")
 memory.remember("Q3 board notes", labels=["topic=board"], memory_category="context")
 
 memory.remember_many(
@@ -170,7 +170,7 @@ result = memory.documents.upload(
     content_type="application/pdf",
     title="Returns policy",
     source="kb",
-    scopes={"org": "acme"},
+    scopes="org/acme",
 )
 print(result.id, result.status)
 ```
@@ -226,7 +226,7 @@ memory.query_context("who is stu")  # composed context string
 ### Sessions, entities, scopes
 
 ```python
-session = memory.sessions.create(scopes={"org": "acme"})
+session = memory.sessions.create(scopes="org/acme")
 memory.sessions.context(session.id, "recap our last call")
 memory.sessions.turns(session.id, limit=20)
 
@@ -312,8 +312,6 @@ The facade accepts these input forms:
   `["team/eng", "org/acme"]` -> `[["team/eng"], ["org/acme"]]` (eng OR acme).
 - A nested list is an AND clause:
   `[["team/eng", "org/acme"]]` -> `[["team/eng", "org/acme"]]` (eng AND acme).
-- A dict is one AND clause of its `key/value` paths:
-  `{"team": "eng", "org": "acme"}` -> `[["team/eng", "org/acme"]]`.
 - The string and nested forms mix freely:
   `["team/eng", ["org/acme", "region/eu"]]` ->
   `[["team/eng"], ["org/acme", "region/eu"]]`.
@@ -322,7 +320,6 @@ The facade accepts these input forms:
 memory.remember("...", scopes="team/eng")
 memory.remember("...", scopes=["team/eng", "org/acme"])     # eng OR acme
 memory.remember("...", scopes=[["team/eng", "org/acme"]])   # eng AND acme
-memory.remember("...", scopes={"org": "acme"})              # -> [["org/acme"]]
 ```
 
 ## Authentication

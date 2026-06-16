@@ -170,7 +170,7 @@ def test_sessions_lifecycle(client: Spectron):
         },
         status=200,
     )
-    created = client.sessions.create(scopes={"org": "acme"})
+    created = client.sessions.create(scopes=["org/acme"])
     assert isinstance(created, Session)
     assert created.scopes == [["org/acme"]]
     assert json.loads(responses.calls[0].request.body) == {"scopes": [["org/acme"]]}
