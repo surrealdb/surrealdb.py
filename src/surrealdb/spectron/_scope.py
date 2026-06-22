@@ -34,9 +34,10 @@ def scope_sets(scope: ScopeArg) -> list[list[str]]:
     - A nested list is an AND clause: `[["a", "b"]]` -> `[["a", "b"]]`.
     - The two forms mix: `["a", ["b", "c"]]` -> `[["a"], ["b", "c"]]`.
 
-    `None` or empty yields `[]` (the key's default write region). Empty paths
-    and empty clauses are dropped, and identical clauses are de-duplicated while
-    preserving order.
+    `None` or empty yields `[]` (the key's default write region). Within a
+    clause, empty paths are dropped and paths are de-duplicated preserving order;
+    a clause that ends up empty is dropped. Duplicate clauses are left as-is (the
+    server dedups co-owned rows by content hash).
     """
     if scope is None:
         return []
@@ -44,7 +45,7 @@ def scope_sets(scope: ScopeArg) -> list[list[str]]:
     out: list[list[str]] = []
     for clause in clauses:
         paths = _clause_paths(clause)
-        if paths and paths not in out:
+        if paths:
             out.append(paths)
     return out
 

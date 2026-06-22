@@ -98,10 +98,18 @@ def test_scope_sets_mixed_strings_and_clauses():
     assert scope_sets(["a", ["b", "c"]]) == [["a"], ["b", "c"]]
 
 
-def test_scope_sets_dedup_preserves_order():
+def test_scope_sets_dedups_paths_within_a_clause_preserving_order():
+    assert scope_sets([["org/acme", "team/eng", "org/acme"]]) == [
+        ["org/acme", "team/eng"],
+    ]
+
+
+def test_scope_sets_keeps_duplicate_clauses():
+    # Cross-clause duplicates pass through; the server dedups by content hash.
     assert scope_sets(["org/acme", "team/eng", "org/acme"]) == [
         ["org/acme"],
         ["team/eng"],
+        ["org/acme"],
     ]
 
 
