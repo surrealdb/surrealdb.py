@@ -129,3 +129,25 @@ class Range:
         if isinstance(other, Range):
             return self.begin == other.begin and self.end == other.end
         return False
+
+    def __str__(self) -> str:
+        """
+        Renders the range as valid SurrealQL range syntax, e.g. ``1..10``,
+        ``1..=10``, ``1>..10`` or ``1>..=10`` depending on the bound types.
+
+        Returns:
+            The SurrealQL string representation of the range.
+        """
+        begin_value = (
+            self.begin.value
+            if isinstance(self.begin, (BoundIncluded, BoundExcluded))
+            else ""
+        )
+        end_value = (
+            self.end.value
+            if isinstance(self.end, (BoundIncluded, BoundExcluded))
+            else ""
+        )
+        marker = ">" if isinstance(self.begin, BoundExcluded) else ""
+        suffix = "=" if isinstance(self.end, BoundIncluded) else ""
+        return f"{begin_value}{marker}..{suffix}{end_value}"
