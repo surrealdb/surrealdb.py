@@ -92,6 +92,7 @@ class QueryDetailKind:
     NOT_EXECUTED = "NotExecuted"
     TIMED_OUT = "TimedOut"
     CANCELLED = "Cancelled"
+    TRANSACTION_CONFLICT = "TransactionConflict"
 
 
 class SerializationDetailKind:
@@ -274,6 +275,10 @@ class QueryError(ServerError):
     @property
     def is_cancelled(self) -> bool:
         return _detail_kind(self.details) == "Cancelled"
+
+    @property
+    def is_transaction_conflict(self) -> bool:
+        return _detail_kind(self.details) == "TransactionConflict"
 
     @property
     def timeout(self) -> dict[str, Any] | None:
