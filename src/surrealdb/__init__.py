@@ -61,7 +61,7 @@ from surrealdb.data.types.datetime import Datetime
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.geometry import Geometry
 from surrealdb.data.types.range import Range
-from surrealdb.data.types.record_id import RecordID
+from surrealdb.data.types.record_id import RecordID, escape_identifier
 from surrealdb.data.types.table import Table
 from surrealdb.spectron import (
     AsyncSpectron,
@@ -137,6 +137,7 @@ __all__ = [
     "Datetime",
     "Tokens",
     "Value",
+    "escape_identifier",
     # Errors – base
     "SurrealError",
     # Errors – server

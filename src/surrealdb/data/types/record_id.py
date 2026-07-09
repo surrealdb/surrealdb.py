@@ -53,9 +53,33 @@ class RecordID:
     """
     An identifier of the record. This class houses the ID of the row, and the table name.
 
+    To reference a record in a query, prefer binding the whole ``RecordID``
+    as a query variable — it is transmitted as a typed CBOR value, never
+    concatenated into query text, so no escaping (or injection) is possible
+    by construction::
+
+        db.query("RELATE $a->owns->$b;", vars={"a": alice, "b": record_id})
+        db.query("SELECT * FROM $rid;", vars={"rid": record_id})
+
+    Note that only the *whole* record id can be bound: SurrealQL does not
+    accept a variable as just the id part of a record-id literal
+    (``company:$id`` is a parse error).
+
     Attributes:
-        table_name: The table name associated with the record ID
-        identifier: The ID of the row
+        table_name: The table name associated with the record ID. This is
+            the raw, unescaped table name.
+        id: The ID of the row. This is the raw, unescaped value — for a
+            string id, it does **not** carry the quoting information
+            SurrealQL needs to tell it apart from a numeric id of the same
+            digits (e.g. the string id ``"231"`` vs. the numeric id
+            ``231``). Interpolating ``.id`` directly into a hand-built
+            query string is unsafe for exactly this reason. When you cannot
+            bind (composing query *text*, e.g. for logs, migration files,
+            or an ``INSERT`` target — the one spot where the server rejects
+            parameter binding), use ``str(record_id)`` for the full
+            ``table:id`` target, or
+            ``surrealdb.escape_identifier(str(record_id.id))`` for just the
+            escaped id fragment.
     """
 
     def __init__(self, table_name: str, identifier: Any) -> None:
