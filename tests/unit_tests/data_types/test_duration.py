@@ -164,9 +164,35 @@ def test_duration_to_string() -> None:
     assert Duration(604800 * 1_000_000_000).to_string() == "1w"
     assert Duration(365 * 86400 * 1_000_000_000).to_string() == "1y"
 
-    # Test compound duration (should use largest unit)
+    # Test compound duration (should combine all non-zero units, largest first)
     compound = Duration(3600 * 1_000_000_000 + 30 * 60 * 1_000_000_000)  # 1h30m
-    assert compound.to_string() == "1h"
+    assert compound.to_string() == "1h30m"
+
+
+def test_duration_to_string_compound_all_units() -> None:
+    """Test Duration.to_string with every unit non-zero, matching the parser's
+    own compound format (see test_duration_parse_str_compound) and the
+    server/JS/PHP SDKs' Display implementations."""
+    elapsed = (
+        (1 * 365 * 86400 * 1_000_000_000)
+        + (2 * 604800 * 1_000_000_000)
+        + (3 * 86400 * 1_000_000_000)
+        + (4 * 3600 * 1_000_000_000)
+        + (5 * 60 * 1_000_000_000)
+        + (6 * 1_000_000_000)
+        + (7 * 1_000_000)
+        + (8 * 1_000)
+        + 9
+    )
+    assert Duration(elapsed).to_string() == "1y2w3d4h5m6s7ms8us9ns"
+
+
+def test_duration_str() -> None:
+    """Test Duration.__str__ produces the same SurrealQL literal as to_string()."""
+    assert str(Duration(0)) == "0ns"
+    assert str(Duration(1000)) == "1us"
+    compound = Duration(3600 * 1_000_000_000 + 30 * 60 * 1_000_000_000)  # 1h30m
+    assert str(compound) == compound.to_string() == "1h30m"
 
 
 def test_duration_to_compact() -> None:

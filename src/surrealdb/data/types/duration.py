@@ -91,11 +91,23 @@ class Duration:
         return self.elapsed // UNITS["y"]
 
     def to_string(self) -> str:
+        result = ""
+        remaining = self.elapsed
         for unit in ["y", "w", "d", "h", "m", "s", "ms", "us", "ns"]:
-            value = self.elapsed // UNITS[unit]
-            if value > 0:
-                return f"{value}{unit}"
-        return "0ns"
+            amount, remaining = divmod(remaining, UNITS[unit])
+            if amount > 0:
+                result += f"{amount}{unit}"
+        return result or "0ns"
+
+    def __str__(self) -> str:
+        """
+        Renders the duration as valid SurrealQL compact-unit syntax, e.g.
+        ``1h30m`` or ``500ms``. Equivalent to :meth:`to_string`.
+
+        Returns:
+            The SurrealQL string representation of the duration.
+        """
+        return self.to_string()
 
     def to_compact(self) -> list[int]:
         return [self.elapsed // UNITS["s"]]
