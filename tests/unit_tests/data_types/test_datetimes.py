@@ -18,6 +18,18 @@ def test_datetime_encode() -> None:
     assert len(encoded) > 0
 
 
+def test_datetime_str() -> None:
+    """Test Datetime.__str__ produces a valid SurrealQL datetime literal (d"...")."""
+    dt = Datetime("2025-02-03T12:30:45.123456Z")
+    assert str(dt) == 'd"2025-02-03T12:30:45.123456Z"'
+
+
+def test_datetime_str_escapes_double_quotes() -> None:
+    """Test Datetime.__str__ escapes an embedded double quote in the ISO string."""
+    dt = Datetime('2025-02-03T12:30:45"Z')
+    assert str(dt) == 'd"2025-02-03T12:30:45\\"Z"'
+
+
 def test_datetime_custom_encode() -> None:
     """Test encoding Datetime wrapper to CBOR bytes."""
     iso_datetime = "2025-02-03T12:30:45.123456Z"

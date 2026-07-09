@@ -8,6 +8,33 @@ from typing import Any
 from surrealdb.errors import InvalidGeometryError
 
 
+def _coord_pair(point: "GeometryPoint") -> str:
+    """``[longitude, latitude]`` — a point's coordinates as they appear nested
+    inside another geometry's ``coordinates`` array (as opposed to a
+    standalone point, which renders as ``(longitude, latitude)``)."""
+    return f"[{point.longitude}, {point.latitude}]"
+
+
+def _points_coords(points: "list[GeometryPoint]") -> str:
+    return "[" + ", ".join(_coord_pair(p) for p in points) + "]"
+
+
+def _line_coords(line: "GeometryLine") -> str:
+    return _points_coords(line.geometry_points)
+
+
+def _rings_coords(lines: "list[GeometryLine]") -> str:
+    return "[" + ", ".join(_line_coords(line) for line in lines) + "]"
+
+
+def _polygon_coords(polygon: "GeometryPolygon") -> str:
+    return _rings_coords(polygon.geometry_lines)
+
+
+def _polygons_coords(polygons: "list[GeometryPolygon]") -> str:
+    return "[" + ", ".join(_polygon_coords(p) for p in polygons) + "]"
+
+
 class Geometry:
     """
     Base class for all geometry types. Provides the interface for retrieving coordinates
@@ -43,6 +70,15 @@ class GeometryPoint(Geometry):
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(longitude={self.longitude}, latitude={self.latitude})"
+
+    def __str__(self) -> str:
+        """
+        Renders the point as a valid SurrealQL geometry literal, e.g. ``(1.23, 4.56)``.
+
+        Returns:
+            The SurrealQL string representation of the point.
+        """
+        return f"({self.longitude}, {self.latitude})"
 
     def get_coordinates(self) -> tuple[float, float]:
         """
@@ -102,6 +138,16 @@ class GeometryLine(Geometry):
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({', '.join(repr(geo) for geo in self.geometry_points)})"
+
+    def __str__(self) -> str:
+        """
+        Renders the line as a valid SurrealQL geometry literal, e.g.
+        ``{ type: 'LineString', coordinates: [[0.0, 0.0], [1.0, 1.0]] }``.
+
+        Returns:
+            The SurrealQL string representation of the line.
+        """
+        return f"{{ type: 'LineString', coordinates: {_line_coords(self)} }}"
 
     @staticmethod
     def parse_coordinates(coordinates: list[tuple[float, float]]) -> "GeometryLine":
@@ -227,6 +273,16 @@ class GeometryPolygon(Geometry):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({', '.join(repr(geo) for geo in self.geometry_lines)})"
 
+    def __str__(self) -> str:
+        """
+        Renders the polygon as a valid SurrealQL geometry literal, e.g.
+        ``{ type: 'Polygon', coordinates: [[[0.0, 0.0], ...]] }``.
+
+        Returns:
+            The SurrealQL string representation of the polygon.
+        """
+        return f"{{ type: 'Polygon', coordinates: {_polygon_coords(self)} }}"
+
     @staticmethod
     def parse_coordinates(
         coordinates: list[list[tuple[float, float]]],
@@ -281,6 +337,16 @@ class GeometryMultiPoint(Geometry):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({', '.join(repr(geo) for geo in self.geometry_points)})"
 
+    def __str__(self) -> str:
+        """
+        Renders the multi-point as a valid SurrealQL geometry literal, e.g.
+        ``{ type: 'MultiPoint', coordinates: [[1.0, 2.0], [3.0, 4.0]] }``.
+
+        Returns:
+            The SurrealQL string representation of the multi-point.
+        """
+        return f"{{ type: 'MultiPoint', coordinates: {_points_coords(self.geometry_points)} }}"
+
     @staticmethod
     def parse_coordinates(
         coordinates: list[tuple[float, float]],
@@ -329,6 +395,16 @@ class GeometryMultiLine(Geometry):
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({', '.join(repr(geo) for geo in self.geometry_lines)})"
+
+    def __str__(self) -> str:
+        """
+        Renders the multi-line as a valid SurrealQL geometry literal, e.g.
+        ``{ type: 'MultiLineString', coordinates: [[[0.0, 0.0], ...]] }``.
+
+        Returns:
+            The SurrealQL string representation of the multi-line.
+        """
+        return f"{{ type: 'MultiLineString', coordinates: {_rings_coords(self.geometry_lines)} }}"
 
     @staticmethod
     def parse_coordinates(
@@ -379,6 +455,16 @@ class GeometryMultiPolygon(Geometry):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({', '.join(repr(geo) for geo in self.geometry_polygons)})"
 
+    def __str__(self) -> str:
+        """
+        Renders the multi-polygon as a valid SurrealQL geometry literal, e.g.
+        ``{ type: 'MultiPolygon', coordinates: [[[[0.0, 0.0], ...]]] }``.
+
+        Returns:
+            The SurrealQL string representation of the multi-polygon.
+        """
+        return f"{{ type: 'MultiPolygon', coordinates: {_polygons_coords(self.geometry_polygons)} }}"
+
     @staticmethod
     def parse_coordinates(
         coordinates: list[list[list[tuple[float, float]]]],
@@ -418,6 +504,18 @@ class GeometryCollection:
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({', '.join(repr(geo) for geo in self.geometries)})"
+
+    def __str__(self) -> str:
+        """
+        Renders the collection as a valid SurrealQL geometry literal, e.g.
+        ``{ type: 'GeometryCollection', geometries: [(1.0, 2.0), ...] }``.
+        Nested geometries render recursively via their own ``__str__``.
+
+        Returns:
+            The SurrealQL string representation of the collection.
+        """
+        geometries = ", ".join(str(geo) for geo in self.geometries)
+        return f"{{ type: 'GeometryCollection', geometries: [{geometries}] }}"
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, GeometryCollection):
