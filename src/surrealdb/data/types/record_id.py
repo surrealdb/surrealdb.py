@@ -54,8 +54,19 @@ class RecordID:
     An identifier of the record. This class houses the ID of the row, and the table name.
 
     Attributes:
-        table_name: The table name associated with the record ID
-        identifier: The ID of the row
+        table_name: The table name associated with the record ID. This is
+            the raw, unescaped table name.
+        id: The ID of the row. This is the raw, unescaped value — for a
+            string id, it does **not** carry the quoting information
+            SurrealQL needs to tell it apart from a numeric id of the same
+            digits (e.g. the string id ``"231"`` vs. the numeric id
+            ``231``). Interpolating ``.id`` directly into a hand-built
+            query string is unsafe for exactly this reason; use
+            ``str(record_id)`` for the full ``table:id`` target, or
+            ``surrealdb.escape_identifier(str(record_id.id))`` if you only
+            need the escaped id fragment (e.g. combined with a table name
+            you already have on hand, as when building a ``RELATE``
+            target).
     """
 
     def __init__(self, table_name: str, identifier: Any) -> None:

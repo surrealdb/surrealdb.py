@@ -179,6 +179,28 @@ def test_record_id_str_with_angle_bracket_escape() -> None:
     assert str(record_id) == "test:⟨foo\\⟩bar⟩"
 
 
+def test_record_id_direct_id_interpolation_is_unsafe() -> None:
+    """Pin the exact footgun reported in issue #265: ``.id`` is the raw,
+    unescaped identifier — interpolating it directly into a hand-built query
+    string silently changes its meaning for id values that need quoting
+    (e.g. an all-digit string id, which is otherwise indistinguishable from
+    a numeric id). ``str(record_id)`` (or ``escape_identifier`` on just the
+    id part) is the documented-safe way to embed a record id in SurrealQL
+    text; this test exists so nobody "fixes" this by silently changing
+    ``.id`` itself, which would break the documented, tested contract that
+    ``.id`` returns the identifier's plain Python value.
+    """
+    record_id = RecordID("company", "231")
+
+    # The unsafe pattern from #265: f"...company:{record_id.id}..."
+    unsafe = f"company:{record_id.id}"
+    assert unsafe == "company:231"  # indistinguishable from the numeric id 231
+
+    # The documented-safe patterns:
+    assert str(record_id) == "company:⟨231⟩"
+    assert f"company:{escape_identifier(str(record_id.id))}" == "company:⟨231⟩"
+
+
 def test_record_id_equality() -> None:
     """Test RecordID equality."""
     record_id1 = RecordID("users", "john")
@@ -446,6 +468,63 @@ async def test_create_with_object_record_id(surrealdb_connection: Any) -> None:
     assert result["id"] == record_id
     assert result["settings"]["active"] is True
     assert result["settings"]["marketing"] is True
+
+
+@pytest.mark.asyncio
+async def test_relate_with_manually_quoted_numeric_string_id(
+    surrealdb_connection: Any,
+) -> None:
+    """Regression test for issue #265: relating to a record whose id is a
+    backtick-quoted numeric string (e.g. ``company:`231` ``, a *string* id
+    "231", distinct from the *numeric* id 231) must target that exact
+    record when the relation is built with the documented-safe pattern
+    (``escape_identifier`` on the id part, or ``str(record_id)`` for the
+    full target) — not by interpolating ``record_id.id`` directly, which
+    silently drops the quoting and targets the wrong (non-existent)
+    numeric-id record instead.
+    """
+    await surrealdb_connection.query(
+        "DEFINE TABLE IF NOT EXISTS owns TYPE RELATION IN record_id_tests OUT record_id_tests;"
+    )
+    await surrealdb_connection.query("CREATE record_id_tests:alice SET name = 'Alice';")
+    await surrealdb_connection.query(
+        "CREATE record_id_tests:`231` SET name = 'Quoted Company';"
+    )
+
+    quoted_res = await surrealdb_connection.query(
+        "SELECT * FROM record_id_tests:`231`;"
+    )
+    quoted_id = quoted_res[0]["id"]
+    assert quoted_id.id == "231"  # the raw id is the plain string "231"
+
+    # The documented-safe pattern: escape just the id part before
+    # interpolating it next to a literal table name.
+    safe_query = f"RELATE record_id_tests:alice->owns->record_id_tests:{escape_identifier(str(quoted_id.id))};"
+    await surrealdb_connection.query(safe_query)
+
+    result = await surrealdb_connection.query(
+        "SELECT ->owns->record_id_tests.* AS companies FROM record_id_tests:alice;"
+    )
+    companies = result[0]["companies"]
+    assert len(companies) == 1
+    assert companies[0]["name"] == "Quoted Company"
+
+
+class TestEscapeIdentifierTopLevelExport:
+    """escape_identifier is exported from the top-level ``surrealdb``
+    package (not just ``surrealdb.data.types.record_id``) so callers who
+    need to safely interpolate just an id/table fragment into hand-built
+    SurrealQL — e.g. when combining a known table name with an existing
+    RecordID's ``.id`` — have a supported, discoverable way to do it,
+    instead of reaching into an internal module path or (as in #265)
+    interpolating the raw, unescaped value directly.
+    """
+
+    def test_importable_from_top_level_package(self) -> None:
+        import surrealdb
+
+        assert surrealdb.escape_identifier is escape_identifier
+        assert surrealdb.escape_identifier("231") == "⟨231⟩"
 
 
 # ---------------------------------------------------------------------------
