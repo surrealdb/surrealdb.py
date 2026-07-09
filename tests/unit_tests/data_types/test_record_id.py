@@ -184,11 +184,13 @@ def test_record_id_direct_id_interpolation_is_unsafe() -> None:
     unescaped identifier — interpolating it directly into a hand-built query
     string silently changes its meaning for id values that need quoting
     (e.g. an all-digit string id, which is otherwise indistinguishable from
-    a numeric id). ``str(record_id)`` (or ``escape_identifier`` on just the
-    id part) is the documented-safe way to embed a record id in SurrealQL
-    text; this test exists so nobody "fixes" this by silently changing
-    ``.id`` itself, which would break the documented, tested contract that
-    ``.id`` returns the identifier's plain Python value.
+    a numeric id). The recommended fix is to bind the whole ``RecordID`` as
+    a query variable (no query-text composition at all — see
+    ``test_relate_with_bound_record_id_vars``); when text must be composed,
+    ``str(record_id)`` (or ``escape_identifier`` on just the id part) is
+    the safe rendering. This test exists so nobody "fixes" this by silently
+    changing ``.id`` itself, which would break the documented, tested
+    contract that ``.id`` returns the identifier's plain Python value.
     """
     record_id = RecordID("company", "231")
 
@@ -196,7 +198,7 @@ def test_record_id_direct_id_interpolation_is_unsafe() -> None:
     unsafe = f"company:{record_id.id}"
     assert unsafe == "company:231"  # indistinguishable from the numeric id 231
 
-    # The documented-safe patterns:
+    # The safe text renderings, for when binding isn't possible:
     assert str(record_id) == "company:⟨231⟩"
     assert f"company:{escape_identifier(str(record_id.id))}" == "company:⟨231⟩"
 
@@ -471,21 +473,21 @@ async def test_create_with_object_record_id(surrealdb_connection: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_relate_with_manually_quoted_numeric_string_id(
+async def test_relate_with_bound_record_id_vars(
     surrealdb_connection: Any,
 ) -> None:
-    """Regression test for issue #265: relating to a record whose id is a
-    backtick-quoted numeric string (e.g. ``company:`231` ``, a *string* id
-    "231", distinct from the *numeric* id 231) must target that exact
-    record when the relation is built with the documented-safe pattern
-    (``escape_identifier`` on the id part, or ``str(record_id)`` for the
-    full target) — not by interpolating ``record_id.id`` directly, which
-    silently drops the quoting and targets the wrong (non-existent)
-    numeric-id record instead.
+    """Regression test for issue #265 — the recommended pattern: bind the
+    whole ``RecordID`` as a query variable. The value travels as a typed
+    CBOR record id, never as query text, so quoting/escaping cannot be
+    dropped and injection is impossible by construction. Note SurrealQL
+    only accepts a variable as the *whole* record id — a variable as just
+    the id part of a literal (``record_id_tests:$id``) is a parse error,
+    which is why the fallback text patterns below exist at all.
     """
     await surrealdb_connection.query(
         "DEFINE TABLE IF NOT EXISTS owns TYPE RELATION IN record_id_tests OUT record_id_tests;"
     )
+    await surrealdb_connection.query("DELETE owns;")
     await surrealdb_connection.query("CREATE record_id_tests:alice SET name = 'Alice';")
     await surrealdb_connection.query(
         "CREATE record_id_tests:`231` SET name = 'Quoted Company';"
@@ -497,7 +499,77 @@ async def test_relate_with_manually_quoted_numeric_string_id(
     quoted_id = quoted_res[0]["id"]
     assert quoted_id.id == "231"  # the raw id is the plain string "231"
 
-    # The documented-safe pattern: escape just the id part before
+    await surrealdb_connection.query(
+        "RELATE $a->owns->$b;",
+        vars={"a": RecordID("record_id_tests", "alice"), "b": quoted_id},
+    )
+
+    result = await surrealdb_connection.query(
+        "SELECT ->owns->record_id_tests.* AS companies FROM record_id_tests:alice;"
+    )
+    companies = result[0]["companies"]
+    assert len(companies) == 1
+    assert companies[0]["name"] == "Quoted Company"
+
+
+@pytest.mark.asyncio
+async def test_bound_record_id_var_treats_hostile_id_as_inert_data(
+    surrealdb_connection: Any,
+) -> None:
+    """A RecordID whose id contains SurrealQL syntax is inert when bound as
+    a variable — it stays a plain string id and cannot alter the statement.
+    (With interpolation this exact value would need careful escaping to not
+    change the query's meaning; with binding the question never arises.)
+    """
+    await surrealdb_connection.query(
+        "DEFINE TABLE IF NOT EXISTS owns TYPE RELATION IN record_id_tests OUT record_id_tests;"
+    )
+    await surrealdb_connection.query("DELETE owns;")
+    await surrealdb_connection.query("CREATE record_id_tests:alice SET name = 'Alice';")
+
+    hostile = RecordID("record_id_tests", "x; REMOVE TABLE record_id_tests; --")
+    res = await surrealdb_connection.query(
+        "RELATE $a->owns->$b;",
+        vars={"a": RecordID("record_id_tests", "alice"), "b": hostile},
+    )
+    assert res[0]["out"] == hostile  # edge points at the literal string id
+
+    # The table (and alice) survived: the hostile id was data, not syntax.
+    alive = await surrealdb_connection.query("SELECT * FROM record_id_tests:alice;")
+    assert alive[0]["name"] == "Alice"
+
+
+@pytest.mark.asyncio
+async def test_relate_with_manually_quoted_numeric_string_id(
+    surrealdb_connection: Any,
+) -> None:
+    """Regression test for issue #265 — the fallback pattern, for contexts
+    where the query *text* itself must be composed and binding is not an
+    option: relating to a record whose id is a backtick-quoted numeric
+    string (e.g. ``company:`231` ``, a *string* id "231", distinct from the
+    *numeric* id 231) must target that exact record when the relation is
+    built with ``escape_identifier`` on the id part (or ``str(record_id)``
+    for the full target) — not by interpolating ``record_id.id`` directly,
+    which silently drops the quoting and targets the wrong (non-existent)
+    numeric-id record instead. Prefer binding the whole RecordID as a var
+    (see ``test_relate_with_bound_record_id_vars``) whenever possible.
+    """
+    await surrealdb_connection.query(
+        "DEFINE TABLE IF NOT EXISTS owns TYPE RELATION IN record_id_tests OUT record_id_tests;"
+    )
+    await surrealdb_connection.query("DELETE owns;")
+    await surrealdb_connection.query("CREATE record_id_tests:alice SET name = 'Alice';")
+    await surrealdb_connection.query(
+        "CREATE record_id_tests:`231` SET name = 'Quoted Company';"
+    )
+
+    quoted_res = await surrealdb_connection.query(
+        "SELECT * FROM record_id_tests:`231`;"
+    )
+    quoted_id = quoted_res[0]["id"]
+    assert quoted_id.id == "231"  # the raw id is the plain string "231"
+
+    # The fallback text pattern: escape just the id part before
     # interpolating it next to a literal table name.
     safe_query = f"RELATE record_id_tests:alice->owns->record_id_tests:{escape_identifier(str(quoted_id.id))};"
     await surrealdb_connection.query(safe_query)
@@ -512,12 +584,14 @@ async def test_relate_with_manually_quoted_numeric_string_id(
 
 class TestEscapeIdentifierTopLevelExport:
     """escape_identifier is exported from the top-level ``surrealdb``
-    package (not just ``surrealdb.data.types.record_id``) so callers who
-    need to safely interpolate just an id/table fragment into hand-built
-    SurrealQL — e.g. when combining a known table name with an existing
-    RecordID's ``.id`` — have a supported, discoverable way to do it,
-    instead of reaching into an internal module path or (as in #265)
-    interpolating the raw, unescaped value directly.
+    package (not just ``surrealdb.data.types.record_id``) for the cases
+    where query *text* must be composed and parameter binding is not
+    available — most notably ``INSERT`` targets, which the server refuses
+    to accept as a bound parameter (the SDK's own insert builder uses this
+    same helper for exactly that), plus logs/codegen/migration files.
+    For live queries, prefer binding the whole ``RecordID`` as a variable
+    instead of interpolating anything (see
+    ``test_relate_with_bound_record_id_vars``).
     """
 
     def test_importable_from_top_level_package(self) -> None:
