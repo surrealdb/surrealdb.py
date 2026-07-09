@@ -304,6 +304,107 @@ def test_geometry_collection_roundtrip() -> None:
     assert isinstance(decoded, GeometryCollection)
 
 
+# Unit tests for __str__ (SurrealQL rendering)
+#
+# Point renders as a bare `(x, y)` literal; every other geometry renders as a
+# GeoJSON-shaped object literal with single-quoted `type` and recursively
+# formatted `coordinates`/`geometries` — matching the server's own
+# `Display`/`ToSql` for `Geometry` (surrealdb/types/src/value/geometry.rs).
+def test_geometry_point_str() -> None:
+    assert str(GeometryPoint(1.23, 4.56)) == "(1.23, 4.56)"
+    assert str(GeometryPoint(0.0, 0.0)) == "(0.0, 0.0)"
+
+
+def test_geometry_line_str() -> None:
+    line = GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0))
+    assert str(line) == "{ type: 'LineString', coordinates: [[0.0, 0.0], [1.0, 1.0]] }"
+
+
+def test_geometry_polygon_str() -> None:
+    exterior = GeometryLine(
+        GeometryPoint(0.0, 0.0),
+        GeometryPoint(1.0, 0.0),
+        GeometryPoint(1.0, 1.0),
+        GeometryPoint(0.0, 0.0),  # Close the ring
+    )
+    polygon = GeometryPolygon(exterior)
+    assert str(polygon) == (
+        "{ type: 'Polygon', coordinates: "
+        "[[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]] }"
+    )
+
+
+def test_geometry_polygon_with_hole_str() -> None:
+    exterior = GeometryLine(
+        GeometryPoint(0.0, 0.0),
+        GeometryPoint(10.0, 0.0),
+        GeometryPoint(10.0, 10.0),
+        GeometryPoint(0.0, 10.0),
+        GeometryPoint(0.0, 0.0),  # Close the ring
+    )
+    hole = GeometryLine(
+        GeometryPoint(2.0, 2.0),
+        GeometryPoint(4.0, 2.0),
+        GeometryPoint(4.0, 4.0),
+        GeometryPoint(2.0, 4.0),
+        GeometryPoint(2.0, 2.0),  # Close the ring
+    )
+    polygon = GeometryPolygon(exterior, hole)
+    assert str(polygon) == (
+        "{ type: 'Polygon', coordinates: "
+        "[[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0], [0.0, 0.0]], "
+        "[[2.0, 2.0], [4.0, 2.0], [4.0, 4.0], [2.0, 4.0], [2.0, 2.0]]] }"
+    )
+
+
+def test_geometry_multipoint_str() -> None:
+    mp = GeometryMultiPoint(GeometryPoint(1.0, 2.0), GeometryPoint(3.0, 4.0))
+    assert str(mp) == "{ type: 'MultiPoint', coordinates: [[1.0, 2.0], [3.0, 4.0]] }"
+
+
+def test_geometry_multiline_str() -> None:
+    ml = GeometryMultiLine(
+        GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
+        GeometryLine(GeometryPoint(2.0, 2.0), GeometryPoint(3.0, 3.0)),
+    )
+    assert str(ml) == (
+        "{ type: 'MultiLineString', coordinates: "
+        "[[[0.0, 0.0], [1.0, 1.0]], [[2.0, 2.0], [3.0, 3.0]]] }"
+    )
+
+
+def test_geometry_multipolygon_str() -> None:
+    exterior1 = GeometryLine(
+        GeometryPoint(0.0, 0.0),
+        GeometryPoint(1.0, 0.0),
+        GeometryPoint(1.0, 1.0),
+        GeometryPoint(0.0, 0.0),  # Close the ring
+    )
+    exterior2 = GeometryLine(
+        GeometryPoint(5.0, 5.0),
+        GeometryPoint(6.0, 5.0),
+        GeometryPoint(6.0, 6.0),
+        GeometryPoint(5.0, 5.0),  # Close the ring
+    )
+    mp = GeometryMultiPolygon(GeometryPolygon(exterior1), GeometryPolygon(exterior2))
+    assert str(mp) == (
+        "{ type: 'MultiPolygon', coordinates: "
+        "[[[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]], "
+        "[[[5.0, 5.0], [6.0, 5.0], [6.0, 6.0], [5.0, 5.0]]]] }"
+    )
+
+
+def test_geometry_collection_str() -> None:
+    gc = GeometryCollection(
+        GeometryPoint(1.1, 2.2),
+        GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
+    )
+    assert str(gc) == (
+        "{ type: 'GeometryCollection', geometries: "
+        "[(1.1, 2.2), { type: 'LineString', coordinates: [[0.0, 0.0], [1.0, 1.0]] }] }"
+    )
+
+
 @pytest.fixture
 async def surrealdb_connection():  # type: ignore[misc]
     url = "ws://localhost:8000/rpc"
