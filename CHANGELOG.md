@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [3.0.0]
+## [3.0.0-alpha.1] - 2026-07-13
 ### Added
 - New awaitable / lazy CRUD builder pattern. `create`, `update`, `upsert`, `delete`, and `insert` now return a builder that exposes chainable clause methods (`.content` / `.replace` / `.merge` / `.patch`) and is awaitable (async) or auto-executing on consumption (sync).
 - `.insert(table, data, relation=True)` (and the equivalent `.insert(table).relation().content(data)` chain) replaces the standalone `insert_relation` method.
@@ -126,8 +126,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial stable release of the SurrealDB Python client.
 
-[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0...HEAD
-[3.0.0]: https://github.com/surrealdb/surrealdb.py/compare/v2.0.1...v3.0.0
+[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-alpha.1...HEAD
+[3.0.0-alpha.1]: https://github.com/surrealdb/surrealdb.py/compare/v2.0.1...v3.0.0-alpha.1
 [2.0.1]: https://github.com/surrealdb/surrealdb.py/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/surrealdb/surrealdb.py/compare/v2.0.0-alpha.1...v2.0.0
 [2.0.0-alpha.1]: https://github.com/surrealdb/surrealdb.py/compare/v1.0.8...v2.0.0-alpha.1
