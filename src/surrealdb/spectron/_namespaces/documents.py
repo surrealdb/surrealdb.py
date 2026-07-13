@@ -17,6 +17,7 @@ from surrealdb.spectron._models import (
     RecomputeLinksResponse,
     UploadResponse,
 )
+from surrealdb.spectron._scope import ScopeArg, scope_sets
 from surrealdb.spectron._transport import (
     AsyncTransport,
     BlockingTransport,
@@ -43,14 +44,23 @@ def _resolve_file(
     return path, filename
 
 
-def _metadata_fields(title: str | None, source: str | None) -> dict[str, Any]:
+def _metadata_fields(
+    title: str | None, source: str | None, scopes: ScopeArg = None
+) -> dict[str, Any]:
     """Build the `metadata` multipart part the upload handler reads.
 
-    Only `title` and `source` are surfaced here; the file's MIME type rides on
-    the `file` part's Content-Type, which the server prefers when the metadata
-    part omits `mime_type`.
+    `title`, `source`, and the write `scopes` (a DNF scope selector) are
+    surfaced here; the file's MIME type rides on the `file` part's Content-Type,
+    which the server prefers when the metadata part omits `mime_type`. Each path
+    in every scope clause must lie within the key's `memory:write` region;
+    omitting `scopes` falls back to the whole write region.
     """
-    metadata = {k: v for k, v in (("title", title), ("source", source)) if v}
+    metadata: dict[str, Any] = {
+        k: v for k, v in (("title", title), ("source", source)) if v
+    }
+    clauses = scope_sets(scopes)
+    if clauses:
+        metadata["scopes"] = clauses
     return {"metadata": metadata} if metadata else {}
 
 
@@ -163,6 +173,7 @@ class BlockingDocuments:
         filename: str | None = None,
         title: str | None = None,
         source: str | None = None,
+        scopes: ScopeArg = None,
         on_behalf_of: str | None = None,
     ) -> UploadResponse:
         file_payload, resolved_filename = _resolve_file(path, filename)
@@ -170,7 +181,7 @@ class BlockingDocuments:
             file=file_payload,
             filename=resolved_filename,
             mime_type=content_type,
-            fields=_metadata_fields(title, source),
+            fields=_metadata_fields(title, source, scopes),
         )
         result = self._transport.request(
             "POST",
@@ -378,6 +389,7 @@ class AsyncDocuments:
         filename: str | None = None,
         title: str | None = None,
         source: str | None = None,
+        scopes: ScopeArg = None,
         on_behalf_of: str | None = None,
     ) -> UploadResponse:
         file_payload, resolved_filename = _resolve_file(path, filename)
@@ -385,7 +397,7 @@ class AsyncDocuments:
             file=file_payload,
             filename=resolved_filename,
             mime_type=content_type,
-            fields=_metadata_fields(title, source),
+            fields=_metadata_fields(title, source, scopes),
         )
         result = await self._transport.request(
             "POST",

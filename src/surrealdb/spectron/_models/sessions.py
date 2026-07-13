@@ -9,7 +9,7 @@ from surrealdb.spectron._models.common import Model
 class Session(Model):
     id: str
     created_at: str = ""
-    scope: list[str] = field(default_factory=list)
+    scopes: list[list[str]] = field(default_factory=list)
 
 
 @dataclass(slots=True)

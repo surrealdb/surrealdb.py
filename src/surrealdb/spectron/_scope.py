@@ -1,33 +1,53 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 
-ScopeArg = str | Mapping[str, str] | Sequence[str] | Sequence[tuple[str, str]] | None
+ScopeClause = str | Sequence[str]
+ScopeArg = str | Sequence[ScopeClause] | None
 
 
-def scope_paths(scope: ScopeArg) -> list[str]:
-    """Normalise a scope argument to the wire `ScopeSet` (a list of `key=value`
-    path strings).
+def _clause_paths(clause: ScopeClause) -> list[str]:
+    """Normalise a single clause to its ordered, de-duplicated AND-set of
+    slash-path strings.
 
-    Accepts a single path string, a mapping, a sequence of path strings, or a
-    sequence of `(key, value)` tuples. All forms collapse to `key=value`
-    strings; ready-made path strings (including nested `team=acme/project=x`)
-    pass through untouched.
+    A string is a single path; a sequence of strings passes through. Empty
+    paths are dropped.
+    """
+    raw = [clause] if isinstance(clause, str) else list(clause)
+    out: list[str] = []
+    for path in raw:
+        if path and path not in out:
+            out.append(path)
+    return out
+
+
+def scope_sets(scope: ScopeArg) -> list[list[str]]:
+    """Normalise a scope argument to a DNF (disjunctive-normal-form) selector:
+    an OR of conjunctive clauses, each clause an AND of slash-path strings.
+
+    The wire shape is `array<array<string>>`. The outer list is an OR across
+    clauses, each inner list an AND of scope paths within a clause:
+
+    - A bare string is one singleton clause: `"team/eng"` -> `[["team/eng"]]`.
+    - A flat list of strings is an OR of singletons:
+      `["a", "b"]` -> `[["a"], ["b"]]`.
+    - A nested list is an AND clause: `[["a", "b"]]` -> `[["a", "b"]]`.
+    - The two forms mix: `["a", ["b", "c"]]` -> `[["a"], ["b", "c"]]`.
+
+    `None` or empty yields `[]` (the key's default write region). Within a
+    clause, empty paths are dropped and paths are de-duplicated preserving order;
+    a clause that ends up empty is dropped. Duplicate clauses are left as-is (the
+    server dedups co-owned rows by content hash).
     """
     if scope is None:
         return []
-    if isinstance(scope, str):
-        return [scope]
-    if isinstance(scope, Mapping):
-        return [f"{k}={v}" for k, v in scope.items()]
-    paths: list[str] = []
-    for item in scope:
-        if isinstance(item, str):
-            paths.append(item)
-        else:
-            key, value = item
-            paths.append(f"{key}={value}")
-    return paths
+    clauses: Sequence[ScopeClause] = [scope] if isinstance(scope, str) else scope
+    out: list[list[str]] = []
+    for clause in clauses:
+        paths = _clause_paths(clause)
+        if paths:
+            out.append(paths)
+    return out
 
 
-__all__ = ["ScopeArg", "scope_paths"]
+__all__ = ["ScopeArg", "scope_sets"]

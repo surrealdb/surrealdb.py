@@ -11,6 +11,7 @@ from surrealdb.spectron import (
 )
 from surrealdb.spectron._errors import error_for_status, error_from_response
 from surrealdb.spectron._retry import backoff_schedule, should_retry
+from surrealdb.spectron._scope import scope_sets
 
 
 @pytest.mark.parametrize(
@@ -74,3 +75,44 @@ def test_idempotent_post_can_retry():
     assert should_retry("POST", 503, 0, 3, idempotent=True) is True
     assert should_retry("POST", None, 0, 3, idempotent=True) is True
     assert should_retry("POST", 404, 0, 3, idempotent=True) is False
+
+
+def test_scope_sets_none_and_empty():
+    assert scope_sets(None) == []
+    assert scope_sets([]) == []
+
+
+def test_scope_sets_string_is_singleton_clause():
+    assert scope_sets("team/eng") == [["team/eng"]]
+
+
+def test_scope_sets_flat_list_is_or_of_singletons():
+    assert scope_sets(["a", "b"]) == [["a"], ["b"]]
+
+
+def test_scope_sets_nested_list_is_and_clause():
+    assert scope_sets([["a", "b"]]) == [["a", "b"]]
+
+
+def test_scope_sets_mixed_strings_and_clauses():
+    assert scope_sets(["a", ["b", "c"]]) == [["a"], ["b", "c"]]
+
+
+def test_scope_sets_dedups_paths_within_a_clause_preserving_order():
+    assert scope_sets([["org/acme", "team/eng", "org/acme"]]) == [
+        ["org/acme", "team/eng"],
+    ]
+
+
+def test_scope_sets_keeps_duplicate_clauses():
+    # Cross-clause duplicates pass through; the server dedups by content hash.
+    assert scope_sets(["org/acme", "team/eng", "org/acme"]) == [
+        ["org/acme"],
+        ["team/eng"],
+        ["org/acme"],
+    ]
+
+
+def test_scope_sets_drops_empty_paths_and_clauses():
+    assert scope_sets(["", "team/eng"]) == [["team/eng"]]
+    assert scope_sets([[], ["team/eng"]]) == [["team/eng"]]
