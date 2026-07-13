@@ -195,7 +195,9 @@ jobs:
   release-python:
     name: Release surrealdb to PyPI
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.event.action == 'published'
+    if: >-
+      (github.event_name == 'release' && github.event.action == 'published') ||
+      github.event_name == 'workflow_dispatch'
     needs: [build-python]
     environment:
       name: pypi
@@ -217,7 +219,9 @@ jobs:
   release-embedded:
     name: Release surrealdb-embedded to PyPI
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.event.action == 'published'
+    if: >-
+      (github.event_name == 'release' && github.event.action == 'published') ||
+      github.event_name == 'workflow_dispatch'
     needs: [linux, linux-aarch64, macos, windows, sdist]
     environment:
       name: pypi-embedded
