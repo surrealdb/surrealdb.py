@@ -54,7 +54,7 @@ async def test_async_namespaces_and_bare_array():
     with aioresponses() as m:
         m.post(
             f"{ROOT}/sessions",
-            payload={"id": "sess:1", "createdAt": "t", "scope": []},
+            payload={"id": "sess:1", "createdAt": "t", "scopes": []},
             status=201,
         )
         m.get(
