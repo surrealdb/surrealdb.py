@@ -71,6 +71,13 @@ test = [
 # uv
 # --------------------------------------------------
 
+# aioresponses (test-only) cannot construct aiohttp>=3.14's ClientResponse,
+# which now requires a `stream_writer` argument. Cap aiohttp during resolution
+# until aioresponses supports 3.14. This is a resolution-only constraint and is
+# NOT published in the wheel metadata, so downstream users keep `aiohttp>=3.13.4`.
+[tool.uv]
+constraint-dependencies = ["aiohttp<3.14"]
+
 [tool.uv.sources]
 surrealdb-embedded = { path = "embedded", editable = true }
 
