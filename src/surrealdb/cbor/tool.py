@@ -153,7 +153,7 @@ def main() -> None:
     parser.add_argument(
         "infiles",
         nargs="*",
-        type=argparse.FileType("rb"),
+        type=argparse.FileType("rb"),  # pyright: ignore[reportDeprecated]
         help="Collection of CBOR files to process or - for stdin",
     )
     parser.add_argument(
