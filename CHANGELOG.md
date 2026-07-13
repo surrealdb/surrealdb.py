@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `query().into(cls)` maps the N statement results positionally onto a dataclass (or any class accepting keyword arguments by parameter order).
 - New v3 API tests under `tests/unit_tests/connections/v3_api/` covering builder clauses, multi-statement query results, `.into()`, and `run()`.
 - Public re-exports of the builder classes (`AsyncCrudBuilder`, `AsyncInsertBuilder`, `AsyncQueryBuilder`, `AsyncQueryIntoBuilder`, and the `Sync*` equivalents) from `surrealdb`.
+- `QueryError.is_transaction_conflict` property, detecting `TRANSACTION_CONFLICT` query errors (#268).
+- `__str__` methods for `Datetime`, `Duration`, and all 7 `Geometry` classes, rendering SurrealQL literals instead of Python's default `repr` (#270).
+- Export `escape_identifier` from the top-level `surrealdb` package and document `RecordID.id`'s raw (unescaped) contract (#271).
 
 ### Changed
 - **Breaking:** `query()` now surfaces every statement result. A single-statement query returns the result `Value`; a multi-statement query (or `BEGIN ... COMMIT` block) returns `tuple[Value, ...]`. Fixes the silent-discard behaviour reported in [#232](https://github.com/surrealdb/surrealdb.py/issues/232).
@@ -30,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Restored the record-level auth fallback in `BlockingHttpSurrealConnection.info()`. When the server returned `No result found` from `INFO` (record-auth scenario), the SDK now retries via `SELECT * FROM $auth` and returns the resolved record; the fallback was inadvertently dead in the initial v3 builder migration because `query()` returns a lazy builder.
+- `Range.__str__` producing invalid SurrealQL (#269).
 
 ## [2.0.1]
 ### Changed
