@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0-alpha.4] - 2026-07-16
+
+### Security
+- Bump the embedded extension's `pyo3` to 0.29.0 (and `pyo3-async-runtimes` to 0.29), fixing a high-severity out-of-bounds read in `PyList` / `PyTuple` iterators and a missing `Sync` bound on `PyCFunction::new_closure`. Affects the native `surrealdb-embedded` package only; no API changes.
+
 ## [3.0.0-alpha.3] - 2026-07-16
 
 Follow-up to `3.0.0-alpha.2`: adds the `into=` row-model API, fixes session authentication propagation, aligns `delete` with `select`, and re-enables mypy type-checking on the test suite.
@@ -174,7 +179,8 @@ Follow-up to `3.0.0-alpha.1` that finalises the v3 API surface and fixes a batch
 ### Added
 - Initial stable release of the SurrealDB Python client.
 
-[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-alpha.3...HEAD
+[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-alpha.4...HEAD
+[3.0.0-alpha.4]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-alpha.3...v3.0.0-alpha.4
 [3.0.0-alpha.3]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-alpha.2...v3.0.0-alpha.3
 [3.0.0-alpha.2]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-alpha.1...v3.0.0-alpha.2
 [3.0.0-alpha.1]: https://github.com/surrealdb/surrealdb.py/compare/v2.0.1...v3.0.0-alpha.1
