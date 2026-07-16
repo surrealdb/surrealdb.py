@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "surrealdb-embedded"
-version = "3.0.0-alpha.1"
+version = "3.0.0-alpha.2"
 description = "SurrealDB embedded database extension for the surrealdb Python SDK"
 authors = [{ name = "SurrealDB" }]
 license = "Apache-2.0"
