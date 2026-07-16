@@ -1,3 +1,4 @@
+from collections.abc import AsyncGenerator
 from typing import Any
 
 import pytest
@@ -14,6 +15,7 @@ from surrealdb.data.types.geometry import (
     GeometryPolygon,
 )
 from surrealdb.errors import InvalidGeometryError
+from surrealdb.types import Value
 
 
 # Unit tests for encoding - GeometryPoint
@@ -486,11 +488,11 @@ def test_geometry_collection_str() -> None:
 
 
 @pytest.fixture
-async def surrealdb_connection():  # type: ignore[misc]
+async def surrealdb_connection() -> AsyncGenerator[AsyncWsSurrealConnection, None]:
     url = "ws://localhost:8000/rpc"
     password = "root"
     username = "root"
-    vars_params = {"username": username, "password": password}
+    vars_params: dict[str, Value] = {"username": username, "password": password}
     database_name = "test_db"
     namespace = "test_ns"
     connection = AsyncWsSurrealConnection(url)
@@ -539,8 +541,8 @@ async def test_geometry_point_db_insert_and_retrieve(surrealdb_connection: Any) 
 
 @pytest.mark.asyncio
 async def test_geometry_point_db_insert_and_retrieve_as_python_object(
-    surrealdb_connection,
-):
+    surrealdb_connection: Any,
+) -> None:
     my_point = GeometryPoint(1.23, 4.56)
     create_query = """
         CREATE geometry_tests:obj_point1 SET geometry = $geo;
@@ -612,8 +614,8 @@ async def test_geometry_line_db_insert_and_retrieve(surrealdb_connection: Any) -
 
 @pytest.mark.asyncio
 async def test_geometry_line_db_insert_and_retrieve_as_python_object(
-    surrealdb_connection,
-):
+    surrealdb_connection: Any,
+) -> None:
     line = GeometryLine(
         GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0), GeometryPoint(2.0, 2.0)
     )
@@ -864,8 +866,8 @@ async def test_geometry_multipoint_db_insert_and_retrieve(
 
 @pytest.mark.asyncio
 async def test_geometry_multipoint_db_insert_and_retrieve_as_python_object(
-    surrealdb_connection,
-):
+    surrealdb_connection: Any,
+) -> None:
     mp = GeometryMultiPoint(
         GeometryPoint(1.0, 2.0),
         GeometryPoint(3.0, 4.0),
@@ -921,8 +923,8 @@ async def test_geometry_multiline_db_insert_and_retrieve(
 
 @pytest.mark.asyncio
 async def test_geometry_multiline_db_insert_and_retrieve_as_python_object(
-    surrealdb_connection,
-):
+    surrealdb_connection: Any,
+) -> None:
     line1 = GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0))
     line2 = GeometryLine(GeometryPoint(2.0, 2.0), GeometryPoint(3.0, 3.0))
     ml = GeometryMultiLine(line1, line2)
@@ -1069,8 +1071,8 @@ async def test_geometry_collection_db_insert_and_retrieve(
 
 @pytest.mark.asyncio
 async def test_geometry_collection_db_insert_and_retrieve_as_python_object(
-    surrealdb_connection,
-):
+    surrealdb_connection: Any,
+) -> None:
     pt = GeometryPoint(1.1, 2.2)
     ln = GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0))
     gc = GeometryCollection(pt, ln)

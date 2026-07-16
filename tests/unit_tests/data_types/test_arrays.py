@@ -1,15 +1,17 @@
+from collections.abc import AsyncGenerator
 from typing import Any
 
 import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data import cbor
+from surrealdb.types import Value
 
 
 # Unit tests for encoding
 def test_empty_array_encode() -> None:
     """Test encoding empty array to CBOR bytes."""
-    test_array = []
+    test_array: list[Any] = []
     encoded = cbor.encode(test_array)
     assert isinstance(encoded, bytes)
 
@@ -39,7 +41,7 @@ def test_nested_array_encode() -> None:
 # Unit tests for decoding
 def test_empty_array_decode() -> None:
     """Test decoding CBOR bytes to empty array."""
-    test_array = []
+    test_array: list[Any] = []
     encoded = cbor.encode(test_array)
     decoded = cbor.decode(encoded)
     assert isinstance(decoded, list)
@@ -128,11 +130,11 @@ def test_large_array_roundtrip() -> None:
 
 # Database fixture
 @pytest.fixture
-async def surrealdb_connection():  # type: ignore[misc]
+async def surrealdb_connection() -> AsyncGenerator[AsyncWsSurrealConnection, None]:
     url = "ws://localhost:8000/rpc"
     password = "root"
     username = "root"
-    vars_params = {"username": username, "password": password}
+    vars_params: dict[str, Value] = {"username": username, "password": password}
     database_name = "test_db"
     namespace = "test_ns"
     connection = AsyncWsSurrealConnection(url)
@@ -149,7 +151,7 @@ async def surrealdb_connection():  # type: ignore[misc]
 @pytest.mark.asyncio
 async def test_empty_array_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending empty array to SurrealDB and receiving it back."""
-    test_array = []
+    test_array: list[Any] = []
     await surrealdb_connection.query(
         "CREATE array_tests:test1 SET value = $val;",
         vars={"val": test_array},
