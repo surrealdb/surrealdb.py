@@ -304,6 +304,86 @@ def test_geometry_collection_roundtrip() -> None:
     assert isinstance(decoded, GeometryCollection)
 
 
+# Unit tests for hashability (issue #9)
+#
+# Each geometry defines __eq__, so it must define a consistent __hash__ to
+# remain usable as a dict key / set member. Coordinates are nested lists, so
+# __hash__ converts them to tuples.
+def test_geometry_point_hashable() -> None:
+    point1 = GeometryPoint(1.23, 4.56)
+    point2 = GeometryPoint(1.23, 4.56)
+    assert hash(point1) == hash(point2)
+    assert point1 in {point2}
+    assert {point1: "value"}[GeometryPoint(1.23, 4.56)] == "value"
+
+
+def test_geometry_line_hashable() -> None:
+    line1 = GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0))
+    line2 = GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0))
+    assert hash(line1) == hash(line2)
+    assert line1 in {line2}
+
+
+def test_geometry_polygon_hashable() -> None:
+    def make_polygon() -> GeometryPolygon:
+        return GeometryPolygon(
+            GeometryLine(
+                GeometryPoint(0.0, 0.0),
+                GeometryPoint(1.0, 0.0),
+                GeometryPoint(1.0, 1.0),
+                GeometryPoint(0.0, 0.0),
+            )
+        )
+
+    assert hash(make_polygon()) == hash(make_polygon())
+    assert make_polygon() in {make_polygon()}
+
+
+def test_geometry_multipoint_hashable() -> None:
+    mp1 = GeometryMultiPoint(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0))
+    mp2 = GeometryMultiPoint(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0))
+    assert hash(mp1) == hash(mp2)
+    assert mp1 in {mp2}
+
+
+def test_geometry_multiline_hashable() -> None:
+    def make_multiline() -> GeometryMultiLine:
+        return GeometryMultiLine(
+            GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0))
+        )
+
+    assert hash(make_multiline()) == hash(make_multiline())
+    assert make_multiline() in {make_multiline()}
+
+
+def test_geometry_multipolygon_hashable() -> None:
+    def make_multipolygon() -> GeometryMultiPolygon:
+        return GeometryMultiPolygon(
+            GeometryPolygon(
+                GeometryLine(
+                    GeometryPoint(0.0, 0.0),
+                    GeometryPoint(1.0, 0.0),
+                    GeometryPoint(1.0, 1.0),
+                    GeometryPoint(0.0, 0.0),
+                )
+            )
+        )
+
+    assert hash(make_multipolygon()) == hash(make_multipolygon())
+    assert make_multipolygon() in {make_multipolygon()}
+
+
+def test_geometry_collection_hashable() -> None:
+    def make_collection() -> GeometryCollection:
+        return GeometryCollection(
+            GeometryPoint(1.0, 2.0),
+            GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0)),
+        )
+
+    assert hash(make_collection()) == hash(make_collection())
+    assert make_collection() in {make_collection()}
+
+
 # Unit tests for __str__ (SurrealQL rendering)
 #
 # Point renders as a bare `(x, y)` literal; every other geometry renders as a

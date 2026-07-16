@@ -54,7 +54,7 @@ class GraphQLOptions:
 
 def table_or_record_id(resource_str: str) -> Table | RecordID:
     if ":" in resource_str:
-        table, record_id = resource_str.split(":")
+        table, record_id = resource_str.split(":", 1)
         if len(table) == 0 or len(record_id) == 0:
             raise InvalidTableError("invalid table or record id string")
         return RecordID(table, record_id)

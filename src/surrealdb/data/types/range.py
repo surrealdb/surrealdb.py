@@ -30,6 +30,13 @@ class Bound:
         """
         return isinstance(other, Bound)
 
+    def __hash__(self) -> int:
+        """
+        Returns a hash of the bound. All plain (unbounded) ``Bound``
+        instances compare equal, so they share a constant hash.
+        """
+        return hash(type(self).__name__)
+
 
 @dataclass
 class BoundIncluded(Bound):
@@ -65,6 +72,9 @@ class BoundIncluded(Bound):
         if isinstance(other, BoundIncluded):
             return self.value == other.value
         return False
+
+    def __hash__(self) -> int:
+        return hash(("BoundIncluded", self.value))
 
 
 @dataclass
@@ -102,6 +112,9 @@ class BoundExcluded(Bound):
             return self.value == other.value
         return False
 
+    def __hash__(self) -> int:
+        return hash(("BoundExcluded", self.value))
+
 
 @dataclass
 class Range:
@@ -129,6 +142,9 @@ class Range:
         if isinstance(other, Range):
             return self.begin == other.begin and self.end == other.end
         return False
+
+    def __hash__(self) -> int:
+        return hash((self.begin, self.end))
 
     def __str__(self) -> str:
         """

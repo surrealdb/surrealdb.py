@@ -87,6 +87,34 @@ def test_range_equality() -> None:
     assert range1 != range4
 
 
+# Unit tests for hashability (issue #9)
+def test_bound_included_hashable() -> None:
+    """BoundIncluded defines __eq__, so it must be hashable and consistent."""
+    bound1 = BoundIncluded(5)
+    bound2 = BoundIncluded(5)
+    assert hash(bound1) == hash(bound2)
+    assert bound1 in {bound2}
+    assert {bound1: "value"}[BoundIncluded(5)] == "value"
+
+
+def test_bound_excluded_hashable() -> None:
+    """BoundExcluded defines __eq__, so it must be hashable and consistent."""
+    bound1 = BoundExcluded(5)
+    bound2 = BoundExcluded(5)
+    assert hash(bound1) == hash(bound2)
+    assert bound1 in {bound2}
+    assert {bound1: "value"}[BoundExcluded(5)] == "value"
+
+
+def test_range_hashable() -> None:
+    """Range defines __eq__, so it must be hashable and consistent."""
+    range1 = Range(BoundIncluded(1), BoundExcluded(10))
+    range2 = Range(BoundIncluded(1), BoundExcluded(10))
+    assert hash(range1) == hash(range2)
+    assert range1 in {range2}
+    assert {range1: "value"}[Range(BoundIncluded(1), BoundExcluded(10))] == "value"
+
+
 # Unit tests for __str__ (SurrealQL rendering)
 def test_range_str_inclusive_inclusive() -> None:
     """Test rendering an inclusive/inclusive range as SurrealQL."""
