@@ -24,10 +24,15 @@ from surrealdb.connections.utils_mixin import UtilsMixin
 from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
-from surrealdb.errors import UnexpectedResponseError
+from surrealdb.errors import ConnectionUnavailableError, UnexpectedResponseError
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 from surrealdb.types import Tokens, Value, parse_auth_result
+
+# Sentinel pushed into a live-query queue to tell a ``subscribe_live`` consumer
+# to stop iterating. Emitted by ``kill`` (the query was killed) and ``close``
+# (the connection is going away) so waiting consumers do not leak.
+_LIVE_QUEUE_CLOSED = object()
 
 
 class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
@@ -56,7 +61,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.loop: AbstractEventLoop | None = None
         self.qry: dict[str, Future[dict[str, Any]]] = {}
         self.recv_task: Task[None] | None = None
-        self.live_queues: dict[str, list[Queue[dict[str, Any]]]] = {}
+        # Queues hold live-notification dicts plus the ``_LIVE_QUEUE_CLOSED``
+        # sentinel, so the value type is ``Any``.
+        self.live_queues: dict[str, list[Queue[Any]]] = {}
 
     async def _recv_task(self) -> None:
         assert self.socket
@@ -82,10 +89,17 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             logger = logging.getLogger(__name__)
             logger.debug(f"Unexpected error in _recv_task: {e}")
         finally:
-            # Clean up any pending futures
+            # Fail any pending futures with a typed error so awaiting callers
+            # surface ``ConnectionUnavailableError`` instead of a raw
+            # ``CancelledError`` when the socket closes mid-request.
             for fut in self.qry.values():
                 if not fut.done():
-                    fut.cancel()
+                    fut.set_exception(
+                        ConnectionUnavailableError(
+                            "WebSocket connection closed before a response "
+                            "was received."
+                        )
+                    )
             self.qry.clear()
 
     async def _send(
@@ -108,7 +122,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             # wait for response
             response = await fut
         finally:
-            del self.qry[query_id]
+            # ``_recv_task`` clears ``self.qry`` when the socket closes, so the
+            # key may already be gone; ``pop`` avoids a spurious ``KeyError``.
+            self.qry.pop(query_id, None)
 
         if bypass is False:
             self.check_response_for_error(response, process)
@@ -615,8 +631,14 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def subscribe_live(
         self, query_uuid: str | UUID
     ) -> AsyncGenerator[dict[str, Value], None]:
-        """Return an async generator of notifications for a live query id."""
-        result_queue: Queue[dict[str, Any]] = Queue()
+        """Return an async generator yielding notifications for a live query.
+
+        Multiple consumers may subscribe to the same ``query_uuid``; each gets
+        its own queue and receives every notification. The generator ends
+        (a plain ``return``, so ``async for`` stops cleanly) when the query is
+        killed via :meth:`kill` or the connection is closed via :meth:`close`.
+        """
+        result_queue: Queue[Any] = Queue()
         suid = str(query_uuid)
 
         # Auto-register if not already registered
@@ -626,9 +648,20 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.live_queues[suid].append(result_queue)
 
         async def _iter() -> AsyncGenerator[dict[str, Any], None]:
-            while True:
-                ret = await result_queue.get()
-                yield ret
+            try:
+                while True:
+                    ret = await result_queue.get()
+                    # ``kill`` / ``close`` push this sentinel to wake waiting
+                    # consumers so the generator terminates instead of leaking.
+                    if ret is _LIVE_QUEUE_CLOSED:
+                        return
+                    yield ret
+            finally:
+                # Deregister this consumer's queue when the generator is
+                # closed (consumer break, GC, kill, or close).
+                queues = self.live_queues.get(suid)
+                if queues is not None and result_queue in queues:
+                    queues.remove(result_queue)
 
         return _iter()
 
@@ -643,7 +676,12 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.KILL, **kwargs)
         await self._send(message, "kill")
-        self.live_queues.pop(str(query_uuid), None)
+        # Wake any subscribers so their generators terminate, then drop the
+        # registration. Each ``_iter`` removes its own queue in its ``finally``.
+        suid = str(query_uuid)
+        for queue in self.live_queues.get(suid, []):
+            queue.put_nowait(_LIVE_QUEUE_CLOSED)
+        self.live_queues.pop(suid, None)
 
     async def attach(self) -> UUID:
         session_id = UUID(str(uuid.uuid4()))
@@ -698,6 +736,12 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         return AsyncSurrealSession(self, session_id)
 
     async def close(self) -> None:
+        # Wake any live subscribers so their generators terminate instead of
+        # waiting forever on a socket that is about to disappear.
+        for queues in self.live_queues.values():
+            for queue in queues:
+                queue.put_nowait(_LIVE_QUEUE_CLOSED)
+
         # Cancel the receive task first
         if self.recv_task and not self.recv_task.done():
             self.recv_task.cancel()

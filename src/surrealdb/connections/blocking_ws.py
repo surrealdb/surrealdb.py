@@ -2,6 +2,8 @@
 A basic blocking connection to a SurrealDB instance.
 """
 
+import logging
+import queue
 import threading
 import uuid
 from collections.abc import Generator
@@ -11,6 +13,7 @@ from uuid import UUID
 
 import websockets
 import websockets.sync.client as ws_sync
+from websockets.exceptions import ConnectionClosed, WebSocketException
 from websockets.sync.client import ClientConnection
 
 from surrealdb.connections.builders import (
@@ -32,6 +35,12 @@ from surrealdb.errors import (
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 from surrealdb.types import Tokens, Value, parse_auth_result
+
+logger = logging.getLogger(__name__)
+
+# How long ``subscribe_live`` blocks on a single socket read before releasing
+# the connection lock so concurrent RPCs on the same socket can proceed.
+_LIVE_RECV_TIMEOUT = 0.1
 
 
 class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
@@ -61,6 +70,11 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.token: str | None = None
         self.socket: ClientConnection | None = None
         self._lock: threading.Lock = threading.Lock()
+        # Live-query notification queues keyed by live-query UUID string. A
+        # ``subscribe_live`` consumer registers its own queue here so that
+        # notifications ``_send`` reads while correlating an RPC reply are
+        # handed off instead of being lost.
+        self.live_queues: dict[str, list[queue.Queue[dict[str, Any]]]] = {}
 
     def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
@@ -75,22 +89,45 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                     subprotocols=[websockets.Subprotocol("cbor")],
                 )
             self.socket.send(message.WS_CBOR_DESCRIPTOR)
-            data = self.socket.recv()
-            response = decode(data if isinstance(data, bytes) else data.encode())
 
-            # Verify the response ID matches the request ID
-            # Note: Some responses (like live query notifications) may not have an "id" field
-            # Only verify if the response has an id field
-            response_id = response.get("id")
-            if response_id is not None and response_id != message.id:
-                raise UnexpectedResponseError(
-                    f"Response ID mismatch: expected {message.id}, got {response_id}. "
-                    "This should not happen with proper locking."
-                )
+            # Correlate the reply to this request. Live-query notifications
+            # carry no top-level "id" and may be delivered between our send and
+            # our reply; route those to their live queue (if a subscriber is
+            # registered, else drop) and keep reading, so a notification is
+            # never returned as an RPC result.
+            while True:
+                data = self.socket.recv()
+                response = decode(data if isinstance(data, bytes) else data.encode())
+                response_id = response.get("id")
+                if response_id is None:
+                    self._route_live_notification(response)
+                    continue
+                if response_id != message.id:
+                    raise UnexpectedResponseError(
+                        f"Response ID mismatch: expected {message.id}, got "
+                        f"{response_id}. This should not happen with proper "
+                        "locking."
+                    )
+                break
 
             if bypass is False:
                 self.check_response_for_error(response, process)
             return response
+
+    def _route_live_notification(self, response: dict[str, Any]) -> None:
+        """Hand a live-query notification off to its subscriber queue.
+
+        Notifications for a live query with no registered ``subscribe_live``
+        queue are dropped. Called while holding ``self._lock``.
+        """
+        result = response.get("result")
+        if not isinstance(result, dict):
+            return
+        live_id = result.get("id")
+        if live_id is None:
+            return
+        for notifications in self.live_queues.get(str(live_id), []):
+            notifications.put(result)
 
     def authenticate(self, token: str, session_id: UUID | None = None) -> None:
         kwargs: dict[str, Any] = {"token": token}
@@ -659,33 +696,81 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self,
         query_uuid: str | UUID,
     ) -> Generator[dict[str, Value], None, None]:
-        """Yield live-query notifications for the given live query id."""
+        """Yield notifications for a live query over this WebSocket.
+
+        The blocking client has no background reader, so a single socket is
+        shared between RPC calls and live subscriptions. Notifications are read
+        under the connection lock with a short timeout, so concurrent RPCs from
+        other threads stay responsive. Any notification that :meth:`_send`
+        reads while correlating an RPC reply is routed here instead of lost.
+
+        .. note::
+            Only a single ``subscribe_live`` generator should be driven per
+            connection at a time; running several concurrently on one socket is
+            not supported (use separate connections instead).
+
+        :raises ConnectionUnavailableError: if the socket is not established or
+            is closed while the subscription is active.
+        """
+        suid = str(query_uuid)
+        notifications: queue.Queue[dict[str, Any]] = queue.Queue()
+        self.live_queues.setdefault(suid, []).append(notifications)
         try:
             while True:
+                # Hand back anything ``_send`` routed to us while correlating.
                 try:
+                    yield notifications.get_nowait()
+                    continue
+                except queue.Empty:
+                    pass
+
+                # Otherwise read from the socket ourselves, under the lock so
+                # we never race ``_send``. The short timeout releases the lock
+                # between reads to keep concurrent RPCs responsive.
+                with self._lock:
                     if self.socket is None:
                         raise ConnectionUnavailableError(
                             "WebSocket connection is not established."
                         )
+                    try:
+                        data = self.socket.recv(timeout=_LIVE_RECV_TIMEOUT)
+                    except TimeoutError:
+                        data = None
+                    except (ConnectionClosed, WebSocketException) as exc:
+                        logger.warning("Live subscription socket closed: %s", exc)
+                        raise ConnectionUnavailableError(
+                            "WebSocket connection closed while subscribed to a "
+                            "live query."
+                        ) from exc
 
-                    # Receive a message from the WebSocket
-                    data = self.socket.recv()
-                    response = decode(
-                        data if isinstance(data, bytes) else data.encode()
-                    )
+                if data is None:
+                    continue
 
-                    notif = response.get("result")
-                    if isinstance(notif, dict):
-                        nid = notif.get("id")
-                        if nid is not None and str(nid) == str(query_uuid):
-                            yield notif
-                except Exception as e:
-                    # Handle WebSocket or decoding errors
-                    print("Error in live subscription:", e)
-                    yield {"error": str(e)}
-        except GeneratorExit:
-            # Handle generator exit gracefully if needed
-            pass
+                response = decode(data if isinstance(data, bytes) else data.encode())
+                if response.get("id") is not None:
+                    # Stray RPC reply with no waiter (should not happen while
+                    # the lock serialises RPCs); ignore rather than yield it.
+                    continue
+                result = response.get("result")
+                if not isinstance(result, dict):
+                    continue
+                rid = result.get("id")
+                if rid is None:
+                    continue
+                if str(rid) == suid:
+                    yield result
+                else:
+                    # Notification for a different live query; route it onward.
+                    for other in self.live_queues.get(str(rid), []):
+                        other.put(result)
+        finally:
+            # Deregister this consumer's queue on exit (consumer break, GC,
+            # error, or connection close).
+            queues = self.live_queues.get(suid)
+            if queues is not None and notifications in queues:
+                queues.remove(notifications)
+            if queues is not None and not queues:
+                self.live_queues.pop(suid, None)
 
     def attach(self) -> UUID:
         session_id = UUID(str(uuid.uuid4()))
