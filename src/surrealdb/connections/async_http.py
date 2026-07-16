@@ -304,7 +304,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         )
 
     @overload
-    def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def delete(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
@@ -312,9 +312,10 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     def delete(self, record: RecordIdType) -> AsyncCrudBuilder[Any]:
         """Delete records; returns an awaitable builder.
 
-        A ``RecordID`` (or ``"table:id"``) resolves to the deleted record; a
-        ``Table`` (or bare name) to the list of deleted records. ``DELETE`` has
-        no clause methods.
+        A ``RecordID`` (or ``"table:id"``) resolves to the deleted record, or
+        ``None`` when no record was deleted (matching select); a ``Table`` (or
+        bare name) to the list of deleted records. ``DELETE`` has no clause
+        methods.
         """
         return AsyncCrudBuilder(
             executor=self._make_executor(),

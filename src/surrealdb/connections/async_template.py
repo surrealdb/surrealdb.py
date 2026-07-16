@@ -233,7 +233,7 @@ class AsyncTemplate:
         raise NotImplementedError(f"upsert not implemented for: {self}")
 
     @overload
-    def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def delete(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
@@ -241,7 +241,10 @@ class AsyncTemplate:
     def delete(self, record: RecordIdType) -> AsyncCrudBuilder[Any]:
         """Delete records.
 
-        Returns an awaitable builder. ``DELETE`` does not support clause methods.
+        Returns an awaitable builder. A ``RecordID`` (or ``"table:id"``)
+        resolves to the deleted record, or ``None`` when no record was
+        deleted (matching select); a ``Table`` (or bare name) resolves to the
+        list of deleted records. ``DELETE`` does not support clause methods.
         """
         raise NotImplementedError(f"delete not implemented for: {self}")
 

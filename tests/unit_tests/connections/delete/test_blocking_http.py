@@ -72,6 +72,26 @@ def test_delete_record_id(
     assert outcome == []
 
 
+def test_delete_record_id_absent(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+) -> None:
+    blocking_http_connection.query("DELETE user;").execute()
+
+    # Deleting an absent record returns None (matching select).
+    outcome = blocking_http_connection.delete(RecordID("user", "missing"))
+    assert outcome is None
+
+
+def test_delete_string_absent(
+    blocking_http_connection: BlockingHttpSurrealConnection,
+) -> None:
+    blocking_http_connection.query("DELETE user;").execute()
+
+    # Deleting an absent "table:id" record returns None (matching select).
+    outcome = blocking_http_connection.delete("user:missing")
+    assert outcome is None
+
+
 def test_delete_table(blocking_http_connection: BlockingHttpSurrealConnection) -> None:
     blocking_http_connection.query("DELETE user;").execute()
     blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()

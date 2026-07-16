@@ -149,13 +149,18 @@ class SyncTemplate:
         raise NotImplementedError(f"upsert not implemented for: {self}")
 
     @overload
-    def delete(self, record: RecordID) -> dict[str, Value]: ...
+    def delete(self, record: RecordID) -> dict[str, Value] | None: ...
     @overload
     def delete(self, record: Table) -> list[Value]: ...
     @overload
     def delete(self, record: str) -> Value: ...
     def delete(self, record: RecordIdType) -> Value:
-        """Delete records eagerly and return the deleted record(s)."""
+        """Delete records eagerly and return the deleted record(s).
+
+        A ``RecordID`` (or ``"table:id"``) returns the deleted record, or
+        ``None`` when no record was deleted (matching select); a ``Table``
+        (or bare name) returns the list of deleted records.
+        """
         raise NotImplementedError(f"delete not implemented for: {self}")
 
     def info(self) -> Value:
