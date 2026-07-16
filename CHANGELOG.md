@@ -6,11 +6,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [3.0.0-alpha.2] - 2026-07-16
+
+Follow-up to `3.0.0-alpha.1` that finalises the v3 API surface and fixes a batch of issues found in review.
+
+### Added
+- `RecordID`, `Table`, `Duration`, `Range`, and all `Geometry` types are now hashable, so they can be used as `dict` keys and `set` members.
+- `Datetime` gained `__eq__`, `__repr__`, and `__hash__`, making it a proper value type.
+- `.first()` on the query builder (async coroutine / sync method), returning the first statement's result, or `None` when there are no statements.
+- Exported `AsyncSurrealConnection` and `BlockingSurrealConnection` union type aliases for annotating connection instances.
+- HTTP connections implement `close()` and reuse a single pooled session across requests within a context manager.
+- README "Live queries" section documenting `live()` / `subscribe_live()` / `kill()`, and a pointer to the Spectron client.
+- Docstrings on the public CRUD / query / select / live-query methods.
+
 ### Changed
-- **Breaking:** Sync `select`, `create`, `update`, `upsert`, `delete`, and `insert` are now **eager**. `select(...)` and `delete(...)` run immediately and return the result. `create/update/upsert(record, data)` and `insert(table, data)` run immediately and return the result; the no-data form (`create(record)`, `insert(table)`) returns a builder whose clause methods (`.content` / `.replace` / `.merge` / `.patch` / `.relation`) and `.execute()` run the operation and return the result. Fixes the magic-consumption footguns (`bool()`, `==`, indexing, `__getattr__`) reported in findings #1/#4.
+- **Breaking:** Sync `select`, `create`, `update`, `upsert`, `delete`, and `insert` are now **eager**. `select(...)` and `delete(...)` run immediately and return the result. `create/update/upsert(record, data)` and `insert(table, data)` run immediately and return the result; the no-data form (`create(record)`, `insert(table)`) returns a builder whose clause methods (`.content` / `.replace` / `.merge` / `.patch` / `.relation`) and `.execute()` run the operation and return the result. This removes the sync magic-consumption footguns (`bool()`, `==`, indexing, `__getattr__`) present in alpha.1.
 - **Breaking:** Sync builders no longer implement any auto-executing magic methods (`__bool__`, `__eq__`, `__getitem__`, `__iter__`, `__len__`, `__contains__`, `__getattr__`, and the pending-`repr`/`str`). Inspecting a builder never triggers a query or mutation.
-- **Breaking:** `query()` now **always** returns a `list[Value]` (one entry per statement) — even for a single statement — for both async (`await db.query(...)` / `.execute()`) and sync (`.execute()`). This supersedes the earlier "single `Value` for one statement, `tuple` for many" behaviour (finding #2). Added `.first()` (async coroutine / sync method) returning the first statement's result, or `None` when there are no statements.
-- **Breaking:** `select(RecordID)` (or a single `"table:id"` string) now returns `dict[str, Value] | None` (the record, or `None` when it is absent) instead of a single-element list; `select(Table)` (or a bare table name) still returns `list[Value]`. `select()` is now typed via `@overload` on the templates, all four connections, and the session/transaction classes (findings #3/#15).
+- **Breaking:** `query()` now **always** returns a `list[Value]` (one entry per statement) — even for a single statement — for both async (`await db.query(...)` / `.execute()`) and sync (`.execute()`). This supersedes the alpha.1 "single `Value` for one statement, `tuple` for many" behaviour. Use `.first()` for the first statement's result.
+- **Breaking:** `select(RecordID)` (or a single `"table:id"` string) now returns `dict[str, Value] | None` (the record, or `None` when it is absent) instead of a single-element list; `select(Table)` (or a bare table name) still returns `list[Value]`. `select()` is now typed via `@overload` on the templates, all four connections, and the session/transaction classes.
+- **Breaking:** The Spectron client is no longer re-exported from the top-level `surrealdb` package; import it from `surrealdb.spectron` (`from surrealdb.spectron import Spectron, AsyncSpectron`). This keeps the Spectron surface out of the core SDK's stability guarantee.
+- **Breaking:** `query_raw`'s bound-variable keyword argument is renamed from `params` to `vars`, matching `query`.
+- The session and transaction wrapper classes now carry the same CRUD `@overload` precision as the base connection.
+- Python `set` / `frozenset` now encode with SurrealDB's set tag (56) instead of the generic CBOR set tag (258).
+- `info()`'s record-auth `$auth` fallback is now applied consistently across all four transports and keyed on the structured error kind rather than the error-message text.
+
+### Removed
+- **Breaking:** The low-level `TAG_*` CBOR constants are no longer exported from the top-level `surrealdb` package; they remain available at `surrealdb.data.types.constants`.
+- Removed the unused `AsyncSurrealDBMeta` / `BlockingSurrealDBMeta` metaclasses and the dead duplicate `surrealdb.cbor` shim modules (`decoder`, `encoder`, `types`, `tool`).
+
+### Fixed
+- `RecordID.parse` (and `table_or_record_id`) no longer raise on record ids containing `:` (e.g. `"user:complex:id"`).
+- WebSocket live queries: `subscribe_live` generators are woken and cleaned up on `kill()` / `close()` instead of leaking; a mid-request disconnect raises a typed `ConnectionUnavailableError` instead of a bare `KeyError`; the blocking client correlates RPC replies by id (never returning a live notification as an RPC result), reads under its lock, and logs via `logging` instead of `print`.
+- Removed several unreachable encoder branches and a stale decoder `TODO` in the CBOR layer.
 
 ## [3.0.0-alpha.1] - 2026-07-13
 ### Added
@@ -131,7 +159,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial stable release of the SurrealDB Python client.
 
-[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-alpha.1...HEAD
+[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-alpha.2...HEAD
+[3.0.0-alpha.2]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-alpha.1...v3.0.0-alpha.2
 [3.0.0-alpha.1]: https://github.com/surrealdb/surrealdb.py/compare/v2.0.1...v3.0.0-alpha.1
 [2.0.1]: https://github.com/surrealdb/surrealdb.py/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/surrealdb/surrealdb.py/compare/v2.0.0-alpha.1...v2.0.0
