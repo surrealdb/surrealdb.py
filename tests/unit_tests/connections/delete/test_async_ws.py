@@ -14,7 +14,7 @@ def record_id() -> RecordID:
 
 @pytest.mark.asyncio
 async def test_delete_string(
-    async_ws_connection: AsyncWsSurrealConnection, record_id
+    async_ws_connection: AsyncWsSurrealConnection, record_id: RecordID
 ) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query("CREATE user:tobie SET name = 'Tobie';")
@@ -26,13 +26,13 @@ async def test_delete_string(
     assert outcome["name"] == "Tobie"
 
     # Verify the record was actually deleted
-    outcome = await async_ws_connection.query("SELECT * FROM user;").first()
-    assert outcome == []
+    remaining = await async_ws_connection.query("SELECT * FROM user;").first()
+    assert remaining == []
 
 
 @pytest.mark.asyncio
 async def test_delete_record_id(
-    async_ws_connection: AsyncWsSurrealConnection, record_id
+    async_ws_connection: AsyncWsSurrealConnection, record_id: RecordID
 ) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query("CREATE user:tobie SET name = 'Tobie';")
@@ -44,8 +44,8 @@ async def test_delete_record_id(
     assert outcome["name"] == "Tobie"
 
     # Verify the record was actually deleted
-    outcome = await async_ws_connection.query("SELECT * FROM user;").first()
-    assert outcome == []
+    remaining = await async_ws_connection.query("SELECT * FROM user;").first()
+    assert remaining == []
 
 
 @pytest.mark.asyncio
@@ -85,5 +85,5 @@ async def test_delete_table(async_ws_connection: AsyncWsSurrealConnection) -> No
     assert any(record["name"] == "Jaime" for record in outcome)
 
     # Verify all records were deleted
-    outcome = await async_ws_connection.query("SELECT * FROM user;").first()
-    assert outcome == []
+    remaining = await async_ws_connection.query("SELECT * FROM user;").first()
+    assert remaining == []

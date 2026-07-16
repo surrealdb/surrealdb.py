@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -22,12 +22,12 @@ def record_id() -> RecordID:
     return RecordID("user", "tobie")
 
 
-def check_no_change(data: dict[str, Any], record_id) -> None:
+def check_no_change(data: dict[str, Any], record_id: RecordID) -> None:
     assert record_id == data["id"]
     assert "Tobie" == data["name"]
 
 
-def check_change(data: dict[str, Any], record_id) -> None:
+def check_change(data: dict[str, Any], record_id: RecordID) -> None:
     assert record_id == data["id"]
     assert "Jaime" == data["name"]
     # No age field assertion
@@ -36,7 +36,7 @@ def check_change(data: dict[str, Any], record_id) -> None:
 def test_update_string(
     blocking_ws_connection: BlockingWsSurrealConnection,
     update_data: dict[str, Any],
-    record_id,
+    record_id: RecordID,
 ) -> None:
     blocking_ws_connection.query("DELETE user;").execute()
     blocking_ws_connection.query(
@@ -46,14 +46,17 @@ def test_update_string(
     outcome = blocking_ws_connection.update("user:tobie").execute()
     assert outcome["id"] == record_id
     assert outcome["name"] == "Tobie"
-    outcome = blocking_ws_connection.query("SELECT * FROM user;").first()
-    check_no_change(outcome[0], record_id)
+    rows = cast(
+        list[dict[str, Any]],
+        blocking_ws_connection.query("SELECT * FROM user;").first(),
+    )
+    check_no_change(rows[0], record_id)
 
 
 def test_update_string_with_data(
     blocking_ws_connection: BlockingWsSurrealConnection,
     update_data: dict[str, Any],
-    record_id,
+    record_id: RecordID,
 ) -> None:
     blocking_ws_connection.query("DELETE user;").execute()
     blocking_ws_connection.query(
@@ -61,15 +64,18 @@ def test_update_string_with_data(
     ).execute()
 
     first_outcome = blocking_ws_connection.update("user:tobie", update_data)
-    check_change(first_outcome, record_id)
-    outcome = blocking_ws_connection.query("SELECT * FROM user;").first()
-    check_change(outcome[0], record_id)
+    check_change(cast(dict[str, Any], first_outcome), record_id)
+    rows = cast(
+        list[dict[str, Any]],
+        blocking_ws_connection.query("SELECT * FROM user;").first(),
+    )
+    check_change(rows[0], record_id)
 
 
 def test_update_record_id(
     blocking_ws_connection: BlockingWsSurrealConnection,
     update_data: dict[str, Any],
-    record_id,
+    record_id: RecordID,
 ) -> None:
     blocking_ws_connection.query("DELETE user;").execute()
     blocking_ws_connection.query(
@@ -78,14 +84,17 @@ def test_update_record_id(
 
     first_outcome = blocking_ws_connection.update(record_id).execute()
     check_no_change(first_outcome, record_id)
-    outcome = blocking_ws_connection.query("SELECT * FROM user;").first()
-    check_no_change(outcome[0], record_id)
+    rows = cast(
+        list[dict[str, Any]],
+        blocking_ws_connection.query("SELECT * FROM user;").first(),
+    )
+    check_no_change(rows[0], record_id)
 
 
 def test_update_record_id_with_data(
     blocking_ws_connection: BlockingWsSurrealConnection,
     update_data: dict[str, Any],
-    record_id,
+    record_id: RecordID,
 ) -> None:
     blocking_ws_connection.query("DELETE user;").execute()
     blocking_ws_connection.query(
@@ -94,14 +103,17 @@ def test_update_record_id_with_data(
 
     outcome = blocking_ws_connection.update(record_id, update_data)
     check_change(outcome, record_id)
-    outcome = blocking_ws_connection.query("SELECT * FROM user;").first()
-    check_change(outcome[0], record_id)
+    rows = cast(
+        list[dict[str, Any]],
+        blocking_ws_connection.query("SELECT * FROM user;").first(),
+    )
+    check_change(rows[0], record_id)
 
 
 def test_update_table(
     blocking_ws_connection: BlockingWsSurrealConnection,
     update_data: dict[str, Any],
-    record_id,
+    record_id: RecordID,
 ) -> None:
     blocking_ws_connection.query("DELETE user;").execute()
     blocking_ws_connection.query(
@@ -110,15 +122,18 @@ def test_update_table(
 
     table = Table("user")
     first_outcome = blocking_ws_connection.update(table).execute()
-    check_no_change(first_outcome[0], record_id)
-    outcome = blocking_ws_connection.query("SELECT * FROM user;").first()
-    check_no_change(outcome[0], record_id)
+    check_no_change(cast(dict[str, Any], first_outcome[0]), record_id)
+    rows = cast(
+        list[dict[str, Any]],
+        blocking_ws_connection.query("SELECT * FROM user;").first(),
+    )
+    check_no_change(rows[0], record_id)
 
 
 def test_update_table_with_data(
     blocking_ws_connection: BlockingWsSurrealConnection,
     update_data: dict[str, Any],
-    record_id,
+    record_id: RecordID,
 ) -> None:
     blocking_ws_connection.query("DELETE user;").execute()
     blocking_ws_connection.query(
@@ -127,6 +142,9 @@ def test_update_table_with_data(
 
     table = Table("user")
     outcome = blocking_ws_connection.update(table, update_data)
-    check_change(outcome[0], record_id)
-    outcome = blocking_ws_connection.query("SELECT * FROM user;").first()
-    check_change(outcome[0], record_id)
+    check_change(cast(dict[str, Any], outcome[0]), record_id)
+    rows = cast(
+        list[dict[str, Any]],
+        blocking_ws_connection.query("SELECT * FROM user;").first(),
+    )
+    check_change(rows[0], record_id)

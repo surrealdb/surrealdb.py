@@ -42,7 +42,9 @@ async def setup_user(
 
 @pytest.mark.asyncio
 async def test_upsert_string(
-    async_http_connection: AsyncHttpSurrealConnection, setup_user: None, existing_data
+    async_http_connection: AsyncHttpSurrealConnection,
+    setup_user: None,
+    existing_data: dict[str, Any],
 ) -> None:
     record_id = RecordID("user", "tobie")
     outcome = await async_http_connection.upsert("user:tobie", existing_data)
@@ -78,7 +80,9 @@ async def test_upsert_string_with_data(
 
 @pytest.mark.asyncio
 async def test_upsert_record_id(
-    async_http_connection: AsyncHttpSurrealConnection, setup_user: None, existing_data
+    async_http_connection: AsyncHttpSurrealConnection,
+    setup_user: None,
+    existing_data: dict[str, Any],
 ) -> None:
     record_id = RecordID("user", "tobie")
     first_outcome = await async_http_connection.upsert(record_id, existing_data)
@@ -95,7 +99,9 @@ async def test_upsert_record_id(
 
 @pytest.mark.asyncio
 async def test_upsert_record_id_with_data(
-    async_http_connection, upsert_data: dict[str, Any], setup_user
+    async_http_connection: AsyncHttpSurrealConnection,
+    upsert_data: dict[str, Any],
+    setup_user: None,
 ) -> None:
     record_id = RecordID("user", "tobie")
     outcome = await async_http_connection.upsert(record_id, upsert_data)
@@ -112,7 +118,9 @@ async def test_upsert_record_id_with_data(
 
 @pytest.mark.asyncio
 async def test_upsert_table(
-    async_http_connection: AsyncHttpSurrealConnection, setup_user: None, existing_data
+    async_http_connection: AsyncHttpSurrealConnection,
+    setup_user: None,
+    existing_data: dict[str, Any],
 ) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")

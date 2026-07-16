@@ -1,13 +1,14 @@
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
+from surrealdb.types import Value
 
 
 @pytest.fixture
-def insert_bulk_data() -> dict[str, Any]:
+def insert_bulk_data() -> list[dict[str, Any]]:
     return [
         {
             "name": "Tobie",
@@ -25,7 +26,7 @@ def insert_bulk_data() -> dict[str, Any]:
 
 
 @pytest.fixture
-def insert_data() -> dict[str, Any]:
+def insert_data() -> list[dict[str, Any]]:
     return [
         {
             "name": "Tobie",
@@ -38,23 +39,33 @@ def insert_data() -> dict[str, Any]:
 
 @pytest.mark.asyncio
 async def test_insert_string_with_data(
-    async_http_connection: AsyncHttpSurrealConnection, insert_bulk_data
+    async_http_connection: AsyncHttpSurrealConnection,
+    insert_bulk_data: list[dict[str, Any]],
 ) -> None:
     await async_http_connection.query("DELETE user;")
-    outcome = await async_http_connection.insert("user", insert_bulk_data)
+    outcome = await async_http_connection.insert("user", cast(Value, insert_bulk_data))
     assert 2 == len(outcome)
-    assert len(await async_http_connection.query("SELECT * FROM user;").first()) == 2
+    assert (
+        len(
+            cast(
+                list[Any],
+                await async_http_connection.query("SELECT * FROM user;").first(),
+            )
+        )
+        == 2
+    )
     await async_http_connection.query("DELETE user;")
 
 
 @pytest.mark.asyncio
 async def test_insert_record_id_result_error(
-    async_http_connection: AsyncHttpSurrealConnection, insert_data
+    async_http_connection: AsyncHttpSurrealConnection,
+    insert_data: list[dict[str, Any]],
 ) -> None:
     await async_http_connection.query("DELETE user;")
     record_id = RecordID("user", "tobie")
     with pytest.raises(Exception) as context:
-        _ = await async_http_connection.insert(record_id, insert_data)
+        _ = await async_http_connection.insert(record_id, cast(Value, insert_data))
     e = str(context.value)
     assert (
         "There was a problem with the database: Can not execute INSERT statement using value"

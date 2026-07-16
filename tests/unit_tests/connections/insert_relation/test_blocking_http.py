@@ -1,10 +1,11 @@
 from collections.abc import Generator
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
+from surrealdb.types import Value
 
 
 @pytest.fixture(autouse=True)
@@ -44,7 +45,7 @@ def test_insert_relation_record_ids(
             "out": RecordID("likes", 400),
         },
     ]
-    outcome = blocking_http_connection.insert("likes", data, relation=True)
+    outcome = blocking_http_connection.insert("likes", cast(Value, data), relation=True)
     assert RecordID("user", "tobie") == outcome[0]["in"]
     assert RecordID("likes", 123) == outcome[0]["out"]
     assert RecordID("user", "jaime") == outcome[1]["in"]
@@ -58,6 +59,6 @@ def test_insert_relation_record_id(
         "in": RecordID("user", "tobie"),
         "out": RecordID("likes", 123),
     }
-    outcome = blocking_http_connection.insert("likes", data, relation=True)
+    outcome = blocking_http_connection.insert("likes", cast(Value, data), relation=True)
     assert RecordID("user", "tobie") == outcome[0]["in"]
     assert RecordID("likes", 123) == outcome[0]["out"]
