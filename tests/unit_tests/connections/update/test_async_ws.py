@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -22,12 +22,12 @@ def record_id() -> RecordID:
     return RecordID("user", "tobie")
 
 
-def check_no_change(data: dict[str, Any], record_id) -> None:
+def check_no_change(data: dict[str, Any], record_id: RecordID) -> None:
     assert record_id == data["id"]
     assert "Tobie" == data["name"]
 
 
-def check_change(data: dict[str, Any], record_id) -> None:
+def check_change(data: dict[str, Any], record_id: RecordID) -> None:
     assert record_id == data["id"]
     assert "Jaime" == data["name"]
     # No age field assertion
@@ -37,7 +37,7 @@ def check_change(data: dict[str, Any], record_id) -> None:
 async def test_update_string(
     async_ws_connection: AsyncWsSurrealConnection,
     update_data: dict[str, Any],
-    record_id,
+    record_id: RecordID,
 ) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
@@ -47,15 +47,18 @@ async def test_update_string(
     outcome = await async_ws_connection.update("user:tobie")
     assert outcome["id"] == record_id
     assert outcome["name"] == "Tobie"
-    outcome = await async_ws_connection.query("SELECT * FROM user;").first()
-    check_no_change(outcome[0], record_id)
+    rows = cast(
+        list[dict[str, Any]],
+        await async_ws_connection.query("SELECT * FROM user;").first(),
+    )
+    check_no_change(rows[0], record_id)
 
 
 @pytest.mark.asyncio
 async def test_update_string_with_data(
     async_ws_connection: AsyncWsSurrealConnection,
     update_data: dict[str, Any],
-    record_id,
+    record_id: RecordID,
 ) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
@@ -63,16 +66,19 @@ async def test_update_string_with_data(
     )
 
     first_outcome = await async_ws_connection.update("user:tobie", update_data)
-    check_change(first_outcome, record_id)
-    outcome = await async_ws_connection.query("SELECT * FROM user;").first()
-    check_change(outcome[0], record_id)
+    check_change(cast(dict[str, Any], first_outcome), record_id)
+    rows = cast(
+        list[dict[str, Any]],
+        await async_ws_connection.query("SELECT * FROM user;").first(),
+    )
+    check_change(rows[0], record_id)
 
 
 @pytest.mark.asyncio
 async def test_update_record_id(
     async_ws_connection: AsyncWsSurrealConnection,
     update_data: dict[str, Any],
-    record_id,
+    record_id: RecordID,
 ) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
@@ -81,15 +87,18 @@ async def test_update_record_id(
 
     first_outcome = await async_ws_connection.update(record_id)
     check_no_change(first_outcome, record_id)
-    outcome = await async_ws_connection.query("SELECT * FROM user;").first()
-    check_no_change(outcome[0], record_id)
+    rows = cast(
+        list[dict[str, Any]],
+        await async_ws_connection.query("SELECT * FROM user;").first(),
+    )
+    check_no_change(rows[0], record_id)
 
 
 @pytest.mark.asyncio
 async def test_update_record_id_with_data(
     async_ws_connection: AsyncWsSurrealConnection,
     update_data: dict[str, Any],
-    record_id,
+    record_id: RecordID,
 ) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
@@ -98,15 +107,18 @@ async def test_update_record_id_with_data(
 
     outcome = await async_ws_connection.update(record_id, update_data)
     check_change(outcome, record_id)
-    outcome = await async_ws_connection.query("SELECT * FROM user;").first()
-    check_change(outcome[0], record_id)
+    rows = cast(
+        list[dict[str, Any]],
+        await async_ws_connection.query("SELECT * FROM user;").first(),
+    )
+    check_change(rows[0], record_id)
 
 
 @pytest.mark.asyncio
 async def test_update_table(
     async_ws_connection: AsyncWsSurrealConnection,
     update_data: dict[str, Any],
-    record_id,
+    record_id: RecordID,
 ) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
@@ -115,16 +127,19 @@ async def test_update_table(
 
     table = Table("user")
     first_outcome = await async_ws_connection.update(table)
-    check_no_change(first_outcome[0], record_id)
-    outcome = await async_ws_connection.query("SELECT * FROM user;").first()
-    check_no_change(outcome[0], record_id)
+    check_no_change(cast(dict[str, Any], first_outcome[0]), record_id)
+    rows = cast(
+        list[dict[str, Any]],
+        await async_ws_connection.query("SELECT * FROM user;").first(),
+    )
+    check_no_change(rows[0], record_id)
 
 
 @pytest.mark.asyncio
 async def test_update_table_with_data(
     async_ws_connection: AsyncWsSurrealConnection,
     update_data: dict[str, Any],
-    record_id,
+    record_id: RecordID,
 ) -> None:
     await async_ws_connection.query("DELETE user;")
     await async_ws_connection.query(
@@ -133,6 +148,9 @@ async def test_update_table_with_data(
 
     table = Table("user")
     outcome = await async_ws_connection.update(table, update_data)
-    check_change(outcome[0], record_id)
-    outcome = await async_ws_connection.query("SELECT * FROM user;").first()
-    check_change(outcome[0], record_id)
+    check_change(cast(dict[str, Any], outcome[0]), record_id)
+    rows = cast(
+        list[dict[str, Any]],
+        await async_ws_connection.query("SELECT * FROM user;").first(),
+    )
+    check_change(rows[0], record_id)

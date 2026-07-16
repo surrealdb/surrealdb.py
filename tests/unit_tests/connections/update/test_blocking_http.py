@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -22,12 +22,12 @@ def record_id() -> RecordID:
     return RecordID("user", "tobie")
 
 
-def check_no_change(data: dict[str, Any], record_id) -> None:
+def check_no_change(data: dict[str, Any], record_id: RecordID) -> None:
     assert record_id == data["id"]
     assert "Tobie" == data["name"]
 
 
-def check_change(data: dict[str, Any], record_id) -> None:
+def check_change(data: dict[str, Any], record_id: RecordID) -> None:
     assert record_id == data["id"]
     assert "Jaime" == data["name"]
     # No age field assertion
@@ -36,7 +36,7 @@ def check_change(data: dict[str, Any], record_id) -> None:
 def test_update_string(
     blocking_http_connection: BlockingHttpSurrealConnection,
     update_data: dict[str, Any],
-    record_id,
+    record_id: RecordID,
 ) -> None:
     blocking_http_connection.query("DELETE user;").execute()
     blocking_http_connection.query(
@@ -46,15 +46,18 @@ def test_update_string(
     outcome = blocking_http_connection.update("user:tobie").execute()
     assert outcome["id"] == record_id
     assert outcome["name"] == "Tobie"
-    outcome = blocking_http_connection.query("SELECT * FROM user;").first()
-    check_no_change(outcome[0], record_id)
+    rows = cast(
+        list[dict[str, Any]],
+        blocking_http_connection.query("SELECT * FROM user;").first(),
+    )
+    check_no_change(rows[0], record_id)
     blocking_http_connection.query("DELETE user;").execute()
 
 
 def test_update_string_with_data(
     blocking_http_connection: BlockingHttpSurrealConnection,
     update_data: dict[str, Any],
-    record_id,
+    record_id: RecordID,
 ) -> None:
     blocking_http_connection.query("DELETE user;").execute()
     blocking_http_connection.query(
@@ -63,17 +66,20 @@ def test_update_string_with_data(
 
     first_outcome = blocking_http_connection.update("user:tobie", update_data)
     print("DEBUG update_string_with_data result:", first_outcome)
-    check_change(first_outcome, record_id)
-    outcome = blocking_http_connection.query("SELECT * FROM user;").first()
-    print("DEBUG update_string_with_data query result:", outcome)
-    check_change(outcome[0], record_id)
+    check_change(cast(dict[str, Any], first_outcome), record_id)
+    rows = cast(
+        list[dict[str, Any]],
+        blocking_http_connection.query("SELECT * FROM user;").first(),
+    )
+    print("DEBUG update_string_with_data query result:", rows)
+    check_change(rows[0], record_id)
     blocking_http_connection.query("DELETE user;").execute()
 
 
 def test_update_record_id(
     blocking_http_connection: BlockingHttpSurrealConnection,
     update_data: dict[str, Any],
-    record_id,
+    record_id: RecordID,
 ) -> None:
     blocking_http_connection.query("DELETE user;").execute()
     blocking_http_connection.query(
@@ -82,15 +88,18 @@ def test_update_record_id(
 
     first_outcome = blocking_http_connection.update(record_id).execute()
     check_no_change(first_outcome, record_id)
-    outcome = blocking_http_connection.query("SELECT * FROM user;").first()
-    check_no_change(outcome[0], record_id)
+    rows = cast(
+        list[dict[str, Any]],
+        blocking_http_connection.query("SELECT * FROM user;").first(),
+    )
+    check_no_change(rows[0], record_id)
     blocking_http_connection.query("DELETE user;").execute()
 
 
 def test_update_record_id_with_data(
     blocking_http_connection: BlockingHttpSurrealConnection,
     update_data: dict[str, Any],
-    record_id,
+    record_id: RecordID,
 ) -> None:
     blocking_http_connection.query("DELETE user;").execute()
     blocking_http_connection.query(
@@ -100,16 +109,19 @@ def test_update_record_id_with_data(
     outcome = blocking_http_connection.update(record_id, update_data)
     print("DEBUG update_record_id_with_data result:", outcome)
     check_change(outcome, record_id)
-    outcome = blocking_http_connection.query("SELECT * FROM user;").first()
-    print("DEBUG update_record_id_with_data query result:", outcome)
-    check_change(outcome[0], record_id)
+    rows = cast(
+        list[dict[str, Any]],
+        blocking_http_connection.query("SELECT * FROM user;").first(),
+    )
+    print("DEBUG update_record_id_with_data query result:", rows)
+    check_change(rows[0], record_id)
     blocking_http_connection.query("DELETE user;").execute()
 
 
 def test_update_table(
     blocking_http_connection: BlockingHttpSurrealConnection,
     update_data: dict[str, Any],
-    record_id,
+    record_id: RecordID,
 ) -> None:
     blocking_http_connection.query("DELETE user;").execute()
     blocking_http_connection.query(
@@ -118,16 +130,19 @@ def test_update_table(
 
     table = Table("user")
     first_outcome = blocking_http_connection.update(table).execute()
-    check_no_change(first_outcome[0], record_id)
-    outcome = blocking_http_connection.query("SELECT * FROM user;").first()
-    check_no_change(outcome[0], record_id)
+    check_no_change(cast(dict[str, Any], first_outcome[0]), record_id)
+    rows = cast(
+        list[dict[str, Any]],
+        blocking_http_connection.query("SELECT * FROM user;").first(),
+    )
+    check_no_change(rows[0], record_id)
     blocking_http_connection.query("DELETE user;").execute()
 
 
 def test_update_table_with_data(
     blocking_http_connection: BlockingHttpSurrealConnection,
     update_data: dict[str, Any],
-    record_id,
+    record_id: RecordID,
 ) -> None:
     blocking_http_connection.query("DELETE user;").execute()
     blocking_http_connection.query(
@@ -137,8 +152,11 @@ def test_update_table_with_data(
     table = Table("user")
     outcome = blocking_http_connection.update(table, update_data)
     print("DEBUG update_table_with_data result:", outcome)
-    check_change(outcome[0], record_id)
-    outcome = blocking_http_connection.query("SELECT * FROM user;").first()
-    print("DEBUG update_table_with_data query result:", outcome)
-    check_change(outcome[0], record_id)
+    check_change(cast(dict[str, Any], outcome[0]), record_id)
+    rows = cast(
+        list[dict[str, Any]],
+        blocking_http_connection.query("SELECT * FROM user;").first(),
+    )
+    print("DEBUG update_table_with_data query result:", rows)
+    check_change(rows[0], record_id)
     blocking_http_connection.query("DELETE user;").execute()
