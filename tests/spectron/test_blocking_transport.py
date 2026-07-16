@@ -23,7 +23,7 @@ def transport() -> BlockingTransport:
 
 
 @responses.activate
-def test_get_sends_bearer_header(transport: BlockingTransport):
+def test_get_sends_bearer_header(transport: BlockingTransport) -> None:
     responses.add(
         responses.GET,
         f"{BASE}/api/v1/x/health",
@@ -40,7 +40,7 @@ def test_get_sends_bearer_header(transport: BlockingTransport):
 
 
 @responses.activate
-def test_post_only_auth_header_is_bearer(transport: BlockingTransport):
+def test_post_only_auth_header_is_bearer(transport: BlockingTransport) -> None:
     responses.add(
         responses.POST, f"{BASE}/api/v1/x/echo", json={"ok": True}, status=200
     )
@@ -54,7 +54,9 @@ def test_post_only_auth_header_is_bearer(transport: BlockingTransport):
 
 
 @responses.activate
-def test_get_retries_on_5xx_then_succeeds(monkeypatch, transport: BlockingTransport):
+def test_get_retries_on_5xx_then_succeeds(
+    monkeypatch: pytest.MonkeyPatch, transport: BlockingTransport
+) -> None:
     monkeypatch.setattr(time, "sleep", lambda _s: None)
     responses.add(responses.GET, f"{BASE}/api/v1/x/y", json={"e": 1}, status=503)
     responses.add(responses.GET, f"{BASE}/api/v1/x/y", json={"e": 2}, status=502)
@@ -67,8 +69,8 @@ def test_get_retries_on_5xx_then_succeeds(monkeypatch, transport: BlockingTransp
 
 @responses.activate
 def test_get_retries_exhaust_raises_api_error(
-    monkeypatch, transport: BlockingTransport
-):
+    monkeypatch: pytest.MonkeyPatch, transport: BlockingTransport
+) -> None:
     monkeypatch.setattr(time, "sleep", lambda _s: None)
     for _ in range(4):
         responses.add(
@@ -81,7 +83,9 @@ def test_get_retries_exhaust_raises_api_error(
 
 
 @responses.activate
-def test_post_does_not_retry_on_5xx(monkeypatch, transport: BlockingTransport):
+def test_post_does_not_retry_on_5xx(
+    monkeypatch: pytest.MonkeyPatch, transport: BlockingTransport
+) -> None:
     monkeypatch.setattr(time, "sleep", lambda _s: None)
     responses.add(
         responses.POST, f"{BASE}/api/v1/x/z", json={"message": "down"}, status=503
@@ -92,7 +96,9 @@ def test_post_does_not_retry_on_5xx(monkeypatch, transport: BlockingTransport):
 
 
 @responses.activate
-def test_idempotent_post_retries_on_5xx(monkeypatch, transport: BlockingTransport):
+def test_idempotent_post_retries_on_5xx(
+    monkeypatch: pytest.MonkeyPatch, transport: BlockingTransport
+) -> None:
     monkeypatch.setattr(time, "sleep", lambda _s: None)
     responses.add(responses.POST, f"{BASE}/api/v1/x/facts", json={"e": 1}, status=503)
     responses.add(
@@ -109,7 +115,7 @@ def test_idempotent_post_retries_on_5xx(monkeypatch, transport: BlockingTranspor
 
 
 @responses.activate
-def test_404_maps_to_not_found(transport: BlockingTransport):
+def test_404_maps_to_not_found(transport: BlockingTransport) -> None:
     responses.add(
         responses.GET,
         f"{BASE}/api/v1/x/missing",
@@ -122,7 +128,7 @@ def test_404_maps_to_not_found(transport: BlockingTransport):
 
 
 @responses.activate
-def test_401_maps_to_auth_error(transport: BlockingTransport):
+def test_401_maps_to_auth_error(transport: BlockingTransport) -> None:
     responses.add(
         responses.GET,
         f"{BASE}/api/v1/x/secure",
@@ -134,7 +140,7 @@ def test_401_maps_to_auth_error(transport: BlockingTransport):
 
 
 @responses.activate
-def test_body_json_payload_sent(transport: BlockingTransport):
+def test_body_json_payload_sent(transport: BlockingTransport) -> None:
     responses.add(
         responses.POST, f"{BASE}/api/v1/x/echo", json={"ack": True}, status=200
     )
@@ -145,32 +151,32 @@ def test_body_json_payload_sent(transport: BlockingTransport):
 
 
 @responses.activate
-def test_no_content_returns_none(transport: BlockingTransport):
+def test_no_content_returns_none(transport: BlockingTransport) -> None:
     responses.add(responses.DELETE, f"{BASE}/api/v1/x/r", body="", status=204)
     assert transport.delete("/api/v1/x/r") is None
 
 
-def test_api_key_ignores_environment(monkeypatch):
+def test_api_key_ignores_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SPECTRON_API_KEY", "env-key")
     with pytest.raises(ValueError, match="API key"):
         BlockingTransport(endpoint=BASE)
 
 
-def test_api_key_required():
+def test_api_key_required() -> None:
     with pytest.raises(ValueError, match="API key"):
         BlockingTransport(endpoint=BASE)
 
 
-def test_api_key_empty_string_rejected():
+def test_api_key_empty_string_rejected() -> None:
     with pytest.raises(ValueError, match="API key"):
         BlockingTransport(endpoint=BASE, api_key="")
 
 
-def test_endpoint_required():
+def test_endpoint_required() -> None:
     with pytest.raises(ValueError, match="endpoint"):
         BlockingTransport(api_key=API_KEY)
 
 
-def test_endpoint_empty_string_rejected():
+def test_endpoint_empty_string_rejected() -> None:
     with pytest.raises(ValueError, match="endpoint"):
         BlockingTransport(endpoint="", api_key=API_KEY)

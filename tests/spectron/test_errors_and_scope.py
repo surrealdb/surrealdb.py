@@ -28,7 +28,7 @@ from surrealdb.spectron._scope import scope_sets
         (418, SpectronAPIError),
     ],
 )
-def test_error_for_status_mapping(status: int, cls: type[SpectronAPIError]):
+def test_error_for_status_mapping(status: int, cls: type[SpectronAPIError]) -> None:
     exc = error_for_status(status, "boom")
     assert isinstance(exc, cls)
     assert isinstance(exc, SpectronError)
@@ -36,25 +36,25 @@ def test_error_for_status_mapping(status: int, cls: type[SpectronAPIError]):
     assert exc.message == "boom"
 
 
-def test_error_from_response_extracts_dict_message():
+def test_error_from_response_extracts_dict_message() -> None:
     exc = error_from_response(404, {"message": "no such doc"})
     assert isinstance(exc, SpectronNotFoundError)
     assert exc.message == "no such doc"
     assert exc.body == {"message": "no such doc"}
 
 
-def test_error_from_response_falls_back_to_string_body():
+def test_error_from_response_falls_back_to_string_body() -> None:
     exc = error_from_response(500, "internal explosion")
     assert isinstance(exc, SpectronAPIError)
     assert exc.message == "internal explosion"
 
 
-def test_error_from_response_picks_up_trace_header():
+def test_error_from_response_picks_up_trace_header() -> None:
     exc = error_from_response(500, {"message": "boom"}, {"x-trace-id": "tr:1"})
     assert exc.trace_id == "tr:1"
 
 
-def test_backoff_schedule_capped():
+def test_backoff_schedule_capped() -> None:
     assert backoff_schedule(0) == ()
     assert backoff_schedule(1) == (0.25,)
     assert backoff_schedule(2) == (0.25, 0.5)
@@ -62,7 +62,7 @@ def test_backoff_schedule_capped():
     assert backoff_schedule(10) == (0.25, 0.5, 1.0)
 
 
-def test_should_retry_rules():
+def test_should_retry_rules() -> None:
     assert should_retry("GET", 503, 0, 3) is True
     assert should_retry("GET", None, 0, 3) is True
     assert should_retry("GET", 404, 0, 3) is False
@@ -71,40 +71,40 @@ def test_should_retry_rules():
     assert should_retry("GET", 500, 3, 3) is False
 
 
-def test_idempotent_post_can_retry():
+def test_idempotent_post_can_retry() -> None:
     assert should_retry("POST", 503, 0, 3, idempotent=True) is True
     assert should_retry("POST", None, 0, 3, idempotent=True) is True
     assert should_retry("POST", 404, 0, 3, idempotent=True) is False
 
 
-def test_scope_sets_none_and_empty():
+def test_scope_sets_none_and_empty() -> None:
     assert scope_sets(None) == []
     assert scope_sets([]) == []
 
 
-def test_scope_sets_string_is_singleton_clause():
+def test_scope_sets_string_is_singleton_clause() -> None:
     assert scope_sets("team/eng") == [["team/eng"]]
 
 
-def test_scope_sets_flat_list_is_or_of_singletons():
+def test_scope_sets_flat_list_is_or_of_singletons() -> None:
     assert scope_sets(["a", "b"]) == [["a"], ["b"]]
 
 
-def test_scope_sets_nested_list_is_and_clause():
+def test_scope_sets_nested_list_is_and_clause() -> None:
     assert scope_sets([["a", "b"]]) == [["a", "b"]]
 
 
-def test_scope_sets_mixed_strings_and_clauses():
+def test_scope_sets_mixed_strings_and_clauses() -> None:
     assert scope_sets(["a", ["b", "c"]]) == [["a"], ["b", "c"]]
 
 
-def test_scope_sets_dedups_paths_within_a_clause_preserving_order():
+def test_scope_sets_dedups_paths_within_a_clause_preserving_order() -> None:
     assert scope_sets([["org/acme", "team/eng", "org/acme"]]) == [
         ["org/acme", "team/eng"],
     ]
 
 
-def test_scope_sets_keeps_duplicate_clauses():
+def test_scope_sets_keeps_duplicate_clauses() -> None:
     # Cross-clause duplicates pass through; the server dedups by content hash.
     assert scope_sets(["org/acme", "team/eng", "org/acme"]) == [
         ["org/acme"],
@@ -113,6 +113,6 @@ def test_scope_sets_keeps_duplicate_clauses():
     ]
 
 
-def test_scope_sets_drops_empty_paths_and_clauses():
+def test_scope_sets_drops_empty_paths_and_clauses() -> None:
     assert scope_sets(["", "team/eng"]) == [["team/eng"]]
     assert scope_sets([[], ["team/eng"]]) == [["team/eng"]]

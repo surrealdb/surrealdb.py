@@ -41,7 +41,7 @@ def client() -> Spectron:
 
 
 @responses.activate
-def test_traces_list_get_stats(client: Spectron):
+def test_traces_list_get_stats(client: Spectron) -> None:
     responses.add(
         responses.GET,
         f"{ROOT}/traces",
@@ -108,7 +108,7 @@ def test_traces_list_get_stats(client: Spectron):
 
 
 @responses.activate
-def test_lifecycle_decay_expire_fsck(client: Spectron):
+def test_lifecycle_decay_expire_fsck(client: Spectron) -> None:
     responses.add(
         responses.POST, f"{ROOT}/lifecycle/decay", json={"affected": 7}, status=200
     )
@@ -139,7 +139,7 @@ def test_lifecycle_decay_expire_fsck(client: Spectron):
 
 
 @responses.activate
-def test_sessions_lifecycle(client: Spectron):
+def test_sessions_lifecycle(client: Spectron) -> None:
     responses.add(
         responses.POST,
         f"{ROOT}/sessions",
@@ -174,7 +174,7 @@ def test_sessions_lifecycle(client: Spectron):
     assert isinstance(created, Session)
     assert created.scopes == [["org/acme"]]
     assert json.loads(responses.calls[0].request.body) == {"scopes": [["org/acme"]]}
-    assert client.sessions.delete("sess:1") is None
+    client.sessions.delete("sess:1")  # returns None
     assert client.sessions.context("sess:1", "recap").context == "summary"
     turns = client.sessions.turns("sess:1", limit=10)
     assert isinstance(turns, TurnListResponse)
@@ -185,7 +185,7 @@ def test_sessions_lifecycle(client: Spectron):
 
 
 @responses.activate
-def test_entities(client: Spectron):
+def test_entities(client: Spectron) -> None:
     responses.add(
         responses.GET,
         f"{ROOT}/entities",
@@ -231,14 +231,14 @@ def test_entities(client: Spectron):
     got = client.entities.get("person", "Stu")
     assert isinstance(got, EntityResponse)
     assert got.entity.id == "e:1"
-    assert client.entities.delete("person", "Stu") is None
+    client.entities.delete("person", "Stu")  # returns None
 
 
 # ---- keys -----------------------------------------------------------------
 
 
 @responses.activate
-def test_keys(client: Spectron):
+def test_keys(client: Spectron) -> None:
     responses.add(
         responses.POST,
         f"{ROOT}/keys",
@@ -261,14 +261,14 @@ def test_keys(client: Spectron):
     keys = client.keys.list()
     assert isinstance(keys, list)
     assert isinstance(keys[0], KeyDetail)
-    assert client.keys.delete("ci") is None
+    client.keys.delete("ci")  # returns None
 
 
 # ---- principals -----------------------------------------------------------
 
 
 @responses.activate
-def test_principals(client: Spectron):
+def test_principals(client: Spectron) -> None:
     responses.add(
         responses.GET,
         f"{ROOT}/principals",
@@ -311,7 +311,7 @@ def test_principals(client: Spectron):
 
 
 @responses.activate
-def test_scopes(client: Spectron):
+def test_scopes(client: Spectron) -> None:
     responses.add(
         responses.POST,
         f"{ROOT}/scopes",
@@ -338,7 +338,7 @@ def test_scopes(client: Spectron):
         "displayName": "Acme",
     }
     assert isinstance(client.scopes.list()[0], ScopeNode)
-    assert client.scopes.delete("org/acme/") is None
+    client.scopes.delete("org/acme/")  # returns None
     forgotten = client.scopes.forget("user/stu/")
     assert isinstance(forgotten, ForgetScopeResponse)
     assert forgotten.forgotten == 12

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 import responses
@@ -28,7 +29,7 @@ def client() -> Spectron:
 
 
 @responses.activate
-def test_remember_posts_to_facts_with_idempotency_key(client: Spectron):
+def test_remember_posts_to_facts_with_idempotency_key(client: Spectron) -> None:
     responses.add(
         responses.POST,
         f"{BASE}/api/v1/{ENC_CONTEXT}/facts",
@@ -60,7 +61,7 @@ def test_remember_posts_to_facts_with_idempotency_key(client: Spectron):
 
 
 @responses.activate
-def test_remember_many_posts_to_facts_batch(client: Spectron):
+def test_remember_many_posts_to_facts_batch(client: Spectron) -> None:
     responses.add(
         responses.POST,
         f"{BASE}/api/v1/{ENC_CONTEXT}/facts/batch",
@@ -83,7 +84,7 @@ def test_remember_many_posts_to_facts_batch(client: Spectron):
 
 
 @responses.activate
-def test_recall_posts_to_query(client: Spectron):
+def test_recall_posts_to_query(client: Spectron) -> None:
     responses.add(
         responses.POST,
         f"{BASE}/api/v1/{ENC_CONTEXT}/query",
@@ -106,7 +107,7 @@ def test_recall_posts_to_query(client: Spectron):
 
 
 @responses.activate
-def test_forget_posts_to_forget(client: Spectron):
+def test_forget_posts_to_forget(client: Spectron) -> None:
     responses.add(
         responses.POST,
         f"{BASE}/api/v1/{ENC_CONTEXT}/forget",
@@ -121,7 +122,7 @@ def test_forget_posts_to_forget(client: Spectron):
 
 
 @responses.activate
-def test_chat_non_stream_posts_to_chat(client: Spectron):
+def test_chat_non_stream_posts_to_chat(client: Spectron) -> None:
     responses.add(
         responses.POST,
         f"{BASE}/api/v1/{ENC_CONTEXT}/chat",
@@ -149,7 +150,7 @@ def test_chat_non_stream_posts_to_chat(client: Spectron):
 
 
 @responses.activate
-def test_documents_upload_posts_multipart(client: Spectron, tmp_path):
+def test_documents_upload_posts_multipart(client: Spectron, tmp_path: Path) -> None:
     f = tmp_path / "hello.txt"
     f.write_text("contents")
     responses.add(
@@ -188,7 +189,7 @@ def test_documents_upload_posts_multipart(client: Spectron, tmp_path):
 
 
 @responses.activate
-def test_scopes_serialise_to_dnf_clauses(client: Spectron):
+def test_scopes_serialise_to_dnf_clauses(client: Spectron) -> None:
     responses.add(
         responses.POST,
         f"{BASE}/api/v1/{ENC_CONTEXT}/facts",
@@ -227,7 +228,7 @@ def test_scopes_serialise_to_dnf_clauses(client: Spectron):
 
 
 @responses.activate
-def test_on_behalf_of_sends_delegation_header(client: Spectron):
+def test_on_behalf_of_sends_delegation_header(client: Spectron) -> None:
     responses.add(
         responses.POST,
         f"{BASE}/api/v1/{ENC_CONTEXT}/facts",
@@ -264,13 +265,13 @@ def test_on_behalf_of_sends_delegation_header(client: Spectron):
     assert "X-Spectron-On-Behalf-Of" not in responses.calls[2].request.headers
 
 
-def test_context_quotes_special_chars(client: Spectron):
+def test_context_quotes_special_chars(client: Spectron) -> None:
     assert client.context_id == CONTEXT
     assert client._base.endswith(f"/api/v1/{ENC_CONTEXT}")
 
 
 @pytest.mark.asyncio
-async def test_async_client_constructs():
+async def test_async_client_constructs() -> None:
     # Lightweight construction test — covers transport not strictly required.
     client = AsyncSpectron(context=CONTEXT, endpoint=BASE, api_key=API_KEY)
     try:
