@@ -892,6 +892,7 @@ class TestSdkSideErrors:
             InvalidTableError,
         ]
         for cls in sdk_classes:
+            err: SurrealError
             if cls is UnsupportedEngineError:
                 err = cls("ws://bad")
             else:

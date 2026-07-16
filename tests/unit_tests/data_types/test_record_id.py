@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from typing import Any, Optional
 
 import pytest
@@ -10,6 +11,7 @@ from surrealdb.data.models import table_or_record_id
 from surrealdb.data.types.record_id import RecordID, escape_identifier
 from surrealdb.data.types.table import Table
 from surrealdb.errors import InvalidRecordIdError, InvalidTableError
+from surrealdb.types import Value
 
 
 # Unit tests for RecordID class
@@ -50,7 +52,8 @@ def test_record_id_parse() -> None:
 
 def test_record_id_pydantic_model_validate_from_dict() -> None:
     """RecordID should be parsed from string on model_validate (python dict input)."""
-    pydantic = pytest.importorskip("pydantic")
+    pytest.importorskip("pydantic")
+    import pydantic
 
     class Person(pydantic.BaseModel):
         id: RecordID | None = None
@@ -64,7 +67,8 @@ def test_record_id_pydantic_model_validate_from_dict() -> None:
 
 def test_record_id_pydantic_model_validate_json() -> None:
     """RecordID should be parsed from string on model_validate_json (JSON input)."""
-    pydantic = pytest.importorskip("pydantic")
+    pytest.importorskip("pydantic")
+    import pydantic
 
     class Person(pydantic.BaseModel):
         id: RecordID | None = None
@@ -78,7 +82,8 @@ def test_record_id_pydantic_model_validate_json() -> None:
 
 def test_record_id_pydantic_model_dump_python_keeps_instance() -> None:
     """model_dump() should keep RecordID instances in python mode."""
-    pydantic = pytest.importorskip("pydantic")
+    pytest.importorskip("pydantic")
+    import pydantic
 
     class Person(pydantic.BaseModel):
         id: RecordID | None = None
@@ -92,7 +97,8 @@ def test_record_id_pydantic_model_dump_python_keeps_instance() -> None:
 
 def test_record_id_pydantic_model_dump_json_stringifies() -> None:
     """model_dump(mode='json') should serialize RecordID to its string form."""
-    pydantic = pytest.importorskip("pydantic")
+    pytest.importorskip("pydantic")
+    import pydantic
 
     class Person(pydantic.BaseModel):
         id: RecordID | None = None
@@ -242,7 +248,9 @@ def test_record_id_direct_id_interpolation_is_unsafe() -> None:
     record_id = RecordID("company", "231")
 
     # The unsafe pattern from #265: f"...company:{record_id.id}..."
-    unsafe = f"company:{record_id.id}"
+    # .id is typed as Value (which includes bytes); interpolating it raw is the
+    # exact footgun this test pins, so the str-bytes-safe warning is intentional.
+    unsafe = f"company:{record_id.id}"  # type: ignore[str-bytes-safe]
     assert unsafe == "company:231"  # indistinguishable from the numeric id 231
 
     # The safe text renderings, for when binding isn't possible:
@@ -418,11 +426,11 @@ def test_record_id_in_array_roundtrip() -> None:
 
 # Database fixture
 @pytest.fixture
-async def surrealdb_connection():  # type: ignore[misc]
+async def surrealdb_connection() -> AsyncGenerator[AsyncWsSurrealConnection, None]:
     url = "ws://localhost:8000/rpc"
     password = "root"
     username = "root"
-    vars_params = {"username": username, "password": password}
+    vars_params: dict[str, Value] = {"username": username, "password": password}
     database_name = "test_db"
     namespace = "test_ns"
     connection = AsyncWsSurrealConnection(url)
