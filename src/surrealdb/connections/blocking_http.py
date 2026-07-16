@@ -51,7 +51,12 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         if self.database:
             headers["Surreal-DB"] = self.database
 
-        response = requests.post(url, headers=headers, data=data, timeout=30)
+        # Reuse the pooled session when running inside a context manager,
+        # otherwise fall back to a fresh per-request request.
+        if self.session is not None:
+            response = self.session.post(url, headers=headers, data=data, timeout=30)
+        else:
+            response = requests.post(url, headers=headers, data=data, timeout=30)
         response.raise_for_status()
 
         raw_cbor = response.content
@@ -371,6 +376,16 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "getting database version")
         return response["result"]
 
+    def close(self) -> None:
+        """Close the pooled HTTP session if one is open.
+
+        Idempotent: a no-op when no session has been opened (for example
+        outside a ``with`` block) and safe to call more than once.
+        """
+        if self.session is not None:
+            self.session.close()
+        self.session = None
+
     def __enter__(self) -> "BlockingHttpSurrealConnection":
         """
         Synchronous context manager entry.
@@ -389,8 +404,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         Synchronous context manager exit.
         Closes the HTTP session upon exiting the context.
         """
-        if self.session is not None:
-            self.session.close()
+        self.close()
 
     def attach(self) -> None:
         raise UnsupportedFeatureError(
