@@ -23,10 +23,13 @@ from surrealdb.types import Tokens, Value, parse_auth_result
 
 class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     """
-    A single async connection to a SurrealDB instance using HTTP. To be used once and discarded.
+    An async connection to a SurrealDB instance using HTTP.
 
     # Notes
-    A new HTTP session is created for each query to send a request to the SurrealDB server.
+    When used as an async context manager (``async with``) a single pooled
+    ``aiohttp.ClientSession`` is created and reused across every request, then
+    closed on exit. Outside a context manager a fresh session is created per
+    request.
 
     Attributes:
         url: The URL of the database to process queries for.
@@ -71,20 +74,37 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         if self.database:
             headers["Surreal-DB"] = self.database
 
+        # Reuse the pooled session when running inside a context manager,
+        # otherwise fall back to a fresh per-request session.
+        if self._session is not None and not self._session.closed:
+            return await self._request(
+                self._session, url, headers, data, operation, bypass
+            )
         async with aiohttp.ClientSession() as session:
-            async with session.request(
-                method="POST",
-                url=url,
-                headers=headers,
-                data=data,
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as response:
-                response.raise_for_status()
-                raw_cbor = await response.read()
-                data = decode(raw_cbor)
-                if bypass is False:
-                    self.check_response_for_error(data, operation)
-                return data
+            return await self._request(session, url, headers, data, operation, bypass)
+
+    async def _request(
+        self,
+        session: aiohttp.ClientSession,
+        url: str,
+        headers: dict[str, str],
+        data: bytes,
+        operation: str,
+        bypass: bool,
+    ) -> dict[str, Any]:
+        async with session.request(
+            method="POST",
+            url=url,
+            headers=headers,
+            data=data,
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as response:
+            response.raise_for_status()
+            raw_cbor = await response.read()
+            result = decode(raw_cbor)
+            if bypass is False:
+                self.check_response_for_error(result, operation)
+            return result
 
     def set_token(self, token: str) -> None:
         """
@@ -316,6 +336,16 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "getting database version")
         return response["result"]
 
+    async def close(self) -> None:
+        """Close the pooled HTTP session if one is open.
+
+        Idempotent: a no-op when no session has been opened (for example
+        outside an ``async with`` block) and safe to call more than once.
+        """
+        if self._session is not None and not self._session.closed:
+            await self._session.close()
+        self._session = None
+
     async def __aenter__(self) -> "AsyncHttpSurrealConnection":
         """
         Asynchronous context manager entry.
@@ -334,8 +364,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         Asynchronous context manager exit.
         Closes the aiohttp session upon exiting the context.
         """
-        if self._session is not None:
-            await self._session.close()
+        await self.close()
 
     async def attach(self) -> None:
         raise UnsupportedFeatureError(
