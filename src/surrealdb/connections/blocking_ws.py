@@ -232,13 +232,13 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def query_raw(
         self,
         query: str,
-        params: dict[str, Value] | None = None,
+        vars: dict[str, Value] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> dict[str, Any]:
-        if params is None:
-            params = {}
-        kwargs: dict[str, Any] = {"query": query, "params": params}
+        if vars is None:
+            vars = {}
+        kwargs: dict[str, Any] = {"query": query, "params": vars}
         if session_id is not None:
             kwargs["session"] = session_id
         if txn_id is not None:

@@ -147,16 +147,16 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         )
 
     def query_raw(
-        self, query: str, params: dict[str, Value] | None = None
+        self, query: str, vars: dict[str, Value] | None = None
     ) -> dict[str, Any]:
-        if params is None:
-            params = {}
+        if vars is None:
+            vars = {}
         for key, value in self.vars.items():
-            params[key] = value
+            vars[key] = value
         message = RequestMessage(
             RequestMethod.QUERY,
             query=query,
-            params=params,
+            params=vars,
         )
         self.id = message.id
         response = self._send(message, "query", bypass=True)
