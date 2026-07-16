@@ -24,13 +24,14 @@ from surrealdb.connections.builders import (
 )
 from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.url import Url
-from surrealdb.connections.utils_mixin import UtilsMixin
+from surrealdb.connections.utils_mixin import AUTH_FALLBACK_QUERY, UtilsMixin
 from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     ConnectionUnavailableError,
     UnexpectedResponseError,
+    parse_rpc_error,
 )
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
@@ -177,6 +178,18 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         message = RequestMessage(RequestMethod.INFO, **kwargs)
         self.id = message.id
         response = self._send(message, "getting database information", bypass=True)
+
+        if response.get("error") is not None:
+            # Record-auth sessions have no ROOT/NS/DB info; re-resolve the
+            # authenticated record via `$auth`.
+            if self._info_needs_auth_fallback(response):
+                record = self._extract_auth_record(
+                    self.query(AUTH_FALLBACK_QUERY, session_id=session_id).first()
+                )
+                if record is not None:
+                    return record
+            raise parse_rpc_error(response["error"])
+
         self.check_response_for_result(response, "getting database information")
         return response["result"]
 

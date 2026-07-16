@@ -12,7 +12,7 @@ from surrealdb.connections.builders import (
 )
 from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.url import Url
-from surrealdb.connections.utils_mixin import UtilsMixin
+from surrealdb.connections.utils_mixin import AUTH_FALLBACK_QUERY, UtilsMixin
 from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
@@ -105,20 +105,16 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.id = message.id
         response = self._send(message, "getting database information", bypass=True)
 
-        if response.get("error"):
-            error = response.get("error")
-            # If INFO returns "No result found", try to get auth info via $auth
-            # This happens when using record-level authentication
-            if (
-                error
-                and error.get("code") == -32000
-                and "No result found" in error.get("message", "")
-            ):
-                auth_response = self.query("SELECT * FROM $auth").first()
-                if isinstance(auth_response, list) and len(auth_response) > 0:
-                    return auth_response[0]
-            if error is not None:
-                raise parse_rpc_error(error)
+        if response.get("error") is not None:
+            # Record-auth sessions have no ROOT/NS/DB info; re-resolve the
+            # authenticated record via `$auth`.
+            if self._info_needs_auth_fallback(response):
+                record = self._extract_auth_record(
+                    self.query(AUTH_FALLBACK_QUERY).first()
+                )
+                if record is not None:
+                    return record
+            raise parse_rpc_error(response["error"])
 
         self.check_response_for_result(response, "getting database information")
         return response["result"]
