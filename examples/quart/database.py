@@ -1,10 +1,10 @@
 """Database connection management."""
 
 from quart import current_app, g
-from surrealdb import AsyncSurreal
+from surrealdb import AsyncSurreal, AsyncSurrealConnection
 
 
-async def get_db() -> AsyncSurreal:
+async def get_db() -> AsyncSurrealConnection:
     """Get database connection for current request.
 
     Creates a new connection if one doesn't exist in the request context.

@@ -1,7 +1,7 @@
 """Authentication endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from surrealdb import AsyncSurreal
+from surrealdb import AsyncSurrealConnection
 
 from database import get_db
 from models import AuthResponse, MessageResponse, SigninRequest, SignupRequest
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 @router.post("/signup", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def signup(
     request: SignupRequest,
-    db: AsyncSurreal = Depends(get_db),
+    db: AsyncSurrealConnection = Depends(get_db),
 ) -> AuthResponse:
     """Register a new user account."""
     try:
@@ -40,7 +40,7 @@ async def signup(
 @router.post("/signin", response_model=AuthResponse)
 async def signin(
     request: SigninRequest,
-    db: AsyncSurreal = Depends(get_db),
+    db: AsyncSurrealConnection = Depends(get_db),
 ) -> AuthResponse:
     """Sign in to an account."""
     try:
@@ -64,7 +64,7 @@ async def signin(
 
 @router.post("/invalidate", response_model=MessageResponse)
 async def invalidate(
-    db: AsyncSurreal = Depends(get_db),
+    db: AsyncSurrealConnection = Depends(get_db),
 ) -> MessageResponse:
     """Sign out and invalidate the session."""
     try:
