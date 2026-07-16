@@ -12,6 +12,7 @@ below (``Any`` does not match the asserted concrete type).
 """
 
 import sys
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 if sys.version_info >= (3, 11):
@@ -36,6 +37,11 @@ from surrealdb.types import Value
 
 
 def test_async_session_crud_overload_precision() -> None:
+    if not TYPE_CHECKING:
+        # Static type-guard only: ``assert_type`` is a runtime no-op, and the
+        # eager sync CRUD methods must not perform real I/O when exercised
+        # purely for their return type. mypy still checks the body below.
+        return
     conn = AsyncWsSurrealConnection("ws://localhost:8000/rpc")
     session = AsyncSurrealSession(conn, uuid4())
 
@@ -65,6 +71,11 @@ def test_async_session_crud_overload_precision() -> None:
 
 
 def test_async_transaction_crud_overload_precision() -> None:
+    if not TYPE_CHECKING:
+        # Static type-guard only: ``assert_type`` is a runtime no-op, and the
+        # eager sync CRUD methods must not perform real I/O when exercised
+        # purely for their return type. mypy still checks the body below.
+        return
     conn = AsyncWsSurrealConnection("ws://localhost:8000/rpc")
     txn = AsyncSurrealTransaction(conn, uuid4(), uuid4())
 
@@ -86,6 +97,11 @@ def test_async_transaction_crud_overload_precision() -> None:
 
 
 def test_blocking_session_crud_overload_precision() -> None:
+    if not TYPE_CHECKING:
+        # Static type-guard only: ``assert_type`` is a runtime no-op, and the
+        # eager sync CRUD methods must not perform real I/O when exercised
+        # purely for their return type. mypy still checks the body below.
+        return
     conn = BlockingWsSurrealConnection("ws://localhost:8000/rpc")
     session = BlockingSurrealSession(conn, uuid4())
 
@@ -114,6 +130,11 @@ def test_blocking_session_crud_overload_precision() -> None:
 
 
 def test_blocking_transaction_crud_overload_precision() -> None:
+    if not TYPE_CHECKING:
+        # Static type-guard only: ``assert_type`` is a runtime no-op, and the
+        # eager sync CRUD methods must not perform real I/O when exercised
+        # purely for their return type. mypy still checks the body below.
+        return
     conn = BlockingWsSurrealConnection("ws://localhost:8000/rpc")
     txn = BlockingSurrealTransaction(conn, uuid4(), uuid4())
 
