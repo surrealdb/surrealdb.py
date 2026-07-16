@@ -364,7 +364,7 @@ async def test_record_id_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE record_id_tests:test1 SET user_ref = $val;",
         vars={"val": record_id},
     )
-    result = await surrealdb_connection.query("SELECT * FROM record_id_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM record_id_tests;").first()
     assert result[0]["user_ref"] == record_id
 
 
@@ -376,7 +376,7 @@ async def test_record_id_with_int_db_roundtrip(surrealdb_connection: Any) -> Non
         "CREATE record_id_tests:test2 SET user_ref = $val;",
         vars={"val": record_id},
     )
-    result = await surrealdb_connection.query("SELECT * FROM record_id_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM record_id_tests;").first()
     assert result[0]["user_ref"] == record_id
 
 
@@ -388,7 +388,7 @@ async def test_record_id_with_array_db_roundtrip(surrealdb_connection: Any) -> N
         "CREATE record_id_tests:test3 SET event_ref = $val;",
         vars={"val": record_id},
     )
-    result = await surrealdb_connection.query("SELECT * FROM record_id_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM record_id_tests;").first()
     assert result[0]["event_ref"] == record_id
 
 
@@ -413,7 +413,7 @@ async def test_multiple_record_ids_db_roundtrip(surrealdb_connection: Any) -> No
         "CREATE record_id_tests:test4 SET user_ref = $user, post_ref = $post, comment_ref = $comment;",
         vars=record_ids,
     )
-    result = await surrealdb_connection.query("SELECT * FROM record_id_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM record_id_tests;").first()
     assert result[0]["user_ref"] == record_ids["user"]
     assert result[0]["post_ref"] == record_ids["post"]
     assert result[0]["comment_ref"] == record_ids["comment"]
@@ -427,7 +427,7 @@ async def test_record_id_with_object_db_roundtrip(surrealdb_connection: Any) -> 
         "CREATE record_id_tests:test5 SET person_ref = $val;",
         vars={"val": record_id},
     )
-    result = await surrealdb_connection.query("SELECT * FROM record_id_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM record_id_tests;").first()
     assert result[0]["person_ref"] == record_id
 
 
@@ -495,7 +495,7 @@ async def test_relate_with_bound_record_id_vars(
 
     quoted_res = await surrealdb_connection.query(
         "SELECT * FROM record_id_tests:`231`;"
-    )
+    ).first()
     quoted_id = quoted_res[0]["id"]
     assert quoted_id.id == "231"  # the raw id is the plain string "231"
 
@@ -506,7 +506,7 @@ async def test_relate_with_bound_record_id_vars(
 
     result = await surrealdb_connection.query(
         "SELECT ->owns->record_id_tests.* AS companies FROM record_id_tests:alice;"
-    )
+    ).first()
     companies = result[0]["companies"]
     assert len(companies) == 1
     assert companies[0]["name"] == "Quoted Company"
@@ -531,11 +531,13 @@ async def test_bound_record_id_var_treats_hostile_id_as_inert_data(
     res = await surrealdb_connection.query(
         "RELATE $a->owns->$b;",
         vars={"a": RecordID("record_id_tests", "alice"), "b": hostile},
-    )
+    ).first()
     assert res[0]["out"] == hostile  # edge points at the literal string id
 
     # The table (and alice) survived: the hostile id was data, not syntax.
-    alive = await surrealdb_connection.query("SELECT * FROM record_id_tests:alice;")
+    alive = await surrealdb_connection.query(
+        "SELECT * FROM record_id_tests:alice;"
+    ).first()
     assert alive[0]["name"] == "Alice"
 
 
@@ -565,7 +567,7 @@ async def test_relate_with_manually_quoted_numeric_string_id(
 
     quoted_res = await surrealdb_connection.query(
         "SELECT * FROM record_id_tests:`231`;"
-    )
+    ).first()
     quoted_id = quoted_res[0]["id"]
     assert quoted_id.id == "231"  # the raw id is the plain string "231"
 
@@ -576,7 +578,7 @@ async def test_relate_with_manually_quoted_numeric_string_id(
 
     result = await surrealdb_connection.query(
         "SELECT ->owns->record_id_tests.* AS companies FROM record_id_tests:alice;"
-    )
+    ).first()
     companies = result[0]["companies"]
     assert len(companies) == 1
     assert companies[0]["name"] == "Quoted Company"

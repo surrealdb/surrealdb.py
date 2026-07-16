@@ -187,7 +187,7 @@ async def test_empty_object_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE object_tests:test1 SET value = $val;",
         vars={"val": test_obj},
     )
-    result = await surrealdb_connection.query("SELECT * FROM object_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM object_tests;").first()
     assert result[0]["value"] == test_obj
 
 
@@ -199,7 +199,7 @@ async def test_simple_object_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE object_tests:test2 SET value = $val;",
         vars={"val": test_obj},
     )
-    result = await surrealdb_connection.query("SELECT * FROM object_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM object_tests;").first()
     assert result[0]["value"] == test_obj
 
 
@@ -211,7 +211,7 @@ async def test_nested_object_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE object_tests:test3 SET value = $val;",
         vars={"val": test_obj},
     )
-    result = await surrealdb_connection.query("SELECT * FROM object_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM object_tests;").first()
     assert result[0]["value"] == test_obj
 
 
@@ -229,7 +229,7 @@ async def test_object_with_mixed_types_db_roundtrip(surrealdb_connection: Any) -
         "CREATE object_tests:test4 SET value = $val;",
         vars={"val": test_obj},
     )
-    result = await surrealdb_connection.query("SELECT * FROM object_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM object_tests;").first()
     assert result[0]["value"] == test_obj
 
 
@@ -249,7 +249,7 @@ async def test_object_with_arrays_and_nested_objects_db_roundtrip(
         "CREATE object_tests:test5 SET value = $val;",
         vars={"val": test_obj},
     )
-    result = await surrealdb_connection.query("SELECT * FROM object_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM object_tests;").first()
     assert result[0]["value"] == test_obj
 
 
@@ -260,7 +260,7 @@ async def test_top_level_object_fields_db_roundtrip(surrealdb_connection: Any) -
         "CREATE object_tests:test6 SET name = $name, age = $age, active = $active;",
         vars={"name": "Charlie", "age": 35, "active": True},
     )
-    result = await surrealdb_connection.query("SELECT * FROM object_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM object_tests;").first()
     assert result[0]["name"] == "Charlie"
     assert result[0]["age"] == 35
     assert result[0]["active"] is True

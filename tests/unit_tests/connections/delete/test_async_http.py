@@ -26,7 +26,7 @@ async def test_delete_string(
     assert outcome["name"] == "Tobie"
 
     # Verify the record was actually deleted
-    outcome = await async_http_connection.query("SELECT * FROM user;")
+    outcome = await async_http_connection.query("SELECT * FROM user;").first()
     assert outcome == []
 
 
@@ -44,7 +44,7 @@ async def test_delete_record_id(
     assert outcome["name"] == "Tobie"
 
     # Verify the record was actually deleted
-    outcome = await async_http_connection.query("SELECT * FROM user;")
+    outcome = await async_http_connection.query("SELECT * FROM user;").first()
     assert outcome == []
 
 
@@ -63,5 +63,5 @@ async def test_delete_table(async_http_connection: AsyncHttpSurrealConnection) -
     assert any(record["name"] == "Jaime" for record in outcome)
 
     # Verify all records were deleted
-    outcome = await async_http_connection.query("SELECT * FROM user;")
+    outcome = await async_http_connection.query("SELECT * FROM user;").first()
     assert outcome == []

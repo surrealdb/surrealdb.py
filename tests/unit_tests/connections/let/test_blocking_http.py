@@ -16,7 +16,7 @@ def test_let(blocking_http_connection: BlockingHttpSurrealConnection) -> None:
     blocking_http_connection.query("CREATE person SET name = $name").execute()
     outcome = blocking_http_connection.query(
         "SELECT * FROM person WHERE name.first = $name.first"
-    )
+    ).first()
     assert outcome[0]["name"] == {"first": "Tobie", "last": "Morgan Hitchcock"}
 
     blocking_http_connection.query("DELETE person;").execute()

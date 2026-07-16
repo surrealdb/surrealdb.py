@@ -34,7 +34,7 @@ def test_new_session_use_query_create_select(
         connection_params["namespace"],
         connection_params["database_name"],
     )
-    result = session.query("SELECT * FROM session_txn_test;")
+    result = session.query("SELECT * FROM session_txn_test;").first()
     assert isinstance(result, list)
     assert len(result) == 0
 
@@ -90,8 +90,8 @@ def test_two_sessions_isolated(
         456,
     )
 
-    res_a = session_a.query("RETURN $var;")
-    res_b = session_b.query("RETURN $var;")
+    res_a = session_a.query("RETURN $var;").first()
+    res_b = session_b.query("RETURN $var;").first()
     assert res_a == 123
     assert res_b == 456
 

@@ -299,6 +299,12 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     async def unset(self, key: str) -> None:
         self.vars.pop(key)
 
+    @overload
+    async def select(self, record: RecordID) -> dict[str, Value] | None: ...
+    @overload
+    async def select(self, record: Table) -> list[Value]: ...
+    @overload
+    async def select(self, record: str) -> Value: ...
     async def select(self, record: RecordIdType) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -307,7 +313,14 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         response = await self.query_raw(query, variables)
         self.check_response_for_error(response, "select")
         self._check_query_result(response["result"][0])
-        return response["result"][0]["result"]
+        result = response["result"][0]["result"]
+        # Single-record targets (RecordID / "table:id") unwrap the one-element
+        # result list to the record dict, or None when the record is absent.
+        if self._is_single_record_operation(record):
+            if isinstance(result, list):
+                return result[0] if result else None
+            return result
+        return result
 
     async def version(self) -> str:
         message = RequestMessage(RequestMethod.VERSION)

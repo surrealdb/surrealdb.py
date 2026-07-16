@@ -37,7 +37,7 @@ def test_merge_string(
     outcome = blocking_http_connection.update("user:tobie").merge({})
     assert outcome["id"] == record_id
     assert outcome["name"] == "Tobie"
-    result = blocking_http_connection.query("SELECT * FROM user;")
+    result = blocking_http_connection.query("SELECT * FROM user;").first()
     assert result[0]["id"] == record_id
     assert result[0]["name"] == "Tobie"
 
@@ -53,7 +53,7 @@ def test_merge_string_with_data(
     assert first_outcome["name"] == "Jaime"
     assert first_outcome["email"] == "jaime@example.com"
     assert first_outcome["enabled"] is True
-    result = blocking_http_connection.query("SELECT * FROM user;")
+    result = blocking_http_connection.query("SELECT * FROM user;").first()
     assert result[0]["id"] == record_id
     assert result[0]["name"] == "Jaime"
     assert result[0]["email"] == "jaime@example.com"
@@ -67,7 +67,7 @@ def test_merge_record_id(
     first_outcome = blocking_http_connection.update(record_id).merge({})
     assert first_outcome["id"] == record_id
     assert first_outcome["name"] == "Tobie"
-    result = blocking_http_connection.query("SELECT * FROM user;")
+    result = blocking_http_connection.query("SELECT * FROM user;").first()
     assert result[0]["id"] == record_id
     assert result[0]["name"] == "Tobie"
 
@@ -83,7 +83,7 @@ def test_merge_record_id_with_data(
     assert outcome["name"] == "Jaime"
     assert outcome["email"] == "jaime@example.com"
     assert outcome["enabled"] is True
-    result = blocking_http_connection.query("SELECT * FROM user;")
+    result = blocking_http_connection.query("SELECT * FROM user;").first()
     assert result[0]["id"] == record_id
     assert result[0]["name"] == "Jaime"
     assert result[0]["email"] == "jaime@example.com"
@@ -98,7 +98,7 @@ def test_merge_table(
     first_outcome = blocking_http_connection.update(table).merge({})
     assert first_outcome[0]["id"] == record_id
     assert first_outcome[0]["name"] == "Tobie"
-    result = blocking_http_connection.query("SELECT * FROM user;")
+    result = blocking_http_connection.query("SELECT * FROM user;").first()
     assert result[0]["id"] == record_id
     assert result[0]["name"] == "Tobie"
 
@@ -115,7 +115,7 @@ def test_merge_table_with_data(
     assert outcome[0]["name"] == "Jaime"
     assert outcome[0]["email"] == "jaime@example.com"
     assert outcome[0]["enabled"] is True
-    result = blocking_http_connection.query("SELECT * FROM user;")
+    result = blocking_http_connection.query("SELECT * FROM user;").first()
     assert result[0]["id"] == record_id
     assert result[0]["name"] == "Jaime"
     assert result[0]["email"] == "jaime@example.com"

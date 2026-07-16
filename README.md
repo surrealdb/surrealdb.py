@@ -119,17 +119,17 @@ with Surreal("ws://localhost:8000/rpc") as db:
     # In SurrealQL you can do a direct insert 
     # and the table will be created if it doesn't exist
     
-    # Create
+    # Create (sync query() returns a builder - call .execute() to run it)
     db.query("""
     insert into person {
         user: 'me',
         password: 'very_safe',
         tags: ['python', 'documentation']
     };
-    """)
+    """).execute()
 
-    # Read
-    print(db.query("select * from person"))
+    # Read - .first() returns the first statement's result (the rows)
+    print(db.query("select * from person").first())
     
     # Update
     print(db.query("""
@@ -138,10 +138,10 @@ with Surreal("ws://localhost:8000/rpc") as db:
         password: 'more_safe',
         tags: ['awesome']
     };
-    """))
+    """).execute())
 
     # Delete
-    print(db.query("delete person"))
+    print(db.query("delete person").execute())
 ```
 
 ## CRUD builder pattern (v3.0)
@@ -180,8 +180,23 @@ The builder is **typed** via `@overload`:
 - `str` target     -> `Value` (a record-id string returns a dict; a table-name
   string returns a list - the type checker can't tell them apart, so falls back to `Value`)
 
-Sync usage is similar, but the clause methods are **terminal** (there is
-no `await` to defer to, so they run immediately and return the result):
+`select()` (async and sync) always runs eagerly and unwraps single records:
+
+- `select(RecordID(...))` (or a `"table:id"` string) -> `dict[str, Value] | None`
+  (`None` when the record does not exist)
+- `select(Table(...))` (or a bare table-name string) -> `list[Value]`
+
+```python
+row = await db.select(RecordID("person", "tobie"))  # dict | None
+rows = await db.select(Table("person"))             # list
+```
+
+Sync usage is **eager** - there is no `await` to defer to, so the
+connection methods run single-shot operations immediately and return the
+plain result. A builder is only handed back for the deferred no-data form
+so you can pick a clause; there are **no** magic methods, so a builder
+never auto-executes on `bool()`, `==`, indexing, iteration, or attribute
+access.
 
 ```python
 from surrealdb import Surreal
@@ -190,43 +205,36 @@ with Surreal("ws://localhost:8000/rpc") as db:
     db.signin({"username": "root", "password": "root"})
     db.use("ns", "db")
 
-    # Terminal: .merge runs the UPDATE and returns the result dict.
-    out = db.create(RecordID("person", "tobie")).merge({"name": "Tobie"})
+    # Passing data runs immediately and returns the created record dict.
+    tobie = db.create(RecordID("person", "tobie"), {"name": "Tobie"})
 
-    # No-clause form: lazy builder; auto-executes the first time you
-    # consume it (indexing, iteration, ==, attribute access, ...).
-    builder = db.create(RecordID("person", "alice"))
-    print(builder["id"])  # <- triggers execution, returns the dict's "id"
+    # No-data form returns a builder; a terminal clause method runs it.
+    out = db.create(RecordID("person", "alice")).merge({"name": "Alice"})
 
-    # Fire-and-forget: call .execute() because no consumption happens.
+    # Clause-less run: call .execute() explicitly.
+    empty = db.create(RecordID("person", "bob")).execute()
+
+    # select() and delete() always run eagerly and return the result.
+    row = db.select(RecordID("person", "tobie"))  # dict | None
+    db.delete(RecordID("person", "bob"))
+
+    # query() returns a builder; call .execute()/.first()/.into().
     db.query("DELETE temp_data;").execute()
 ```
 
-> Note: `__repr__` and `__str__` on a pending sync builder return a
-> `"<...pending>"` placeholder rather than executing the operation, so
-> debuggers, loggers, and `print()` cannot accidentally fire pending
-> queries or mutations.
->
-> ⚠ **Truthiness and comparison** auto-execute though.
-> `if db.query("DELETE foo;")`, `bool(db.create(...))`, and
-> `db.create(...) == something` will all run the operation. If you want
-> fire-and-forget, call `.execute()` explicitly. The full list of
-> auto-executing magic methods is `__getitem__`, `__iter__`, `__len__`,
-> `__contains__`, `__eq__`, `__ne__`, `__bool__`, and `__getattr__`.
-
 ### Thread safety
 
-Sync builders guard their cache with a per-builder lock so consuming the
-same builder from multiple threads issues exactly one RPC. They are
+The no-data sync builder guards its cache with a per-builder lock so
+calling `.execute()` from multiple threads issues exactly one RPC. It is
 **not** safe for concurrent *reconfiguration* though — calling `.merge()`
-on one thread while another consumes the result is a race on the
-builder's clause/data state that the lock does not cover. Treat builders
-as single-shot, single-owner values; pass the realised result between
+on one thread while another calls `.execute()` is a race on the builder's
+clause/data state that the lock does not cover. Treat builders as
+single-shot, single-owner values; pass the realised result between
 threads, not the builder itself.
 
 The underlying `BlockingWsSurrealConnection` is itself thread-safe (it
 serialises send/recv with an internal lock), so sharing a connection
-across threads and creating per-thread builders against it is fine.
+across threads and issuing per-thread operations against it is fine.
 
 ### Async cancellation and server truth
 
@@ -244,17 +252,22 @@ need atomic rollback semantics.
 
 ## Multi-statement queries and transactions (issue #232 fix)
 
-`query()` now surfaces every statement result. When the server returns a
-single result, `query()` returns a single Value. When it returns multiple
-(multi-statement queries or `BEGIN ... COMMIT` blocks), `query()` returns
-a `tuple[Value, ...]`.
+`query()` always returns a `list[Value]` - one entry per statement, even
+for a single statement - so multi-statement queries and `BEGIN ... COMMIT`
+blocks never silently drop results. Use `.first()` for the first
+statement's result (or `None` when there are no statements).
 
 ```python
-single = await db.query("SELECT * FROM person")
+rows = await db.query("SELECT * FROM person")       # [people_list]
+first = await db.query("SELECT * FROM person").first()  # people_list
 many = await db.query(
     "SELECT * FROM person; SELECT count() FROM person GROUP ALL"
 )
-# many is (people_list, count_list)
+# many is [people_list, count_list]
+
+# Sync: query() returns a builder - run it explicitly.
+rows = db.query("SELECT * FROM person").execute()   # [people_list]
+first = db.query("SELECT * FROM person").first()    # people_list
 ```
 
 You can also map the N statement results onto a dataclass via `.into()`:
@@ -324,10 +337,13 @@ v3.0 is a breaking change. Highlights:
 | `db.merge(record, data)`                         | `db.update(record).merge(data)`                           |
 | `db.patch(record, data)`                         | `db.update(record).patch(data)`                           |
 | `db.insert_relation(table, data)`                | `db.insert(table, data, relation=True)`                   |
-| `db.query("SELECT 1; SELECT 2")` -> first result | `db.query("SELECT 1; SELECT 2")` -> `tuple` of all results |
+| `db.query("SELECT 1")` -> single result          | `db.query("SELECT 1")` -> `[result]` (use `.first()` / `[0]`) |
+| `db.query("SELECT 1; SELECT 2")` -> first result | `db.query("SELECT 1; SELECT 2")` -> `list` of all results |
 | n/a                                              | `db.run("fn::name", [args])`                              |
 | n/a                                              | `db.query("...").into(MyDataclass)`                       |
-| Sync `db.query("DELETE foo")` runs immediately   | Sync `db.query("DELETE foo").execute()` (lazy builder)     |
+| Sync `db.query("DELETE foo")` runs immediately   | Sync `db.query("DELETE foo").execute()` (returns list)     |
+| Sync `db.create(rec)[...]` (magic auto-exec)     | Sync `db.create(rec, data)` eager, or `db.create(rec).execute()` |
+| `db.select(RecordID(...))` -> `[record]`         | `db.select(RecordID(...))` -> `record` dict or `None`     |
 | `db.delete("my-table")` (silently inlined)       | `db.delete(Table("my-table"))` (raw string rejected)      |
 
 > Bare-string resource targets are now strictly validated against the

@@ -119,7 +119,7 @@ async def test_none(surrealdb_connection: Any) -> None:
     assert "Dave" == outcome["name"]
     assert 34 == outcome["age"]
 
-    outcome = await surrealdb_connection.query("SELECT * FROM person")
+    outcome = await surrealdb_connection.query("SELECT * FROM person").first()
     assert 2 == len(outcome)
 
 
@@ -134,7 +134,7 @@ async def test_none_with_query(surrealdb_connection: Any) -> None:
     outcome = await surrealdb_connection.query(
         "UPSERT person MERGE {id: $id, name: $name, nums: $nums}",
         {"id": [1, 2], "name": "John", "nums": [None]},
-    )
+    ).first()
     record_check = RecordID(table_name="person", identifier=[1, 2])
     if len(outcome) > 0:
         assert record_check == outcome[0]["id"]
@@ -145,7 +145,7 @@ async def test_none_with_query(surrealdb_connection: Any) -> None:
     outcome = await surrealdb_connection.query(
         "UPSERT person MERGE {id: $id, name: $name, nums: $nums}",
         {"id": [3, 4], "name": "Dave", "nums": [None]},
-    )
+    ).first()
     record_check = RecordID(table_name="person", identifier=[3, 4])
     if len(outcome) > 0:
         assert record_check == outcome[0]["id"]
@@ -153,5 +153,5 @@ async def test_none_with_query(surrealdb_connection: Any) -> None:
         nums_value = outcome[0].get("nums")
         assert nums_value in [[None], []]
 
-    outcome = await surrealdb_connection.query("SELECT * FROM person")
+    outcome = await surrealdb_connection.query("SELECT * FROM person").first()
     assert len(outcome) in [0, 2]

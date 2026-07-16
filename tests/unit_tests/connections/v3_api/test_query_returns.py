@@ -1,13 +1,13 @@
 """
-Tests for the new v3.0 query() return shape.
+Tests for the v3.0 query() return shape.
 
 Verifies the fix for GH issue #232: previously query() always returned
 ``response["result"][0]["result"]``, silently dropping every statement
-result after the first. The new behaviour returns:
-
-- the result Value when exactly one statement was executed
-- a ``tuple[Value, ...]`` when multiple statements were executed (so
-  transactions and multi-statement queries no longer lose data).
+result after the first. The new behaviour ALWAYS returns a
+``list[Value]`` - one entry per statement, even for a single statement -
+so transactions and multi-statement queries never lose data. ``.first()``
+returns the first statement's result, and ``.into(cls)`` maps the N
+statement results positionally onto a dataclass / class.
 """
 
 from collections.abc import AsyncGenerator, Generator
@@ -48,24 +48,26 @@ def _blocking_setup(
 
 
 @pytest.mark.asyncio
-async def test_async_query_single_statement_returns_value(
+async def test_async_query_single_statement_returns_list(
     async_ws_connection: AsyncWsSurrealConnection,
     _async_setup: None,
     _blocking_setup: None,
 ) -> None:
     result = await async_ws_connection.query("RETURN 42;")
-    assert result == 42
+    assert result == [42]
+    first = await async_ws_connection.query("RETURN 42;").first()
+    assert first == 42
 
 
 @pytest.mark.asyncio
-async def test_async_query_multi_statement_returns_tuple(
+async def test_async_query_multi_statement_returns_list(
     async_ws_connection: AsyncWsSurrealConnection,
     _async_setup: None,
     _blocking_setup: None,
 ) -> None:
     result = await async_ws_connection.query("RETURN 1; RETURN 2; RETURN 3;")
-    assert isinstance(result, tuple)
-    assert result == (1, 2, 3)
+    assert isinstance(result, list)
+    assert result == [1, 2, 3]
 
 
 @pytest.mark.asyncio
@@ -77,14 +79,10 @@ async def test_async_query_transaction_block_surfaces_all_results(
     """Reproduction for issue #232.
 
     The transaction should expose the UPDATE result rather than silently
-    dropping it. SurrealDB 3.x returns one entry per statement (the
-    builder packages those into a tuple); older versions collapse the
-    block to the last statement's result. Either way, the UPDATE
-    result must be observable - it must not be silently discarded.
+    dropping it. ``query()`` returns one ``list`` entry per statement, so
+    the UPDATE result must be observable somewhere in the list.
     """
-    await async_ws_connection.query(
-        "CREATE multi_q:1 SET status = 'pending';"
-    )
+    await async_ws_connection.query("CREATE multi_q:1 SET status = 'pending';")
     result = await async_ws_connection.query(
         "BEGIN TRANSACTION;"
         " UPDATE multi_q:1 SET status = 'running';"
@@ -99,13 +97,8 @@ async def test_async_query_transaction_block_surfaces_all_results(
             and item[0].get("status") == "running"
         )
 
-    if isinstance(result, tuple):
-        # v3: tuple of (BEGIN, UPDATE, COMMIT) statement results.
-        assert any(_is_update_result(item) for item in result), result
-    else:
-        # v2: server collapses the block to the last statement's result;
-        # query() returns that single value directly.
-        assert _is_update_result(result), result
+    assert isinstance(result, list)
+    assert any(_is_update_result(item) for item in result), result
 
 
 @pytest.mark.asyncio
@@ -120,9 +113,9 @@ async def test_async_query_into_dataclass(
         second: int
         third: int
 
-    mapped = await async_ws_connection.query(
-        "RETURN 10; RETURN 20; RETURN 30;"
-    ).into(Result)
+    mapped = await async_ws_connection.query("RETURN 10; RETURN 20; RETURN 30;").into(
+        Result
+    )
     assert isinstance(mapped, Result)
     assert mapped.first == 10
     assert mapped.second == 20
@@ -151,21 +144,22 @@ async def test_async_query_into_field_count_mismatch(
 # ---------------------------------------------------------------------------
 
 
-def test_blocking_query_single_statement_returns_value(
+def test_blocking_query_single_statement_returns_list(
     blocking_ws_connection: BlockingWsSurrealConnection,
     _blocking_setup: None,
 ) -> None:
     result = blocking_ws_connection.query("RETURN 42;").execute()
-    assert result == 42
+    assert result == [42]
+    assert blocking_ws_connection.query("RETURN 42;").first() == 42
 
 
-def test_blocking_query_multi_statement_returns_tuple(
+def test_blocking_query_multi_statement_returns_list(
     blocking_ws_connection: BlockingWsSurrealConnection,
     _blocking_setup: None,
 ) -> None:
     result = blocking_ws_connection.query("RETURN 1; RETURN 2; RETURN 3;").execute()
-    assert isinstance(result, tuple)
-    assert result == (1, 2, 3)
+    assert isinstance(result, list)
+    assert result == [1, 2, 3]
 
 
 def test_blocking_query_into_dataclass(

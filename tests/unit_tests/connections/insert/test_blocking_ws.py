@@ -42,7 +42,7 @@ def test_insert_string_with_data(
     blocking_ws_connection.query("DELETE user;").execute()
     outcome = blocking_ws_connection.insert("user", insert_bulk_data)
     assert 2 == len(outcome)
-    assert len(blocking_ws_connection.query("SELECT * FROM user;")) == 2
+    assert len(blocking_ws_connection.query("SELECT * FROM user;").first()) == 2
 
 
 def test_insert_record_id_result_error(

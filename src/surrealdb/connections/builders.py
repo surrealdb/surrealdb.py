@@ -1,5 +1,5 @@
 """
-Awaitable / lazy CRUD and query builders shared across all connection types.
+Awaitable / eager CRUD and query builders shared across all connection types.
 
 The builders capture the operation state (target resource, optional clause,
 data payload) and execute it through an injected ``executor`` callback.
@@ -7,31 +7,43 @@ This keeps wire-level concerns (session/transaction routing, websocket vs
 http transport) in the connection classes while the SQL construction and
 result extraction live in one place.
 
-Async builders are awaitable - ``await db.create(...)`` runs the operation.
-Sync builders implement magic methods so the returned object behaves like
-the result it produces; clause methods on sync builders are *terminal* and
-execute immediately, returning the underlying result. An explicit
-``execute()`` method is also available for callers that want to be explicit.
+Async vs sync
+-------------
+- **Async** builders are awaitable - ``await db.create(...)`` runs the
+  operation. Their clause methods (``.content`` / ``.replace`` / ``.merge``
+  / ``.patch``) return ``self`` so the builder stays awaitable, and the RPC
+  only fires on ``await`` / ``.execute()``.
+- **Sync** builders are *eager*: there is no ``await`` to defer execution to,
+  so the sync connection methods run single-shot operations immediately and
+  hand back the plain result. A sync builder is only returned for the
+  deferred forms - ``db.create(record)`` with no data, or ``db.insert(table)``
+  with no data - and every terminal method on it (``.content`` / ``.replace``
+  / ``.merge`` / ``.patch`` / ``.relation().content(...)`` / ``.execute()``)
+  runs the operation and returns the underlying result. Sync builders carry
+  **no** magic dunders: they never auto-execute on ``bool()``, ``==``,
+  indexing, iteration, or attribute access.
 
-Idempotency
------------
-Builders cache their result. Awaiting (or consuming) the same instance
-twice runs the operation **once**:
+Idempotency (async only)
+------------------------
+Async builders cache their result: awaiting the same instance twice (or from
+concurrent tasks) runs the operation **once** via an ``asyncio.Future`` so
+concurrent awaits all wait on the same in-flight operation rather than firing
+duplicate RPC calls. ``query().into(MyResult)`` shares the cached fetch with
+the parent ``query()`` builder, so ``await q.into(T)`` followed by ``await q``
+issues only one server round-trip. Sync builders keep a simple ``_executed``
+flag + lock so an explicit ``.execute()`` after a terminal clause returns the
+cached result rather than re-issuing the RPC.
 
-- Async builders use an ``asyncio.Future`` so concurrent awaits all wait on
-  the same in-flight operation rather than firing duplicate RPC calls.
-- Sync builders use a simple ``_executed`` flag plus cached result.
-
-In both cases ``query().into(MyResult)`` shares the cached fetch with the
-parent ``query()`` builder, so ``await q.into(T)`` followed by ``await q``
-issues only one server round-trip.
+query() always returns a sequence
+---------------------------------
+Both :class:`AsyncQueryBuilder` and :class:`SyncQueryBuilder` return
+``list[Value]`` - one entry per statement - even for a single statement
+(fixes the historic silent-discard behaviour, GH issue #232). Use
+``.first()`` to pull the first statement's result, or ``.into(cls)`` to map
+the N statement results positionally onto a dataclass / class.
 
 Safety
 ------
-- ``__repr__`` and ``__str__`` on sync builders return a ``"<...pending>"``
-  placeholder when the operation has not yet been triggered, so debuggers,
-  loggers, or pytest introspection cannot accidentally execute a pending
-  query / mutation.
 - Plain ``str`` resource targets are bound through ``type::thing()`` /
   ``type::table()`` (parameterised) rather than concatenated into the SQL,
   guarding against the classic injection footgun where untrusted input
@@ -44,7 +56,7 @@ import asyncio
 import inspect
 import re
 import threading
-from collections.abc import Awaitable, Callable, Generator, Iterator
+from collections.abc import Awaitable, Callable, Generator
 from dataclasses import fields, is_dataclass
 from typing import Any, Generic, TypeVar, cast
 
@@ -611,9 +623,9 @@ class AsyncInsertBuilder(_InsertState):
 class AsyncQueryBuilder(_QueryState):
     """Awaitable QUERY builder for async connections.
 
-    Returns a single Value when the server returned exactly one statement
-    result, otherwise a tuple of all statement results (fixes the historic
-    silent-discard behaviour - GH issue #232).
+    Always returns ``list[Value]`` - one entry per statement - even for a
+    single statement (fixes the historic silent-discard behaviour, GH issue
+    #232). Use ``.first()`` for the first statement's result.
 
     Idempotent: the underlying RPC fires once, and ``.into(cls)`` shares
     the same cached fetch.
@@ -642,13 +654,17 @@ class AsyncQueryBuilder(_QueryState):
         # issuing a second RPC.
         return AsyncQueryIntoBuilder(self, cls)
 
-    async def execute(self) -> Value | tuple[Value, ...]:
-        values = await self._fetch_values()
-        if len(values) == 1:
-            return values[0]
-        return tuple(values)
+    async def execute(self) -> list[Value]:
+        return cast("list[Value]", await self._fetch_values())
 
-    def __await__(self) -> Generator[Any, None, Value | tuple[Value, ...]]:
+    async def first(self) -> Value:
+        """Return the first statement's result (``None`` if no statements)."""
+        values = await self._fetch_values()
+        if not values:
+            return None
+        return cast(Value, values[0])
+
+    def __await__(self) -> Generator[Any, None, list[Value]]:
         return self.execute().__await__()
 
 
@@ -677,135 +693,31 @@ class AsyncQueryIntoBuilder(Generic[T]):
 # ---------------------------------------------------------------------------
 
 
-class _SyncBuilderMixin:
-    """Magic methods that auto-execute the builder when used as a result.
+class SyncCrudBuilder(_CrudState, Generic[T]):
+    """Eager CRUD builder for sync connections.
 
-    Subclasses must define ``_run_once()`` returning the cached result and
-    a ``_lock: threading.Lock`` attribute. Subclasses' ``_run_once()``
-    implementations must acquire ``self._lock`` around their cache check
-    so two threads consuming the same builder don't issue duplicate RPCs
-    or corrupt cached state.
+    Sync connection methods run single-shot operations (``db.create(record,
+    data)``) immediately and return the plain result. This builder is only
+    handed back for the deferred no-data form (``db.create(record)``) so the
+    caller can pick a clause. Every terminal method here runs the operation
+    the moment it is called and returns the underlying result:
 
-    Builders are *lazy* — the operation only runs when you ask for the
-    result. The methods that auto-execute are:
+    - ``.content(data)`` / ``.replace(data)`` / ``.merge(data)`` /
+      ``.patch(data)`` run ``CREATE/UPDATE/UPSERT ... <CLAUSE> $data``.
+    - ``.execute()`` runs the clause-less form.
 
-    - ``__getitem__`` (``builder[key]``)
-    - ``__iter__`` (``for x in builder``)
-    - ``__len__`` (``len(builder)``)
-    - ``__contains__`` (``x in builder``)
-    - ``__eq__`` / ``__ne__`` (``builder == other``)
-    - ``__bool__`` (``if builder:`` or ``not builder``)
-    - ``__getattr__`` (any unknown attribute lookup)
+    There are **no** magic dunders: the builder never auto-executes on
+    ``bool()``, ``==``, indexing, iteration, or attribute access. Repeat
+    ``.execute()`` calls return the cached result; calling another clause
+    method after the builder has executed raises rather than silently
+    returning the stale result.
 
-    .. warning::
-
-        ``__bool__`` and ``__eq__`` mean that **any** truthiness check or
-        comparison fires the operation, including idioms like
-        ``if db.query("DELETE foo;"): ...`` or
-        ``assert db.create(...)``. If you don't intend to consume the
-        result, call ``.execute()`` explicitly (for fire-and-forget) or
-        bind the builder to a name and only access it conditionally.
-
-    .. warning::
-
-        ``__getattr__`` forwards any non-underscore attribute access to
-        the realised result. A typo
-        (``builder.contnet({"x": 1})`` instead of ``.content``) will
-        silently fire the operation and *then* raise ``AttributeError``
-        from the result. A type checker (``mypy`` / ``pyright``) catches
-        these statically.
-
-    ``__repr__`` / ``__str__`` deliberately do **not** trigger execution -
-    they return a ``"<...pending>"`` placeholder when the builder has not
-    yet been run. This keeps loggers, debuggers, and test introspection
-    from accidentally firing pending queries.
-
-    Thread safety:
-        ``_run_once()`` is guarded by a per-builder lock so that
-        consuming the same builder from multiple threads issues exactly
-        one RPC. The builder is **not** safe for concurrent
-        *reconfiguration* across threads though - calling ``.merge()``
-        on one thread while another consumes the result is a race on
-        ``_mode`` / ``_data`` that the lock does not cover. Treat
-        builders as single-shot, single-owner values; pass the realised
-        result between threads, not the builder itself.
-    """
-
-    # The bool/None defaults are immutable and safe at class level.
-    # ``_lock`` deliberately has NO class-level default: subclasses MUST
-    # initialise a per-instance ``threading.Lock()`` in __init__.
-    # Without this guard a forgotten override would silently share one
-    # global lock across every builder instance, defeating the per-builder
-    # cache contract; with the type-only declaration, a forgotten override
-    # raises ``AttributeError`` at first ``_run_once`` call instead.
-    _executed: bool = False
-    _cached_result: Any = None
-    _lock: threading.Lock  # pyright: ignore[reportUninitializedInstanceVariable]
-
-    def _run_once(self) -> Any:  # pragma: no cover - abstract
-        raise NotImplementedError
-
-    def __getitem__(self, key: Any) -> Any:
-        return self._run_once()[key]
-
-    def __iter__(self) -> Iterator[Any]:
-        return iter(self._run_once())
-
-    def __len__(self) -> int:
-        return len(self._run_once())
-
-    def __contains__(self, item: Any) -> bool:
-        return item in self._run_once()
-
-    def __eq__(self, other: object) -> bool:
-        return bool(self._run_once() == other)
-
-    def __ne__(self, other: object) -> bool:
-        return bool(self._run_once() != other)
-
-    def __bool__(self) -> bool:
-        return bool(self._run_once())
-
-    def __repr__(self) -> str:
-        if self._executed:
-            return repr(self._cached_result)
-        return (
-            f"<{self.__class__.__name__} pending - call .execute() or consume to run>"
-        )
-
-    def __str__(self) -> str:
-        if self._executed:
-            return str(self._cached_result)
-        return self.__repr__()
-
-    def __getattr__(self, name: str) -> Any:
-        # __getattr__ is only invoked when the attribute is missing on the
-        # instance. Internal attributes start with ``_`` and are always set
-        # in __init__ so we never reach here for them.
-        if name.startswith("_"):
-            raise AttributeError(name)
-        return getattr(self._run_once(), name)
-
-
-class SyncCrudBuilder(_CrudState, _SyncBuilderMixin, Generic[T]):
-    """Lazy CRUD builder for sync connections.
-
-    Important - sync vs async difference:
-
-    - On **async** connections the clause methods (``content`` / ``replace``
-      / ``merge`` / ``patch``) return ``self`` so the builder remains
-      awaitable: ``await db.create(rec).merge({"x": 1})``.
-    - On **sync** connections the clause methods are **terminal**: they run
-      the operation immediately and return the result value. There is no
-      sync ``await`` to defer execution to, so chaining further would have
-      no effect.
-
-    For the no-clause case (plain ``db.create(record)``) the sync builder
-    is lazy and only runs once the result is consumed (indexed, iterated,
-    compared, etc.) or ``.execute()`` is called explicitly. Repeat consumes
-    return the same cached result; calling another clause method after the
-    builder has executed raises rather than silently returning the stale
-    result.
+    Thread safety: ``_run_once()`` is guarded by a per-builder lock so
+    consuming the same builder from multiple threads issues exactly one
+    RPC. The builder is **not** safe for concurrent *reconfiguration* -
+    calling ``.merge()`` on one thread while another calls ``.execute()``
+    races on ``_mode`` / ``_data``. Treat builders as single-shot,
+    single-owner values.
     """
 
     def __init__(
@@ -862,9 +774,13 @@ class SyncCrudBuilder(_CrudState, _SyncBuilderMixin, Generic[T]):
             return self._cached_result
 
 
-class SyncInsertBuilder(_InsertState, _SyncBuilderMixin):
-    """Lazy INSERT builder for sync connections (idempotent).
+class SyncInsertBuilder(_InsertState):
+    """Eager INSERT builder for sync connections.
 
+    Handed back only for the deferred no-data form (``db.insert(table)``).
+    ``.content(data)`` and ``.execute()`` run the operation and return the
+    inserted record(s); ``.relation()`` toggles ``INSERT RELATION`` and
+    returns ``self`` for chaining. There are **no** magic dunders.
     Reconfiguring the builder *after* it has executed raises rather than
     silently returning the cached result.
     """
@@ -912,13 +828,21 @@ class SyncInsertBuilder(_InsertState, _SyncBuilderMixin):
             return self._cached_result
 
 
-class SyncQueryBuilder(_QueryState, _SyncBuilderMixin):
-    """Lazy QUERY builder for sync connections.
+class SyncQueryBuilder(_QueryState):
+    """Eager QUERY builder for sync connections.
 
-    Idempotent: ``.execute()``, magic-method consumption, and
-    ``.into(cls)`` all share a single cached fetch and update
-    ``_executed`` consistently, so ``repr(builder)`` after any of them
-    no longer shows ``"pending"``.
+    ``db.query(sql)`` returns this builder; the caller triggers execution
+    explicitly:
+
+    - ``.execute()`` -> ``list[Value]`` (one entry per statement, always a
+      list - even for a single statement).
+    - ``.first()`` -> the first statement's result (``None`` if no
+      statements).
+    - ``.into(cls)`` -> the N statement results mapped positionally onto a
+      dataclass / class.
+
+    There are **no** magic dunders. Idempotent: ``.execute()``,
+    ``.first()``, and ``.into(cls)`` all share a single cached fetch.
     """
 
     def __init__(
@@ -930,35 +854,33 @@ class SyncQueryBuilder(_QueryState, _SyncBuilderMixin):
         super().__init__(query, variables)
         self._executor = executor
         self._executed = False
-        self._cached_result: Any = None
         self._cached_values: list[Any] | None = None
         self._lock = threading.Lock()
 
     def into(self, cls: type[T]) -> T:
-        # Reuse this builder's cached fetch so `await q` plus `q.into(T)`
-        # on the same instance only issues one RPC. Going through
-        # ``_run_once`` (rather than ``_fetch_values`` directly) keeps
-        # ``_executed`` and ``_cached_result`` in lockstep so subsequent
-        # ``repr(builder)`` shows the real result, not "pending".
-        self._run_once()
-        assert self._cached_values is not None  # set by _run_once
-        return _map_to_class(cls, self._cached_values)
+        # Reuse this builder's cached fetch so `.execute()` plus `.into(T)`
+        # on the same instance only issue one RPC.
+        values = self._run_once()
+        return _map_to_class(cls, values)
 
-    def execute(self) -> Value | tuple[Value, ...]:
-        return cast("Value | tuple[Value, ...]", self._run_once())
+    def execute(self) -> list[Value]:
+        return cast("list[Value]", self._run_once())
 
-    def _run_once(self) -> Any:
+    def first(self) -> Value:
+        """Return the first statement's result (``None`` if no statements)."""
+        values = self._run_once()
+        if not values:
+            return None
+        return cast(Value, values[0])
+
+    def _run_once(self) -> list[Any]:
         with self._lock:
             if not self._executed:
                 response = self._executor(self._query, self._variables)
-                values = self._statement_values(response)
-                self._cached_values = values
-                if len(values) == 1:
-                    self._cached_result = values[0]
-                else:
-                    self._cached_result = tuple(values)
+                self._cached_values = self._statement_values(response)
                 self._executed = True
-            return self._cached_result
+            assert self._cached_values is not None
+            return self._cached_values
 
 
 __all__ = [

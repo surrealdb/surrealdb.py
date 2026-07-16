@@ -277,9 +277,34 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         message = RequestMessage(RequestMethod.UNSET, **kwargs)
         await self._send(message, "unsetting")
 
+    @overload
+    async def select(
+        self,
+        record: RecordID,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> dict[str, Value] | None: ...
+    @overload
+    async def select(
+        self,
+        record: Table,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> list[Value]: ...
+    @overload
+    async def select(
+        self,
+        record: str,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> Value: ...
     async def select(
         self,
         record: RecordIdType,
+        *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> Value:
@@ -292,7 +317,14 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         )
         self.check_response_for_error(response, "select")
         self._check_query_result(response["result"][0])
-        return response["result"][0]["result"]
+        result = response["result"][0]["result"]
+        # Single-record targets (RecordID / "table:id") unwrap the one-element
+        # result list to the record dict, or None when the record is absent.
+        if self._is_single_record_operation(record):
+            if isinstance(result, list):
+                return result[0] if result else None
+            return result
+        return result
 
     def _make_executor(
         self,
@@ -698,6 +730,12 @@ class AsyncSurrealSession:
     async def unset(self, key: str) -> None:
         await self._connection.unset(key, session_id=self._session_id)
 
+    @overload
+    async def select(self, record: RecordID) -> dict[str, Value] | None: ...
+    @overload
+    async def select(self, record: Table) -> list[Value]: ...
+    @overload
+    async def select(self, record: str) -> Value: ...
     async def select(self, record: RecordIdType) -> Value:
         return await self._connection.select(record, session_id=self._session_id)
 
@@ -787,6 +825,12 @@ class AsyncSurrealTransaction:
             txn_id=self._txn_id,
         )
 
+    @overload
+    async def select(self, record: RecordID) -> dict[str, Value] | None: ...
+    @overload
+    async def select(self, record: Table) -> list[Value]: ...
+    @overload
+    async def select(self, record: str) -> Value: ...
     async def select(self, record: RecordIdType) -> Value:
         return await self._connection.select(
             record,

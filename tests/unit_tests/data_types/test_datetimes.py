@@ -135,7 +135,7 @@ async def test_native_datetime(surrealdb_connection: Any) -> None:
     )
     compact_test_outcome = await surrealdb_connection.query(
         "SELECT * FROM datetime_tests;"
-    )
+    ).first()
     assert compact_test_outcome[0]["datetime"] == now
     outcome = compact_test_outcome[0]["datetime"]
     assert now.isoformat() == outcome.isoformat()
@@ -154,7 +154,7 @@ async def test_datetime_iso_format(surrealdb_connection: Any) -> None:
     )
     compact_test_outcome = await surrealdb_connection.query(
         "SELECT * FROM datetime_tests;"
-    )
+    ).first()
     assert str(compact_test_outcome[0]["datetime"]) == str(iso_datetime_obj)
     date_str = compact_test_outcome[0]["datetime"].isoformat()
     if sys.version_info >= (3, 11):

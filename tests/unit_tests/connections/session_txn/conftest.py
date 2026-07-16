@@ -50,11 +50,15 @@ def session_txn_requires_v3(
     result = None
     probe_error: Exception | None = None
     try:
-        blocking_ws_connection.query("REMOVE TABLE IF EXISTS session_txn_probe;").execute()
-        blocking_ws_connection.query("DEFINE TABLE session_txn_probe SCHEMALESS;").execute()
+        blocking_ws_connection.query(
+            "REMOVE TABLE IF EXISTS session_txn_probe;"
+        ).execute()
+        blocking_ws_connection.query(
+            "DEFINE TABLE session_txn_probe SCHEMALESS;"
+        ).execute()
         try:
             # Mirror what the actual tests do - no signin on the session.
-            session.create("session_txn_probe:check", {"probe": True}).execute()
+            session.create("session_txn_probe:check", {"probe": True})
             result = session.query("SELECT * FROM session_txn_probe;").execute()
         except Exception as exc:  # noqa: BLE001 - capture for skip decision
             probe_error = exc
@@ -63,7 +67,9 @@ def session_txn_requires_v3(
             session.close_session()
         except Exception:
             pass
-        blocking_ws_connection.query("REMOVE TABLE IF EXISTS session_txn_probe;").execute()
+        blocking_ws_connection.query(
+            "REMOVE TABLE IF EXISTS session_txn_probe;"
+        ).execute()
     if probe_error is not None:
         pytest.skip(
             "Session-scoped create/query failed "

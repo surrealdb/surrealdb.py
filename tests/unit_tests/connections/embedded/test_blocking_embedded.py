@@ -10,7 +10,7 @@ def test_mem_connection() -> None:
     with Surreal("mem://") as db:
         db.use("test", "test")
 
-        result = db.create("person", {"name": "Alice", "age": 30}).execute()
+        result = db.create("person", {"name": "Alice", "age": 30})
         assert result is not None
 
         people = db.select("person")
@@ -22,7 +22,7 @@ def test_create_and_select() -> None:
     with Surreal("mem://") as db:
         db.use("test", "test")
 
-        created = db.create("user", {"name": "Bob", "email": "bob@example.com"}).execute()
+        created = db.create("user", {"name": "Bob", "email": "bob@example.com"})
         assert created is not None
 
         users = db.select("user")
@@ -34,9 +34,9 @@ def test_update_operation() -> None:
     with Surreal("mem://") as db:
         db.use("test", "test")
 
-        db.create("product", {"name": "Widget", "price": 10}).execute()
+        db.create("product", {"name": "Widget", "price": 10})
 
-        updated = db.update("product", {"name": "Widget", "price": 15}).execute()
+        updated = db.update("product", {"name": "Widget", "price": 15})
         assert updated is not None
 
 
@@ -45,9 +45,9 @@ def test_delete_operation() -> None:
     with Surreal("mem://") as db:
         db.use("test", "test")
 
-        db.create("temp", {"data": "test"}).execute()
+        db.create("temp", {"data": "test"})
 
-        deleted = db.delete("temp").execute()
+        deleted = db.delete("temp")
         assert deleted is not None
 
 
@@ -81,7 +81,7 @@ def test_merge_operation() -> None:
     with Surreal("mem://") as db:
         db.use("test", "test")
 
-        db.create("item", {"name": "Item1", "quantity": 5}).execute()
+        db.create("item", {"name": "Item1", "quantity": 5})
 
         merged = db.update("item").merge({"quantity": 10})
         assert merged is not None
@@ -92,10 +92,10 @@ def test_upsert_operation() -> None:
     with Surreal("mem://") as db:
         db.use("test", "test")
 
-        upserted = db.upsert("record:1", {"value": "first"}).execute()
+        upserted = db.upsert("record:1", {"value": "first"})
         assert upserted is not None
 
-        upserted = db.upsert("record:1", {"value": "second"}).execute()
+        upserted = db.upsert("record:1", {"value": "second"})
         assert upserted is not None
 
 
@@ -118,7 +118,7 @@ def test_connection_lifecycle() -> None:
     db.connect("mem://")
     db.use("test", "test")
 
-    db.create("test", {"value": 1}).execute()
+    db.create("test", {"value": 1})
 
     db.close()
 

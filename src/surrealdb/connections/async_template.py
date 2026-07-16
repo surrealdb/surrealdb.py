@@ -117,29 +117,39 @@ class AsyncTemplate:
     ) -> AsyncQueryBuilder:
         """Run one or more SurrealQL statements against the database.
 
-        Returns an awaitable builder. Awaiting the builder returns:
+        Returns an awaitable builder. Awaiting it (or calling ``.execute()``)
+        returns ``list[Value]`` - one entry per statement, always a list even
+        for a single statement (this is the v3.0 fix for issue #232 - earlier
+        versions silently dropped every result after the first).
 
-        - The result Value when the server returned exactly one statement result
-        - A ``tuple[Value, ...]`` of all statement results when N>1 statements ran
-          (this is the v3.0 fix for issue #232 - earlier versions silently
-          dropped every result after the first).
-
-        Use ``.into(MyResult)`` to map the N statement results positionally onto
-        a dataclass or any class accepting keyword arguments.
+        Use ``.first()`` for the first statement's result, or ``.into(MyResult)``
+        to map the N statement results positionally onto a dataclass or any
+        class accepting keyword arguments.
 
         Args:
             query: SurrealQL statement(s).
             vars: Variables referenced in the query.
 
         Example:
-            single = await db.query('SELECT * FROM person')
+            rows = await db.query('SELECT * FROM person')  # list of statements
+            first = await db.query('SELECT * FROM person').first()
             many = await db.query('SELECT * FROM person; SELECT count() FROM person GROUP ALL')
             mapped = await db.query('CREATE ...; SELECT ...').into(MyResult)
         """
         raise NotImplementedError(f"query not implemented for: {self}")
 
+    @overload
+    async def select(self, record: RecordID) -> dict[str, Value] | None: ...
+    @overload
+    async def select(self, record: Table) -> list[Value]: ...
+    @overload
+    async def select(self, record: str) -> Value: ...
     async def select(self, record: RecordIdType) -> Value:
         """Select all records in a table or a specific record.
+
+        A ``RecordID`` (or ``"table:id"`` string) returns the record dict, or
+        ``None`` when it is absent. A ``Table`` (or bare table-name string)
+        returns the list of records.
 
         Args:
             record: The table or record ID to select.

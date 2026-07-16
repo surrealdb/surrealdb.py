@@ -108,7 +108,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
                 and error.get("code") == -32000
                 and "No result found" in error.get("message", "")
             ):
-                auth_response = self.query("SELECT * FROM $auth").execute()
+                auth_response = self.query("SELECT * FROM $auth").first()
                 if isinstance(auth_response, list) and len(auth_response) > 0:
                     return auth_response[0]
             if error is not None:
@@ -159,24 +159,19 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
 
         return _executor
 
-    # CRUD overloads --------------------------------------------------------
+    # CRUD (eager) ----------------------------------------------------------
+    #
+    # Passing ``data`` runs the operation immediately and returns the result;
+    # the no-data form returns a builder so the caller can pick a clause.
 
     @overload
-    def create(
-        self, record: RecordID, data: Value | None = None
-    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def create(self, record: RecordIdType) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
-    def create(
-        self, record: Table, data: Value | None = None
-    ) -> SyncCrudBuilder[dict[str, Value]]: ...
-    @overload
-    def create(
-        self, record: str, data: Value | None = None
-    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def create(self, record: RecordIdType, data: Value) -> dict[str, Value]: ...
     def create(
         self, record: RecordIdType, data: Value | None = None
-    ) -> SyncCrudBuilder[Any]:
-        return SyncCrudBuilder(
+    ) -> SyncCrudBuilder[dict[str, Value]] | dict[str, Value]:
+        builder: SyncCrudBuilder[dict[str, Value]] = SyncCrudBuilder(
             executor=self._make_executor(),
             operation="CREATE",
             record=record,
@@ -184,80 +179,101 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
             data=data,
             always_unwrap=True,
         )
+        if data is not None:
+            return builder.execute()
+        return builder
 
     @overload
-    def update(
-        self, record: RecordID, data: Value | None = None
-    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def update(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
-    def update(
-        self, record: Table, data: Value | None = None
-    ) -> SyncCrudBuilder[list[Value]]: ...
+    def update(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
-    def update(
-        self, record: str, data: Value | None = None
-    ) -> SyncCrudBuilder[Value]: ...
+    def update(self, record: str) -> SyncCrudBuilder[Value]: ...
+    @overload
+    def update(self, record: RecordID, data: Value) -> dict[str, Value]: ...
+    @overload
+    def update(self, record: Table, data: Value) -> list[Value]: ...
+    @overload
+    def update(self, record: str, data: Value) -> Value: ...
     def update(
         self, record: RecordIdType, data: Value | None = None
-    ) -> SyncCrudBuilder[Any]:
-        return SyncCrudBuilder(
+    ) -> SyncCrudBuilder[Any] | Value:
+        builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(),
             operation="UPDATE",
             record=record,
             op_name="update",
             data=data,
         )
+        if data is not None:
+            return builder.execute()
+        return builder
 
     @overload
-    def upsert(
-        self, record: RecordID, data: Value | None = None
-    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def upsert(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
-    def upsert(
-        self, record: Table, data: Value | None = None
-    ) -> SyncCrudBuilder[list[Value]]: ...
+    def upsert(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
-    def upsert(
-        self, record: str, data: Value | None = None
-    ) -> SyncCrudBuilder[Value]: ...
+    def upsert(self, record: str) -> SyncCrudBuilder[Value]: ...
+    @overload
+    def upsert(self, record: RecordID, data: Value) -> dict[str, Value]: ...
+    @overload
+    def upsert(self, record: Table, data: Value) -> list[Value]: ...
+    @overload
+    def upsert(self, record: str, data: Value) -> Value: ...
     def upsert(
         self, record: RecordIdType, data: Value | None = None
-    ) -> SyncCrudBuilder[Any]:
-        return SyncCrudBuilder(
+    ) -> SyncCrudBuilder[Any] | Value:
+        builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(),
             operation="UPSERT",
             record=record,
             op_name="upsert",
             data=data,
         )
+        if data is not None:
+            return builder.execute()
+        return builder
 
     @overload
-    def delete(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def delete(self, record: RecordID) -> dict[str, Value]: ...
     @overload
-    def delete(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
+    def delete(self, record: Table) -> list[Value]: ...
     @overload
-    def delete(self, record: str) -> SyncCrudBuilder[Value]: ...
-    def delete(self, record: RecordIdType) -> SyncCrudBuilder[Any]:
-        return SyncCrudBuilder(
+    def delete(self, record: str) -> Value: ...
+    def delete(self, record: RecordIdType) -> Value:
+        builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(),
             operation="DELETE",
             record=record,
             op_name="delete",
         )
+        return cast(Value, builder.execute())
 
+    @overload
+    def insert(
+        self, table: str | Table, *, relation: bool = False
+    ) -> SyncInsertBuilder: ...
+    @overload
+    def insert(
+        self, table: str | Table, data: Value, *, relation: bool = False
+    ) -> list[Value]: ...
     def insert(
         self,
         table: str | Table,
         data: Value | None = None,
         *,
         relation: bool = False,
-    ) -> SyncInsertBuilder:
-        return SyncInsertBuilder(
+    ) -> SyncInsertBuilder | list[Value]:
+        builder = SyncInsertBuilder(
             executor=self._make_executor(),
             table=table,
             data=data,
             relation=relation,
         )
+        if data is not None:
+            return builder.execute()
+        return builder
 
     def run(
         self,
@@ -282,6 +298,12 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     def unset(self, key: str) -> None:
         self.vars.pop(key)
 
+    @overload
+    def select(self, record: RecordID) -> dict[str, Value] | None: ...
+    @overload
+    def select(self, record: Table) -> list[Value]: ...
+    @overload
+    def select(self, record: str) -> Value: ...
     def select(self, record: RecordIdType) -> Value:
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -290,7 +312,14 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         response = self.query_raw(query, variables)
         self.check_response_for_error(response, "select")
         self._check_query_result(response["result"][0])
-        return response["result"][0]["result"]
+        result = response["result"][0]["result"]
+        # Single-record targets (RecordID / "table:id") unwrap the one-element
+        # result list to the record dict, or None when the record is absent.
+        if self._is_single_record_operation(record):
+            if isinstance(result, list):
+                return result[0] if result else None
+            return result
+        return result
 
     def version(self) -> str:
         message = RequestMessage(RequestMethod.VERSION)
