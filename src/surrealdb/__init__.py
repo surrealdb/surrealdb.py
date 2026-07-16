@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Union
 
 _EMBEDDED_AVAILABLE = False
 try:
@@ -36,42 +36,12 @@ from surrealdb.connections.builders import (
     SyncQueryBuilder,
 )
 from surrealdb.connections.url import Url, UrlScheme
-from surrealdb.data.types.constants import (
-    TAG_BOUND_EXCLUDED,
-    TAG_BOUND_INCLUDED,
-    TAG_DATETIME,
-    TAG_DATETIME_COMPACT,
-    TAG_DECIMAL_STRING,
-    TAG_DURATION,
-    TAG_DURATION_COMPACT,
-    TAG_GEOMETRY_COLLECTION,
-    TAG_GEOMETRY_LINE,
-    TAG_GEOMETRY_MULTI_LINE,
-    TAG_GEOMETRY_MULTI_POINT,
-    TAG_GEOMETRY_MULTI_POLYGON,
-    TAG_GEOMETRY_POINT,
-    TAG_GEOMETRY_POLYGON,
-    TAG_NONE,
-    TAG_RANGE,
-    TAG_RECORD_ID,
-    TAG_TABLE_NAME,
-    TAG_UUID_STRING,
-)
 from surrealdb.data.types.datetime import Datetime
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.geometry import Geometry
 from surrealdb.data.types.range import Range
 from surrealdb.data.types.record_id import RecordID, escape_identifier
 from surrealdb.data.types.table import Table
-from surrealdb.spectron import (
-    AsyncSpectron,
-    Spectron,
-    SpectronAPIError,
-    SpectronAuthError,
-    SpectronError,
-    SpectronNotFoundError,
-    SpectronScopeError,
-)
 from surrealdb.errors import (
     AlreadyExistsDetailKind,
     AlreadyExistsError,
@@ -120,6 +90,9 @@ __all__ = [
     "BlockingSurrealSession",
     "BlockingSurrealTransaction",
     "BlockingWsSurrealConnection",
+    # Connection type aliases (for annotating the objects the factories return)
+    "AsyncSurrealConnection",
+    "BlockingSurrealConnection",
     # Builders (returned by create/update/upsert/delete/insert/query)
     "AsyncCrudBuilder",
     "AsyncInsertBuilder",
@@ -173,100 +146,24 @@ __all__ = [
     "InvalidTableError",
     # Errors – backward compat
     "SurrealDBMethodError",
-    # Constants
-    "TAG_BOUND_EXCLUDED",
-    "TAG_BOUND_INCLUDED",
-    "TAG_DATETIME",
-    "TAG_DATETIME_COMPACT",
-    "TAG_DECIMAL_STRING",
-    "TAG_DURATION",
-    "TAG_DURATION_COMPACT",
-    "TAG_GEOMETRY_COLLECTION",
-    "TAG_GEOMETRY_LINE",
-    "TAG_GEOMETRY_MULTI_LINE",
-    "TAG_GEOMETRY_MULTI_POINT",
-    "TAG_GEOMETRY_MULTI_POLYGON",
-    "TAG_GEOMETRY_POINT",
-    "TAG_GEOMETRY_POLYGON",
-    "TAG_NONE",
-    "TAG_RANGE",
-    "TAG_RECORD_ID",
-    "TAG_TABLE_NAME",
-    "TAG_UUID_STRING",
-    # Spectron clients
-    "Spectron",
-    "AsyncSpectron",
-    # Spectron exceptions (prefixed to avoid clashes with surrealdb.* errors)
-    "SpectronError",
-    "SpectronAPIError",
-    "SpectronAuthError",
-    "SpectronScopeError",
-    "SpectronNotFoundError",
 ]
 
 _EMBEDDED_SCHEMES = (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV, UrlScheme.SURREALKV_VERSIONED)
 
-
-class AsyncSurrealDBMeta(type):
-
-    def __call__(cls, *args: Any, **kwargs: Any) -> Union["AsyncEmbeddedSurrealConnection", AsyncHttpSurrealConnection, AsyncWsSurrealConnection]:
-        if len(args) > 0:
-            url = args[0]
-        else:
-            url = kwargs.get("url")
-
-        if url is None:
-            raise ValueError("The 'url' parameter is required to initialise SurrealDB.")
-
-        constructed_url = Url(url)
-
-        if constructed_url.scheme in _EMBEDDED_SCHEMES:
-            if not _EMBEDDED_AVAILABLE:
-                raise UnsupportedEngineError(url)
-            return AsyncEmbeddedSurrealConnection(url=url)
-        elif (
-            constructed_url.scheme == UrlScheme.HTTP
-            or constructed_url.scheme == UrlScheme.HTTPS
-        ):
-            return AsyncHttpSurrealConnection(url=url)
-        elif (
-            constructed_url.scheme == UrlScheme.WS
-            or constructed_url.scheme == UrlScheme.WSS
-        ):
-            return AsyncWsSurrealConnection(url=url)
-        else:
-            raise UnsupportedEngineError(url)
-
-
-class BlockingSurrealDBMeta(type):
-
-    def __call__(cls, *args: Any, **kwargs: Any) -> Union["BlockingEmbeddedSurrealConnection", BlockingHttpSurrealConnection, BlockingWsSurrealConnection]:
-        if len(args) > 0:
-            url = args[0]
-        else:
-            url = kwargs.get("url")
-
-        if url is None:
-            raise ValueError("The 'url' parameter is required to initialise SurrealDB.")
-
-        constructed_url = Url(url)
-
-        if constructed_url.scheme in _EMBEDDED_SCHEMES:
-            if not _EMBEDDED_AVAILABLE:
-                raise UnsupportedEngineError(url)
-            return BlockingEmbeddedSurrealConnection(url=url)
-        elif (
-            constructed_url.scheme == UrlScheme.HTTP
-            or constructed_url.scheme == UrlScheme.HTTPS
-        ):
-            return BlockingHttpSurrealConnection(url=url)
-        elif (
-            constructed_url.scheme == UrlScheme.WS
-            or constructed_url.scheme == UrlScheme.WSS
-        ):
-            return BlockingWsSurrealConnection(url=url)
-        else:
-            raise UnsupportedEngineError(url)
+# Type aliases for the connection objects the factory functions return. The
+# ``Surreal``/``AsyncSurreal`` names are factory *functions*, so they cannot be
+# used to annotate a connection instance (e.g. ``db: AsyncSurreal``). Use these
+# unions instead: ``db: AsyncSurrealConnection`` / ``db: BlockingSurrealConnection``.
+AsyncSurrealConnection = Union[
+    AsyncWsSurrealConnection,
+    AsyncHttpSurrealConnection,
+    "AsyncEmbeddedSurrealConnection",
+]
+BlockingSurrealConnection = Union[
+    BlockingWsSurrealConnection,
+    BlockingHttpSurrealConnection,
+    "BlockingEmbeddedSurrealConnection",
+]
 
 
 def Surreal(

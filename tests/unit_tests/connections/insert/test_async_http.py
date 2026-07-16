@@ -43,7 +43,7 @@ async def test_insert_string_with_data(
     await async_http_connection.query("DELETE user;")
     outcome = await async_http_connection.insert("user", insert_bulk_data)
     assert 2 == len(outcome)
-    assert len(await async_http_connection.query("SELECT * FROM user;")) == 2
+    assert len(await async_http_connection.query("SELECT * FROM user;").first()) == 2
     await async_http_connection.query("DELETE user;")
 
 

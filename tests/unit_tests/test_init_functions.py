@@ -70,47 +70,13 @@ def test_async_surreal_invalid_protocol() -> None:
         AsyncSurreal("ftp://localhost:8000")
 
 
-# Test the meta classes indirectly through the factory functions
-# These tests ensure the meta classes work correctly
-
-
-def test_blocking_meta_class_positional_arg() -> None:
-    """Test BlockingSurrealDBMeta with positional argument."""
-    # This tests the meta class behavior indirectly
-    connection = Surreal("http://localhost:8000")
-    assert isinstance(connection, BlockingHttpSurrealConnection)
-
-
-def test_blocking_meta_class_keyword_arg() -> None:
-    """Test BlockingSurrealDBMeta with keyword argument."""
-    # This tests the meta class behavior indirectly
+def test_surreal_keyword_arg() -> None:
+    """Test Surreal function accepts the url as a keyword argument."""
     connection = Surreal(url="http://localhost:8000")
     assert isinstance(connection, BlockingHttpSurrealConnection)
 
 
-def test_blocking_meta_class_missing_url() -> None:
-    """Test BlockingSurrealDBMeta with missing URL raises ValueError."""
-    # This would test the meta class directly, but we can't instantiate it
-    # The factory function doesn't expose this error case
-    pass
-
-
-def test_async_meta_class_positional_arg() -> None:
-    """Test AsyncSurrealDBMeta with positional argument."""
-    # This tests the meta class behavior indirectly
-    connection = AsyncSurreal("http://localhost:8000")
-    assert isinstance(connection, AsyncHttpSurrealConnection)
-
-
-def test_async_meta_class_keyword_arg() -> None:
-    """Test AsyncSurrealDBMeta with keyword argument."""
-    # This tests the meta class behavior indirectly
+def test_async_surreal_keyword_arg() -> None:
+    """Test AsyncSurreal function accepts the url as a keyword argument."""
     connection = AsyncSurreal(url="http://localhost:8000")
     assert isinstance(connection, AsyncHttpSurrealConnection)
-
-
-def test_async_meta_class_missing_url() -> None:
-    """Test AsyncSurrealDBMeta with missing URL raises ValueError."""
-    # This would test the meta class directly, but we can't instantiate it
-    # The factory function doesn't expose this error case
-    pass

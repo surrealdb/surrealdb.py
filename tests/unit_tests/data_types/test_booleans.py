@@ -95,7 +95,7 @@ async def test_true_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE boolean_tests:test1 SET value = $val;",
         vars={"val": True},
     )
-    result = await surrealdb_connection.query("SELECT * FROM boolean_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM boolean_tests;").first()
     assert result[0]["value"] is True
 
 
@@ -106,7 +106,7 @@ async def test_false_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE boolean_tests:test2 SET value = $val;",
         vars={"val": False},
     )
-    result = await surrealdb_connection.query("SELECT * FROM boolean_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM boolean_tests;").first()
     assert result[0]["value"] is False
 
 
@@ -117,7 +117,7 @@ async def test_boolean_fields_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE boolean_tests:test3 SET is_active = $active, is_admin = $admin, is_verified = $verified;",
         vars={"active": True, "admin": False, "verified": True},
     )
-    result = await surrealdb_connection.query("SELECT * FROM boolean_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM boolean_tests;").first()
     assert result[0]["is_active"] is True
     assert result[0]["is_admin"] is False
     assert result[0]["is_verified"] is True

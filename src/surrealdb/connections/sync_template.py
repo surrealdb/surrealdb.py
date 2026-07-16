@@ -3,6 +3,7 @@ from typing import Any, overload
 from uuid import UUID
 
 from surrealdb.connections.builders import (
+    _UNSET,
     SyncCrudBuilder,
     SyncInsertBuilder,
     SyncQueryBuilder,
@@ -50,112 +51,139 @@ class SyncTemplate:
     ) -> SyncQueryBuilder:
         """Run one or more SurrealQL statements against the database.
 
-        Returns a lazy builder. Triggering execution (e.g. by indexing,
-        iterating, or calling ``.execute()``) returns:
+        Returns a builder. Trigger execution explicitly:
 
-        - The result Value when the server returned exactly one statement result
-        - A ``tuple[Value, ...]`` of all statement results when N>1 statements
-          ran (this is the v3.0 fix for issue #232 - earlier versions silently
-          dropped every result after the first).
-
-        Use ``.into(MyResult)`` to map the N statement results positionally onto
-        a dataclass or any class accepting keyword arguments.
+        - ``.execute()`` -> ``list[Value]`` (one entry per statement, always a
+          list even for a single statement - this is the v3.0 fix for issue
+          #232, earlier versions silently dropped every result after the
+          first).
+        - ``.first()`` -> the first statement's result (``None`` if no
+          statements).
+        - ``.into(MyResult)`` maps the N statement results positionally onto a
+          dataclass or any class accepting keyword arguments.
         """
         raise NotImplementedError(f"query not implemented for: {self}")
 
+    @overload
+    def select(self, record: RecordID) -> dict[str, Value] | None: ...
+    @overload
+    def select(self, record: Table) -> list[Value]: ...
+    @overload
+    def select(self, record: str) -> Value: ...
     def select(self, record: RecordIdType) -> Value:
-        """Select all records in a table or a specific record."""
+        """Select all records in a table or a specific record.
+
+        A ``RecordID`` (or ``"table:id"`` string) returns the record dict, or
+        ``None`` when it is absent. A ``Table`` (or bare table-name string)
+        returns the list of records.
+        """
         raise NotImplementedError(f"select not implemented for: {self}")
 
     @overload
-    def create(
-        self, record: RecordID, data: Value | None = None
-    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def create(self, record: RecordIdType) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
+    def create(self, record: RecordIdType, data: Value) -> dict[str, Value]: ...
     def create(
-        self, record: Table, data: Value | None = None
-    ) -> SyncCrudBuilder[dict[str, Value]]: ...
-    @overload
-    def create(
-        self, record: str, data: Value | None = None
-    ) -> SyncCrudBuilder[dict[str, Value]]: ...
-    def create(
-        self, record: RecordIdType, data: Value | None = None
-    ) -> SyncCrudBuilder[Any]:
+        self, record: RecordIdType, data: Value = _UNSET
+    ) -> SyncCrudBuilder[dict[str, Value]] | dict[str, Value]:
         """Create a record.
 
-        Returns a lazy builder. Optional terminal clause methods:
+        ``db.create(record, data)`` runs ``CREATE ... CONTENT $data`` eagerly
+        and returns the created record (``data=None`` runs ``CONTENT NULL``).
+        ``db.create(record)`` (no data) returns a :class:`SyncCrudBuilder`;
+        pick a terminal clause to run it:
 
         - ``.content(data)``  -> ``CREATE ... CONTENT $data``
         - ``.replace(data)``  -> ``CREATE ... REPLACE $data``
         - ``.merge(data)``    -> ``CREATE ... MERGE $data``
         - ``.patch(data)``    -> ``CREATE ... PATCH $data``
-
-        ``db.create(record, data)`` is sugar for ``db.create(record).content(data)``.
+        - ``.execute()``      -> ``CREATE ...`` (no clause)
         """
         raise NotImplementedError(f"create not implemented for: {self}")
 
     @overload
-    def update(
-        self, record: RecordID, data: Value | None = None
-    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def update(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
-    def update(
-        self, record: Table, data: Value | None = None
-    ) -> SyncCrudBuilder[list[Value]]: ...
+    def update(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
+    def update(self, record: str) -> SyncCrudBuilder[Value]: ...
+    @overload
+    def update(self, record: RecordID, data: Value) -> dict[str, Value]: ...
+    @overload
+    def update(self, record: Table, data: Value) -> list[Value]: ...
+    @overload
+    def update(self, record: str, data: Value) -> Value: ...
     def update(
-        self, record: str, data: Value | None = None
-    ) -> SyncCrudBuilder[Value]: ...
-    def update(
-        self, record: RecordIdType, data: Value | None = None
-    ) -> SyncCrudBuilder[Any]:
-        """Update records (replacing the existing data by default)."""
+        self, record: RecordIdType, data: Value = _UNSET
+    ) -> SyncCrudBuilder[Any] | Value:
+        """Update records (replacing the existing data by default).
+
+        ``db.update(record, data)`` runs eagerly and returns the result; the
+        no-data form returns a :class:`SyncCrudBuilder` with terminal clause
+        methods (``.content`` / ``.replace`` / ``.merge`` / ``.patch`` /
+        ``.execute``).
+        """
         raise NotImplementedError(f"update not implemented for: {self}")
 
     @overload
-    def upsert(
-        self, record: RecordID, data: Value | None = None
-    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def upsert(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
-    def upsert(
-        self, record: Table, data: Value | None = None
-    ) -> SyncCrudBuilder[list[Value]]: ...
+    def upsert(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
+    def upsert(self, record: str) -> SyncCrudBuilder[Value]: ...
+    @overload
+    def upsert(self, record: RecordID, data: Value) -> dict[str, Value]: ...
+    @overload
+    def upsert(self, record: Table, data: Value) -> list[Value]: ...
+    @overload
+    def upsert(self, record: str, data: Value) -> Value: ...
     def upsert(
-        self, record: str, data: Value | None = None
-    ) -> SyncCrudBuilder[Value]: ...
-    def upsert(
-        self, record: RecordIdType, data: Value | None = None
-    ) -> SyncCrudBuilder[Any]:
-        """Insert or update records."""
+        self, record: RecordIdType, data: Value = _UNSET
+    ) -> SyncCrudBuilder[Any] | Value:
+        """Insert or update records.
+
+        ``db.upsert(record, data)`` runs eagerly and returns the result; the
+        no-data form returns a :class:`SyncCrudBuilder` with terminal clause
+        methods.
+        """
         raise NotImplementedError(f"upsert not implemented for: {self}")
 
     @overload
-    def delete(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def delete(self, record: RecordID) -> dict[str, Value]: ...
     @overload
-    def delete(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
+    def delete(self, record: Table) -> list[Value]: ...
     @overload
-    def delete(self, record: str) -> SyncCrudBuilder[Value]: ...
-    def delete(self, record: RecordIdType) -> SyncCrudBuilder[Any]:
-        """Delete records."""
+    def delete(self, record: str) -> Value: ...
+    def delete(self, record: RecordIdType) -> Value:
+        """Delete records eagerly and return the deleted record(s)."""
         raise NotImplementedError(f"delete not implemented for: {self}")
 
     def info(self) -> Value:
         """Return the record of the authenticated record user."""
         raise NotImplementedError(f"info not implemented for: {self}")
 
+    @overload
+    def insert(
+        self, table: str | Table, *, relation: bool = False
+    ) -> SyncInsertBuilder: ...
+    @overload
+    def insert(
+        self, table: str | Table, data: Value, *, relation: bool = False
+    ) -> list[Value]: ...
     def insert(
         self,
         table: str | Table,
-        data: Value | None = None,
+        data: Value = _UNSET,
         *,
         relation: bool = False,
-    ) -> SyncInsertBuilder:
+    ) -> SyncInsertBuilder | list[Value]:
         """Insert one or multiple records (or relations) into a table.
 
-        Pass ``relation=True`` to issue ``INSERT RELATION INTO``, or chain
-        ``.relation()`` on the returned builder.
+        ``db.insert(table, data)`` runs eagerly and returns the inserted
+        records. ``db.insert(table)`` (no data) returns a
+        :class:`SyncInsertBuilder`; pass ``relation=True`` (or chain
+        ``.relation()``) for ``INSERT RELATION INTO`` and run it with
+        ``.content(data)`` / ``.execute()``.
         """
         raise NotImplementedError(f"insert not implemented for: {self}")
 

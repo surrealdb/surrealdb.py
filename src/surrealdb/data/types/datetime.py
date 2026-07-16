@@ -15,3 +15,14 @@ class Datetime:
             The SurrealQL string representation of the datetime.
         """
         return f"d{json.dumps(self.dt)}"
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.dt!r})"
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Datetime):
+            return self.dt == other.dt
+        return False
+
+    def __hash__(self) -> int:
+        return hash(self.dt)

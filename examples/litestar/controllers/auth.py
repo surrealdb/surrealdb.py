@@ -4,7 +4,7 @@ from litestar import Controller, post
 from litestar.di import Provide
 from litestar.exceptions import InternalServerException
 from litestar.status_codes import HTTP_201_CREATED
-from surrealdb import AsyncSurreal
+from surrealdb import AsyncSurrealConnection
 
 from database import provide_db
 from models import AuthResponse, MessageResponse, SigninRequest, SignupRequest
@@ -17,7 +17,7 @@ class AuthController(Controller):
     dependencies = {"db": Provide(provide_db)}
 
     @post("/signup", status_code=HTTP_201_CREATED)
-    async def signup(self, data: SignupRequest, db: AsyncSurreal) -> AuthResponse:
+    async def signup(self, data: SignupRequest, db: AsyncSurrealConnection) -> AuthResponse:
         """Register a new user account."""
         try:
             token = await db.signup(
@@ -38,7 +38,7 @@ class AuthController(Controller):
             raise InternalServerException(f"Signup failed: {str(e)}")
 
     @post("/signin")
-    async def signin(self, data: SigninRequest, db: AsyncSurreal) -> AuthResponse:
+    async def signin(self, data: SigninRequest, db: AsyncSurrealConnection) -> AuthResponse:
         """Sign in to an account."""
         try:
             token = await db.signin(
@@ -56,7 +56,7 @@ class AuthController(Controller):
             raise InternalServerException(f"Authentication failed: {str(e)}")
 
     @post("/invalidate")
-    async def invalidate(self, db: AsyncSurreal) -> MessageResponse:
+    async def invalidate(self, db: AsyncSurrealConnection) -> MessageResponse:
         """Sign out and invalidate the session."""
         try:
             await db.invalidate()

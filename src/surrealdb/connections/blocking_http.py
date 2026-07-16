@@ -5,6 +5,7 @@ from typing import Any, cast, overload
 import requests
 
 from surrealdb.connections.builders import (
+    _UNSET,
     SyncCrudBuilder,
     SyncInsertBuilder,
     SyncQueryBuilder,
@@ -50,7 +51,12 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         if self.database:
             headers["Surreal-DB"] = self.database
 
-        response = requests.post(url, headers=headers, data=data, timeout=30)
+        # Reuse the pooled session when running inside a context manager,
+        # otherwise fall back to a fresh per-request request.
+        if self.session is not None:
+            response = self.session.post(url, headers=headers, data=data, timeout=30)
+        else:
+            response = requests.post(url, headers=headers, data=data, timeout=30)
         response.raise_for_status()
 
         raw_cbor = response.content
@@ -108,7 +114,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
                 and error.get("code") == -32000
                 and "No result found" in error.get("message", "")
             ):
-                auth_response = self.query("SELECT * FROM $auth").execute()
+                auth_response = self.query("SELECT * FROM $auth").first()
                 if isinstance(auth_response, list) and len(auth_response) > 0:
                     return auth_response[0]
             if error is not None:
@@ -131,6 +137,13 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     def query(
         self, query: str, vars: dict[str, Value] | None = None
     ) -> SyncQueryBuilder:
+        """Run SurrealQL and return a builder; trigger it explicitly.
+
+        ``.execute()`` returns ``list[Value]`` (one entry per statement, always
+        a list - the v3 fix for issue #232), ``.first()`` returns the first
+        statement's result (or ``None``), and ``.into(cls)`` maps the statement
+        results onto a dataclass / class.
+        """
         return SyncQueryBuilder(
             executor=self._make_executor(),
             query=query,
@@ -159,105 +172,150 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
 
         return _executor
 
-    # CRUD overloads --------------------------------------------------------
+    # CRUD (eager) ----------------------------------------------------------
+    #
+    # Passing ``data`` runs the operation immediately and returns the result;
+    # the no-data form returns a builder so the caller can pick a clause.
 
     @overload
-    def create(
-        self, record: RecordID, data: Value | None = None
-    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def create(self, record: RecordIdType) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
+    def create(self, record: RecordIdType, data: Value) -> dict[str, Value]: ...
     def create(
-        self, record: Table, data: Value | None = None
-    ) -> SyncCrudBuilder[dict[str, Value]]: ...
-    @overload
-    def create(
-        self, record: str, data: Value | None = None
-    ) -> SyncCrudBuilder[dict[str, Value]]: ...
-    def create(
-        self, record: RecordIdType, data: Value | None = None
-    ) -> SyncCrudBuilder[Any]:
-        return SyncCrudBuilder(
+        self, record: RecordIdType, data: Value = _UNSET
+    ) -> SyncCrudBuilder[dict[str, Value]] | dict[str, Value]:
+        """Create a record (eager).
+
+        ``db.create(record, data)`` runs ``CREATE ... CONTENT $data``
+        immediately and returns the created record (``data=None`` runs
+        ``CONTENT NULL``). ``db.create(record)`` (no data) returns a
+        :class:`SyncCrudBuilder` so the caller can pick a terminal clause
+        (``.content`` / ``.replace`` / ``.merge`` / ``.patch`` / ``.execute``).
+        """
+        builder: SyncCrudBuilder[dict[str, Value]] = SyncCrudBuilder(
             executor=self._make_executor(),
             operation="CREATE",
             record=record,
             op_name="create",
-            data=data,
             always_unwrap=True,
         )
+        if data is _UNSET:
+            return builder
+        return builder.content(data)
 
     @overload
-    def update(
-        self, record: RecordID, data: Value | None = None
-    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def update(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
-    def update(
-        self, record: Table, data: Value | None = None
-    ) -> SyncCrudBuilder[list[Value]]: ...
+    def update(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
+    def update(self, record: str) -> SyncCrudBuilder[Value]: ...
+    @overload
+    def update(self, record: RecordID, data: Value) -> dict[str, Value]: ...
+    @overload
+    def update(self, record: Table, data: Value) -> list[Value]: ...
+    @overload
+    def update(self, record: str, data: Value) -> Value: ...
     def update(
-        self, record: str, data: Value | None = None
-    ) -> SyncCrudBuilder[Value]: ...
-    def update(
-        self, record: RecordIdType, data: Value | None = None
-    ) -> SyncCrudBuilder[Any]:
-        return SyncCrudBuilder(
+        self, record: RecordIdType, data: Value = _UNSET
+    ) -> SyncCrudBuilder[Any] | Value:
+        """Update records, replacing existing content by default (eager).
+
+        ``db.update(record, data)`` runs eagerly and returns the result
+        (``data=None`` runs ``CONTENT NULL``); the no-data form returns a
+        :class:`SyncCrudBuilder` with terminal clause methods.
+        """
+        builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(),
             operation="UPDATE",
             record=record,
             op_name="update",
-            data=data,
         )
+        if data is _UNSET:
+            return builder
+        return builder.content(data)
 
     @overload
-    def upsert(
-        self, record: RecordID, data: Value | None = None
-    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def upsert(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
-    def upsert(
-        self, record: Table, data: Value | None = None
-    ) -> SyncCrudBuilder[list[Value]]: ...
+    def upsert(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
+    def upsert(self, record: str) -> SyncCrudBuilder[Value]: ...
+    @overload
+    def upsert(self, record: RecordID, data: Value) -> dict[str, Value]: ...
+    @overload
+    def upsert(self, record: Table, data: Value) -> list[Value]: ...
+    @overload
+    def upsert(self, record: str, data: Value) -> Value: ...
     def upsert(
-        self, record: str, data: Value | None = None
-    ) -> SyncCrudBuilder[Value]: ...
-    def upsert(
-        self, record: RecordIdType, data: Value | None = None
-    ) -> SyncCrudBuilder[Any]:
-        return SyncCrudBuilder(
+        self, record: RecordIdType, data: Value = _UNSET
+    ) -> SyncCrudBuilder[Any] | Value:
+        """Insert or update records (eager).
+
+        ``db.upsert(record, data)`` runs eagerly and returns the result
+        (``data=None`` runs ``CONTENT NULL``); the no-data form returns a
+        :class:`SyncCrudBuilder` with terminal clause methods.
+        """
+        builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(),
             operation="UPSERT",
             record=record,
             op_name="upsert",
-            data=data,
         )
+        if data is _UNSET:
+            return builder
+        return builder.content(data)
 
     @overload
-    def delete(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def delete(self, record: RecordID) -> dict[str, Value]: ...
     @overload
-    def delete(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
+    def delete(self, record: Table) -> list[Value]: ...
     @overload
-    def delete(self, record: str) -> SyncCrudBuilder[Value]: ...
-    def delete(self, record: RecordIdType) -> SyncCrudBuilder[Any]:
-        return SyncCrudBuilder(
+    def delete(self, record: str) -> Value: ...
+    def delete(self, record: RecordIdType) -> Value:
+        """Delete records eagerly and return the deleted record(s).
+
+        A ``RecordID`` (or ``"table:id"``) returns the single deleted record; a
+        ``Table`` (or bare name) returns the list of deleted records.
+        """
+        builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(),
             operation="DELETE",
             record=record,
             op_name="delete",
         )
+        return cast(Value, builder.execute())
 
+    @overload
+    def insert(
+        self, table: str | Table, *, relation: bool = False
+    ) -> SyncInsertBuilder: ...
+    @overload
+    def insert(
+        self, table: str | Table, data: Value, *, relation: bool = False
+    ) -> list[Value]: ...
     def insert(
         self,
         table: str | Table,
-        data: Value | None = None,
+        data: Value = _UNSET,
         *,
         relation: bool = False,
-    ) -> SyncInsertBuilder:
-        return SyncInsertBuilder(
+    ) -> SyncInsertBuilder | list[Value]:
+        """Insert record(s) or relation(s) into a table (eager).
+
+        ``db.insert(table, data)`` runs immediately and returns the inserted
+        records. ``db.insert(table)`` (no data) returns a
+        :class:`SyncInsertBuilder`; pass ``relation=True`` (or chain
+        ``.relation()``) for ``INSERT RELATION INTO`` and run it with
+        ``.content(data)`` / ``.execute()``.
+        """
+        builder = SyncInsertBuilder(
             executor=self._make_executor(),
             table=table,
-            data=data,
             relation=relation,
         )
+        if data is _UNSET:
+            return builder
+        return builder.content(data)
 
     def run(
         self,
@@ -282,7 +340,19 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     def unset(self, key: str) -> None:
         self.vars.pop(key)
 
+    @overload
+    def select(self, record: RecordID) -> dict[str, Value] | None: ...
+    @overload
+    def select(self, record: Table) -> list[Value]: ...
+    @overload
+    def select(self, record: str) -> Value: ...
     def select(self, record: RecordIdType) -> Value:
+        """Select records eagerly.
+
+        A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
+        when it is absent. A ``Table`` (or bare table-name string) returns the
+        list of records.
+        """
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"SELECT * FROM {resource_ref}"
@@ -290,7 +360,14 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         response = self.query_raw(query, variables)
         self.check_response_for_error(response, "select")
         self._check_query_result(response["result"][0])
-        return response["result"][0]["result"]
+        result = response["result"][0]["result"]
+        # Single-record targets (RecordID / "table:id") unwrap the one-element
+        # result list to the record dict, or None when the record is absent.
+        if self._is_single_record_operation(record):
+            if isinstance(result, list):
+                return result[0] if result else None
+            return result
+        return result
 
     def version(self) -> str:
         message = RequestMessage(RequestMethod.VERSION)
@@ -298,6 +375,16 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         response = self._send(message, "getting database version")
         self.check_response_for_result(response, "getting database version")
         return response["result"]
+
+    def close(self) -> None:
+        """Close the pooled HTTP session if one is open.
+
+        Idempotent: a no-op when no session has been opened (for example
+        outside a ``with`` block) and safe to call more than once.
+        """
+        if self.session is not None:
+            self.session.close()
+        self.session = None
 
     def __enter__(self) -> "BlockingHttpSurrealConnection":
         """
@@ -317,8 +404,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         Synchronous context manager exit.
         Closes the HTTP session upon exiting the context.
         """
-        if self.session is not None:
-            self.session.close()
+        self.close()
 
     def attach(self) -> None:
         raise UnsupportedFeatureError(

@@ -34,7 +34,7 @@ def test_bearer_access_record_user(bearer_v3_root_ws: dict) -> None:
 
     grant_result = root.query(
         "ACCESS bearer_record_api GRANT FOR RECORD users:testrecord"
-    ).execute()
+    ).first()
     assert grant_result is not None
     assert isinstance(grant_result, dict)
     grant_info = grant_result.get("grant")
@@ -59,7 +59,7 @@ def test_bearer_access_record_user(bearer_v3_root_ws: dict) -> None:
         assert tokens.access is not None
         assert tokens.access != ""
 
-        result = conn.query("RETURN 1")
+        result = conn.query("RETURN 1").first()
         assert result == 1
     finally:
         if conn.socket:
@@ -87,7 +87,7 @@ def test_bearer_record_signin_token_not_usable_with_authenticate(
     ).execute()
     grant_result = root.query(
         "ACCESS bearer_record_auth GRANT FOR RECORD auth_records:auth_test"
-    ).execute()
+    ).first()
     bearer_key = grant_result["grant"]["key"]
 
     conn = BlockingWsSurrealConnection(url)

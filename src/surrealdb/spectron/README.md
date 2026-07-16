@@ -4,7 +4,7 @@ Python client for [Spectron](https://github.com/surrealdb/spectron), bundled
 with `surrealdb`.
 
 ```python
-from surrealdb import Spectron
+from surrealdb.spectron import Spectron
 
 with Spectron(
     context="acme-prod",
@@ -25,7 +25,7 @@ pip install surrealdb
 ## Clients
 
 ```python
-from surrealdb import Spectron, AsyncSpectron
+from surrealdb.spectron import Spectron, AsyncSpectron
 
 with Spectron(context="acme-prod", endpoint="https://api.spectron.example", api_key="sk-...") as memory:
     memory.remember("I work at Acme as CTO")
@@ -268,7 +268,7 @@ memory.lifecycle.fsck(check="duplicates")   # integrity report
 ## Errors
 
 ```python
-from surrealdb import SpectronAPIError, SpectronNotFoundError
+from surrealdb.spectron import SpectronAPIError, SpectronNotFoundError
 
 try:
     memory.recall("...")

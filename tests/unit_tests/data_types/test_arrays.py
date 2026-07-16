@@ -154,7 +154,7 @@ async def test_empty_array_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE array_tests:test1 SET value = $val;",
         vars={"val": test_array},
     )
-    result = await surrealdb_connection.query("SELECT * FROM array_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM array_tests;").first()
     assert result[0]["value"] == test_array
 
 
@@ -166,7 +166,7 @@ async def test_simple_array_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE array_tests:test2 SET value = $val;",
         vars={"val": test_array},
     )
-    result = await surrealdb_connection.query("SELECT * FROM array_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM array_tests;").first()
     assert result[0]["value"] == test_array
 
 
@@ -178,7 +178,7 @@ async def test_string_array_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE array_tests:test3 SET value = $val;",
         vars={"val": test_array},
     )
-    result = await surrealdb_connection.query("SELECT * FROM array_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM array_tests;").first()
     assert result[0]["value"] == test_array
 
 
@@ -190,7 +190,7 @@ async def test_mixed_type_array_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE array_tests:test4 SET value = $val;",
         vars={"val": test_array},
     )
-    result = await surrealdb_connection.query("SELECT * FROM array_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM array_tests;").first()
     assert result[0]["value"] == test_array
 
 
@@ -202,7 +202,7 @@ async def test_nested_array_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE array_tests:test5 SET value = $val;",
         vars={"val": test_array},
     )
-    result = await surrealdb_connection.query("SELECT * FROM array_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM array_tests;").first()
     assert result[0]["value"] == test_array
 
 
@@ -217,5 +217,5 @@ async def test_array_of_objects_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE array_tests:test6 SET value = $val;",
         vars={"val": test_array},
     )
-    result = await surrealdb_connection.query("SELECT * FROM array_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM array_tests;").first()
     assert result[0]["value"] == test_array

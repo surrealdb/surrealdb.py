@@ -132,6 +132,17 @@ def test_duration_equality() -> None:
     assert duration1 != "not a duration"
 
 
+def test_duration_hashable() -> None:
+    """Duration defines __eq__, so it must define a consistent __hash__ to
+    remain usable as a dict key / set member (issue #9)."""
+    duration1 = Duration(1000)
+    duration2 = Duration(1000)
+
+    assert hash(duration1) == hash(duration2)
+    assert duration1 in {duration2}
+    assert {duration1: "value"}[Duration(1000)] == "value"
+
+
 def test_duration_properties() -> None:
     """Test Duration property accessors."""
     # 1 hour, 30 minutes, 45 seconds, 500 milliseconds, 100 microseconds, 50 nanoseconds

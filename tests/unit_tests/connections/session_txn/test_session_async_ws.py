@@ -36,7 +36,7 @@ async def test_new_session_use_query_create_select(
         connection_params["namespace"],
         connection_params["database_name"],
     )
-    result = await session.query("SELECT * FROM session_txn_test;")
+    result = await session.query("SELECT * FROM session_txn_test;").first()
     assert isinstance(result, list)
     assert len(result) == 0
 
@@ -84,8 +84,8 @@ async def test_two_sessions_isolated(
         456,
     )
 
-    res_a = await session_a.query("RETURN $var;")
-    res_b = await session_b.query("RETURN $var;")
+    res_a = await session_a.query("RETURN $var;").first()
+    res_b = await session_b.query("RETURN $var;").first()
     assert res_a == 123
     assert res_b == 456
 

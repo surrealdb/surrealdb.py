@@ -35,7 +35,7 @@ def test_transaction_commit(
 
     before_commit = session.query(
         "SELECT * FROM session_txn_test WHERE id = session_txn_test:committed;"
-    )
+    ).first()
     assert isinstance(before_commit, list)
     assert len(before_commit) == 0
 
@@ -43,7 +43,7 @@ def test_transaction_commit(
 
     after_commit = session.query(
         "SELECT * FROM session_txn_test WHERE id = session_txn_test:committed;"
-    )
+    ).first()
     assert isinstance(after_commit, list)
     assert len(after_commit) == 1
     assert after_commit[0].get("name") == "txn-commit"
@@ -73,7 +73,7 @@ def test_transaction_cancel(
 
     after_cancel = session.query(
         "SELECT * FROM session_txn_test WHERE id = session_txn_test:cancelled;"
-    )
+    ).first()
     assert isinstance(after_cancel, list)
     assert len(after_cancel) == 0
 
@@ -96,7 +96,7 @@ def test_transaction_query_select(
         "session_txn_test:txn_query",
         {"name": "txn-query", "value": 1},
     )
-    result = txn.query("SELECT * FROM session_txn_test:txn_query;")
+    result = txn.query("SELECT * FROM session_txn_test:txn_query;").first()
     assert isinstance(result, list)
     assert len(result) == 1
     assert result[0].get("name") == "txn-query"
