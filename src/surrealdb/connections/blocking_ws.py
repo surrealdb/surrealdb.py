@@ -174,13 +174,13 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def query_raw(
         self,
         query: str,
-        params: dict[str, Value] | None = None,
+        vars: dict[str, Value] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> dict[str, Any]:
-        if params is None:
-            params = {}
-        kwargs: dict[str, Any] = {"query": query, "params": params}
+        if vars is None:
+            vars = {}
+        kwargs: dict[str, Any] = {"query": query, "params": vars}
         if session_id is not None:
             kwargs["session"] = session_id
         if txn_id is not None:
@@ -653,6 +653,18 @@ class BlockingSurrealSession:
     def select(self, record: RecordIdType) -> Value:
         return self._connection.select(record, session_id=self._session_id)
 
+    @overload
+    def create(
+        self, record: RecordID, data: Value | None = None
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def create(
+        self, record: Table, data: Value | None = None
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def create(
+        self, record: str, data: Value | None = None
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     def create(
         self,
         record: RecordIdType,
@@ -660,6 +672,18 @@ class BlockingSurrealSession:
     ) -> SyncCrudBuilder[Any]:
         return self._connection.create(record, data, session_id=self._session_id)
 
+    @overload
+    def update(
+        self, record: RecordID, data: Value | None = None
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def update(
+        self, record: Table, data: Value | None = None
+    ) -> SyncCrudBuilder[list[Value]]: ...
+    @overload
+    def update(
+        self, record: str, data: Value | None = None
+    ) -> SyncCrudBuilder[Value]: ...
     def update(
         self,
         record: RecordIdType,
@@ -667,6 +691,18 @@ class BlockingSurrealSession:
     ) -> SyncCrudBuilder[Any]:
         return self._connection.update(record, data, session_id=self._session_id)
 
+    @overload
+    def upsert(
+        self, record: RecordID, data: Value | None = None
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def upsert(
+        self, record: Table, data: Value | None = None
+    ) -> SyncCrudBuilder[list[Value]]: ...
+    @overload
+    def upsert(
+        self, record: str, data: Value | None = None
+    ) -> SyncCrudBuilder[Value]: ...
     def upsert(
         self,
         record: RecordIdType,
@@ -674,6 +710,12 @@ class BlockingSurrealSession:
     ) -> SyncCrudBuilder[Any]:
         return self._connection.upsert(record, data, session_id=self._session_id)
 
+    @overload
+    def delete(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def delete(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
+    @overload
+    def delete(self, record: str) -> SyncCrudBuilder[Value]: ...
     def delete(self, record: RecordIdType) -> SyncCrudBuilder[Any]:
         return self._connection.delete(record, session_id=self._session_id)
 
@@ -744,6 +786,18 @@ class BlockingSurrealTransaction:
             txn_id=self._txn_id,
         )
 
+    @overload
+    def create(
+        self, record: RecordID, data: Value | None = None
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def create(
+        self, record: Table, data: Value | None = None
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def create(
+        self, record: str, data: Value | None = None
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     def create(
         self,
         record: RecordIdType,
@@ -756,6 +810,18 @@ class BlockingSurrealTransaction:
             txn_id=self._txn_id,
         )
 
+    @overload
+    def update(
+        self, record: RecordID, data: Value | None = None
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def update(
+        self, record: Table, data: Value | None = None
+    ) -> SyncCrudBuilder[list[Value]]: ...
+    @overload
+    def update(
+        self, record: str, data: Value | None = None
+    ) -> SyncCrudBuilder[Value]: ...
     def update(
         self,
         record: RecordIdType,
@@ -768,6 +834,18 @@ class BlockingSurrealTransaction:
             txn_id=self._txn_id,
         )
 
+    @overload
+    def upsert(
+        self, record: RecordID, data: Value | None = None
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def upsert(
+        self, record: Table, data: Value | None = None
+    ) -> SyncCrudBuilder[list[Value]]: ...
+    @overload
+    def upsert(
+        self, record: str, data: Value | None = None
+    ) -> SyncCrudBuilder[Value]: ...
     def upsert(
         self,
         record: RecordIdType,
@@ -780,6 +858,12 @@ class BlockingSurrealTransaction:
             txn_id=self._txn_id,
         )
 
+    @overload
+    def delete(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def delete(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
+    @overload
+    def delete(self, record: str) -> SyncCrudBuilder[Value]: ...
     def delete(self, record: RecordIdType) -> SyncCrudBuilder[Any]:
         return self._connection.delete(
             record,

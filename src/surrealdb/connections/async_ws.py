@@ -224,13 +224,13 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def query_raw(
         self,
         query: str,
-        params: dict[str, Value] | None = None,
+        vars: dict[str, Value] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> dict[str, Any]:
-        if params is None:
-            params = {}
-        kwargs: dict[str, Any] = {"query": query, "params": params}
+        if vars is None:
+            vars = {}
+        kwargs: dict[str, Any] = {"query": query, "params": vars}
         if session_id is not None:
             kwargs["session"] = session_id
         if txn_id is not None:
@@ -701,6 +701,18 @@ class AsyncSurrealSession:
     async def select(self, record: RecordIdType) -> Value:
         return await self._connection.select(record, session_id=self._session_id)
 
+    @overload
+    def create(
+        self, record: RecordID, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def create(
+        self, record: Table, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def create(
+        self, record: str, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     def create(
         self,
         record: RecordIdType,
@@ -708,6 +720,18 @@ class AsyncSurrealSession:
     ) -> AsyncCrudBuilder[Any]:
         return self._connection.create(record, data, session_id=self._session_id)
 
+    @overload
+    def update(
+        self, record: RecordID, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def update(
+        self, record: Table, data: Value | None = None
+    ) -> AsyncCrudBuilder[list[Value]]: ...
+    @overload
+    def update(
+        self, record: str, data: Value | None = None
+    ) -> AsyncCrudBuilder[Value]: ...
     def update(
         self,
         record: RecordIdType,
@@ -715,6 +739,18 @@ class AsyncSurrealSession:
     ) -> AsyncCrudBuilder[Any]:
         return self._connection.update(record, data, session_id=self._session_id)
 
+    @overload
+    def upsert(
+        self, record: RecordID, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def upsert(
+        self, record: Table, data: Value | None = None
+    ) -> AsyncCrudBuilder[list[Value]]: ...
+    @overload
+    def upsert(
+        self, record: str, data: Value | None = None
+    ) -> AsyncCrudBuilder[Value]: ...
     def upsert(
         self,
         record: RecordIdType,
@@ -722,6 +758,12 @@ class AsyncSurrealSession:
     ) -> AsyncCrudBuilder[Any]:
         return self._connection.upsert(record, data, session_id=self._session_id)
 
+    @overload
+    def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def delete(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
+    @overload
+    def delete(self, record: str) -> AsyncCrudBuilder[Value]: ...
     def delete(self, record: RecordIdType) -> AsyncCrudBuilder[Any]:
         return self._connection.delete(record, session_id=self._session_id)
 
@@ -794,6 +836,18 @@ class AsyncSurrealTransaction:
             txn_id=self._txn_id,
         )
 
+    @overload
+    def create(
+        self, record: RecordID, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def create(
+        self, record: Table, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def create(
+        self, record: str, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     def create(
         self,
         record: RecordIdType,
@@ -806,6 +860,18 @@ class AsyncSurrealTransaction:
             txn_id=self._txn_id,
         )
 
+    @overload
+    def update(
+        self, record: RecordID, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def update(
+        self, record: Table, data: Value | None = None
+    ) -> AsyncCrudBuilder[list[Value]]: ...
+    @overload
+    def update(
+        self, record: str, data: Value | None = None
+    ) -> AsyncCrudBuilder[Value]: ...
     def update(
         self,
         record: RecordIdType,
@@ -818,6 +884,18 @@ class AsyncSurrealTransaction:
             txn_id=self._txn_id,
         )
 
+    @overload
+    def upsert(
+        self, record: RecordID, data: Value | None = None
+    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def upsert(
+        self, record: Table, data: Value | None = None
+    ) -> AsyncCrudBuilder[list[Value]]: ...
+    @overload
+    def upsert(
+        self, record: str, data: Value | None = None
+    ) -> AsyncCrudBuilder[Value]: ...
     def upsert(
         self,
         record: RecordIdType,
@@ -830,6 +908,12 @@ class AsyncSurrealTransaction:
             txn_id=self._txn_id,
         )
 
+    @overload
+    def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    @overload
+    def delete(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
+    @overload
+    def delete(self, record: str) -> AsyncCrudBuilder[Value]: ...
     def delete(self, record: RecordIdType) -> AsyncCrudBuilder[Any]:
         return self._connection.delete(
             record,
