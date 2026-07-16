@@ -41,6 +41,8 @@ Both :class:`AsyncQueryBuilder` and :class:`SyncQueryBuilder` return
 (fixes the historic silent-discard behaviour, GH issue #232). Use
 ``.first()`` to pull the first statement's result, or ``.into(cls)`` to map
 the N statement results positionally onto a dataclass / class.
+``.into(cls, rows=True)`` instead maps each ROW of the single statement
+result onto ``cls`` and returns ``list[cls]``.
 
 Safety
 ------
@@ -56,9 +58,9 @@ import asyncio
 import inspect
 import re
 import threading
-from collections.abc import Awaitable, Callable, Generator
+from collections.abc import Awaitable, Callable, Generator, Mapping
 from dataclasses import fields, is_dataclass
-from typing import Any, Generic, TypeVar, cast
+from typing import Any, Generic, Literal, TypeVar, cast, overload
 
 from surrealdb.data.types.record_id import RecordID, RecordIdType, escape_identifier
 from surrealdb.data.types.table import Table
@@ -72,6 +74,17 @@ from surrealdb.types import Value
 
 T = TypeVar("T")
 U = TypeVar("U")
+# Covariant output type for ``AsyncQueryIntoBuilder`` - ``T_co`` only ever
+# appears in return position (``execute`` / ``__await__``), so covariance is
+# sound and lets the ``.into(..., rows=...)`` overloads (whose returns are
+# ``Builder[U]`` vs ``Builder[U | list[U]]``) type-check without overlap
+# conflicts (an invariant generic would reject the narrowing).
+T_co = TypeVar("T_co", covariant=True)
+# Row-model type variable for the ``into=`` mapping surface. ``M`` binds the
+# user's model class so ``select``/``create``/``query().into(..., rows=True)``
+# return precisely typed model instances (``M`` / ``list[M]`` / ``M | None``)
+# rather than the raw ``dict`` / ``list[Value]`` shapes.
+M = TypeVar("M")
 
 AsyncExecutor = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
 SyncExecutor = Callable[[str, dict[str, Any]], dict[str, Any]]
@@ -255,6 +268,7 @@ class _CrudState:
         record: RecordIdType,
         op_name: str,
         always_unwrap: bool,
+        into: type[Any] | None = None,
     ) -> None:
         self._operation = operation
         self._record = record
@@ -263,6 +277,10 @@ class _CrudState:
         self._single = always_unwrap or _is_single_record_operation(record)
         self._mode: str = _Clause.DEFAULT
         self._data: Value | None = None
+        # Optional row-model class. When set, the extracted result is mapped
+        # through ``_map_result`` (which delegates to ``_map_to_class``) before
+        # being returned, so ``into=Model`` yields ``Model`` / ``list[Model]``.
+        self._into: type[Any] | None = into
 
     def _check_not_executed(self) -> None:
         """Raise if this builder has already been executed.
@@ -327,6 +345,7 @@ class _InsertState:
         table: str | Table,
         data: Value | None,
         relation: bool,
+        into: type[Any] | None = None,
     ) -> None:
         if isinstance(table, RecordID):
             raise SurrealError(
@@ -336,6 +355,9 @@ class _InsertState:
         self._table = table
         self._data = data
         self._relation = relation
+        # Optional row-model class; when set the inserted records are mapped
+        # element-wise through ``_map_to_class`` into ``list[into]``.
+        self._into: type[Any] | None = into
 
     def _check_not_executed(self) -> None:
         """Subclasses override to consult their own execution state."""
@@ -392,8 +414,25 @@ class _QueryState:
         return [stmt.get("result") for stmt in stmts]
 
 
-def _map_to_class(cls: type[T], values: list[Any]) -> T:
-    """Map the N statement results positionally onto the fields of ``cls``."""
+def _map_to_class(cls: type[T], values: list[Any] | Mapping[str, Any]) -> T:
+    """Construct ``cls`` from statement results or a single record row.
+
+    Two calling conventions share this one kwargs-construction helper:
+
+    - A ``Mapping`` (a single record dict, as produced by ``select`` /
+      ``create`` / ``query().into(cls, rows=True)`` with ``into=``) is expanded
+      straight into keyword arguments - ``cls(**row)``. This covers
+      dataclasses, pydantic ``BaseModel``, and any class whose constructor
+      accepts the record's fields as keywords.
+    - A ``list`` (the N statement results from ``query().into(cls)``) is mapped
+      positionally onto the fields / constructor parameters of ``cls`` - the
+      historic ``into(cls)`` behaviour, unchanged.
+    """
+    if isinstance(values, Mapping):
+        # Row -> model: the record's keys are the constructor kwargs. Works
+        # uniformly for dataclasses, pydantic models, and plain classes.
+        return cls(**values)
+
     if is_dataclass(cls):
         field_list = list(fields(cls))
         if len(field_list) != len(values):
@@ -427,6 +466,52 @@ def _map_to_class(cls: type[T], values: list[Any]) -> T:
         )
     kwargs = {name: value for name, value in zip(param_names, values, strict=True)}
     return cls(**kwargs)
+
+
+def _statement_rows(values: list[Any]) -> list[Any]:
+    """Return the rows of the first statement result for row-mapping.
+
+    ``query(sql).into(cls, rows=True)`` maps each ROW of a single statement's
+    result. The query builder yields one entry per statement, so row-mapping
+    uses the first statement's result (the common single-``SELECT`` case):
+
+    - a ``list`` result is returned as-is (its elements are the rows),
+    - a scalar / single record is wrapped as a one-row list,
+    - ``None`` (or no statements at all) yields ``[]``.
+    """
+    if not values:
+        return []
+    first = values[0]
+    if isinstance(first, list):
+        return first
+    if first is None:
+        return []
+    return [first]
+
+
+def _map_result(into: type[Any] | None, result: Any) -> Any:
+    """Map an extracted ``select`` / CRUD result onto ``into`` by runtime shape.
+
+    ``into`` is a model class (dataclass, pydantic ``BaseModel``, or any
+    kwargs-constructible class). Mapping follows the shape the operation
+    already produced so the static ``@overload`` return type and the runtime
+    value stay in lock-step:
+
+    - a ``list`` maps element-wise to ``list[into]`` (``Table`` targets),
+    - ``None`` stays ``None`` (an absent single record),
+    - anything else (a record dict) maps to a single ``into`` instance.
+
+    Construction goes through :func:`_map_to_class`, the shared kwargs mapper -
+    there is deliberately no parallel row mapper. ``into=None`` returns the
+    result untouched, so the no-``into`` path is byte-for-byte unchanged.
+    """
+    if into is None:
+        return result
+    if isinstance(result, list):
+        return [_map_to_class(into, row) for row in result]
+    if result is None:
+        return None
+    return _map_to_class(into, result)
 
 
 # ---------------------------------------------------------------------------
@@ -531,8 +616,9 @@ class AsyncCrudBuilder(_CrudState, Generic[T]):
         op_name: str,
         data: Value | None = None,
         always_unwrap: bool = False,
+        into: type[Any] | None = None,
     ) -> None:
-        super().__init__(operation, record, op_name, always_unwrap)
+        super().__init__(operation, record, op_name, always_unwrap, into)
         self._executor = executor
         self._runner = _AsyncCachedRunner()
         if data is not None:
@@ -572,7 +658,7 @@ class AsyncCrudBuilder(_CrudState, Generic[T]):
     async def _do_execute(self) -> T:
         query, variables = self._build()
         response = await self._executor(query, variables)
-        return cast(T, self._extract(response))
+        return cast(T, _map_result(self._into, self._extract(response)))
 
     async def execute(self) -> T:
         return cast(T, await self._runner.run(self._do_execute))
@@ -581,7 +667,7 @@ class AsyncCrudBuilder(_CrudState, Generic[T]):
         return self.execute().__await__()
 
 
-class AsyncInsertBuilder(_InsertState):
+class AsyncInsertBuilder(_InsertState, Generic[T]):
     """Awaitable INSERT builder for async connections (idempotent).
 
     Re-configuring the builder *after* it has executed raises rather than
@@ -594,8 +680,9 @@ class AsyncInsertBuilder(_InsertState):
         table: str | Table,
         data: Value | None = None,
         relation: bool = False,
+        into: type[Any] | None = None,
     ) -> None:
-        super().__init__(table, data, relation)
+        super().__init__(table, data, relation, into)
         self._executor = executor
         self._runner = _AsyncCachedRunner()
 
@@ -613,25 +700,25 @@ class AsyncInsertBuilder(_InsertState):
                 "executed. Create a new builder for a fresh operation."
             )
 
-    def relation(self) -> AsyncInsertBuilder:
+    def relation(self) -> AsyncInsertBuilder[T]:
         self._check_not_executed()
         self._relation = True
         return self
 
-    def content(self, data: Value) -> AsyncInsertBuilder:
+    def content(self, data: Value) -> AsyncInsertBuilder[T]:
         self._check_not_executed()
         self._data = data
         return self
 
-    async def _do_execute(self) -> list[Value]:
+    async def _do_execute(self) -> list[T]:
         query, variables = self._build()
         response = await self._executor(query, variables)
-        return cast(list[Value], self._extract(response))
+        return cast(list[T], _map_result(self._into, self._extract(response)))
 
-    async def execute(self) -> list[Value]:
-        return cast(list[Value], await self._runner.run(self._do_execute))
+    async def execute(self) -> list[T]:
+        return cast(list[T], await self._runner.run(self._do_execute))
 
-    def __await__(self) -> Generator[Any, None, list[Value]]:
+    def __await__(self) -> Generator[Any, None, list[T]]:
         return self.execute().__await__()
 
 
@@ -663,11 +750,32 @@ class AsyncQueryBuilder(_QueryState):
 
         return cast(list[Any], await self._runner.run(_do))
 
-    def into(self, cls: type[U]) -> AsyncQueryIntoBuilder[U]:
-        # Hand the into-builder a reference to *self* so it reuses the
-        # already-fetched (or about-to-be-fetched) values rather than
-        # issuing a second RPC.
-        return AsyncQueryIntoBuilder(self, cls)
+    @overload
+    def into(self, cls: type[U]) -> AsyncQueryIntoBuilder[U]: ...
+    @overload
+    def into(
+        self, cls: type[U], *, rows: Literal[True]
+    ) -> AsyncQueryIntoBuilder[list[U]]: ...
+    @overload
+    def into(
+        self, cls: type[U], *, rows: Literal[False]
+    ) -> AsyncQueryIntoBuilder[U]: ...
+    @overload
+    def into(
+        self, cls: type[U], *, rows: bool
+    ) -> AsyncQueryIntoBuilder[U | list[U]]: ...
+    def into(self, cls: type[U], *, rows: bool = False) -> AsyncQueryIntoBuilder[Any]:
+        """Map the query result onto ``cls``.
+
+        Default (``rows`` unset): map the N statement results positionally onto
+        the fields / constructor parameters of ``cls`` (awaiting yields one
+        ``cls``). ``rows=True``: map each ROW of the single statement result to
+        ``cls`` (awaiting yields ``list[cls]``).
+
+        Either way the into-builder reuses *self*'s cached fetch rather than
+        issuing a second RPC.
+        """
+        return AsyncQueryIntoBuilder(self, cls, rows=rows)
 
     async def execute(self) -> list[Value]:
         return cast("list[Value]", await self._fetch_values())
@@ -683,23 +791,32 @@ class AsyncQueryBuilder(_QueryState):
         return self.execute().__await__()
 
 
-class AsyncQueryIntoBuilder(Generic[T]):
+class AsyncQueryIntoBuilder(Generic[T_co]):
     """Async query builder that maps results onto a user-supplied class.
 
     Reuses the parent :class:`AsyncQueryBuilder`'s cached fetch so that
     ``await q`` and ``await q.into(T)`` together still only round-trip
-    once.
+    once. ``T_co`` is the *output* type: ``U`` for the default statements-to-
+    fields mapping, ``list[U]`` when created with ``rows=True``.
     """
 
-    def __init__(self, parent: AsyncQueryBuilder, cls: type[T]) -> None:
+    def __init__(
+        self, parent: AsyncQueryBuilder, cls: type[Any], rows: bool = False
+    ) -> None:
         self._parent = parent
         self._cls = cls
+        self._rows = rows
 
-    async def execute(self) -> T:
+    async def execute(self) -> T_co:
         values = await self._parent._fetch_values()  # pyright: ignore[reportPrivateUsage]
-        return _map_to_class(self._cls, values)
+        if self._rows:
+            return cast(
+                "T_co",
+                [_map_to_class(self._cls, row) for row in _statement_rows(values)],
+            )
+        return cast("T_co", _map_to_class(self._cls, values))
 
-    def __await__(self) -> Generator[Any, None, T]:
+    def __await__(self) -> Generator[Any, None, T_co]:
         return self.execute().__await__()
 
 
@@ -743,8 +860,9 @@ class SyncCrudBuilder(_CrudState, Generic[T]):
         op_name: str,
         data: Value | None = None,
         always_unwrap: bool = False,
+        into: type[Any] | None = None,
     ) -> None:
-        super().__init__(operation, record, op_name, always_unwrap)
+        super().__init__(operation, record, op_name, always_unwrap, into)
         self._executor = executor
         self._executed = False
         self._cached_result: Any = None
@@ -784,12 +902,12 @@ class SyncCrudBuilder(_CrudState, Generic[T]):
             if not self._executed:
                 query, variables = self._build()
                 response = self._executor(query, variables)
-                self._cached_result = self._extract(response)
+                self._cached_result = _map_result(self._into, self._extract(response))
                 self._executed = True
             return self._cached_result
 
 
-class SyncInsertBuilder(_InsertState):
+class SyncInsertBuilder(_InsertState, Generic[T]):
     """Eager INSERT builder for sync connections.
 
     Handed back only for the deferred no-data form (``db.insert(table)``).
@@ -806,8 +924,9 @@ class SyncInsertBuilder(_InsertState):
         table: str | Table,
         data: Value | None = None,
         relation: bool = False,
+        into: type[Any] | None = None,
     ) -> None:
-        super().__init__(table, data, relation)
+        super().__init__(table, data, relation, into)
         self._executor = executor
         self._executed = False
         self._cached_result: Any = None
@@ -820,25 +939,25 @@ class SyncInsertBuilder(_InsertState):
                 "executed. Create a new builder for a fresh operation."
             )
 
-    def relation(self) -> SyncInsertBuilder:
+    def relation(self) -> SyncInsertBuilder[T]:
         self._check_not_executed()
         self._relation = True
         return self
 
-    def content(self, data: Value) -> list[Value]:
+    def content(self, data: Value) -> list[T]:
         self._check_not_executed()
         self._data = data
-        return cast(list[Value], self._run_once())
+        return cast(list[T], self._run_once())
 
-    def execute(self) -> list[Value]:
-        return cast(list[Value], self._run_once())
+    def execute(self) -> list[T]:
+        return cast(list[T], self._run_once())
 
     def _run_once(self) -> Any:
         with self._lock:
             if not self._executed:
                 query, variables = self._build()
                 response = self._executor(query, variables)
-                self._cached_result = self._extract(response)
+                self._cached_result = _map_result(self._into, self._extract(response))
                 self._executed = True
             return self._cached_result
 
@@ -872,10 +991,28 @@ class SyncQueryBuilder(_QueryState):
         self._cached_values: list[Any] | None = None
         self._lock = threading.Lock()
 
-    def into(self, cls: type[T]) -> T:
-        # Reuse this builder's cached fetch so `.execute()` plus `.into(T)`
-        # on the same instance only issue one RPC.
+    @overload
+    def into(self, cls: type[T]) -> T: ...
+    @overload
+    def into(self, cls: type[T], *, rows: Literal[True]) -> list[T]: ...
+    @overload
+    def into(self, cls: type[T], *, rows: Literal[False]) -> T: ...
+    @overload
+    def into(self, cls: type[T], *, rows: bool) -> T | list[T]: ...
+    def into(self, cls: type[T], *, rows: bool = False) -> Any:
+        """Map the query result onto ``cls``.
+
+        Default (``rows`` unset): map the N statement results positionally onto
+        the fields / constructor parameters of ``cls`` (returns one ``cls``).
+        ``rows=True``: map each ROW of the single statement result to ``cls``
+        (returns ``list[cls]``).
+
+        Reuses this builder's cached fetch so ``.execute()`` plus ``.into(T)``
+        on the same instance only issue one RPC.
+        """
         values = self._run_once()
+        if rows:
+            return [_map_to_class(cls, row) for row in _statement_rows(values)]
         return _map_to_class(cls, values)
 
     def execute(self) -> list[Value]:
@@ -903,8 +1040,10 @@ __all__ = [
     "AsyncInsertBuilder",
     "AsyncQueryBuilder",
     "AsyncQueryIntoBuilder",
+    "M",
     "SyncCrudBuilder",
     "SyncInsertBuilder",
     "SyncQueryBuilder",
     "_UNSET",
+    "_map_result",
 ]

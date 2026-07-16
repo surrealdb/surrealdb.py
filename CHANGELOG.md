@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Keyword-only `into=` argument on `select`, `create`, `update`, `upsert`, `delete`, and `insert` (async and sync, including the session/transaction wrappers) mapping each returned record onto a model class — a dataclass, a pydantic `BaseModel`, or any class accepting the record's fields as keyword arguments. Return types are narrowed precisely per `@overload`: a single-record target resolves to `Model` (or `Model | None`), a `Table` target to `list[Model]`. The no-data builder forms (`create(record, into=Model)`, `update(record, into=Model)`, `insert(table, into=Model)`) carry the model through their clause methods (`.content` / `.merge` / … / `.execute`). Mapping reuses the existing `_map_to_class` helper.
+- `query(sql).into(Model, rows=True)` maps each **row** of a single statement's result onto `Model`, returning `list[Model]`. The default `.into(cls)` (statements-to-fields) behaviour is unchanged when `rows` is not set.
+
 ### Changed
 - `delete(RecordID)` now returns `dict | None` (the deleted record, or `None` when absent), matching `select`; `delete(Table)` still returns a list.
 

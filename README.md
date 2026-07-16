@@ -191,6 +191,51 @@ row = await db.select(RecordID("person", "tobie"))  # dict | None
 rows = await db.select(Table("person"))             # list
 ```
 
+### Mapping rows to a model (`into=`)
+
+Pass the keyword-only `into=` argument to map each returned record onto a model
+class - a dataclass, a pydantic `BaseModel`, or any class whose constructor
+accepts the record's fields as keyword arguments. The return type is narrowed
+precisely per overload: a single-record target resolves to `Model` (or
+`Model | None`), a table target to `list[Model]`.
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Person:
+    id: RecordID
+    name: str
+
+# select: single record -> Person | None, table -> list[Person]
+person = await db.select(RecordID("person", "tobie"), into=Person)  # Person | None
+people = await db.select(Table("person"), into=Person)              # list[Person]
+
+# create / update / upsert / delete map the written record(s) too
+created = await db.create(RecordID("person", "tobie"), {"name": "Tobie"}, into=Person)
+updated = await db.update(Table("person"), {"active": True}, into=Person)  # list[Person]
+
+# insert maps the inserted records
+inserted = await db.insert(Table("person"), [{"name": "A"}], into=Person)  # list[Person]
+
+# the no-data builder form carries the model through its clause methods
+p = await db.create(RecordID("person", "jaime"), into=Person).merge({"name": "Jaime"})
+
+# map each ROW of a single query statement with into(Model, rows=True)
+rows = await db.query("SELECT * FROM person").into(Person, rows=True)  # list[Person]
+```
+
+Sync connections take the same `into=` argument and run eagerly:
+
+```python
+person = db.select(RecordID("person", "tobie"), into=Person)  # Person | None
+created = db.create(RecordID("person", "tobie"), {"name": "Tobie"}, into=Person)
+rows = db.query("SELECT * FROM person").into(Person, rows=True)  # list[Person]
+```
+
+Omitting `into=` leaves the raw `dict` / `list[Value]` results completely
+unchanged.
+
 Sync usage is **eager** - there is no `await` to defer to, so the
 connection methods run single-shot operations immediately and return the
 plain result. A builder is only handed back for the deferred no-data form
@@ -286,6 +331,13 @@ result = await db.query(
     "SELECT * FROM person;"
     "SELECT count() FROM person GROUP ALL"
 ).into(Stats)
+```
+
+Or map each **row** of a single statement's result onto a model with
+`.into(Model, rows=True)`, which returns `list[Model]`:
+
+```python
+people = await db.query("SELECT * FROM person").into(Person, rows=True)  # list[Person]
 ```
 
 For the raw server response (status, time, error per statement), keep
