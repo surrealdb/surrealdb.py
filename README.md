@@ -315,6 +315,96 @@ result = await db.run("fn::increment", [1])
 greeting = await db.run("fn::greet", ["world"])
 ```
 
+## Live queries
+
+Live queries let you subscribe to changes on a table and receive a
+notification whenever a record is created, updated, or deleted. They are a
+**WebSocket-only** feature (`ws://` or `wss://`).
+
+The API is three methods:
+
+- `live(table, diff=False)` - start a live query on a table and return its
+  `UUID`. Pass `diff=True` to receive JSON Patch diffs instead of full
+  records.
+- `subscribe_live(query_uuid)` - return a generator (async generator for the
+  async client) that yields notification dicts. Each notification has an
+  `"action"` (`"CREATE"`, `"UPDATE"`, or `"DELETE"`) and a `"result"` (the
+  affected record).
+- `kill(query_uuid)` - stop a running live query.
+
+You can also start a live query through `query("LIVE SELECT * FROM ...")`,
+which returns the same `UUID` you can pass to `subscribe_live()`.
+
+### Async
+
+```python
+import asyncio
+from surrealdb import AsyncSurreal
+
+async def main():
+    # Connection that owns the subscription.
+    async with AsyncSurreal("ws://localhost:8000/rpc") as db:
+        await db.signin({"username": "root", "password": "root"})
+        await db.use("ns", "db")
+
+        live_id = await db.live("person")           # -> UUID
+        subscription = await db.subscribe_live(live_id)
+
+        # Drive the mutation on a SEPARATE connection (see caveats below).
+        async with AsyncSurreal("ws://localhost:8000/rpc") as writer:
+            await writer.signin({"username": "root", "password": "root"})
+            await writer.use("ns", "db")
+            await writer.create("person", {"name": "Jaime"})
+
+        # Wait for the notification (guard with a timeout in real code).
+        notification = await asyncio.wait_for(subscription.__anext__(), timeout=10)
+        print(notification["action"])   # "CREATE"
+        print(notification["result"])   # the created record
+
+        await db.kill(live_id)
+
+asyncio.run(main())
+```
+
+### Blocking
+
+```python
+from surrealdb import Surreal
+
+with Surreal("ws://localhost:8000/rpc") as db:
+    db.signin({"username": "root", "password": "root"})
+    db.use("ns", "db")
+
+    live_id = db.live("person")            # -> UUID
+    subscription = db.subscribe_live(live_id)
+
+    # Mutate on a SEPARATE connection so the notification can arrive.
+    with Surreal("ws://localhost:8000/rpc") as writer:
+        writer.signin({"username": "root", "password": "root"})
+        writer.use("ns", "db")
+        writer.create("person", {"name": "Jaime"})
+
+    for notification in subscription:
+        print(notification["action"], notification["result"])
+        break                              # generator blocks for the next one
+
+    db.kill(live_id)
+```
+
+### Caveats
+
+- **Mutate on a separate connection.** The connection that owns a
+  subscription is busy receiving live notifications, so running
+  `CREATE`/`UPDATE`/`DELETE` on that *same* connection races the query
+  responses against the incoming notifications. Perform the mutations that
+  should trigger notifications on a **second** connection (this is exactly
+  what the test suite does).
+- **Blocking client: one subscriber per connection.** The blocking
+  `subscribe_live()` reads notifications straight off the socket, so a single
+  blocking connection supports only **one** concurrent subscriber. Use a
+  separate connection per live subscription (or the async client, which
+  fans notifications out to per-subscriber queues).
+
 ## Migrating from 2.x
 
 v3.0 is a breaking change. Highlights:
@@ -515,6 +605,29 @@ async with AsyncSurreal("ws://localhost:8000") as db:
 
 For a complete example with configuration options and best practices, see [`examples/logfire/`](examples/logfire/).
 
+## Spectron
+
+[Spectron](https://github.com/surrealdb/spectron) is a memory service, and its
+client is bundled with `surrealdb`. It is **no longer re-exported at the top
+level** - import it from its own submodule:
+
+```python
+from surrealdb.spectron import Spectron, AsyncSpectron
+
+with Spectron(
+    context="acme-prod",
+    endpoint="https://api.spectron.example",
+    api_key="sk-spec-...",
+) as memory:
+    memory.remember("I work at Acme as CTO")
+    hits = memory.recall("what do I do at Acme")
+    print(hits.hits)
+```
+
+`Spectron` is synchronous (backed by `requests`); `AsyncSpectron` is the
+`await`-able equivalent (backed by `aiohttp`). See
+[`src/surrealdb/spectron/README.md`](src/surrealdb/spectron/README.md) for the
+full client documentation.
 
 ## Contributing
 
