@@ -10,10 +10,10 @@ from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 def setup_table(
     blocking_ws_connection: BlockingWsSurrealConnection,
 ) -> Generator[None, None, None]:
-    blocking_ws_connection.query("REMOVE TABLE IF EXISTS session_txn_test;")
-    blocking_ws_connection.query("DEFINE TABLE session_txn_test SCHEMALESS;")
+    blocking_ws_connection.query("REMOVE TABLE IF EXISTS session_txn_test;").execute()
+    blocking_ws_connection.query("DEFINE TABLE session_txn_test SCHEMALESS;").execute()
     yield
-    blocking_ws_connection.query("REMOVE TABLE IF EXISTS session_txn_test;")
+    blocking_ws_connection.query("REMOVE TABLE IF EXISTS session_txn_test;").execute()
 
 
 def test_transaction_commit(
