@@ -309,7 +309,7 @@ async def test_range_inclusive_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE range_tests:test1 SET range_val = $val;",
         vars={"val": range_obj},
     )
-    result = await surrealdb_connection.query("SELECT * FROM range_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM range_tests;").first()
     assert result[0]["range_val"] == range_obj
 
 
@@ -321,7 +321,7 @@ async def test_range_exclusive_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE range_tests:test2 SET range_val = $val;",
         vars={"val": range_obj},
     )
-    result = await surrealdb_connection.query("SELECT * FROM range_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM range_tests;").first()
     assert result[0]["range_val"] == range_obj
 
 
@@ -333,7 +333,7 @@ async def test_range_mixed_bounds_db_roundtrip(surrealdb_connection: Any) -> Non
         "CREATE range_tests:test3 SET range_val = $val;",
         vars={"val": range_obj},
     )
-    result = await surrealdb_connection.query("SELECT * FROM range_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM range_tests;").first()
     assert result[0]["range_val"] == range_obj
 
 
@@ -345,7 +345,7 @@ async def test_string_range_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE range_tests:test4 SET range_val = $val;",
         vars={"val": range_obj},
     )
-    result = await surrealdb_connection.query("SELECT * FROM range_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM range_tests;").first()
     assert result[0]["range_val"] == range_obj
 
 
@@ -360,7 +360,7 @@ async def test_multiple_ranges_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE range_tests:test5 SET r1 = $range1, r2 = $range2;",
         vars=ranges,
     )
-    result = await surrealdb_connection.query("SELECT * FROM range_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM range_tests;").first()
     assert result[0]["r1"] == ranges["range1"]
     assert result[0]["r2"] == ranges["range2"]
 
@@ -377,5 +377,5 @@ async def test_range_in_array_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE range_tests:test6 SET ranges = $val;",
         vars={"val": ranges_array},
     )
-    result = await surrealdb_connection.query("SELECT * FROM range_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM range_tests;").first()
     assert result[0]["ranges"] == ranges_array

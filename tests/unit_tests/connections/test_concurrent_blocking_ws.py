@@ -24,7 +24,9 @@ def setup_data(
     blocking_ws_connection.query_raw("DELETE likes;")
     blocking_ws_connection.query_raw("DELETE document;")
     blocking_ws_connection.query_raw("REMOVE TABLE user;")
-    blocking_ws_connection.query("DEFINE TABLE IF NOT EXISTS user SCHEMALESS;").execute()
+    blocking_ws_connection.query(
+        "DEFINE TABLE IF NOT EXISTS user SCHEMALESS;"
+    ).execute()
     blocking_ws_connection.query("CREATE user:1 SET name = 'User 1';").execute()
     blocking_ws_connection.query("CREATE user:2 SET name = 'User 2';").execute()
     yield
@@ -208,6 +210,6 @@ def test_sequential_operations_still_work(
     # Query to verify
     result = blocking_ws_connection.query(
         "SELECT * FROM document WHERE id = document:100;"
-    )
+    ).first()
     assert len(result) == 1
     assert result[0]["content"] == "Test"

@@ -74,9 +74,7 @@ async def test_async_query_awaited_twice_runs_once(
     # Both await results are identical (same cached fetch)
     assert first == second
     # Server-side, the UPDATE only ran once - n is 2, not 3
-    after = await async_ws_connection.query(
-        "SELECT n FROM counter:trace"
-    )
+    after = await async_ws_connection.query("SELECT n FROM counter:trace").first()
     assert after[0]["n"] == 2
 
 
@@ -92,7 +90,7 @@ async def test_async_query_concurrent_awaits_run_once(
     )
     a, b, c = await asyncio.gather(builder, builder, builder)
     assert a == b == c
-    after = await async_ws_connection.query("SELECT n FROM counter:concurrent")
+    after = await async_ws_connection.query("SELECT n FROM counter:concurrent").first()
     assert after[0]["n"] == 1
 
 
@@ -128,17 +126,16 @@ async def test_async_into_shares_parent_fetch(
 
     await async_ws_connection.query("CREATE counter:share SET n = 7")
     builder = async_ws_connection.query(
-        "UPDATE counter:share SET n = n + 1 RETURN AFTER;"
-        "RETURN 99;"
+        "UPDATE counter:share SET n = n + 1 RETURN AFTER;RETURN 99;"
     )
     direct = await builder
     mapped = await builder.into(Pair)
-    # `direct` is a tuple (update_list, 99); `mapped` repacks the same
+    # `direct` is a list [update_list, 99]; `mapped` repacks the same
     # values into Pair. They reference the same cached fetch.
     assert direct[0] == mapped.a
     assert direct[1] == mapped.b
     # Server-side, the UPDATE ran only once - the n value is 8 (was 7, +1).
-    after = await async_ws_connection.query("SELECT n FROM counter:share")
+    after = await async_ws_connection.query("SELECT n FROM counter:share").first()
     assert after[0]["n"] == 8
 
 
@@ -153,19 +150,18 @@ def test_sync_into_shares_parent_fetch(
 
     blocking_ws_connection.query("CREATE counter:sync_share SET n = 5").execute()
     builder = blocking_ws_connection.query(
-        "UPDATE counter:sync_share SET n = n + 1 RETURN AFTER;"
-        "RETURN 11;"
+        "UPDATE counter:sync_share SET n = n + 1 RETURN AFTER;RETURN 11;"
     )
     direct = builder.execute()
     mapped = builder.into(Pair)
     assert direct[0] == mapped.a
     assert direct[1] == mapped.b
-    after = blocking_ws_connection.query("SELECT n FROM counter:sync_share")
+    after = blocking_ws_connection.query("SELECT n FROM counter:sync_share").first()
     assert after[0]["n"] == 6
 
 
 # ---------------------------------------------------------------------------
-# Safe __repr__ / __str__
+# No-data builders are inert until run
 # ---------------------------------------------------------------------------
 
 
@@ -173,17 +169,20 @@ def test_sync_builder_repr_does_not_execute(
     blocking_ws_connection: BlockingWsSurrealConnection,
     _sync_setup: None,
 ) -> None:
-    """Calling repr()/str() on a pending builder must not run the query."""
+    """A no-data builder must not run until a clause / execute() is called.
+
+    Sync builders carry no magic dunders, so ``repr()``/``str()`` (and any
+    other incidental inspection) can never fire the pending operation.
+    """
     blocking_ws_connection.query("CREATE counter:repr_safe SET n = 1").execute()
     blocking_ws_connection.update("counter:repr_safe").merge({"n": 999})
-    # Fresh pending builder - just inspecting must not execute it.
-    pending = blocking_ws_connection.update("counter:repr_safe", {"n": 555})
-    assert "pending" in repr(pending)
-    assert "pending" in str(pending)
-    after = blocking_ws_connection.query(
-        "SELECT n FROM counter:repr_safe"
-    ).execute()
-    # n is whatever the previously-terminal merge set, not 555.
+    # Fresh no-data builder - just inspecting must not execute it.
+    pending = blocking_ws_connection.update("counter:repr_safe")
+    repr(pending)
+    str(pending)
+    after = blocking_ws_connection.query("SELECT n FROM counter:repr_safe").first()
+    # n is whatever the previous terminal merge set - the pending builder
+    # above never ran, so it did not clobber the value.
     assert after[0]["n"] == 999
 
 
@@ -210,9 +209,7 @@ def test_sync_unsafe_string_record_rejected(
     _sync_setup: None,
 ) -> None:
     with pytest.raises(SurrealError):
-        blocking_ws_connection.delete(
-            "counter:1..10; REMOVE TABLE counter;"
-        ).execute()
+        blocking_ws_connection.delete("counter:1..10; REMOVE TABLE counter;")
 
 
 @pytest.mark.asyncio
@@ -221,11 +218,14 @@ async def test_string_record_id_bound_safely(
     _async_setup: None,
     _sync_setup: None,
 ) -> None:
-    """A normal `"table:id"` string is bound as a parameterised RecordID."""
+    """A normal `"table:id"` string is bound as a parameterised RecordID.
+
+    select() of a single record-id string unwraps to the record dict.
+    """
     await async_ws_connection.create("counter:abc", {"n": 42})
     out = await async_ws_connection.select("counter:abc")
-    assert isinstance(out, list)
-    assert out[0]["n"] == 42
+    assert isinstance(out, dict)
+    assert out["n"] == 42
 
 
 @pytest.mark.asyncio
@@ -283,7 +283,8 @@ def test_sync_crud_reconfigure_after_execute_raises(
     blocking_ws_connection: BlockingWsSurrealConnection,
     _sync_setup: None,
 ) -> None:
-    builder = blocking_ws_connection.create("counter:sync_reconfig", {"n": 1})
+    # No-data create returns a builder; run it, then reconfiguring raises.
+    builder = blocking_ws_connection.create("counter:sync_reconfig")
     builder.execute()  # explicit consumption
     with pytest.raises(SurrealError, match="Cannot reconfigure"):
         builder.merge({"n": 2})
@@ -293,43 +294,36 @@ def test_sync_insert_reconfigure_after_execute_raises(
     blocking_ws_connection: BlockingWsSurrealConnection,
     _sync_setup: None,
 ) -> None:
-    builder = blocking_ws_connection.insert("counter", {"n": 1})
-    builder.execute()
+    # No-data insert returns a builder; .content() runs it, then
+    # reconfiguring raises.
+    builder = blocking_ws_connection.insert("counter")
+    builder.content({"n": 1})
     with pytest.raises(SurrealError, match="Cannot reconfigure"):
         builder.relation()
 
 
 # ---------------------------------------------------------------------------
-# Sync `query().into()` keeps `_executed` / repr in lockstep
+# Sync `query().into()` and `.execute()` share one cached fetch
 # ---------------------------------------------------------------------------
 
 
-def test_sync_query_into_marks_executed(
+def test_sync_query_into_and_execute_share_fetch(
     blocking_ws_connection: BlockingWsSurrealConnection,
     _sync_setup: None,
 ) -> None:
-    """After `.into(cls)` the builder must report executed, not pending.
-
-    Previously `.into()` populated the values cache without flipping
-    `_executed`, so `repr(builder)` after a successful `.into()` would
-    misleadingly print "pending" even though the RPC had already run.
-    """
+    """`.into(cls)` and `.execute()` on one builder share a single fetch."""
 
     @dataclass
     class Pair:
         a: int
         b: int
 
-    blocking_ws_connection.query(
-        "CREATE counter:into_repr SET n = 1"
-    ).execute()
+    blocking_ws_connection.query("CREATE counter:into_repr SET n = 1").execute()
     builder = blocking_ws_connection.query("RETURN 10; RETURN 20;")
-    assert "pending" in repr(builder)
     mapped = builder.into(Pair)
     assert mapped == Pair(a=10, b=20)
-    assert "pending" not in repr(builder)
-    # And re-executing returns the same cached tuple without re-fetching.
-    assert builder.execute() == (10, 20)
+    # Re-executing returns the same cached list without re-fetching.
+    assert builder.execute() == [10, 20]
 
 
 # ---------------------------------------------------------------------------
@@ -347,33 +341,39 @@ def test_string_record_id_with_extra_colons_rejected(
     literal-parsing rules for compound IDs, so we refuse to guess.
     """
     with pytest.raises(SurrealError, match="Ambiguous record-id"):
-        blocking_ws_connection.delete("counter:part:rest").execute()
+        blocking_ws_connection.delete("counter:part:rest")
 
 
 # ---------------------------------------------------------------------------
-# Truthiness / equality auto-execute behaviour
+# No magic auto-execute: inspecting a builder never runs it
 # ---------------------------------------------------------------------------
 
 
-def test_sync_builder_bool_triggers_execution(
+def test_sync_builder_has_no_magic_auto_execute(
     blocking_ws_connection: BlockingWsSurrealConnection,
     _sync_setup: None,
 ) -> None:
-    """`bool(builder)` runs the operation - this is documented but tested.
+    """Sync builders carry no auto-executing dunders.
 
-    The point of the test is to *pin* the behaviour so a future refactor
-    that silently changes it will break this test and force an explicit
-    decision (and a docs update).
+    ``bool()`` on a builder is plain object truthiness (always True) and
+    must NOT run the operation; only ``.execute()`` / a clause method does.
+    Pins the eager-model contract so a future refactor that re-introduces
+    magic consumption breaks here and forces an explicit decision.
     """
     blocking_ws_connection.query("CREATE counter:bool_check SET n = 5").execute()
     builder = blocking_ws_connection.query(
         "UPDATE counter:bool_check SET n = n + 1 RETURN AFTER"
     )
-    assert "pending" in repr(builder)
-    assert bool(builder)  # auto-executes
-    assert "pending" not in repr(builder)
-    after = blocking_ws_connection.query("SELECT n FROM counter:bool_check")
-    assert after[0]["n"] == 6  # update ran exactly once
+    assert bool(builder) is True  # object truthiness - does NOT execute
+    for magic in ("__bool__", "__eq__", "__getitem__", "__iter__", "__len__"):
+        assert magic not in type(builder).__dict__
+    # The UPDATE never ran: n is still 5.
+    after = blocking_ws_connection.query("SELECT n FROM counter:bool_check").first()
+    assert after[0]["n"] == 5
+    # Explicit execution runs it exactly once.
+    builder.execute()
+    after = blocking_ws_connection.query("SELECT n FROM counter:bool_check").first()
+    assert after[0]["n"] == 6
 
 
 # ---------------------------------------------------------------------------
@@ -392,9 +392,7 @@ def test_sync_builder_thread_safe_run_once(
     operation independently - corrupting the cache and (for mutations)
     duplicating side effects.
     """
-    blocking_ws_connection.query(
-        "CREATE counter:thread_safe SET n = 0"
-    ).execute()
+    blocking_ws_connection.query("CREATE counter:thread_safe SET n = 0").execute()
     builder = blocking_ws_connection.query(
         "UPDATE counter:thread_safe SET n = n + 1 RETURN AFTER"
     )
@@ -415,9 +413,7 @@ def test_sync_builder_thread_safe_run_once(
     # Every thread sees the *same* cached result.
     assert all(r == results[0] for r in results)
     # And the UPDATE ran exactly once - n is 1, not 8.
-    after = blocking_ws_connection.query(
-        "SELECT n FROM counter:thread_safe"
-    )
+    after = blocking_ws_connection.query("SELECT n FROM counter:thread_safe").first()
     assert after[0]["n"] == 1
 
 
@@ -543,10 +539,10 @@ async def test_async_into_then_await_shares_fetch(
     )
     mapped = await builder.into(Pair)
     direct = await builder
-    assert isinstance(direct, tuple)
+    assert isinstance(direct, list)
     assert direct[0] == mapped.a
     assert direct[1] == mapped.b
-    after = await async_ws_connection.query("SELECT n FROM counter:reverse")
+    after = await async_ws_connection.query("SELECT n FROM counter:reverse").first()
     assert isinstance(after, list)
     assert after[0]["n"] == 4  # update ran exactly once
 
