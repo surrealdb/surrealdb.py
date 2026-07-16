@@ -6,6 +6,7 @@ SURREALDB_VERSION=v3.0.0-beta.2 or use docker-compose profile v3).
 They are skipped when the server version is not 3.x.
 """
 
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -27,7 +28,7 @@ def _is_surrealdb_v3(version_str: str) -> bool:
 
 
 @pytest.fixture(scope="module")
-def bearer_v3_root_ws() -> dict[str, Any]:
+def bearer_v3_root_ws() -> Iterator[dict[str, Any]]:
     """
     Root-authenticated WebSocket connection and version check.
 

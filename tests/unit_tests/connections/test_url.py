@@ -6,7 +6,7 @@ from surrealdb.connections.url import Url, UrlScheme
 
 
 @pytest.fixture
-def test_data() -> None:
+def test_data() -> dict[str, Any]:
     return {
         "urls": [
             "http://localhost:5000",
@@ -38,4 +38,3 @@ def test_embedded_url_schemes() -> None:
     assert Url("file:///tmp/db").scheme == UrlScheme.FILE
     assert Url("surrealkv:///tmp/db").scheme == UrlScheme.SURREALKV
     assert Url("surrealkv+versioned:///tmp/db").scheme == UrlScheme.SURREALKV_VERSIONED
-

@@ -1,3 +1,5 @@
+from typing import cast
+
 import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
@@ -6,19 +8,18 @@ from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 @pytest.mark.asyncio
 async def test_unset(async_ws_connection: AsyncWsSurrealConnection) -> None:
     await async_ws_connection.query("DELETE person;")
-    outcome = await async_ws_connection.let(
+    await async_ws_connection.let(
         "name",
         {
             "first": "Tobie",
             "last": "Morgan Hitchcock",
         },
     )
-    assert outcome is None
     await async_ws_connection.query("CREATE person SET name = $name")
     outcome = await async_ws_connection.query(
         "SELECT * FROM person WHERE name.first = $name.first"
     ).first()
-    assert len(outcome) == 1
+    assert len(cast(list, outcome)) == 1
     assert outcome[0]["name"] == {"first": "Tobie", "last": "Morgan Hitchcock"}
 
     await async_ws_connection.unset(key="name")
