@@ -11,11 +11,11 @@ from surrealdb.connections.builders import (
     AsyncQueryBuilder,
 )
 from surrealdb.connections.url import Url
-from surrealdb.connections.utils_mixin import UtilsMixin
+from surrealdb.connections.utils_mixin import AUTH_FALLBACK_QUERY, UtilsMixin
 from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
-from surrealdb.errors import UnsupportedFeatureError
+from surrealdb.errors import UnsupportedFeatureError, parse_rpc_error
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 from surrealdb.types import Tokens, Value, parse_auth_result
@@ -130,6 +130,17 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         response = await self._send(
             message, "getting database information", bypass=True
         )
+
+        if response.get("error") is not None:
+            # Record-auth sessions have no ROOT/NS/DB info; re-resolve the
+            # authenticated record via `$auth` (finding #23).
+            if self._info_needs_auth_fallback(response):
+                record = self._extract_auth_record(
+                    await self.query(AUTH_FALLBACK_QUERY)
+                )
+                if record is not None:
+                    return record
+            raise parse_rpc_error(response["error"])
 
         self.check_response_for_result(response, "getting database information")
         return cast(dict[str, Value], response["result"])
