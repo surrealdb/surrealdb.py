@@ -9,6 +9,8 @@ from surrealdb.connections.builders import (
     AsyncCrudBuilder,
     AsyncInsertBuilder,
     AsyncQueryBuilder,
+    M,
+    _map_result,
 )
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import AUTH_FALLBACK_QUERY, UtilsMixin
@@ -218,6 +220,10 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     @overload
     def create(
+        self, record: RecordIdType, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M]: ...
+    @overload
+    def create(
         self, record: RecordID, data: Value | None = None
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
@@ -229,14 +235,19 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self, record: str, data: Value | None = None
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     def create(
-        self, record: RecordIdType, data: Value | None = None
+        self,
+        record: RecordIdType,
+        data: Value | None = None,
+        *,
+        into: type[M] | None = None,
     ) -> AsyncCrudBuilder[Any]:
         """Create a record; returns an awaitable builder.
 
         ``await db.create(record, data)`` is sugar for
         ``await db.create(record).content(data)``. Clause methods
         (``.content`` / ``.replace`` / ``.merge`` / ``.patch``) return the
-        builder so it stays awaitable.
+        builder so it stays awaitable. Pass ``into=Model`` to map the created
+        record onto ``Model``.
         """
         return AsyncCrudBuilder(
             executor=self._make_executor(),
@@ -245,8 +256,21 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
             op_name="create",
             data=data,
             always_unwrap=True,
+            into=into,
         )
 
+    @overload
+    def update(
+        self, record: RecordID, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M]: ...
+    @overload
+    def update(
+        self, record: Table, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[list[M]]: ...
+    @overload
+    def update(
+        self, record: str, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | list[M]]: ...
     @overload
     def update(
         self, record: RecordID, data: Value | None = None
@@ -260,12 +284,17 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self, record: str, data: Value | None = None
     ) -> AsyncCrudBuilder[Value]: ...
     def update(
-        self, record: RecordIdType, data: Value | None = None
+        self,
+        record: RecordIdType,
+        data: Value | None = None,
+        *,
+        into: type[M] | None = None,
     ) -> AsyncCrudBuilder[Any]:
         """Update records; returns an awaitable builder.
 
         Optional clause methods ``.content`` / ``.replace`` / ``.merge`` /
-        ``.patch`` return the builder so it stays awaitable.
+        ``.patch`` return the builder so it stays awaitable. Pass ``into=Model``
+        to map the returned record(s) onto ``Model`` / ``list[Model]``.
         """
         return AsyncCrudBuilder(
             executor=self._make_executor(),
@@ -273,8 +302,21 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
             record=record,
             op_name="update",
             data=data,
+            into=into,
         )
 
+    @overload
+    def upsert(
+        self, record: RecordID, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M]: ...
+    @overload
+    def upsert(
+        self, record: Table, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[list[M]]: ...
+    @overload
+    def upsert(
+        self, record: str, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | list[M]]: ...
     @overload
     def upsert(
         self, record: RecordID, data: Value | None = None
@@ -288,12 +330,17 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self, record: str, data: Value | None = None
     ) -> AsyncCrudBuilder[Value]: ...
     def upsert(
-        self, record: RecordIdType, data: Value | None = None
+        self,
+        record: RecordIdType,
+        data: Value | None = None,
+        *,
+        into: type[M] | None = None,
     ) -> AsyncCrudBuilder[Any]:
         """Insert or update records; returns an awaitable builder.
 
         Optional clause methods ``.content`` / ``.replace`` / ``.merge`` /
-        ``.patch`` return the builder so it stays awaitable.
+        ``.patch`` return the builder so it stays awaitable. Pass ``into=Model``
+        to map the returned record(s) onto ``Model`` / ``list[Model]``.
         """
         return AsyncCrudBuilder(
             executor=self._make_executor(),
@@ -301,46 +348,76 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
             record=record,
             op_name="upsert",
             data=data,
+            into=into,
         )
 
+    @overload
+    def delete(
+        self, record: RecordID, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | None]: ...
+    @overload
+    def delete(self, record: Table, *, into: type[M]) -> AsyncCrudBuilder[list[M]]: ...
+    @overload
+    def delete(
+        self, record: str, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
     def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def delete(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
     def delete(self, record: str) -> AsyncCrudBuilder[Value]: ...
-    def delete(self, record: RecordIdType) -> AsyncCrudBuilder[Any]:
+    def delete(
+        self, record: RecordIdType, *, into: type[M] | None = None
+    ) -> AsyncCrudBuilder[Any]:
         """Delete records; returns an awaitable builder.
 
         A ``RecordID`` (or ``"table:id"``) resolves to the deleted record, or
         ``None`` when no record was deleted (matching select); a ``Table`` (or
         bare name) to the list of deleted records. ``DELETE`` has no clause
-        methods.
+        methods. Pass ``into=Model`` to map the deleted record(s) onto ``Model``.
         """
         return AsyncCrudBuilder(
             executor=self._make_executor(),
             operation="DELETE",
             record=record,
             op_name="delete",
+            into=into,
         )
 
+    @overload
+    def insert(
+        self, table: str | Table, data: Value | None = None, *, relation: bool = False
+    ) -> AsyncInsertBuilder[Value]: ...
+    @overload
     def insert(
         self,
         table: str | Table,
         data: Value | None = None,
         *,
+        into: type[M],
         relation: bool = False,
-    ) -> AsyncInsertBuilder:
+    ) -> AsyncInsertBuilder[M]: ...
+    def insert(
+        self,
+        table: str | Table,
+        data: Value | None = None,
+        *,
+        into: type[M] | None = None,
+        relation: bool = False,
+    ) -> AsyncInsertBuilder[Any]:
         """Insert record(s) or relation(s); returns an awaitable builder.
 
         Pass ``relation=True`` (or chain ``.relation()``) for ``INSERT
-        RELATION INTO``. Awaiting the builder (or ``.execute()``) runs it.
+        RELATION INTO``. Awaiting the builder (or ``.execute()``) runs it. Pass
+        ``into=Model`` to map the inserted records onto ``list[Model]``.
         """
         return AsyncInsertBuilder(
             executor=self._make_executor(),
             table=table,
             data=data,
             relation=relation,
+            into=into,
         )
 
     async def run(
@@ -367,17 +444,23 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.vars.pop(key)
 
     @overload
+    async def select(self, record: RecordID, *, into: type[M]) -> M | None: ...
+    @overload
+    async def select(self, record: Table, *, into: type[M]) -> list[M]: ...
+    @overload
+    async def select(self, record: str, *, into: type[M]) -> M | list[M] | None: ...
+    @overload
     async def select(self, record: RecordID) -> dict[str, Value] | None: ...
     @overload
     async def select(self, record: Table) -> list[Value]: ...
     @overload
     async def select(self, record: str) -> Value: ...
-    async def select(self, record: RecordIdType) -> Value:
+    async def select(self, record: RecordIdType, *, into: type[M] | None = None) -> Any:
         """Select records.
 
         A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
         when it is absent. A ``Table`` (or bare table-name string) returns the
-        list of records.
+        list of records. Pass ``into=Model`` to map each record onto ``Model``.
         """
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -391,9 +474,14 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         # result list to the record dict, or None when the record is absent.
         if self._is_single_record_operation(record):
             if isinstance(result, list):
-                return result[0] if result else None
-            return result
-        return result
+                value: Any = result[0] if result else None
+            else:
+                value = result
+        else:
+            value = result
+        if into is not None:
+            return _map_result(into, value)
+        return value
 
     async def version(self) -> str:
         message = RequestMessage(RequestMethod.VERSION)

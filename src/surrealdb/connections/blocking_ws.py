@@ -8,7 +8,7 @@ import threading
 import uuid
 from collections.abc import Generator
 from types import TracebackType
-from typing import Any, cast, overload
+from typing import Any, overload
 from uuid import UUID
 
 import websockets
@@ -18,9 +18,11 @@ from websockets.sync.client import ClientConnection
 
 from surrealdb.connections.builders import (
     _UNSET,
+    M,
     SyncCrudBuilder,
     SyncInsertBuilder,
     SyncQueryBuilder,
+    _map_result,
 )
 from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.url import Url
@@ -298,6 +300,33 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self,
         record: RecordID,
         *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> M | None: ...
+    @overload
+    def select(
+        self,
+        record: Table,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> list[M]: ...
+    @overload
+    def select(
+        self,
+        record: str,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> M | list[M] | None: ...
+    @overload
+    def select(
+        self,
+        record: RecordID,
+        *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> dict[str, Value] | None: ...
@@ -321,14 +350,15 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self,
         record: RecordIdType,
         *,
+        into: type[M] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> Value:
+    ) -> Any:
         """Select records eagerly.
 
         A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
         when it is absent. A ``Table`` (or bare table-name string) returns the
-        list of records.
+        list of records. Pass ``into=Model`` to map each record onto ``Model``.
         """
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -344,9 +374,14 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         # result list to the record dict, or None when the record is absent.
         if self._is_single_record_operation(record):
             if isinstance(result, list):
-                return result[0] if result else None
-            return result
-        return result
+                value: Any = result[0] if result else None
+            else:
+                value = result
+        else:
+            value = result
+        if into is not None:
+            return _map_result(into, value)
+        return value
 
     def _make_executor(
         self,
@@ -372,6 +407,25 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self,
         record: RecordIdType,
         *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> SyncCrudBuilder[M]: ...
+    @overload
+    def create(
+        self,
+        record: RecordIdType,
+        data: Value,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> M: ...
+    @overload
+    def create(
+        self,
+        record: RecordIdType,
+        *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> SyncCrudBuilder[dict[str, Value]]: ...
@@ -389,9 +443,10 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         record: RecordIdType,
         data: Value = _UNSET,
         *,
+        into: type[M] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> SyncCrudBuilder[dict[str, Value]] | dict[str, Value]:
+    ) -> Any:
         """Create a record (eager).
 
         ``db.create(record, data)`` runs ``CREATE ... CONTENT $data``
@@ -399,18 +454,77 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         ``CONTENT NULL``). ``db.create(record)`` (no data) returns a
         :class:`SyncCrudBuilder` so the caller can pick a terminal clause
         (``.content`` / ``.replace`` / ``.merge`` / ``.patch`` / ``.execute``).
+        Pass ``into=Model`` to map the created record onto ``Model``.
         """
-        builder: SyncCrudBuilder[dict[str, Value]] = SyncCrudBuilder(
+        builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
             operation="CREATE",
             record=record,
             op_name="create",
             always_unwrap=True,
+            into=into,
         )
         if data is _UNSET:
             return builder
         return builder.content(data)
 
+    @overload
+    def update(
+        self,
+        record: RecordID,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> SyncCrudBuilder[M]: ...
+    @overload
+    def update(
+        self,
+        record: Table,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> SyncCrudBuilder[list[M]]: ...
+    @overload
+    def update(
+        self,
+        record: str,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> SyncCrudBuilder[M | list[M]]: ...
+    @overload
+    def update(
+        self,
+        record: RecordID,
+        data: Value,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> M: ...
+    @overload
+    def update(
+        self,
+        record: Table,
+        data: Value,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> list[M]: ...
+    @overload
+    def update(
+        self,
+        record: str,
+        data: Value,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> M | list[M]: ...
     @overload
     def update(
         self,
@@ -467,26 +581,87 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         record: RecordIdType,
         data: Value = _UNSET,
         *,
+        into: type[M] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> SyncCrudBuilder[Any] | Value:
+    ) -> Any:
         """Update records, replacing existing content by default (eager).
 
         ``db.update(record, data)`` runs ``UPDATE ... CONTENT $data``
         immediately and returns the result (``data=None`` runs ``CONTENT
         NULL``). ``db.update(record)`` (no data) returns a
-        :class:`SyncCrudBuilder` with terminal clause methods.
+        :class:`SyncCrudBuilder` with terminal clause methods. Pass
+        ``into=Model`` to map the returned record(s) onto ``Model`` /
+        ``list[Model]``.
         """
         builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
             operation="UPDATE",
             record=record,
             op_name="update",
+            into=into,
         )
         if data is _UNSET:
             return builder
         return builder.content(data)
 
+    @overload
+    def upsert(
+        self,
+        record: RecordID,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> SyncCrudBuilder[M]: ...
+    @overload
+    def upsert(
+        self,
+        record: Table,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> SyncCrudBuilder[list[M]]: ...
+    @overload
+    def upsert(
+        self,
+        record: str,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> SyncCrudBuilder[M | list[M]]: ...
+    @overload
+    def upsert(
+        self,
+        record: RecordID,
+        data: Value,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> M: ...
+    @overload
+    def upsert(
+        self,
+        record: Table,
+        data: Value,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> list[M]: ...
+    @overload
+    def upsert(
+        self,
+        record: str,
+        data: Value,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> M | list[M]: ...
     @overload
     def upsert(
         self,
@@ -543,26 +718,57 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         record: RecordIdType,
         data: Value = _UNSET,
         *,
+        into: type[M] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> SyncCrudBuilder[Any] | Value:
+    ) -> Any:
         """Insert or update records (eager).
 
         ``db.upsert(record, data)`` runs ``UPSERT ... CONTENT $data``
         immediately and returns the result (``data=None`` runs ``CONTENT
         NULL``). ``db.upsert(record)`` (no data) returns a
-        :class:`SyncCrudBuilder` with terminal clause methods.
+        :class:`SyncCrudBuilder` with terminal clause methods. Pass
+        ``into=Model`` to map the returned record(s) onto ``Model`` /
+        ``list[Model]``.
         """
         builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
             operation="UPSERT",
             record=record,
             op_name="upsert",
+            into=into,
         )
         if data is _UNSET:
             return builder
         return builder.content(data)
 
+    @overload
+    def delete(
+        self,
+        record: RecordID,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> M | None: ...
+    @overload
+    def delete(
+        self,
+        record: Table,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> list[M]: ...
+    @overload
+    def delete(
+        self,
+        record: str,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> M | list[M] | None: ...
     @overload
     def delete(
         self,
@@ -591,22 +797,25 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self,
         record: RecordIdType,
         *,
+        into: type[M] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> Value:
+    ) -> Any:
         """Delete records eagerly and return the deleted record(s).
 
         A ``RecordID`` (or ``"table:id"``) returns the deleted record, or
         ``None`` when no record was deleted (matching select); a ``Table`` (or
-        bare name) returns the list of deleted records.
+        bare name) returns the list of deleted records. Pass ``into=Model`` to
+        map the deleted record(s) onto ``Model``.
         """
         builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
             operation="DELETE",
             record=record,
             op_name="delete",
+            into=into,
         )
-        return cast(Value, builder.execute())
+        return builder.execute()
 
     @overload
     def insert(
@@ -616,7 +825,17 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         relation: bool = False,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> SyncInsertBuilder: ...
+    ) -> SyncInsertBuilder[Value]: ...
+    @overload
+    def insert(
+        self,
+        table: str | Table,
+        *,
+        into: type[M],
+        relation: bool = False,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> SyncInsertBuilder[M]: ...
     @overload
     def insert(
         self,
@@ -627,27 +846,41 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> list[Value]: ...
+    @overload
+    def insert(
+        self,
+        table: str | Table,
+        data: Value,
+        *,
+        into: type[M],
+        relation: bool = False,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> list[M]: ...
     def insert(
         self,
         table: str | Table,
         data: Value = _UNSET,
         *,
+        into: type[M] | None = None,
         relation: bool = False,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> SyncInsertBuilder | list[Value]:
+    ) -> Any:
         """Insert record(s) or relation(s) into a table (eager).
 
         ``db.insert(table, data)`` runs immediately and returns the inserted
         records. ``db.insert(table)`` (no data) returns a
         :class:`SyncInsertBuilder`; pass ``relation=True`` (or chain
         ``.relation()``) for ``INSERT RELATION INTO`` and run it with
-        ``.content(data)`` / ``.execute()``.
+        ``.content(data)`` / ``.execute()``. Pass ``into=Model`` to map the
+        inserted records onto ``list[Model]``.
         """
-        builder = SyncInsertBuilder(
+        builder: SyncInsertBuilder[Any] = SyncInsertBuilder(
             executor=self._make_executor(session_id, txn_id),
             table=table,
             relation=relation,
+            into=into,
         )
         if data is _UNSET:
             return builder
@@ -921,14 +1154,26 @@ class BlockingSurrealSession:
         self._connection.unset(key, session_id=self._session_id)
 
     @overload
+    def select(self, record: RecordID, *, into: type[M]) -> M | None: ...
+    @overload
+    def select(self, record: Table, *, into: type[M]) -> list[M]: ...
+    @overload
+    def select(self, record: str, *, into: type[M]) -> M | list[M] | None: ...
+    @overload
     def select(self, record: RecordID) -> dict[str, Value] | None: ...
     @overload
     def select(self, record: Table) -> list[Value]: ...
     @overload
     def select(self, record: str) -> Value: ...
-    def select(self, record: RecordIdType) -> Value:
-        return self._connection.select(record, session_id=self._session_id)
+    def select(self, record: RecordIdType, *, into: type[M] | None = None) -> Any:
+        if into is None:
+            return self._connection.select(record, session_id=self._session_id)
+        return self._connection.select(record, into=into, session_id=self._session_id)
 
+    @overload
+    def create(self, record: RecordIdType, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    @overload
+    def create(self, record: RecordIdType, data: Value, *, into: type[M]) -> M: ...
     @overload
     def create(self, record: RecordIdType) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
@@ -937,9 +1182,27 @@ class BlockingSurrealSession:
         self,
         record: RecordIdType,
         data: Value = _UNSET,
-    ) -> SyncCrudBuilder[dict[str, Value]] | dict[str, Value]:
-        return self._connection.create(record, data, session_id=self._session_id)
+        *,
+        into: type[M] | None = None,
+    ) -> Any:
+        if into is None:
+            return self._connection.create(record, data, session_id=self._session_id)
+        return self._connection.create(
+            record, data, into=into, session_id=self._session_id
+        )
 
+    @overload
+    def update(self, record: RecordID, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    @overload
+    def update(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
+    @overload
+    def update(self, record: str, *, into: type[M]) -> SyncCrudBuilder[M | list[M]]: ...
+    @overload
+    def update(self, record: RecordID, data: Value, *, into: type[M]) -> M: ...
+    @overload
+    def update(self, record: Table, data: Value, *, into: type[M]) -> list[M]: ...
+    @overload
+    def update(self, record: str, data: Value, *, into: type[M]) -> M | list[M]: ...
     @overload
     def update(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
@@ -956,9 +1219,27 @@ class BlockingSurrealSession:
         self,
         record: RecordIdType,
         data: Value = _UNSET,
-    ) -> SyncCrudBuilder[Any] | Value:
-        return self._connection.update(record, data, session_id=self._session_id)
+        *,
+        into: type[M] | None = None,
+    ) -> Any:
+        if into is None:
+            return self._connection.update(record, data, session_id=self._session_id)
+        return self._connection.update(
+            record, data, into=into, session_id=self._session_id
+        )
 
+    @overload
+    def upsert(self, record: RecordID, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    @overload
+    def upsert(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
+    @overload
+    def upsert(self, record: str, *, into: type[M]) -> SyncCrudBuilder[M | list[M]]: ...
+    @overload
+    def upsert(self, record: RecordID, data: Value, *, into: type[M]) -> M: ...
+    @overload
+    def upsert(self, record: Table, data: Value, *, into: type[M]) -> list[M]: ...
+    @overload
+    def upsert(self, record: str, data: Value, *, into: type[M]) -> M | list[M]: ...
     @overload
     def upsert(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
@@ -975,35 +1256,62 @@ class BlockingSurrealSession:
         self,
         record: RecordIdType,
         data: Value = _UNSET,
-    ) -> SyncCrudBuilder[Any] | Value:
-        return self._connection.upsert(record, data, session_id=self._session_id)
+        *,
+        into: type[M] | None = None,
+    ) -> Any:
+        if into is None:
+            return self._connection.upsert(record, data, session_id=self._session_id)
+        return self._connection.upsert(
+            record, data, into=into, session_id=self._session_id
+        )
 
+    @overload
+    def delete(self, record: RecordID, *, into: type[M]) -> M | None: ...
+    @overload
+    def delete(self, record: Table, *, into: type[M]) -> list[M]: ...
+    @overload
+    def delete(self, record: str, *, into: type[M]) -> M | list[M] | None: ...
     @overload
     def delete(self, record: RecordID) -> dict[str, Value] | None: ...
     @overload
     def delete(self, record: Table) -> list[Value]: ...
     @overload
     def delete(self, record: str) -> Value: ...
-    def delete(self, record: RecordIdType) -> Value:
-        return self._connection.delete(record, session_id=self._session_id)
+    def delete(self, record: RecordIdType, *, into: type[M] | None = None) -> Any:
+        if into is None:
+            return self._connection.delete(record, session_id=self._session_id)
+        return self._connection.delete(record, into=into, session_id=self._session_id)
 
     @overload
     def insert(
         self, table: str | Table, *, relation: bool = False
-    ) -> SyncInsertBuilder: ...
+    ) -> SyncInsertBuilder[Value]: ...
+    @overload
+    def insert(
+        self, table: str | Table, *, into: type[M], relation: bool = False
+    ) -> SyncInsertBuilder[M]: ...
     @overload
     def insert(
         self, table: str | Table, data: Value, *, relation: bool = False
     ) -> list[Value]: ...
+    @overload
+    def insert(
+        self, table: str | Table, data: Value, *, into: type[M], relation: bool = False
+    ) -> list[M]: ...
     def insert(
         self,
         table: str | Table,
         data: Value = _UNSET,
         *,
+        into: type[M] | None = None,
         relation: bool = False,
-    ) -> SyncInsertBuilder | list[Value]:
+    ) -> Any:
+        if into is None:
+            return self._connection.insert(
+                table, data, relation=relation, session_id=self._session_id
+            )
         return self._connection.insert(
-            table, data, relation=relation, session_id=self._session_id
+            table, data, into=into, relation=relation, session_id=self._session_id
         )
 
     def run(
@@ -1056,18 +1364,30 @@ class BlockingSurrealTransaction:
         )
 
     @overload
+    def select(self, record: RecordID, *, into: type[M]) -> M | None: ...
+    @overload
+    def select(self, record: Table, *, into: type[M]) -> list[M]: ...
+    @overload
+    def select(self, record: str, *, into: type[M]) -> M | list[M] | None: ...
+    @overload
     def select(self, record: RecordID) -> dict[str, Value] | None: ...
     @overload
     def select(self, record: Table) -> list[Value]: ...
     @overload
     def select(self, record: str) -> Value: ...
-    def select(self, record: RecordIdType) -> Value:
+    def select(self, record: RecordIdType, *, into: type[M] | None = None) -> Any:
+        if into is None:
+            return self._connection.select(
+                record, session_id=self._session_id, txn_id=self._txn_id
+            )
         return self._connection.select(
-            record,
-            session_id=self._session_id,
-            txn_id=self._txn_id,
+            record, into=into, session_id=self._session_id, txn_id=self._txn_id
         )
 
+    @overload
+    def create(self, record: RecordIdType, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    @overload
+    def create(self, record: RecordIdType, data: Value, *, into: type[M]) -> M: ...
     @overload
     def create(self, record: RecordIdType) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
@@ -1076,14 +1396,29 @@ class BlockingSurrealTransaction:
         self,
         record: RecordIdType,
         data: Value = _UNSET,
-    ) -> SyncCrudBuilder[dict[str, Value]] | dict[str, Value]:
+        *,
+        into: type[M] | None = None,
+    ) -> Any:
+        if into is None:
+            return self._connection.create(
+                record, data, session_id=self._session_id, txn_id=self._txn_id
+            )
         return self._connection.create(
-            record,
-            data,
-            session_id=self._session_id,
-            txn_id=self._txn_id,
+            record, data, into=into, session_id=self._session_id, txn_id=self._txn_id
         )
 
+    @overload
+    def update(self, record: RecordID, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    @overload
+    def update(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
+    @overload
+    def update(self, record: str, *, into: type[M]) -> SyncCrudBuilder[M | list[M]]: ...
+    @overload
+    def update(self, record: RecordID, data: Value, *, into: type[M]) -> M: ...
+    @overload
+    def update(self, record: Table, data: Value, *, into: type[M]) -> list[M]: ...
+    @overload
+    def update(self, record: str, data: Value, *, into: type[M]) -> M | list[M]: ...
     @overload
     def update(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
@@ -1100,14 +1435,29 @@ class BlockingSurrealTransaction:
         self,
         record: RecordIdType,
         data: Value = _UNSET,
-    ) -> SyncCrudBuilder[Any] | Value:
+        *,
+        into: type[M] | None = None,
+    ) -> Any:
+        if into is None:
+            return self._connection.update(
+                record, data, session_id=self._session_id, txn_id=self._txn_id
+            )
         return self._connection.update(
-            record,
-            data,
-            session_id=self._session_id,
-            txn_id=self._txn_id,
+            record, data, into=into, session_id=self._session_id, txn_id=self._txn_id
         )
 
+    @overload
+    def upsert(self, record: RecordID, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    @overload
+    def upsert(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
+    @overload
+    def upsert(self, record: str, *, into: type[M]) -> SyncCrudBuilder[M | list[M]]: ...
+    @overload
+    def upsert(self, record: RecordID, data: Value, *, into: type[M]) -> M: ...
+    @overload
+    def upsert(self, record: Table, data: Value, *, into: type[M]) -> list[M]: ...
+    @overload
+    def upsert(self, record: str, data: Value, *, into: type[M]) -> M | list[M]: ...
     @overload
     def upsert(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
@@ -1124,45 +1474,74 @@ class BlockingSurrealTransaction:
         self,
         record: RecordIdType,
         data: Value = _UNSET,
-    ) -> SyncCrudBuilder[Any] | Value:
+        *,
+        into: type[M] | None = None,
+    ) -> Any:
+        if into is None:
+            return self._connection.upsert(
+                record, data, session_id=self._session_id, txn_id=self._txn_id
+            )
         return self._connection.upsert(
-            record,
-            data,
-            session_id=self._session_id,
-            txn_id=self._txn_id,
+            record, data, into=into, session_id=self._session_id, txn_id=self._txn_id
         )
 
+    @overload
+    def delete(self, record: RecordID, *, into: type[M]) -> M | None: ...
+    @overload
+    def delete(self, record: Table, *, into: type[M]) -> list[M]: ...
+    @overload
+    def delete(self, record: str, *, into: type[M]) -> M | list[M] | None: ...
     @overload
     def delete(self, record: RecordID) -> dict[str, Value] | None: ...
     @overload
     def delete(self, record: Table) -> list[Value]: ...
     @overload
     def delete(self, record: str) -> Value: ...
-    def delete(self, record: RecordIdType) -> Value:
+    def delete(self, record: RecordIdType, *, into: type[M] | None = None) -> Any:
+        if into is None:
+            return self._connection.delete(
+                record, session_id=self._session_id, txn_id=self._txn_id
+            )
         return self._connection.delete(
-            record,
-            session_id=self._session_id,
-            txn_id=self._txn_id,
+            record, into=into, session_id=self._session_id, txn_id=self._txn_id
         )
 
     @overload
     def insert(
         self, table: str | Table, *, relation: bool = False
-    ) -> SyncInsertBuilder: ...
+    ) -> SyncInsertBuilder[Value]: ...
+    @overload
+    def insert(
+        self, table: str | Table, *, into: type[M], relation: bool = False
+    ) -> SyncInsertBuilder[M]: ...
     @overload
     def insert(
         self, table: str | Table, data: Value, *, relation: bool = False
     ) -> list[Value]: ...
+    @overload
+    def insert(
+        self, table: str | Table, data: Value, *, into: type[M], relation: bool = False
+    ) -> list[M]: ...
     def insert(
         self,
         table: str | Table,
         data: Value = _UNSET,
         *,
+        into: type[M] | None = None,
         relation: bool = False,
-    ) -> SyncInsertBuilder | list[Value]:
+    ) -> Any:
+        if into is None:
+            return self._connection.insert(
+                table,
+                data,
+                relation=relation,
+                session_id=self._session_id,
+                txn_id=self._txn_id,
+            )
         return self._connection.insert(
             table,
             data,
+            into=into,
             relation=relation,
             session_id=self._session_id,
             txn_id=self._txn_id,

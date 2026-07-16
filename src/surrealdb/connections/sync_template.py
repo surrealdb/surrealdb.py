@@ -4,6 +4,7 @@ from uuid import UUID
 
 from surrealdb.connections.builders import (
     _UNSET,
+    M,
     SyncCrudBuilder,
     SyncInsertBuilder,
     SyncQueryBuilder,
@@ -61,31 +62,47 @@ class SyncTemplate:
           statements).
         - ``.into(MyResult)`` maps the N statement results positionally onto a
           dataclass or any class accepting keyword arguments.
+        - ``.into(Model, rows=True)`` maps each ROW of the single statement
+          result onto ``Model``, returning ``list[Model]``.
         """
         raise NotImplementedError(f"query not implemented for: {self}")
 
+    @overload
+    def select(self, record: RecordID, *, into: type[M]) -> M | None: ...
+    @overload
+    def select(self, record: Table, *, into: type[M]) -> list[M]: ...
+    @overload
+    def select(self, record: str, *, into: type[M]) -> M | list[M] | None: ...
     @overload
     def select(self, record: RecordID) -> dict[str, Value] | None: ...
     @overload
     def select(self, record: Table) -> list[Value]: ...
     @overload
     def select(self, record: str) -> Value: ...
-    def select(self, record: RecordIdType) -> Value:
+    def select(self, record: RecordIdType, *, into: type[M] | None = None) -> Any:
         """Select all records in a table or a specific record.
 
         A ``RecordID`` (or ``"table:id"`` string) returns the record dict, or
         ``None`` when it is absent. A ``Table`` (or bare table-name string)
         returns the list of records.
+
+        Pass ``into=Model`` to map each record onto a model class (dataclass,
+        pydantic ``BaseModel``, or any kwargs-constructible class): a single
+        record resolves to ``Model | None``, a table to ``list[Model]``.
         """
         raise NotImplementedError(f"select not implemented for: {self}")
 
+    @overload
+    def create(self, record: RecordIdType, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    @overload
+    def create(self, record: RecordIdType, data: Value, *, into: type[M]) -> M: ...
     @overload
     def create(self, record: RecordIdType) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def create(self, record: RecordIdType, data: Value) -> dict[str, Value]: ...
     def create(
-        self, record: RecordIdType, data: Value = _UNSET
-    ) -> SyncCrudBuilder[dict[str, Value]] | dict[str, Value]:
+        self, record: RecordIdType, data: Value = _UNSET, *, into: type[M] | None = None
+    ) -> Any:
         """Create a record.
 
         ``db.create(record, data)`` runs ``CREATE ... CONTENT $data`` eagerly
@@ -98,9 +115,24 @@ class SyncTemplate:
         - ``.merge(data)``    -> ``CREATE ... MERGE $data``
         - ``.patch(data)``    -> ``CREATE ... PATCH $data``
         - ``.execute()``      -> ``CREATE ...`` (no clause)
+
+        Pass ``into=Model`` to map the created record onto ``Model`` (the eager
+        form returns ``Model``; the builder form's clause methods return ``Model``).
         """
         raise NotImplementedError(f"create not implemented for: {self}")
 
+    @overload
+    def update(self, record: RecordID, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    @overload
+    def update(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
+    @overload
+    def update(self, record: str, *, into: type[M]) -> SyncCrudBuilder[M | list[M]]: ...
+    @overload
+    def update(self, record: RecordID, data: Value, *, into: type[M]) -> M: ...
+    @overload
+    def update(self, record: Table, data: Value, *, into: type[M]) -> list[M]: ...
+    @overload
+    def update(self, record: str, data: Value, *, into: type[M]) -> M | list[M]: ...
     @overload
     def update(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
@@ -114,17 +146,31 @@ class SyncTemplate:
     @overload
     def update(self, record: str, data: Value) -> Value: ...
     def update(
-        self, record: RecordIdType, data: Value = _UNSET
-    ) -> SyncCrudBuilder[Any] | Value:
+        self, record: RecordIdType, data: Value = _UNSET, *, into: type[M] | None = None
+    ) -> Any:
         """Update records (replacing the existing data by default).
 
         ``db.update(record, data)`` runs eagerly and returns the result; the
         no-data form returns a :class:`SyncCrudBuilder` with terminal clause
         methods (``.content`` / ``.replace`` / ``.merge`` / ``.patch`` /
-        ``.execute``).
+        ``.execute``). Pass ``into=Model`` to map the returned record(s) onto
+        ``Model`` (a ``RecordID`` target resolves to ``Model``, a ``Table`` to
+        ``list[Model]``).
         """
         raise NotImplementedError(f"update not implemented for: {self}")
 
+    @overload
+    def upsert(self, record: RecordID, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    @overload
+    def upsert(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
+    @overload
+    def upsert(self, record: str, *, into: type[M]) -> SyncCrudBuilder[M | list[M]]: ...
+    @overload
+    def upsert(self, record: RecordID, data: Value, *, into: type[M]) -> M: ...
+    @overload
+    def upsert(self, record: Table, data: Value, *, into: type[M]) -> list[M]: ...
+    @overload
+    def upsert(self, record: str, data: Value, *, into: type[M]) -> M | list[M]: ...
     @overload
     def upsert(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
@@ -138,28 +184,37 @@ class SyncTemplate:
     @overload
     def upsert(self, record: str, data: Value) -> Value: ...
     def upsert(
-        self, record: RecordIdType, data: Value = _UNSET
-    ) -> SyncCrudBuilder[Any] | Value:
+        self, record: RecordIdType, data: Value = _UNSET, *, into: type[M] | None = None
+    ) -> Any:
         """Insert or update records.
 
         ``db.upsert(record, data)`` runs eagerly and returns the result; the
         no-data form returns a :class:`SyncCrudBuilder` with terminal clause
-        methods.
+        methods. Pass ``into=Model`` to map the returned record(s) onto
+        ``Model`` (a ``RecordID`` target resolves to ``Model``, a ``Table`` to
+        ``list[Model]``).
         """
         raise NotImplementedError(f"upsert not implemented for: {self}")
 
+    @overload
+    def delete(self, record: RecordID, *, into: type[M]) -> M | None: ...
+    @overload
+    def delete(self, record: Table, *, into: type[M]) -> list[M]: ...
+    @overload
+    def delete(self, record: str, *, into: type[M]) -> M | list[M] | None: ...
     @overload
     def delete(self, record: RecordID) -> dict[str, Value] | None: ...
     @overload
     def delete(self, record: Table) -> list[Value]: ...
     @overload
     def delete(self, record: str) -> Value: ...
-    def delete(self, record: RecordIdType) -> Value:
+    def delete(self, record: RecordIdType, *, into: type[M] | None = None) -> Any:
         """Delete records eagerly and return the deleted record(s).
 
         A ``RecordID`` (or ``"table:id"``) returns the deleted record, or
         ``None`` when no record was deleted (matching select); a ``Table``
-        (or bare name) returns the list of deleted records.
+        (or bare name) returns the list of deleted records. Pass ``into=Model``
+        to map the deleted record(s) onto ``Model``.
         """
         raise NotImplementedError(f"delete not implemented for: {self}")
 
@@ -170,25 +225,35 @@ class SyncTemplate:
     @overload
     def insert(
         self, table: str | Table, *, relation: bool = False
-    ) -> SyncInsertBuilder: ...
+    ) -> SyncInsertBuilder[Value]: ...
+    @overload
+    def insert(
+        self, table: str | Table, *, into: type[M], relation: bool = False
+    ) -> SyncInsertBuilder[M]: ...
     @overload
     def insert(
         self, table: str | Table, data: Value, *, relation: bool = False
     ) -> list[Value]: ...
+    @overload
+    def insert(
+        self, table: str | Table, data: Value, *, into: type[M], relation: bool = False
+    ) -> list[M]: ...
     def insert(
         self,
         table: str | Table,
         data: Value = _UNSET,
         *,
+        into: type[M] | None = None,
         relation: bool = False,
-    ) -> SyncInsertBuilder | list[Value]:
+    ) -> Any:
         """Insert one or multiple records (or relations) into a table.
 
         ``db.insert(table, data)`` runs eagerly and returns the inserted
         records. ``db.insert(table)`` (no data) returns a
         :class:`SyncInsertBuilder`; pass ``relation=True`` (or chain
         ``.relation()``) for ``INSERT RELATION INTO`` and run it with
-        ``.content(data)`` / ``.execute()``.
+        ``.content(data)`` / ``.execute()``. Pass ``into=Model`` to map the
+        inserted records onto ``list[Model]``.
         """
         raise NotImplementedError(f"insert not implemented for: {self}")
 

@@ -6,9 +6,11 @@ import requests
 
 from surrealdb.connections.builders import (
     _UNSET,
+    M,
     SyncCrudBuilder,
     SyncInsertBuilder,
     SyncQueryBuilder,
+    _map_result,
 )
 from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.url import Url
@@ -174,12 +176,16 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     # the no-data form returns a builder so the caller can pick a clause.
 
     @overload
+    def create(self, record: RecordIdType, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    @overload
+    def create(self, record: RecordIdType, data: Value, *, into: type[M]) -> M: ...
+    @overload
     def create(self, record: RecordIdType) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def create(self, record: RecordIdType, data: Value) -> dict[str, Value]: ...
     def create(
-        self, record: RecordIdType, data: Value = _UNSET
-    ) -> SyncCrudBuilder[dict[str, Value]] | dict[str, Value]:
+        self, record: RecordIdType, data: Value = _UNSET, *, into: type[M] | None = None
+    ) -> Any:
         """Create a record (eager).
 
         ``db.create(record, data)`` runs ``CREATE ... CONTENT $data``
@@ -187,18 +193,32 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         ``CONTENT NULL``). ``db.create(record)`` (no data) returns a
         :class:`SyncCrudBuilder` so the caller can pick a terminal clause
         (``.content`` / ``.replace`` / ``.merge`` / ``.patch`` / ``.execute``).
+        Pass ``into=Model`` to map the created record onto ``Model``.
         """
-        builder: SyncCrudBuilder[dict[str, Value]] = SyncCrudBuilder(
+        builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(),
             operation="CREATE",
             record=record,
             op_name="create",
             always_unwrap=True,
+            into=into,
         )
         if data is _UNSET:
             return builder
         return builder.content(data)
 
+    @overload
+    def update(self, record: RecordID, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    @overload
+    def update(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
+    @overload
+    def update(self, record: str, *, into: type[M]) -> SyncCrudBuilder[M | list[M]]: ...
+    @overload
+    def update(self, record: RecordID, data: Value, *, into: type[M]) -> M: ...
+    @overload
+    def update(self, record: Table, data: Value, *, into: type[M]) -> list[M]: ...
+    @overload
+    def update(self, record: str, data: Value, *, into: type[M]) -> M | list[M]: ...
     @overload
     def update(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
@@ -212,24 +232,39 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def update(self, record: str, data: Value) -> Value: ...
     def update(
-        self, record: RecordIdType, data: Value = _UNSET
-    ) -> SyncCrudBuilder[Any] | Value:
+        self, record: RecordIdType, data: Value = _UNSET, *, into: type[M] | None = None
+    ) -> Any:
         """Update records, replacing existing content by default (eager).
 
         ``db.update(record, data)`` runs eagerly and returns the result
         (``data=None`` runs ``CONTENT NULL``); the no-data form returns a
-        :class:`SyncCrudBuilder` with terminal clause methods.
+        :class:`SyncCrudBuilder` with terminal clause methods. Pass
+        ``into=Model`` to map the returned record(s) onto ``Model`` /
+        ``list[Model]``.
         """
         builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(),
             operation="UPDATE",
             record=record,
             op_name="update",
+            into=into,
         )
         if data is _UNSET:
             return builder
         return builder.content(data)
 
+    @overload
+    def upsert(self, record: RecordID, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    @overload
+    def upsert(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
+    @overload
+    def upsert(self, record: str, *, into: type[M]) -> SyncCrudBuilder[M | list[M]]: ...
+    @overload
+    def upsert(self, record: RecordID, data: Value, *, into: type[M]) -> M: ...
+    @overload
+    def upsert(self, record: Table, data: Value, *, into: type[M]) -> list[M]: ...
+    @overload
+    def upsert(self, record: str, data: Value, *, into: type[M]) -> M | list[M]: ...
     @overload
     def upsert(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
@@ -243,72 +278,94 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def upsert(self, record: str, data: Value) -> Value: ...
     def upsert(
-        self, record: RecordIdType, data: Value = _UNSET
-    ) -> SyncCrudBuilder[Any] | Value:
+        self, record: RecordIdType, data: Value = _UNSET, *, into: type[M] | None = None
+    ) -> Any:
         """Insert or update records (eager).
 
         ``db.upsert(record, data)`` runs eagerly and returns the result
         (``data=None`` runs ``CONTENT NULL``); the no-data form returns a
-        :class:`SyncCrudBuilder` with terminal clause methods.
+        :class:`SyncCrudBuilder` with terminal clause methods. Pass
+        ``into=Model`` to map the returned record(s) onto ``Model`` /
+        ``list[Model]``.
         """
         builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(),
             operation="UPSERT",
             record=record,
             op_name="upsert",
+            into=into,
         )
         if data is _UNSET:
             return builder
         return builder.content(data)
 
     @overload
+    def delete(self, record: RecordID, *, into: type[M]) -> M | None: ...
+    @overload
+    def delete(self, record: Table, *, into: type[M]) -> list[M]: ...
+    @overload
+    def delete(self, record: str, *, into: type[M]) -> M | list[M] | None: ...
+    @overload
     def delete(self, record: RecordID) -> dict[str, Value] | None: ...
     @overload
     def delete(self, record: Table) -> list[Value]: ...
     @overload
     def delete(self, record: str) -> Value: ...
-    def delete(self, record: RecordIdType) -> Value:
+    def delete(self, record: RecordIdType, *, into: type[M] | None = None) -> Any:
         """Delete records eagerly and return the deleted record(s).
 
         A ``RecordID`` (or ``"table:id"``) returns the deleted record, or
         ``None`` when no record was deleted (matching select); a ``Table`` (or
-        bare name) returns the list of deleted records.
+        bare name) returns the list of deleted records. Pass ``into=Model`` to
+        map the deleted record(s) onto ``Model``.
         """
         builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(),
             operation="DELETE",
             record=record,
             op_name="delete",
+            into=into,
         )
-        return cast(Value, builder.execute())
+        return builder.execute()
 
     @overload
     def insert(
         self, table: str | Table, *, relation: bool = False
-    ) -> SyncInsertBuilder: ...
+    ) -> SyncInsertBuilder[Value]: ...
+    @overload
+    def insert(
+        self, table: str | Table, *, into: type[M], relation: bool = False
+    ) -> SyncInsertBuilder[M]: ...
     @overload
     def insert(
         self, table: str | Table, data: Value, *, relation: bool = False
     ) -> list[Value]: ...
+    @overload
+    def insert(
+        self, table: str | Table, data: Value, *, into: type[M], relation: bool = False
+    ) -> list[M]: ...
     def insert(
         self,
         table: str | Table,
         data: Value = _UNSET,
         *,
+        into: type[M] | None = None,
         relation: bool = False,
-    ) -> SyncInsertBuilder | list[Value]:
+    ) -> Any:
         """Insert record(s) or relation(s) into a table (eager).
 
         ``db.insert(table, data)`` runs immediately and returns the inserted
         records. ``db.insert(table)`` (no data) returns a
         :class:`SyncInsertBuilder`; pass ``relation=True`` (or chain
         ``.relation()``) for ``INSERT RELATION INTO`` and run it with
-        ``.content(data)`` / ``.execute()``.
+        ``.content(data)`` / ``.execute()``. Pass ``into=Model`` to map the
+        inserted records onto ``list[Model]``.
         """
-        builder = SyncInsertBuilder(
+        builder: SyncInsertBuilder[Any] = SyncInsertBuilder(
             executor=self._make_executor(),
             table=table,
             relation=relation,
+            into=into,
         )
         if data is _UNSET:
             return builder
@@ -338,17 +395,23 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.vars.pop(key)
 
     @overload
+    def select(self, record: RecordID, *, into: type[M]) -> M | None: ...
+    @overload
+    def select(self, record: Table, *, into: type[M]) -> list[M]: ...
+    @overload
+    def select(self, record: str, *, into: type[M]) -> M | list[M] | None: ...
+    @overload
     def select(self, record: RecordID) -> dict[str, Value] | None: ...
     @overload
     def select(self, record: Table) -> list[Value]: ...
     @overload
     def select(self, record: str) -> Value: ...
-    def select(self, record: RecordIdType) -> Value:
+    def select(self, record: RecordIdType, *, into: type[M] | None = None) -> Any:
         """Select records eagerly.
 
         A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
         when it is absent. A ``Table`` (or bare table-name string) returns the
-        list of records.
+        list of records. Pass ``into=Model`` to map each record onto ``Model``.
         """
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -362,9 +425,14 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         # result list to the record dict, or None when the record is absent.
         if self._is_single_record_operation(record):
             if isinstance(result, list):
-                return result[0] if result else None
-            return result
-        return result
+                value: Any = result[0] if result else None
+            else:
+                value = result
+        else:
+            value = result
+        if into is not None:
+            return _map_result(into, value)
+        return value
 
     def version(self) -> str:
         message = RequestMessage(RequestMethod.VERSION)

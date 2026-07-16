@@ -6,6 +6,7 @@ from surrealdb.connections.builders import (
     AsyncCrudBuilder,
     AsyncInsertBuilder,
     AsyncQueryBuilder,
+    M,
 )
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
@@ -124,7 +125,9 @@ class AsyncTemplate:
 
         Use ``.first()`` for the first statement's result, or ``.into(MyResult)``
         to map the N statement results positionally onto a dataclass or any
-        class accepting keyword arguments.
+        class accepting keyword arguments. ``.into(Model, rows=True)`` instead
+        maps each ROW of the single statement result onto ``Model``, returning
+        ``list[Model]``.
 
         Args:
             query: SurrealQL statement(s).
@@ -135,27 +138,43 @@ class AsyncTemplate:
             first = await db.query('SELECT * FROM person').first()
             many = await db.query('SELECT * FROM person; SELECT count() FROM person GROUP ALL')
             mapped = await db.query('CREATE ...; SELECT ...').into(MyResult)
+            people = await db.query('SELECT * FROM person').into(Person, rows=True)
         """
         raise NotImplementedError(f"query not implemented for: {self}")
 
+    @overload
+    async def select(self, record: RecordID, *, into: type[M]) -> M | None: ...
+    @overload
+    async def select(self, record: Table, *, into: type[M]) -> list[M]: ...
+    @overload
+    async def select(self, record: str, *, into: type[M]) -> M | list[M] | None: ...
     @overload
     async def select(self, record: RecordID) -> dict[str, Value] | None: ...
     @overload
     async def select(self, record: Table) -> list[Value]: ...
     @overload
     async def select(self, record: str) -> Value: ...
-    async def select(self, record: RecordIdType) -> Value:
+    async def select(self, record: RecordIdType, *, into: type[M] | None = None) -> Any:
         """Select all records in a table or a specific record.
 
         A ``RecordID`` (or ``"table:id"`` string) returns the record dict, or
         ``None`` when it is absent. A ``Table`` (or bare table-name string)
         returns the list of records.
 
+        Pass ``into=Model`` to map each record onto a model class (dataclass,
+        pydantic ``BaseModel``, or any kwargs-constructible class): a single
+        record resolves to ``Model | None``, a table to ``list[Model]``.
+
         Args:
             record: The table or record ID to select.
+            into: Optional model class to map the selected record(s) onto.
         """
         raise NotImplementedError(f"select not implemented for: {self}")
 
+    @overload
+    def create(
+        self, record: RecordIdType, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M]: ...
     @overload
     def create(
         self, record: RecordID, data: Value | None = None
@@ -169,7 +188,11 @@ class AsyncTemplate:
         self, record: str, data: Value | None = None
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     def create(
-        self, record: RecordIdType, data: Value | None = None
+        self,
+        record: RecordIdType,
+        data: Value | None = None,
+        *,
+        into: type[M] | None = None,
     ) -> AsyncCrudBuilder[Any]:
         """Create a record.
 
@@ -181,15 +204,30 @@ class AsyncTemplate:
         - ``.patch(data)``    -> ``CREATE ... PATCH $data``
 
         ``db.create(record, data)`` is sugar for ``db.create(record).content(data)``.
+        Pass ``into=Model`` to map the created record onto ``Model`` (the
+        builder and its clause methods then resolve to ``Model``).
 
         Example:
             await db.create(RecordID('person', 'tobie'), {'name': 'Tobie'})
             await db.create(RecordID('person', 'tobie')).merge({'name': 'Tobie'})
+            await db.create(RecordID('person', 'tobie'), data, into=Person)
         """
         raise NotImplementedError(f"create not implemented for: {self}")
 
     @overload
     def update(
+        self, record: RecordID, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M]: ...
+    @overload
+    def update(
+        self, record: Table, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[list[M]]: ...
+    @overload
+    def update(
+        self, record: str, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | list[M]]: ...
+    @overload
+    def update(
         self, record: RecordID, data: Value | None = None
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
@@ -201,15 +239,33 @@ class AsyncTemplate:
         self, record: str, data: Value | None = None
     ) -> AsyncCrudBuilder[Value]: ...
     def update(
-        self, record: RecordIdType, data: Value | None = None
+        self,
+        record: RecordIdType,
+        data: Value | None = None,
+        *,
+        into: type[M] | None = None,
     ) -> AsyncCrudBuilder[Any]:
         """Update records (replacing the existing data by default).
 
         Returns an awaitable builder. Optional clause methods:
         ``.content(data)``, ``.replace(data)``, ``.merge(data)``, ``.patch(data)``.
+        Pass ``into=Model`` to map the returned record(s) onto ``Model`` (a
+        ``RecordID`` target resolves to ``Model``, a ``Table`` to ``list[Model]``).
         """
         raise NotImplementedError(f"update not implemented for: {self}")
 
+    @overload
+    def upsert(
+        self, record: RecordID, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M]: ...
+    @overload
+    def upsert(
+        self, record: Table, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[list[M]]: ...
+    @overload
+    def upsert(
+        self, record: str, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | list[M]]: ...
     @overload
     def upsert(
         self, record: RecordID, data: Value | None = None
@@ -223,28 +279,47 @@ class AsyncTemplate:
         self, record: str, data: Value | None = None
     ) -> AsyncCrudBuilder[Value]: ...
     def upsert(
-        self, record: RecordIdType, data: Value | None = None
+        self,
+        record: RecordIdType,
+        data: Value | None = None,
+        *,
+        into: type[M] | None = None,
     ) -> AsyncCrudBuilder[Any]:
         """Insert or update records.
 
         Returns an awaitable builder. Optional clause methods:
         ``.content(data)``, ``.replace(data)``, ``.merge(data)``, ``.patch(data)``.
+        Pass ``into=Model`` to map the returned record(s) onto ``Model`` (a
+        ``RecordID`` target resolves to ``Model``, a ``Table`` to ``list[Model]``).
         """
         raise NotImplementedError(f"upsert not implemented for: {self}")
 
+    @overload
+    def delete(
+        self, record: RecordID, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | None]: ...
+    @overload
+    def delete(self, record: Table, *, into: type[M]) -> AsyncCrudBuilder[list[M]]: ...
+    @overload
+    def delete(
+        self, record: str, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
     def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def delete(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
     def delete(self, record: str) -> AsyncCrudBuilder[Value]: ...
-    def delete(self, record: RecordIdType) -> AsyncCrudBuilder[Any]:
+    def delete(
+        self, record: RecordIdType, *, into: type[M] | None = None
+    ) -> AsyncCrudBuilder[Any]:
         """Delete records.
 
         Returns an awaitable builder. A ``RecordID`` (or ``"table:id"``)
         resolves to the deleted record, or ``None`` when no record was
         deleted (matching select); a ``Table`` (or bare name) resolves to the
         list of deleted records. ``DELETE`` does not support clause methods.
+        Pass ``into=Model`` to map the deleted record(s) onto ``Model``.
         """
         raise NotImplementedError(f"delete not implemented for: {self}")
 
@@ -252,22 +327,38 @@ class AsyncTemplate:
         """Return the record of the authenticated record user."""
         raise NotImplementedError(f"info not implemented for: {self}")
 
+    @overload
+    def insert(
+        self, table: str | Table, data: Value | None = None, *, relation: bool = False
+    ) -> AsyncInsertBuilder[Value]: ...
+    @overload
     def insert(
         self,
         table: str | Table,
         data: Value | None = None,
         *,
+        into: type[M],
         relation: bool = False,
-    ) -> AsyncInsertBuilder:
+    ) -> AsyncInsertBuilder[M]: ...
+    def insert(
+        self,
+        table: str | Table,
+        data: Value | None = None,
+        *,
+        into: type[M] | None = None,
+        relation: bool = False,
+    ) -> AsyncInsertBuilder[Any]:
         """Insert one or multiple records (or relations) into a table.
 
         Pass ``relation=True`` to issue ``INSERT RELATION INTO``, or chain
-        ``.relation()`` on the returned builder.
+        ``.relation()`` on the returned builder. Pass ``into=Model`` to map the
+        inserted records onto ``list[Model]``.
 
         Example:
             await db.insert(Table('person'), [{...}, {...}])
             await db.insert(Table('likes'), {...}, relation=True)
             await db.insert(Table('likes')).relation().content({...})
+            await db.insert(Table('person'), [{...}], into=Person)
         """
         raise NotImplementedError(f"insert not implemented for: {self}")
 

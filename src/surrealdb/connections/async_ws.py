@@ -18,6 +18,8 @@ from surrealdb.connections.builders import (
     AsyncCrudBuilder,
     AsyncInsertBuilder,
     AsyncQueryBuilder,
+    M,
+    _map_result,
 )
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import AUTH_FALLBACK_QUERY, UtilsMixin
@@ -325,6 +327,33 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self,
         record: RecordID,
         *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> M | None: ...
+    @overload
+    async def select(
+        self,
+        record: Table,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> list[M]: ...
+    @overload
+    async def select(
+        self,
+        record: str,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> M | list[M] | None: ...
+    @overload
+    async def select(
+        self,
+        record: RecordID,
+        *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> dict[str, Value] | None: ...
@@ -348,14 +377,15 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self,
         record: RecordIdType,
         *,
+        into: type[M] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> Value:
+    ) -> Any:
         """Select records.
 
         A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
         when it is absent. A ``Table`` (or bare table-name string) returns the
-        list of records.
+        list of records. Pass ``into=Model`` to map each record onto ``Model``.
         """
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
@@ -371,9 +401,14 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         # result list to the record dict, or None when the record is absent.
         if self._is_single_record_operation(record):
             if isinstance(result, list):
-                return result[0] if result else None
-            return result
-        return result
+                value: Any = result[0] if result else None
+            else:
+                value = result
+        else:
+            value = result
+        if into is not None:
+            return _map_result(into, value)
+        return value
 
     def _make_executor(
         self,
@@ -394,6 +429,16 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     @overload
     def create(
         self,
+        record: RecordIdType,
+        data: Value | None = None,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[M]: ...
+    @overload
+    def create(
+        self,
         record: RecordID,
         data: Value | None = None,
         *,
@@ -423,6 +468,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         record: RecordIdType,
         data: Value | None = None,
         *,
+        into: type[M] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> AsyncCrudBuilder[Any]:
@@ -431,7 +477,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         ``await db.create(record, data)`` is sugar for
         ``await db.create(record).content(data)``. Clause methods
         (``.content`` / ``.replace`` / ``.merge`` / ``.patch``) return the
-        builder so it stays awaitable.
+        builder so it stays awaitable. Pass ``into=Model`` to map the created
+        record onto ``Model``.
         """
         return AsyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
@@ -440,8 +487,39 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             op_name="create",
             data=data,
             always_unwrap=True,
+            into=into,
         )
 
+    @overload
+    def update(
+        self,
+        record: RecordID,
+        data: Value | None = None,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[M]: ...
+    @overload
+    def update(
+        self,
+        record: Table,
+        data: Value | None = None,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[list[M]]: ...
+    @overload
+    def update(
+        self,
+        record: str,
+        data: Value | None = None,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[M | list[M]]: ...
     @overload
     def update(
         self,
@@ -474,13 +552,15 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         record: RecordIdType,
         data: Value | None = None,
         *,
+        into: type[M] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> AsyncCrudBuilder[Any]:
         """Update records; returns an awaitable builder.
 
         Optional clause methods ``.content`` / ``.replace`` / ``.merge`` /
-        ``.patch`` return the builder so it stays awaitable.
+        ``.patch`` return the builder so it stays awaitable. Pass ``into=Model``
+        to map the returned record(s) onto ``Model`` / ``list[Model]``.
         """
         return AsyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
@@ -488,8 +568,39 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             record=record,
             op_name="update",
             data=data,
+            into=into,
         )
 
+    @overload
+    def upsert(
+        self,
+        record: RecordID,
+        data: Value | None = None,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[M]: ...
+    @overload
+    def upsert(
+        self,
+        record: Table,
+        data: Value | None = None,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[list[M]]: ...
+    @overload
+    def upsert(
+        self,
+        record: str,
+        data: Value | None = None,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[M | list[M]]: ...
     @overload
     def upsert(
         self,
@@ -522,13 +633,15 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         record: RecordIdType,
         data: Value | None = None,
         *,
+        into: type[M] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> AsyncCrudBuilder[Any]:
         """Insert or update records; returns an awaitable builder.
 
         Optional clause methods ``.content`` / ``.replace`` / ``.merge`` /
-        ``.patch`` return the builder so it stays awaitable.
+        ``.patch`` return the builder so it stays awaitable. Pass ``into=Model``
+        to map the returned record(s) onto ``Model`` / ``list[Model]``.
         """
         return AsyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
@@ -536,8 +649,36 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             record=record,
             op_name="upsert",
             data=data,
+            into=into,
         )
 
+    @overload
+    def delete(
+        self,
+        record: RecordID,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[M | None]: ...
+    @overload
+    def delete(
+        self,
+        record: Table,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[list[M]]: ...
+    @overload
+    def delete(
+        self,
+        record: str,
+        *,
+        into: type[M],
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
     def delete(
         self,
@@ -566,6 +707,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self,
         record: RecordIdType,
         *,
+        into: type[M] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> AsyncCrudBuilder[Any]:
@@ -574,15 +716,17 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         A ``RecordID`` (or ``"table:id"``) resolves to the deleted record, or
         ``None`` when no record was deleted (matching select); a ``Table`` (or
         bare name) to the list of deleted records. ``DELETE`` has no clause
-        methods.
+        methods. Pass ``into=Model`` to map the deleted record(s) onto ``Model``.
         """
         return AsyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
             operation="DELETE",
             record=record,
             op_name="delete",
+            into=into,
         )
 
+    @overload
     def insert(
         self,
         table: str | Table,
@@ -591,17 +735,40 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         relation: bool = False,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> AsyncInsertBuilder:
+    ) -> AsyncInsertBuilder[Value]: ...
+    @overload
+    def insert(
+        self,
+        table: str | Table,
+        data: Value | None = None,
+        *,
+        into: type[M],
+        relation: bool = False,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncInsertBuilder[M]: ...
+    def insert(
+        self,
+        table: str | Table,
+        data: Value | None = None,
+        *,
+        into: type[M] | None = None,
+        relation: bool = False,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncInsertBuilder[Any]:
         """Insert record(s) or relation(s); returns an awaitable builder.
 
         Pass ``relation=True`` (or chain ``.relation()``) for ``INSERT
-        RELATION INTO``. Awaiting the builder (or ``.execute()``) runs it.
+        RELATION INTO``. Awaiting the builder (or ``.execute()``) runs it. Pass
+        ``into=Model`` to map the inserted records onto ``list[Model]``.
         """
         return AsyncInsertBuilder(
             executor=self._make_executor(session_id, txn_id),
             table=table,
             data=data,
             relation=relation,
+            into=into,
         )
 
     async def run(
@@ -852,14 +1019,28 @@ class AsyncSurrealSession:
         await self._connection.unset(key, session_id=self._session_id)
 
     @overload
+    async def select(self, record: RecordID, *, into: type[M]) -> M | None: ...
+    @overload
+    async def select(self, record: Table, *, into: type[M]) -> list[M]: ...
+    @overload
+    async def select(self, record: str, *, into: type[M]) -> M | list[M] | None: ...
+    @overload
     async def select(self, record: RecordID) -> dict[str, Value] | None: ...
     @overload
     async def select(self, record: Table) -> list[Value]: ...
     @overload
     async def select(self, record: str) -> Value: ...
-    async def select(self, record: RecordIdType) -> Value:
-        return await self._connection.select(record, session_id=self._session_id)
+    async def select(self, record: RecordIdType, *, into: type[M] | None = None) -> Any:
+        if into is None:
+            return await self._connection.select(record, session_id=self._session_id)
+        return await self._connection.select(
+            record, into=into, session_id=self._session_id
+        )
 
+    @overload
+    def create(
+        self, record: RecordIdType, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M]: ...
     @overload
     def create(
         self, record: RecordID, data: Value | None = None
@@ -876,9 +1057,27 @@ class AsyncSurrealSession:
         self,
         record: RecordIdType,
         data: Value | None = None,
+        *,
+        into: type[M] | None = None,
     ) -> AsyncCrudBuilder[Any]:
-        return self._connection.create(record, data, session_id=self._session_id)
+        if into is None:
+            return self._connection.create(record, data, session_id=self._session_id)
+        return self._connection.create(
+            record, data, into=into, session_id=self._session_id
+        )
 
+    @overload
+    def update(
+        self, record: RecordID, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M]: ...
+    @overload
+    def update(
+        self, record: Table, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[list[M]]: ...
+    @overload
+    def update(
+        self, record: str, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | list[M]]: ...
     @overload
     def update(
         self, record: RecordID, data: Value | None = None
@@ -895,9 +1094,27 @@ class AsyncSurrealSession:
         self,
         record: RecordIdType,
         data: Value | None = None,
+        *,
+        into: type[M] | None = None,
     ) -> AsyncCrudBuilder[Any]:
-        return self._connection.update(record, data, session_id=self._session_id)
+        if into is None:
+            return self._connection.update(record, data, session_id=self._session_id)
+        return self._connection.update(
+            record, data, into=into, session_id=self._session_id
+        )
 
+    @overload
+    def upsert(
+        self, record: RecordID, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M]: ...
+    @overload
+    def upsert(
+        self, record: Table, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[list[M]]: ...
+    @overload
+    def upsert(
+        self, record: str, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | list[M]]: ...
     @overload
     def upsert(
         self, record: RecordID, data: Value | None = None
@@ -914,27 +1131,65 @@ class AsyncSurrealSession:
         self,
         record: RecordIdType,
         data: Value | None = None,
+        *,
+        into: type[M] | None = None,
     ) -> AsyncCrudBuilder[Any]:
-        return self._connection.upsert(record, data, session_id=self._session_id)
+        if into is None:
+            return self._connection.upsert(record, data, session_id=self._session_id)
+        return self._connection.upsert(
+            record, data, into=into, session_id=self._session_id
+        )
 
+    @overload
+    def delete(
+        self, record: RecordID, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | None]: ...
+    @overload
+    def delete(self, record: Table, *, into: type[M]) -> AsyncCrudBuilder[list[M]]: ...
+    @overload
+    def delete(
+        self, record: str, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
     def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def delete(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
     def delete(self, record: str) -> AsyncCrudBuilder[Value]: ...
-    def delete(self, record: RecordIdType) -> AsyncCrudBuilder[Any]:
-        return self._connection.delete(record, session_id=self._session_id)
+    def delete(
+        self, record: RecordIdType, *, into: type[M] | None = None
+    ) -> AsyncCrudBuilder[Any]:
+        if into is None:
+            return self._connection.delete(record, session_id=self._session_id)
+        return self._connection.delete(record, into=into, session_id=self._session_id)
 
+    @overload
+    def insert(
+        self, table: str | Table, data: Value | None = None, *, relation: bool = False
+    ) -> AsyncInsertBuilder[Value]: ...
+    @overload
     def insert(
         self,
         table: str | Table,
         data: Value | None = None,
         *,
+        into: type[M],
         relation: bool = False,
-    ) -> AsyncInsertBuilder:
+    ) -> AsyncInsertBuilder[M]: ...
+    def insert(
+        self,
+        table: str | Table,
+        data: Value | None = None,
+        *,
+        into: type[M] | None = None,
+        relation: bool = False,
+    ) -> AsyncInsertBuilder[Any]:
+        if into is None:
+            return self._connection.insert(
+                table, data, relation=relation, session_id=self._session_id
+            )
         return self._connection.insert(
-            table, data, relation=relation, session_id=self._session_id
+            table, data, into=into, relation=relation, session_id=self._session_id
         )
 
     async def run(
@@ -989,18 +1244,30 @@ class AsyncSurrealTransaction:
         )
 
     @overload
+    async def select(self, record: RecordID, *, into: type[M]) -> M | None: ...
+    @overload
+    async def select(self, record: Table, *, into: type[M]) -> list[M]: ...
+    @overload
+    async def select(self, record: str, *, into: type[M]) -> M | list[M] | None: ...
+    @overload
     async def select(self, record: RecordID) -> dict[str, Value] | None: ...
     @overload
     async def select(self, record: Table) -> list[Value]: ...
     @overload
     async def select(self, record: str) -> Value: ...
-    async def select(self, record: RecordIdType) -> Value:
+    async def select(self, record: RecordIdType, *, into: type[M] | None = None) -> Any:
+        if into is None:
+            return await self._connection.select(
+                record, session_id=self._session_id, txn_id=self._txn_id
+            )
         return await self._connection.select(
-            record,
-            session_id=self._session_id,
-            txn_id=self._txn_id,
+            record, into=into, session_id=self._session_id, txn_id=self._txn_id
         )
 
+    @overload
+    def create(
+        self, record: RecordIdType, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M]: ...
     @overload
     def create(
         self, record: RecordID, data: Value | None = None
@@ -1017,14 +1284,29 @@ class AsyncSurrealTransaction:
         self,
         record: RecordIdType,
         data: Value | None = None,
+        *,
+        into: type[M] | None = None,
     ) -> AsyncCrudBuilder[Any]:
+        if into is None:
+            return self._connection.create(
+                record, data, session_id=self._session_id, txn_id=self._txn_id
+            )
         return self._connection.create(
-            record,
-            data,
-            session_id=self._session_id,
-            txn_id=self._txn_id,
+            record, data, into=into, session_id=self._session_id, txn_id=self._txn_id
         )
 
+    @overload
+    def update(
+        self, record: RecordID, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M]: ...
+    @overload
+    def update(
+        self, record: Table, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[list[M]]: ...
+    @overload
+    def update(
+        self, record: str, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | list[M]]: ...
     @overload
     def update(
         self, record: RecordID, data: Value | None = None
@@ -1041,14 +1323,29 @@ class AsyncSurrealTransaction:
         self,
         record: RecordIdType,
         data: Value | None = None,
+        *,
+        into: type[M] | None = None,
     ) -> AsyncCrudBuilder[Any]:
+        if into is None:
+            return self._connection.update(
+                record, data, session_id=self._session_id, txn_id=self._txn_id
+            )
         return self._connection.update(
-            record,
-            data,
-            session_id=self._session_id,
-            txn_id=self._txn_id,
+            record, data, into=into, session_id=self._session_id, txn_id=self._txn_id
         )
 
+    @overload
+    def upsert(
+        self, record: RecordID, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M]: ...
+    @overload
+    def upsert(
+        self, record: Table, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[list[M]]: ...
+    @overload
+    def upsert(
+        self, record: str, data: Value | None = None, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | list[M]]: ...
     @overload
     def upsert(
         self, record: RecordID, data: Value | None = None
@@ -1065,37 +1362,77 @@ class AsyncSurrealTransaction:
         self,
         record: RecordIdType,
         data: Value | None = None,
+        *,
+        into: type[M] | None = None,
     ) -> AsyncCrudBuilder[Any]:
+        if into is None:
+            return self._connection.upsert(
+                record, data, session_id=self._session_id, txn_id=self._txn_id
+            )
         return self._connection.upsert(
-            record,
-            data,
-            session_id=self._session_id,
-            txn_id=self._txn_id,
+            record, data, into=into, session_id=self._session_id, txn_id=self._txn_id
         )
 
+    @overload
+    def delete(
+        self, record: RecordID, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | None]: ...
+    @overload
+    def delete(self, record: Table, *, into: type[M]) -> AsyncCrudBuilder[list[M]]: ...
+    @overload
+    def delete(
+        self, record: str, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
     def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def delete(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
     def delete(self, record: str) -> AsyncCrudBuilder[Value]: ...
-    def delete(self, record: RecordIdType) -> AsyncCrudBuilder[Any]:
+    def delete(
+        self, record: RecordIdType, *, into: type[M] | None = None
+    ) -> AsyncCrudBuilder[Any]:
+        if into is None:
+            return self._connection.delete(
+                record, session_id=self._session_id, txn_id=self._txn_id
+            )
         return self._connection.delete(
-            record,
-            session_id=self._session_id,
-            txn_id=self._txn_id,
+            record, into=into, session_id=self._session_id, txn_id=self._txn_id
         )
 
+    @overload
+    def insert(
+        self, table: str | Table, data: Value | None = None, *, relation: bool = False
+    ) -> AsyncInsertBuilder[Value]: ...
+    @overload
     def insert(
         self,
         table: str | Table,
         data: Value | None = None,
         *,
+        into: type[M],
         relation: bool = False,
-    ) -> AsyncInsertBuilder:
+    ) -> AsyncInsertBuilder[M]: ...
+    def insert(
+        self,
+        table: str | Table,
+        data: Value | None = None,
+        *,
+        into: type[M] | None = None,
+        relation: bool = False,
+    ) -> AsyncInsertBuilder[Any]:
+        if into is None:
+            return self._connection.insert(
+                table,
+                data,
+                relation=relation,
+                session_id=self._session_id,
+                txn_id=self._txn_id,
+            )
         return self._connection.insert(
             table,
             data,
+            into=into,
             relation=relation,
             session_id=self._session_id,
             txn_id=self._txn_id,
