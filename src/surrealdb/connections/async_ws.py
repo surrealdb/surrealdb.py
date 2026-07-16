@@ -541,7 +541,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    ) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def delete(
         self,
@@ -567,9 +567,10 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     ) -> AsyncCrudBuilder[Any]:
         """Delete records; returns an awaitable builder.
 
-        A ``RecordID`` (or ``"table:id"``) resolves to the deleted record; a
-        ``Table`` (or bare name) to the list of deleted records. ``DELETE`` has
-        no clause methods.
+        A ``RecordID`` (or ``"table:id"``) resolves to the deleted record, or
+        ``None`` when no record was deleted (matching select); a ``Table`` (or
+        bare name) to the list of deleted records. ``DELETE`` has no clause
+        methods.
         """
         return AsyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
@@ -913,7 +914,7 @@ class AsyncSurrealSession:
         return self._connection.upsert(record, data, session_id=self._session_id)
 
     @overload
-    def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def delete(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
@@ -1069,7 +1070,7 @@ class AsyncSurrealTransaction:
         )
 
     @overload
-    def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value]]: ...
+    def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def delete(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload

@@ -64,7 +64,8 @@ def test_async_session_crud_overload_precision() -> None:
     assert_type(session.upsert("person"), AsyncCrudBuilder[Value])
 
     assert_type(
-        session.delete(RecordID("person", 1)), AsyncCrudBuilder[dict[str, Value]]
+        session.delete(RecordID("person", 1)),
+        AsyncCrudBuilder[dict[str, Value] | None],
     )
     assert_type(session.delete(Table("person")), AsyncCrudBuilder[list[Value]])
     assert_type(session.delete("person"), AsyncCrudBuilder[Value])
@@ -91,7 +92,10 @@ def test_async_transaction_crud_overload_precision() -> None:
     assert_type(txn.upsert(Table("person")), AsyncCrudBuilder[list[Value]])
     assert_type(txn.upsert("person"), AsyncCrudBuilder[Value])
 
-    assert_type(txn.delete(RecordID("person", 1)), AsyncCrudBuilder[dict[str, Value]])
+    assert_type(
+        txn.delete(RecordID("person", 1)),
+        AsyncCrudBuilder[dict[str, Value] | None],
+    )
     assert_type(txn.delete(Table("person")), AsyncCrudBuilder[list[Value]])
     assert_type(txn.delete("person"), AsyncCrudBuilder[Value])
 
@@ -124,7 +128,7 @@ def test_blocking_session_crud_overload_precision() -> None:
     assert_type(session.upsert("person"), SyncCrudBuilder[Value])
 
     # delete is eager on sync connections: it returns the result directly.
-    assert_type(session.delete(RecordID("person", 1)), dict[str, Value])
+    assert_type(session.delete(RecordID("person", 1)), dict[str, Value] | None)
     assert_type(session.delete(Table("person")), list[Value])
     assert_type(session.delete("person"), Value)
 
@@ -151,6 +155,6 @@ def test_blocking_transaction_crud_overload_precision() -> None:
     assert_type(txn.upsert("person"), SyncCrudBuilder[Value])
 
     # delete is eager on sync connections: it returns the result directly.
-    assert_type(txn.delete(RecordID("person", 1)), dict[str, Value])
+    assert_type(txn.delete(RecordID("person", 1)), dict[str, Value] | None)
     assert_type(txn.delete(Table("person")), list[Value])
     assert_type(txn.delete("person"), Value)

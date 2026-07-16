@@ -46,6 +46,26 @@ def test_delete_record_id(
     assert outcome == []
 
 
+def test_delete_record_id_absent(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+) -> None:
+    blocking_ws_connection.query("DELETE user;").execute()
+
+    # Deleting an absent record returns None (matching select).
+    outcome = blocking_ws_connection.delete(RecordID("user", "missing"))
+    assert outcome is None
+
+
+def test_delete_string_absent(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+) -> None:
+    blocking_ws_connection.query("DELETE user;").execute()
+
+    # Deleting an absent "table:id" record returns None (matching select).
+    outcome = blocking_ws_connection.delete("user:missing")
+    assert outcome is None
+
+
 def test_delete_table(blocking_ws_connection: BlockingWsSurrealConnection) -> None:
     blocking_ws_connection.query("DELETE user;").execute()
     blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()
