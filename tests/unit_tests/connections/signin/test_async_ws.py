@@ -1,23 +1,27 @@
+from collections.abc import AsyncIterator
+from typing import Any
+
 import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
+from surrealdb.types import Value
 
 
 @pytest.fixture(autouse=True)
-async def setup_async_ws_signin() -> None:
+async def setup_async_ws_signin() -> AsyncIterator[dict[str, Any]]:
     """Setup fixture for async WS signin tests"""
     url = "ws://localhost:8000"
     password = "root"
     username = "root"
     database_name = "test_db"
     namespace = "test_ns"
-    vars_params = {
+    vars_params: dict[str, Value] = {
         "username": username,
         "password": password,
     }
     connection = AsyncWsSurrealConnection(url)
     _ = await connection.signin(vars_params)
-    _ = await connection.use(namespace=namespace, database=database_name)
+    await connection.use(namespace=namespace, database=database_name)
     _ = await connection.query_raw("DELETE user;")
     _ = await connection.query_raw("REMOVE TABLE user;")
     _ = await connection.query(
@@ -57,14 +61,14 @@ async def setup_async_ws_signin() -> None:
 
 
 @pytest.mark.asyncio
-async def test_signin_root(setup_async_ws_signin) -> None:
+async def test_signin_root(setup_async_ws_signin: dict[str, Any]) -> None:
     connection = AsyncWsSurrealConnection(setup_async_ws_signin["url"])
     response = await connection.signin(setup_async_ws_signin["vars_params"])
     assert response is not None
 
 
 @pytest.mark.asyncio
-async def test_signin_namespace(setup_async_ws_signin) -> None:
+async def test_signin_namespace(setup_async_ws_signin: dict[str, Any]) -> None:
     connection = AsyncWsSurrealConnection(setup_async_ws_signin["url"])
     vars = {
         "namespace": setup_async_ws_signin["namespace"],
@@ -76,7 +80,7 @@ async def test_signin_namespace(setup_async_ws_signin) -> None:
 
 
 @pytest.mark.asyncio
-async def test_signin_database(setup_async_ws_signin) -> None:
+async def test_signin_database(setup_async_ws_signin: dict[str, Any]) -> None:
     connection = AsyncWsSurrealConnection(setup_async_ws_signin["url"])
     vars = {
         "namespace": setup_async_ws_signin["namespace"],
@@ -89,7 +93,7 @@ async def test_signin_database(setup_async_ws_signin) -> None:
 
 
 @pytest.mark.asyncio
-async def test_signin_record(setup_async_ws_signin) -> None:
+async def test_signin_record(setup_async_ws_signin: dict[str, Any]) -> None:
     vars = {
         "namespace": setup_async_ws_signin["namespace"],
         "database": setup_async_ws_signin["database_name"],

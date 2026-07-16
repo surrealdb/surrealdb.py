@@ -30,7 +30,7 @@ def client() -> Spectron:
 
 
 @responses.activate
-def test_consolidate_posts_dry_run(client: Spectron):
+def test_consolidate_posts_dry_run(client: Spectron) -> None:
     responses.add(
         responses.POST,
         f"{BASE}/api/v1/{ENC}/consolidate",
@@ -62,7 +62,7 @@ def test_consolidate_posts_dry_run(client: Spectron):
 
 
 @responses.activate
-def test_audit_gets_with_filters(client: Spectron):
+def test_audit_gets_with_filters(client: Spectron) -> None:
     responses.add(
         responses.GET,
         f"{BASE}/api/v1/{ENC}/audit",
@@ -92,7 +92,7 @@ def test_audit_gets_with_filters(client: Spectron):
 
 
 @responses.activate
-def test_reflect_posts_query(client: Spectron):
+def test_reflect_posts_query(client: Spectron) -> None:
     responses.add(
         responses.POST,
         f"{BASE}/api/v1/{ENC}/reflect",
@@ -112,7 +112,7 @@ def test_reflect_posts_query(client: Spectron):
 
 
 @responses.activate
-def test_elaborate_posts_optional_body(client: Spectron):
+def test_elaborate_posts_optional_body(client: Spectron) -> None:
     responses.add(
         responses.POST,
         f"{BASE}/api/v1/{ENC}/elaborate",
@@ -127,7 +127,7 @@ def test_elaborate_posts_optional_body(client: Spectron):
 
 
 @responses.activate
-def test_inspect_returns_raw_payload(client: Spectron):
+def test_inspect_returns_raw_payload(client: Spectron) -> None:
     responses.add(
         responses.GET,
         f"{BASE}/api/v1/{ENC}/inspect",
@@ -148,7 +148,7 @@ def test_inspect_returns_raw_payload(client: Spectron):
 
 
 @responses.activate
-def test_query_context_posts(client: Spectron):
+def test_query_context_posts(client: Spectron) -> None:
     responses.add(
         responses.POST,
         f"{BASE}/api/v1/{ENC}/context",
@@ -163,7 +163,7 @@ def test_query_context_posts(client: Spectron):
 
 
 @responses.activate
-def test_state_whoami_profile(client: Spectron):
+def test_state_whoami_profile(client: Spectron) -> None:
     responses.add(
         responses.GET,
         f"{BASE}/api/v1/{ENC}/state",
@@ -211,6 +211,6 @@ def test_state_whoami_profile(client: Spectron):
 
 
 @responses.activate
-def test_health_is_not_context_scoped(client: Spectron):
+def test_health_is_not_context_scoped(client: Spectron) -> None:
     responses.add(responses.GET, f"{BASE}/api/v1/health", json={"ok": True}, status=200)
     assert client.health() == {"ok": True}

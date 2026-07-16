@@ -3,6 +3,7 @@ from collections.abc import AsyncGenerator
 import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
+from surrealdb.types import Value
 
 
 @pytest.fixture(autouse=True)
@@ -33,7 +34,7 @@ async def setup_schema(
 @pytest.mark.asyncio
 async def test_signup(setup_schema: None) -> None:
     url = "ws://localhost:8000"
-    vars = {
+    vars: dict[str, Value] = {
         "namespace": "test_ns",
         "database": "test_db",
         "access": "user",

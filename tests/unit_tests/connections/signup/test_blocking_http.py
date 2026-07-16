@@ -1,17 +1,21 @@
+from collections.abc import Iterator
+from typing import Any
+
 import pytest
 
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
+from surrealdb.types import Value
 
 
 @pytest.fixture(autouse=True)
-def setup_blocking_http_signup() -> None:
+def setup_blocking_http_signup() -> Iterator[dict[str, Any]]:
     """Setup fixture for blocking HTTP signup tests"""
     url = "http://localhost:8000"
     password = "root"
     username = "root"
-    vars_params = {
+    vars_params: dict[str, Value] = {
         "username": username,
         "password": password,
     }
@@ -19,7 +23,7 @@ def setup_blocking_http_signup() -> None:
     namespace = "test_ns"
     connection = BlockingHttpSurrealConnection(url)
     _ = connection.signin(vars_params)
-    _ = connection.use(namespace=namespace, database=database_name)
+    connection.use(namespace=namespace, database=database_name)
     _ = connection.query_raw("DELETE user;")
     _ = connection.query_raw("REMOVE TABLE user;")
     connection.query(
@@ -51,7 +55,7 @@ def setup_blocking_http_signup() -> None:
     connection.query("REMOVE TABLE user;").execute()
 
 
-def test_signup(setup_blocking_http_signup) -> None:
+def test_signup(setup_blocking_http_signup: dict[str, Any]) -> None:
     vars = {
         "namespace": setup_blocking_http_signup["namespace"],
         "database": setup_blocking_http_signup["database_name"],

@@ -1,3 +1,5 @@
+from typing import cast
+
 import pytest
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
@@ -24,7 +26,7 @@ async def test_select(async_http_connection: AsyncHttpSurrealConnection) -> None
     outcome = await async_http_connection.select("user")
     assert outcome[0]["name"] == "Jaime"
     assert outcome[1]["name"] == "Tobie"
-    assert 2 == len(outcome)
+    assert 2 == len(cast(list, outcome))
 
     await async_http_connection.query("DELETE user;")
     await async_http_connection.query("DELETE users;")

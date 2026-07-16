@@ -11,7 +11,7 @@ from surrealdb.spectron import (
 )
 
 
-def test_remember_response_decodes_camel_case():
+def test_remember_response_decodes_camel_case() -> None:
     resp = RememberResponse.from_dict(
         {
             "mode": "infer",
@@ -44,7 +44,7 @@ def test_remember_response_decodes_camel_case():
     assert encoded["extraction"]["turnId"] == "turn:1"
 
 
-def test_remember_batch_response_decodes_lists():
+def test_remember_batch_response_decodes_lists() -> None:
     resp = RememberBatchResponse.from_dict(
         {
             "sessionId": "sess:abc",
@@ -68,7 +68,7 @@ def test_remember_batch_response_decodes_lists():
     assert resp.extractions[0].entities == [{"name": "Acme"}]
 
 
-def test_recall_response_decodes_hits():
+def test_recall_response_decodes_hits() -> None:
     resp = RecallResponse.from_dict(
         {
             "classificationKind": "hybrid",
@@ -91,7 +91,7 @@ def test_recall_response_decodes_hits():
     assert resp.trace == {"id": "trace:1"}
 
 
-def test_chat_response_decodes_nested_extraction():
+def test_chat_response_decodes_nested_extraction() -> None:
     resp = ChatResponse.from_dict(
         {
             "reply": "you're the CTO of Acme",
@@ -114,13 +114,13 @@ def test_chat_response_decodes_nested_extraction():
     assert isinstance(resp.memory_updates, ExtractionResult)
 
 
-def test_forget_response_round_trips():
+def test_forget_response_round_trips() -> None:
     resp = ForgetResponse.from_dict({"deleted": 3})
     assert resp.deleted == 3
     assert resp.to_dict() == {"deleted": 3}
 
 
-def test_upload_response_round_trips():
+def test_upload_response_round_trips() -> None:
     resp = UploadResponse.from_dict(
         {
             "contentHash": "sha:abc",

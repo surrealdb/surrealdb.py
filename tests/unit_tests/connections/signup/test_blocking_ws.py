@@ -1,17 +1,21 @@
+from collections.abc import Iterator
+from typing import Any
+
 import pytest
 
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
+from surrealdb.types import Value
 
 
 @pytest.fixture(autouse=True)
-def setup_blocking_ws_signup() -> None:
+def setup_blocking_ws_signup() -> Iterator[dict[str, Any]]:
     """Setup fixture for blocking WS signup tests"""
     url = "ws://localhost:8000"
     password = "root"
     username = "root"
-    vars_params = {
+    vars_params: dict[str, Value] = {
         "username": username,
         "password": password,
     }
@@ -19,7 +23,7 @@ def setup_blocking_ws_signup() -> None:
     namespace = "test_ns"
     connection = BlockingWsSurrealConnection(url)
     _ = connection.signin(vars_params)
-    _ = connection.use(namespace=namespace, database=database_name)
+    connection.use(namespace=namespace, database=database_name)
     _ = connection.query_raw("DELETE user;")
     _ = connection.query_raw("REMOVE TABLE user;")
     connection.query(
@@ -53,7 +57,7 @@ def setup_blocking_ws_signup() -> None:
         connection.socket.close()
 
 
-def test_signup(setup_blocking_ws_signup) -> None:
+def test_signup(setup_blocking_ws_signup: dict[str, Any]) -> None:
     vars = {
         "namespace": setup_blocking_ws_signup["namespace"],
         "database": setup_blocking_ws_signup["database_name"],

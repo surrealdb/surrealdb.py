@@ -10,38 +10,38 @@ from surrealdb.data.cbor import decode, encode
 
 # Test roundtrip for basic types
 @given(st.integers())
-def test_cbor_roundtrip_int(val) -> None:
+def test_cbor_roundtrip_int(val: int) -> None:
     assert decode(encode(val)) == val
 
 
 @given(st.floats(allow_nan=False, allow_infinity=False))
-def test_cbor_roundtrip_float(val) -> None:
+def test_cbor_roundtrip_float(val: float) -> None:
     assert decode(encode(val)) == val
 
 
 @given(st.text())
-def test_cbor_roundtrip_str(val) -> None:
+def test_cbor_roundtrip_str(val: str) -> None:
     assert decode(encode(val)) == val
 
 
 @given(st.booleans())
-def test_cbor_roundtrip_bool(val) -> None:
+def test_cbor_roundtrip_bool(val: bool) -> None:
     assert decode(encode(val)) == val
 
 
 @given(st.none())
-def test_cbor_roundtrip_none(val) -> None:
+def test_cbor_roundtrip_none(val: None) -> None:
     assert decode(encode(val)) is None
 
 
 # Test roundtrip for lists and dicts
 @given(st.lists(st.integers()))
-def test_cbor_roundtrip_list(val) -> None:
+def test_cbor_roundtrip_list(val: list[int]) -> None:
     assert decode(encode(val)) == val
 
 
 @given(st.dictionaries(st.text(), st.integers()))
-def test_cbor_roundtrip_dict(val) -> None:
+def test_cbor_roundtrip_dict(val: dict[str, int]) -> None:
     assert decode(encode(val)) == val
 
 
@@ -53,18 +53,18 @@ def test_cbor_roundtrip_dict(val) -> None:
         max_leaves=10,
     )
 )
-def test_cbor_roundtrip_nested(val) -> None:
+def test_cbor_roundtrip_nested(val: Any) -> None:
     assert decode(encode(val)) == val
 
 
 # Edge case: empty structures
 @given(st.just([]))
-def test_cbor_roundtrip_empty_list(val) -> None:
+def test_cbor_roundtrip_empty_list(val: list[Any]) -> None:
     assert decode(encode(val)) == val
 
 
 @given(st.just({}))
-def test_cbor_roundtrip_empty_dict(val) -> None:
+def test_cbor_roundtrip_empty_dict(val: dict[Any, Any]) -> None:
     assert decode(encode(val)) == val
 
 
@@ -78,7 +78,7 @@ def test_cbor_roundtrip_empty_dict(val) -> None:
         max_value=decimal.Decimal("999999.99"),
     )
 )
-def test_cbor_roundtrip_decimal(val) -> None:
+def test_cbor_roundtrip_decimal(val: decimal.Decimal) -> None:
     """Test that Decimal values can be encoded and decoded via CBOR."""
     result = decode(encode(val))
     assert isinstance(result, decimal.Decimal)

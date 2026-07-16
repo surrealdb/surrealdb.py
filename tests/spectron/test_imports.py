@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 
-def test_clients_importable_from_subpackage():
+def test_clients_importable_from_subpackage() -> None:
     from surrealdb.spectron import AsyncSpectron, Spectron
 
     assert Spectron.__name__ == "Spectron"
     assert AsyncSpectron.__name__ == "AsyncSpectron"
 
 
-def test_exception_aliases_importable_from_subpackage():
+def test_exception_aliases_importable_from_subpackage() -> None:
     from surrealdb.spectron import (
         SpectronAPIError,
         SpectronAuthError,
@@ -22,7 +22,7 @@ def test_exception_aliases_importable_from_subpackage():
         assert issubclass(cls, SpectronAPIError)
 
 
-def test_removed_aliases_no_longer_exposed():
+def test_removed_aliases_no_longer_exposed() -> None:
     import surrealdb
 
     for name in (
@@ -47,7 +47,7 @@ def test_removed_aliases_no_longer_exposed():
         assert not hasattr(surrealdb, name), f"surrealdb still exposes {name}"
 
 
-def test_subpackage_exports():
+def test_subpackage_exports() -> None:
     import surrealdb.spectron as spx
 
     for name in (
@@ -75,7 +75,7 @@ def test_subpackage_exports():
         assert hasattr(spx, name), f"surrealdb.spectron missing {name}"
 
 
-def test_old_namespaces_are_gone():
+def test_old_namespaces_are_gone() -> None:
     import surrealdb.spectron as spx
 
     for name in (
@@ -95,7 +95,7 @@ def test_old_namespaces_are_gone():
         assert not hasattr(spx, name), f"surrealdb.spectron still exposes {name}"
 
 
-def test_existing_surrealdb_exports_still_work():
+def test_existing_surrealdb_exports_still_work() -> None:
     from surrealdb import (
         AsyncSurreal,
         RecordID,

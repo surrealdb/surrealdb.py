@@ -22,7 +22,7 @@ ROOT = f"{BASE}/api/v1/{CONTEXT}"
 
 
 @pytest.mark.asyncio
-async def test_async_consolidate_and_audit():
+async def test_async_consolidate_and_audit() -> None:
     with aioresponses() as m:
         m.post(
             f"{ROOT}/consolidate",
@@ -50,7 +50,7 @@ async def test_async_consolidate_and_audit():
 
 
 @pytest.mark.asyncio
-async def test_async_namespaces_and_bare_array():
+async def test_async_namespaces_and_bare_array() -> None:
     with aioresponses() as m:
         m.post(
             f"{ROOT}/sessions",
@@ -81,7 +81,7 @@ async def test_async_namespaces_and_bare_array():
 
 
 @pytest.mark.asyncio
-async def test_async_fetch_raw_bytes():
+async def test_async_fetch_raw_bytes() -> None:
     with aioresponses() as m:
         m.get(f"{ROOT}/documents/doc%3A1/raw", body=b"%PDF data", status=200)
         async with AsyncSpectron(context=CONTEXT, endpoint=BASE, api_key=API_KEY) as c:

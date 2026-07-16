@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `delete(RecordID)` now returns `dict | None` (the deleted record, or `None` when absent), matching `select`; `delete(Table)` still returns a list.
+- Internal: the test suite is now type-checked by CI (`mypy tests/`) with the full set of error codes enabled, so it guards against public-API type regressions. Only `index`, `union-attr`, and `call-overload` remain suppressed for tests, because the public `Value` union is indexed into pervasively across the suite with no bug-catching value.
 
 ### Fixed
 - `new_session()` now propagates the connection's authentication to the new session, so session-scoped operations run with the connection's identity. Previously a freshly attached session was unauthenticated and its writes silently no-opped (the server returned an empty result with no error). `authenticate()` also records the connection's token so it can be replayed.

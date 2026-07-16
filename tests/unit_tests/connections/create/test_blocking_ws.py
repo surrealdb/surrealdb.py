@@ -1,5 +1,5 @@
 from collections.abc import Generator
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -33,7 +33,12 @@ def test_create_string(
     outcome = blocking_ws_connection.create("user").execute()
     assert "user" == outcome["id"].table_name
 
-    assert len(blocking_ws_connection.query("SELECT * FROM user;").first()) == 1
+    assert (
+        len(
+            cast(list[Any], blocking_ws_connection.query("SELECT * FROM user;").first())
+        )
+        == 1
+    )
 
 
 def test_create_string_with_data(
@@ -47,7 +52,9 @@ def test_create_string_with_data(
     assert create_data["email"] == outcome["email"]
     assert create_data["enabled"] == outcome["enabled"]
 
-    result = blocking_ws_connection.query("SELECT * FROM user;").first()
+    result = cast(
+        list[Any], blocking_ws_connection.query("SELECT * FROM user;").first()
+    )
     assert len(result) == 1
     assert "user" == result[0]["id"].table_name
     assert create_data["name"] == result[0]["name"]
@@ -56,8 +63,10 @@ def test_create_string_with_data(
 
 
 def test_create_string_with_data_and_id(
-    blocking_ws_connection, create_data: dict[str, Any], setup_user
-):
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    create_data: dict[str, Any],
+    setup_user: None,
+) -> None:
     first_outcome = blocking_ws_connection.create("user:tobie", create_data)
     assert "user" == first_outcome["id"].table_name
     assert "tobie" == first_outcome["id"].id
@@ -65,7 +74,9 @@ def test_create_string_with_data_and_id(
     assert create_data["email"] == first_outcome["email"]
     assert create_data["enabled"] == first_outcome["enabled"]
 
-    result = blocking_ws_connection.query("SELECT * FROM user;").first()
+    result = cast(
+        list[Any], blocking_ws_connection.query("SELECT * FROM user;").first()
+    )
     assert len(result) == 1
     assert "user" == result[0]["id"].table_name
     assert "tobie" == result[0]["id"].id
@@ -82,7 +93,12 @@ def test_create_record_id(
     assert "user" == outcome["id"].table_name
     assert 1 == outcome["id"].id
 
-    assert len(blocking_ws_connection.query("SELECT * FROM user;").first()) == 1
+    assert (
+        len(
+            cast(list[Any], blocking_ws_connection.query("SELECT * FROM user;").first())
+        )
+        == 1
+    )
 
 
 def test_create_record_id_with_data(
@@ -98,7 +114,9 @@ def test_create_record_id_with_data(
     assert create_data["email"] == outcome["email"]
     assert create_data["enabled"] == outcome["enabled"]
 
-    result = blocking_ws_connection.query("SELECT * FROM user;").first()
+    result = cast(
+        list[Any], blocking_ws_connection.query("SELECT * FROM user;").first()
+    )
     assert len(result) == 1
     assert "user" == result[0]["id"].table_name
     assert create_data["name"] == result[0]["name"]
@@ -113,7 +131,12 @@ def test_create_table(
     outcome = blocking_ws_connection.create(table).execute()
     assert "user" == outcome["id"].table_name
 
-    assert len(blocking_ws_connection.query("SELECT * FROM user;").first()) == 1
+    assert (
+        len(
+            cast(list[Any], blocking_ws_connection.query("SELECT * FROM user;").first())
+        )
+        == 1
+    )
 
 
 def test_create_table_with_data(
@@ -128,7 +151,9 @@ def test_create_table_with_data(
     assert create_data["email"] == outcome["email"]
     assert create_data["enabled"] == outcome["enabled"]
 
-    result = blocking_ws_connection.query("SELECT * FROM user;").first()
+    result = cast(
+        list[Any], blocking_ws_connection.query("SELECT * FROM user;").first()
+    )
     assert len(result) == 1
     assert "user" == result[0]["id"].table_name
     assert create_data["name"] == result[0]["name"]

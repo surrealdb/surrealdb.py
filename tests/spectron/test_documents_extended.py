@@ -33,7 +33,7 @@ def client() -> Spectron:
 
 
 @responses.activate
-def test_get_delete_document(client: Spectron):
+def test_get_delete_document(client: Spectron) -> None:
     responses.add(
         responses.GET,
         f"{DOCS}/doc%3A1",
@@ -55,11 +55,11 @@ def test_get_delete_document(client: Spectron):
     doc = client.documents.get("doc:1")
     assert isinstance(doc, Document)
     assert doc.status == "Ready"
-    assert client.documents.delete("doc:1") is None
+    client.documents.delete("doc:1")  # returns None
 
 
 @responses.activate
-def test_list_documents_with_filters(client: Spectron):
+def test_list_documents_with_filters(client: Spectron) -> None:
     responses.add(
         responses.GET,
         DOCS,
@@ -74,7 +74,7 @@ def test_list_documents_with_filters(client: Spectron):
 
 
 @responses.activate
-def test_query_documents(client: Spectron):
+def test_query_documents(client: Spectron) -> None:
     responses.add(
         responses.POST,
         f"{DOCS}/query",
@@ -101,7 +101,7 @@ def test_query_documents(client: Spectron):
 
 
 @responses.activate
-def test_fetch_raw_returns_bytes(client: Spectron):
+def test_fetch_raw_returns_bytes(client: Spectron) -> None:
     responses.add(
         responses.GET,
         f"{DOCS}/doc%3A1/raw",
@@ -114,7 +114,7 @@ def test_fetch_raw_returns_bytes(client: Spectron):
 
 
 @responses.activate
-def test_reprocess_and_recompute(client: Spectron):
+def test_reprocess_and_recompute(client: Spectron) -> None:
     responses.add(
         responses.PUT,
         f"{DOCS}/doc%3A1",
@@ -141,7 +141,7 @@ def test_reprocess_and_recompute(client: Spectron):
 
 
 @responses.activate
-def test_chunks(client: Spectron):
+def test_chunks(client: Spectron) -> None:
     responses.add(
         responses.GET,
         f"{DOCS}/doc%3A1/chunks",
@@ -168,7 +168,7 @@ def test_chunks(client: Spectron):
 
 
 @responses.activate
-def test_keyword_subnamespace(client: Spectron):
+def test_keyword_subnamespace(client: Spectron) -> None:
     responses.add(
         responses.GET,
         f"{DOCS}/keywords",

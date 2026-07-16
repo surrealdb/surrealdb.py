@@ -22,10 +22,11 @@ from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.cbor import decode, encode
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.errors import NotAllowedError
+from surrealdb.types import Value
 
 Responder = Callable[[dict[str, Any]], dict[str, Any]]
 
-RECORD_SIGNIN = {
+RECORD_SIGNIN: dict[str, Value] = {
     "namespace": "test_ns",
     "database": "test_db",
     "access": "user",

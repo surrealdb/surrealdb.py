@@ -72,7 +72,9 @@ def test_map_row_to_plain_class() -> None:
 
 
 def test_map_row_to_pydantic() -> None:
-    pydantic = pytest.importorskip("pydantic")
+    pytest.importorskip("pydantic")
+    import pydantic
+
     from surrealdb.connections.builders import _map_to_class
 
     class PydModel(pydantic.BaseModel):

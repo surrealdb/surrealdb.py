@@ -1,13 +1,14 @@
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
+from surrealdb.types import Value
 
 
 @pytest.fixture
-def insert_bulk_data() -> dict[str, Any]:
+def insert_bulk_data() -> list[dict[str, Any]]:
     return [
         {
             "name": "Tobie",
@@ -25,7 +26,7 @@ def insert_bulk_data() -> dict[str, Any]:
 
 
 @pytest.fixture
-def insert_data() -> dict[str, Any]:
+def insert_data() -> list[dict[str, Any]]:
     return [
         {
             "name": "Tobie",
@@ -37,21 +38,28 @@ def insert_data() -> dict[str, Any]:
 
 
 def test_insert_string_with_data(
-    blocking_ws_connection: BlockingWsSurrealConnection, insert_bulk_data
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    insert_bulk_data: list[dict[str, Any]],
 ) -> None:
     blocking_ws_connection.query("DELETE user;").execute()
-    outcome = blocking_ws_connection.insert("user", insert_bulk_data)
+    outcome = blocking_ws_connection.insert("user", cast(Value, insert_bulk_data))
     assert 2 == len(outcome)
-    assert len(blocking_ws_connection.query("SELECT * FROM user;").first()) == 2
+    assert (
+        len(
+            cast(list[Any], blocking_ws_connection.query("SELECT * FROM user;").first())
+        )
+        == 2
+    )
 
 
 def test_insert_record_id_result_error(
-    blocking_ws_connection: BlockingWsSurrealConnection, insert_data
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    insert_data: list[dict[str, Any]],
 ) -> None:
     blocking_ws_connection.query("DELETE user;").execute()
     record_id = RecordID("user", "tobie")
     with pytest.raises(Exception) as context:
-        _ = blocking_ws_connection.insert(record_id, insert_data)
+        _ = blocking_ws_connection.insert(record_id, cast(Value, insert_data))
     e = str(context.value)
     assert (
         "There was a problem with the database: Can not execute INSERT statement using value"

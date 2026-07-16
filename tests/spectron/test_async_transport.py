@@ -14,7 +14,7 @@ BASE = "https://api.spectron.test"
 
 
 @pytest.mark.asyncio
-async def test_async_get_sends_bearer_header():
+async def test_async_get_sends_bearer_header() -> None:
     with aioresponses() as m:
         m.get(f"{BASE}/api/v1/x/health", payload={"ok": True}, status=200)
         async with AsyncTransport(endpoint=BASE, api_key=API_KEY) as t:
@@ -28,7 +28,7 @@ async def test_async_get_sends_bearer_header():
 
 
 @pytest.mark.asyncio
-async def test_async_get_retries_on_5xx(monkeypatch):
+async def test_async_get_retries_on_5xx(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _no_sleep(_seconds: float) -> None:
         return None
 
@@ -44,7 +44,7 @@ async def test_async_get_retries_on_5xx(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_async_post_does_not_retry(monkeypatch):
+async def test_async_post_does_not_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _no_sleep(_seconds: float) -> None:
         return None
 
@@ -58,7 +58,7 @@ async def test_async_post_does_not_retry(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_async_idempotent_post_retries(monkeypatch):
+async def test_async_idempotent_post_retries(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _no_sleep(_seconds: float) -> None:
         return None
 
@@ -78,7 +78,7 @@ async def test_async_idempotent_post_retries(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_async_404_maps_to_not_found():
+async def test_async_404_maps_to_not_found() -> None:
     with aioresponses() as m:
         m.get(f"{BASE}/api/v1/x/missing", status=404, payload={"message": "gone"})
         async with AsyncTransport(endpoint=BASE, api_key=API_KEY) as t:

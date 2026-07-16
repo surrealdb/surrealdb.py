@@ -1,15 +1,16 @@
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
+from surrealdb.types import Value
 
 
 @pytest.fixture
-def patch_data() -> dict[str, Any]:
+def patch_data() -> list[dict[str, Any]]:
     return [
         {"op": "replace", "path": "/name", "value": "Jaime"},
         {"op": "replace", "path": "/email", "value": "jaime@example.com"},
@@ -32,11 +33,13 @@ async def setup_user(
 @pytest.mark.asyncio
 async def test_patch_string_with_data(
     async_ws_connection: AsyncWsSurrealConnection,
-    patch_data: dict[str, Any],
+    patch_data: list[dict[str, Any]],
     setup_user: None,
 ) -> None:
     record_id = RecordID("user", "tobie")
-    outcome = await async_ws_connection.update("user:tobie").patch(patch_data)
+    outcome = await async_ws_connection.update("user:tobie").patch(
+        cast(Value, patch_data)
+    )
     assert outcome["id"] == record_id
     assert outcome["name"] == "Jaime"
     assert outcome["email"] == "jaime@example.com"
@@ -51,11 +54,11 @@ async def test_patch_string_with_data(
 @pytest.mark.asyncio
 async def test_patch_record_id_with_data(
     async_ws_connection: AsyncWsSurrealConnection,
-    patch_data: dict[str, Any],
+    patch_data: list[dict[str, Any]],
     setup_user: None,
 ) -> None:
     record_id = RecordID("user", "tobie")
-    outcome = await async_ws_connection.update(record_id).patch(patch_data)
+    outcome = await async_ws_connection.update(record_id).patch(cast(Value, patch_data))
     assert outcome["id"] == record_id
     assert outcome["name"] == "Jaime"
     assert outcome["email"] == "jaime@example.com"
@@ -70,12 +73,12 @@ async def test_patch_record_id_with_data(
 @pytest.mark.asyncio
 async def test_patch_table_with_data(
     async_ws_connection: AsyncWsSurrealConnection,
-    patch_data: dict[str, Any],
+    patch_data: list[dict[str, Any]],
     setup_user: None,
 ) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")
-    outcome = await async_ws_connection.update(table).patch(patch_data)
+    outcome = await async_ws_connection.update(table).patch(cast(Value, patch_data))
     assert outcome[0]["id"] == record_id
     assert outcome[0]["name"] == "Jaime"
     assert outcome[0]["email"] == "jaime@example.com"

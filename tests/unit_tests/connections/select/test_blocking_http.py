@@ -1,3 +1,5 @@
+from typing import cast
+
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
@@ -21,7 +23,7 @@ def test_select(blocking_http_connection: BlockingHttpSurrealConnection) -> None
     outcome = blocking_http_connection.select("user")
     assert outcome[0]["name"] == "Jaime"
     assert outcome[1]["name"] == "Tobie"
-    assert 2 == len(outcome)
+    assert 2 == len(cast(list, outcome))
 
     blocking_http_connection.query("DELETE user;").execute()
     blocking_http_connection.query("DELETE users;").execute()

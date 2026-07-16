@@ -7,7 +7,7 @@ ensuring responses are not mixed up when multiple threads share a connection.
 
 import concurrent.futures
 from collections.abc import Generator
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -47,7 +47,7 @@ def test_concurrent_insert_relation(
     """
     errors = []
 
-    def insert_relation_task(task_id: int):
+    def insert_relation_task(task_id: int) -> Any:
         """Execute an insert_relation and verify the response."""
         try:
             result = blocking_ws_connection.insert(
@@ -61,7 +61,7 @@ def test_concurrent_insert_relation(
 
             # Verify we got the correct response for this specific request
             expected_out = RecordID("likes", task_id)
-            actual_out = result[0]["out"]
+            actual_out = cast(RecordID, result[0]["out"])
 
             if actual_out != expected_out:
                 errors.append(
@@ -90,7 +90,7 @@ def test_concurrent_create(
     """
     errors = []
 
-    def create_task(task_id: int):
+    def create_task(task_id: int) -> Any:
         """Execute a create and verify the response."""
         try:
             result = blocking_ws_connection.create(
@@ -99,7 +99,7 @@ def test_concurrent_create(
 
             # Verify we got the correct response
             expected_id = RecordID("document", task_id)
-            actual_id = result["id"]
+            actual_id = cast(RecordID, result["id"])
 
             if actual_id != expected_id:
                 errors.append(
@@ -107,7 +107,9 @@ def test_concurrent_create(
                 )
 
             if result["content"] != f"Document {task_id}":
-                errors.append(f"Task {task_id}: Got wrong content: {result['content']}")
+                errors.append(
+                    f"Task {task_id}: Got wrong content: {cast(str, result['content'])}"
+                )
 
             return result
         except Exception as e:
@@ -134,7 +136,7 @@ def test_concurrent_mixed_operations(
     """
     errors = []
 
-    def insert_relation_task(task_id: int):
+    def insert_relation_task(task_id: int) -> Any:
         """Execute an insert_relation."""
         try:
             result = blocking_ws_connection.insert(
@@ -146,7 +148,7 @@ def test_concurrent_mixed_operations(
             expected_out = RecordID("likes", task_id)
             if result[0]["out"] != expected_out:
                 errors.append(
-                    f"insert_relation {task_id}: Wrong response {result[0]['out']}"
+                    f"insert_relation {task_id}: Wrong response {cast(RecordID, result[0]['out'])}"
                 )
 
             return result
@@ -154,7 +156,7 @@ def test_concurrent_mixed_operations(
             errors.append(f"insert_relation {task_id} failed: {e}")
             raise
 
-    def create_task(task_id: int):
+    def create_task(task_id: int) -> Any:
         """Execute a create."""
         try:
             result = blocking_ws_connection.create(
@@ -163,7 +165,9 @@ def test_concurrent_mixed_operations(
 
             expected_id = RecordID("document", task_id)
             if result["id"] != expected_id:
-                errors.append(f"create {task_id}: Wrong response {result['id']}")
+                errors.append(
+                    f"create {task_id}: Wrong response {cast(RecordID, result['id'])}"
+                )
 
             return result
         except Exception as e:
@@ -211,5 +215,5 @@ def test_sequential_operations_still_work(
     result = blocking_ws_connection.query(
         "SELECT * FROM document WHERE id = document:100;"
     ).first()
-    assert len(result) == 1
+    assert len(cast(list, result)) == 1
     assert result[0]["content"] == "Test"

@@ -43,7 +43,7 @@ def setup_user(
 def test_upsert_string(
     blocking_http_connection: BlockingHttpSurrealConnection,
     setup_user: None,
-    existing_data,
+    existing_data: dict[str, Any],
 ) -> None:
     record_id = RecordID("user", "tobie")
     outcome = blocking_http_connection.upsert("user:tobie", existing_data)
@@ -79,7 +79,7 @@ def test_upsert_string_with_data(
 def test_upsert_record_id(
     blocking_http_connection: BlockingHttpSurrealConnection,
     setup_user: None,
-    existing_data,
+    existing_data: dict[str, Any],
 ) -> None:
     record_id = RecordID("user", "tobie")
     first_outcome = blocking_http_connection.upsert(record_id, existing_data)
@@ -115,7 +115,7 @@ def test_upsert_record_id_with_data(
 def test_upsert_table(
     blocking_http_connection: BlockingHttpSurrealConnection,
     setup_user: None,
-    existing_data,
+    existing_data: dict[str, Any],
 ) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")

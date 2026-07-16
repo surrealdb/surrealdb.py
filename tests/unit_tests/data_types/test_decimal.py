@@ -1,10 +1,12 @@
 import decimal
+from collections.abc import AsyncGenerator
 from typing import Any
 
 import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data import cbor
+from surrealdb.types import Value
 
 
 # Unit tests for encoding
@@ -98,11 +100,11 @@ def test_decimal_in_dict_roundtrip() -> None:
 
 
 @pytest.fixture
-async def surrealdb_connection():  # type: ignore[misc]
+async def surrealdb_connection() -> AsyncGenerator[AsyncWsSurrealConnection, None]:
     url = "ws://localhost:8000/rpc"
     password = "root"
     username = "root"
-    vars_params = {"username": username, "password": password}
+    vars_params: dict[str, Value] = {"username": username, "password": password}
     database_name = "test_db"
     namespace = "test_ns"
     connection = AsyncWsSurrealConnection(url)

@@ -13,7 +13,7 @@ def record_id() -> RecordID:
 
 
 def test_delete_string(
-    blocking_ws_connection: BlockingWsSurrealConnection, record_id
+    blocking_ws_connection: BlockingWsSurrealConnection, record_id: RecordID
 ) -> None:
     blocking_ws_connection.query("DELETE user;").execute()
     blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()
@@ -25,12 +25,12 @@ def test_delete_string(
     assert outcome["name"] == "Tobie"
 
     # Verify the record was actually deleted
-    outcome = blocking_ws_connection.query("SELECT * FROM user;").first()
-    assert outcome == []
+    remaining = blocking_ws_connection.query("SELECT * FROM user;").first()
+    assert remaining == []
 
 
 def test_delete_record_id(
-    blocking_ws_connection: BlockingWsSurrealConnection, record_id
+    blocking_ws_connection: BlockingWsSurrealConnection, record_id: RecordID
 ) -> None:
     blocking_ws_connection.query("DELETE user;").execute()
     blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()
@@ -42,8 +42,8 @@ def test_delete_record_id(
     assert outcome["name"] == "Tobie"
 
     # Verify the record was actually deleted
-    outcome = blocking_ws_connection.query("SELECT * FROM user;").first()
-    assert outcome == []
+    remaining = blocking_ws_connection.query("SELECT * FROM user;").first()
+    assert remaining == []
 
 
 def test_delete_record_id_absent(
@@ -80,5 +80,5 @@ def test_delete_table(blocking_ws_connection: BlockingWsSurrealConnection) -> No
     assert any(record["name"] == "Jaime" for record in outcome)
 
     # Verify all records were deleted
-    outcome = blocking_ws_connection.query("SELECT * FROM user;").first()
-    assert outcome == []
+    remaining = blocking_ws_connection.query("SELECT * FROM user;").first()
+    assert remaining == []
