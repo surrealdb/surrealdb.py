@@ -167,6 +167,10 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.AUTHENTICATE, **kwargs)
         await self._send(message, "authenticating")
+        # Record the token as the connection identity so new_session() can
+        # replay it — only when authenticating the connection, not a sub-session.
+        if session_id is None:
+            self.token = token
 
     async def invalidate(self, session_id: UUID | None = None) -> None:
         kwargs: dict[str, Any] = {}

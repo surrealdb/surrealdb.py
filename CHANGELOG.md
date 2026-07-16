@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `delete(RecordID)` now returns `dict | None` (the deleted record, or `None` when absent), matching `select`; `delete(Table)` still returns a list.
 
+### Fixed
+- `new_session()` now propagates the connection's authentication to the new session, so session-scoped operations run with the connection's identity. Previously a freshly attached session was unauthenticated and its writes silently no-opped (the server returned an empty result with no error). `authenticate()` also records the connection's token so it can be replayed.
+
 ## [3.0.0-alpha.2] - 2026-07-16
 
 Follow-up to `3.0.0-alpha.1` that finalises the v3 API surface and fixes a batch of issues found in review.

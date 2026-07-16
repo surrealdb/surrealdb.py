@@ -137,6 +137,10 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         message = RequestMessage(RequestMethod.AUTHENTICATE, **kwargs)
         self.id = message.id
         self._send(message, "authenticating")
+        # Record the token as the connection identity so new_session() can
+        # replay it — only when authenticating the connection, not a sub-session.
+        if session_id is None:
+            self.token = token
 
     def invalidate(self, session_id: UUID | None = None) -> None:
         kwargs: dict[str, Any] = {}
