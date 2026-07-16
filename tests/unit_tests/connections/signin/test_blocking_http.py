@@ -1,23 +1,27 @@
+from collections.abc import Iterator
+from typing import Any
+
 import pytest
 
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
+from surrealdb.types import Value
 
 
 @pytest.fixture(autouse=True)
-def setup_blocking_http_signin() -> None:
+def setup_blocking_http_signin() -> Iterator[dict[str, Any]]:
     """Setup fixture for blocking HTTP signin tests"""
     url = "http://localhost:8000"
     password = "root"
     username = "root"
     database_name = "test_db"
     namespace = "test_ns"
-    vars_params = {
+    vars_params: dict[str, Value] = {
         "username": username,
         "password": password,
     }
     connection = BlockingHttpSurrealConnection(url)
     _ = connection.signin(vars_params)
-    _ = connection.use(namespace=namespace, database=database_name)
+    connection.use(namespace=namespace, database=database_name)
     _ = connection.query_raw("DELETE user;")
     _ = connection.query_raw("REMOVE TABLE user;")
     connection.query(
@@ -56,13 +60,13 @@ def setup_blocking_http_signin() -> None:
     connection.query_raw("REMOVE TABLE user;")
 
 
-def test_signin_root(setup_blocking_http_signin) -> None:
+def test_signin_root(setup_blocking_http_signin: dict[str, Any]) -> None:
     connection = BlockingHttpSurrealConnection(setup_blocking_http_signin["url"])
     response = connection.signin(setup_blocking_http_signin["vars_params"])
     assert response is not None
 
 
-def test_signin_namespace(setup_blocking_http_signin) -> None:
+def test_signin_namespace(setup_blocking_http_signin: dict[str, Any]) -> None:
     connection = BlockingHttpSurrealConnection(setup_blocking_http_signin["url"])
     vars = {
         "namespace": setup_blocking_http_signin["namespace"],
@@ -73,7 +77,7 @@ def test_signin_namespace(setup_blocking_http_signin) -> None:
     assert response is not None
 
 
-def test_signin_database(setup_blocking_http_signin) -> None:
+def test_signin_database(setup_blocking_http_signin: dict[str, Any]) -> None:
     connection = BlockingHttpSurrealConnection(setup_blocking_http_signin["url"])
     vars = {
         "namespace": setup_blocking_http_signin["namespace"],
@@ -85,7 +89,7 @@ def test_signin_database(setup_blocking_http_signin) -> None:
     assert response is not None
 
 
-def test_signin_record(setup_blocking_http_signin) -> None:
+def test_signin_record(setup_blocking_http_signin: dict[str, Any]) -> None:
     vars = {
         "namespace": setup_blocking_http_signin["namespace"],
         "database": setup_blocking_http_signin["database_name"],

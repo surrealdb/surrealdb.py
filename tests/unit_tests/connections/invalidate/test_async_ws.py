@@ -1,17 +1,20 @@
 import os
+from collections.abc import AsyncIterator
+from typing import cast
 
 import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
+from surrealdb.types import Value
 
 
 @pytest.fixture
-async def main_connection() -> None:
+async def main_connection() -> AsyncIterator[AsyncWsSurrealConnection]:
     """Create a separate connection for the main connection that creates the test data"""
     url = "ws://localhost:8000"
     password = "root"
     username = "root"
-    vars_params = {
+    vars_params: dict[str, Value] = {
         "username": username,
         "password": password,
     }
@@ -32,34 +35,36 @@ async def main_connection() -> None:
 
 @pytest.mark.asyncio
 async def test_invalidate_with_guest_mode_on(
-    main_connection, async_ws_connection: AsyncWsSurrealConnection
+    main_connection: AsyncWsSurrealConnection,
+    async_ws_connection: AsyncWsSurrealConnection,
 ) -> None:
     outcome = await async_ws_connection.query("SELECT * FROM user;").first()
-    assert len(outcome) == 1
+    assert len(cast(list, outcome)) == 1
     outcome = await main_connection.query("SELECT * FROM user;").first()
-    assert len(outcome) == 1
+    assert len(cast(list, outcome)) == 1
 
     await async_ws_connection.invalidate()
 
     try:
         outcome = await async_ws_connection.query("SELECT * FROM user;").first()
-        assert len(outcome) == 0
+        assert len(cast(list, outcome)) == 0
     except Exception as err:
         assert "Not enough permissions" in str(
             err
         ) or "Anonymous access not allowed" in str(err)
     outcome = await main_connection.query("SELECT * FROM user;").first()
-    assert len(outcome) == 1
+    assert len(cast(list, outcome)) == 1
 
 
 @pytest.mark.asyncio
 async def test_invalidate_test_for_no_guest_mode(
-    main_connection, async_ws_connection: AsyncWsSurrealConnection
+    main_connection: AsyncWsSurrealConnection,
+    async_ws_connection: AsyncWsSurrealConnection,
 ) -> None:
     outcome = await async_ws_connection.query("SELECT * FROM user;").first()
-    assert len(outcome) == 1
+    assert len(cast(list, outcome)) == 1
     outcome = await main_connection.query("SELECT * FROM user;").first()
-    assert len(outcome) == 1
+    assert len(cast(list, outcome)) == 1
 
     await async_ws_connection.invalidate()
 
@@ -67,7 +72,7 @@ async def test_invalidate_test_for_no_guest_mode(
     try:
         outcome = await async_ws_connection.query("SELECT * FROM user;").first()
         # If guest mode is enabled, we get empty results instead of an exception
-        assert len(outcome) == 0
+        assert len(cast(list, outcome)) == 0
     except Exception as err:
         # If guest mode is disabled, we get an exception
         assert "Not enough permissions" in str(
@@ -75,4 +80,4 @@ async def test_invalidate_test_for_no_guest_mode(
         ) or "Anonymous access not allowed" in str(err)
 
     outcome = await main_connection.query("SELECT * FROM user;").first()
-    assert len(outcome) == 1
+    assert len(cast(list, outcome)) == 1

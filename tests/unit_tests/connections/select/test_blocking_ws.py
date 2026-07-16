@@ -1,3 +1,5 @@
+from typing import cast
+
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
@@ -21,7 +23,7 @@ def test_select(blocking_ws_connection: BlockingWsSurrealConnection) -> None:
     outcome = blocking_ws_connection.select("user")
     assert outcome[0]["name"] == "Jaime"
     assert outcome[1]["name"] == "Tobie"
-    assert 2 == len(outcome)
+    assert 2 == len(cast(list, outcome))
 
 
 def test_select_record_id_present(
