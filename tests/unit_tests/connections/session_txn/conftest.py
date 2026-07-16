@@ -57,9 +57,13 @@ def session_txn_requires_v3(
             "DEFINE TABLE session_txn_probe SCHEMALESS;"
         ).execute()
         try:
-            # Mirror what the actual tests do - no signin on the session.
+            # The session inherits the connection's root auth (see
+            # new_session), so - like the actual tests - it does not sign in
+            # again. ``.first()`` returns the first statement's rows (a list of
+            # record dicts); ``.execute()`` would wrap that in an outer
+            # per-statement list, so the row check below would never see a dict.
             session.create("session_txn_probe:check", {"probe": True})
-            result = session.query("SELECT * FROM session_txn_probe;").execute()
+            result = session.query("SELECT * FROM session_txn_probe;").first()
         except Exception as exc:  # noqa: BLE001 - capture for skip decision
             probe_error = exc
     finally:

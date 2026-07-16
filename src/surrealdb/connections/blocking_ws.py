@@ -840,6 +840,14 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
 
     def new_session(self) -> "BlockingSurrealSession":
         session_id = self.attach()
+        # A freshly attached session starts unauthenticated on the server -
+        # it does not inherit the socket's auth automatically. Replay the
+        # connection's current token so the new session shares the same
+        # identity, matching the documented usage where you sign in once on
+        # the connection and then open sessions from it. Callers can still
+        # sign in / invalidate on the session to change its identity.
+        if self.token is not None:
+            self.authenticate(self.token, session_id=session_id)
         return BlockingSurrealSession(self, session_id)
 
     def close(self) -> None:
