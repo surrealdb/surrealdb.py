@@ -49,7 +49,7 @@ def test_upsert_string(
     assert outcome["name"] == "Tobie"
     assert outcome["email"] == "tobie@example.com"
     assert outcome["enabled"] is True
-    result = blocking_ws_connection.query("SELECT * FROM user;")
+    result = blocking_ws_connection.query("SELECT * FROM user;").first()
     assert result[0]["id"] == record_id
     assert result[0]["name"] == "Tobie"
     assert result[0]["email"] == "tobie@example.com"
@@ -67,7 +67,7 @@ def test_upsert_string_with_data(
     assert first_outcome["name"] == "Jaime"
     assert first_outcome["email"] == "jaime@example.com"
     assert first_outcome["enabled"] is True
-    result = blocking_ws_connection.query("SELECT * FROM user;")
+    result = blocking_ws_connection.query("SELECT * FROM user;").first()
     assert result[0]["id"] == record_id
     assert result[0]["name"] == "Jaime"
     assert result[0]["email"] == "jaime@example.com"
@@ -83,7 +83,7 @@ def test_upsert_record_id(
     assert first_outcome["name"] == "Tobie"
     assert first_outcome["email"] == "tobie@example.com"
     assert first_outcome["enabled"] is True
-    result = blocking_ws_connection.query("SELECT * FROM user;")
+    result = blocking_ws_connection.query("SELECT * FROM user;").first()
     assert result[0]["id"] == record_id
     assert result[0]["name"] == "Tobie"
     assert result[0]["email"] == "tobie@example.com"
@@ -101,7 +101,7 @@ def test_upsert_record_id_with_data(
     assert outcome["name"] == "Jaime"
     assert outcome["email"] == "jaime@example.com"
     assert outcome["enabled"] is True
-    result = blocking_ws_connection.query("SELECT * FROM user;")
+    result = blocking_ws_connection.query("SELECT * FROM user;").first()
     assert result[0]["id"] == record_id
     assert result[0]["name"] == "Jaime"
     assert result[0]["email"] == "jaime@example.com"
@@ -114,7 +114,7 @@ def test_upsert_table(
     table = Table("user")
     record_id = RecordID("user", "tobie")
     first_outcome = blocking_ws_connection.upsert(table, existing_data)
-    result = blocking_ws_connection.query("SELECT * FROM user;")
+    result = blocking_ws_connection.query("SELECT * FROM user;").first()
     # SurrealDB may create a new record or not, depending on version
     assert any(r["id"] == record_id for r in result)
     assert any(r["name"] == "Tobie" for r in result)
@@ -135,7 +135,7 @@ def test_upsert_table_with_data(
         and r["enabled"] is True
         for r in outcome
     )
-    result = blocking_ws_connection.query("SELECT * FROM user;")
+    result = blocking_ws_connection.query("SELECT * FROM user;").first()
     assert any(
         r["name"] == "Jaime"
         and r["email"] == "jaime@example.com"

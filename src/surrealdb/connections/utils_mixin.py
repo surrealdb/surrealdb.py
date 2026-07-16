@@ -5,7 +5,24 @@ from surrealdb.connections.builders import (
 )
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
-from surrealdb.errors import SurrealError, parse_query_error, parse_rpc_error
+from surrealdb.errors import (
+    ErrorKind,
+    SurrealError,
+    parse_query_error,
+    parse_rpc_error,
+)
+from surrealdb.types import Value
+
+# Legacy JSON-RPC error code historically returned by the ``info`` RPC when a
+# record-authenticated session has no ROOT/NS/DB scope to report (the message
+# used to read "No result found"). Newer servers surface this as a structured
+# ``NotFound`` error instead; both are handled by :meth:`UtilsMixin.
+# _info_needs_auth_fallback`.
+_NO_RESULT_RPC_CODE = -32000
+
+# The SurrealQL used to resolve the currently authenticated record for
+# record-level ("scope") users when ``info`` reports no result.
+AUTH_FALLBACK_QUERY = "SELECT * FROM $auth"
 
 # These are re-exported for backwards compatibility with downstream code
 # that imported them via ``surrealdb.connections.utils_mixin``.
@@ -29,6 +46,45 @@ class UtilsMixin:
     def check_response_for_result(response: dict[str, Any], process: str) -> None:
         if "result" not in response.keys():
             raise SurrealError(f"no result {process}: {response}")
+
+    @staticmethod
+    def _info_needs_auth_fallback(response: dict[str, Any]) -> bool:
+        """Return ``True`` when an ``info`` response should fall back to ``$auth``.
+
+        Record-level ("scope") authenticated sessions have no ROOT/NS/DB
+        identity for the ``info`` RPC to report, so the server returns a
+        "no result / not found" error rather than a payload. When that
+        happens the caller should re-resolve the authenticated record via
+        ``SELECT * FROM $auth`` so record-auth users get a consistent result
+        across every transport.
+
+        The decision is keyed on the *structured* error (``kind`` /
+        legacy ``code``) rather than the human-readable message text, which
+        is not part of any stability contract and varies between server
+        versions.
+        """
+        error = response.get("error")
+        if not error:
+            return False
+        parsed = parse_rpc_error(error)
+        # New servers report this as a structured ``NotFound`` error; older
+        # ones use the legacy ``-32000`` code. Match either, never the text.
+        return (
+            parsed.has_kind(ErrorKind.NOT_FOUND) or parsed.code == _NO_RESULT_RPC_CODE
+        )
+
+    @staticmethod
+    def _extract_auth_record(auth_result: Any) -> Value | None:
+        """Extract the single record from a ``SELECT * FROM $auth`` result.
+
+        ``auth_result`` is the statement result produced by the query
+        builders (a list of matching records). Returns the single
+        authenticated record, or ``None`` when there is no such record so
+        the caller can re-raise the original ``info`` error.
+        """
+        if isinstance(auth_result, list) and len(auth_result) > 0:
+            return auth_result[0]
+        return None
 
     @staticmethod
     def _check_query_result(stmt: dict[str, Any]) -> None:

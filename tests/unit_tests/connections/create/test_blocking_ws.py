@@ -30,10 +30,10 @@ def setup_user(
 def test_create_string(
     blocking_ws_connection: BlockingWsSurrealConnection, setup_user: None
 ) -> None:
-    outcome = blocking_ws_connection.create("user")
+    outcome = blocking_ws_connection.create("user").execute()
     assert "user" == outcome["id"].table_name
 
-    assert len(blocking_ws_connection.query("SELECT * FROM user;")) == 1
+    assert len(blocking_ws_connection.query("SELECT * FROM user;").first()) == 1
 
 
 def test_create_string_with_data(
@@ -47,7 +47,7 @@ def test_create_string_with_data(
     assert create_data["email"] == outcome["email"]
     assert create_data["enabled"] == outcome["enabled"]
 
-    result = blocking_ws_connection.query("SELECT * FROM user;")
+    result = blocking_ws_connection.query("SELECT * FROM user;").first()
     assert len(result) == 1
     assert "user" == result[0]["id"].table_name
     assert create_data["name"] == result[0]["name"]
@@ -65,7 +65,7 @@ def test_create_string_with_data_and_id(
     assert create_data["email"] == first_outcome["email"]
     assert create_data["enabled"] == first_outcome["enabled"]
 
-    result = blocking_ws_connection.query("SELECT * FROM user;")
+    result = blocking_ws_connection.query("SELECT * FROM user;").first()
     assert len(result) == 1
     assert "user" == result[0]["id"].table_name
     assert "tobie" == result[0]["id"].id
@@ -78,11 +78,11 @@ def test_create_record_id(
     blocking_ws_connection: BlockingWsSurrealConnection, setup_user: None
 ) -> None:
     record_id = RecordID("user", 1)
-    outcome = blocking_ws_connection.create(record_id)
+    outcome = blocking_ws_connection.create(record_id).execute()
     assert "user" == outcome["id"].table_name
     assert 1 == outcome["id"].id
 
-    assert len(blocking_ws_connection.query("SELECT * FROM user;")) == 1
+    assert len(blocking_ws_connection.query("SELECT * FROM user;").first()) == 1
 
 
 def test_create_record_id_with_data(
@@ -98,7 +98,7 @@ def test_create_record_id_with_data(
     assert create_data["email"] == outcome["email"]
     assert create_data["enabled"] == outcome["enabled"]
 
-    result = blocking_ws_connection.query("SELECT * FROM user;")
+    result = blocking_ws_connection.query("SELECT * FROM user;").first()
     assert len(result) == 1
     assert "user" == result[0]["id"].table_name
     assert create_data["name"] == result[0]["name"]
@@ -110,10 +110,10 @@ def test_create_table(
     blocking_ws_connection: BlockingWsSurrealConnection, setup_user: None
 ) -> None:
     table = Table("user")
-    outcome = blocking_ws_connection.create(table)
+    outcome = blocking_ws_connection.create(table).execute()
     assert "user" == outcome["id"].table_name
 
-    assert len(blocking_ws_connection.query("SELECT * FROM user;")) == 1
+    assert len(blocking_ws_connection.query("SELECT * FROM user;").first()) == 1
 
 
 def test_create_table_with_data(
@@ -128,7 +128,7 @@ def test_create_table_with_data(
     assert create_data["email"] == outcome["email"]
     assert create_data["enabled"] == outcome["enabled"]
 
-    result = blocking_ws_connection.query("SELECT * FROM user;")
+    result = blocking_ws_connection.query("SELECT * FROM user;").first()
     assert len(result) == 1
     assert "user" == result[0]["id"].table_name
     assert create_data["name"] == result[0]["name"]

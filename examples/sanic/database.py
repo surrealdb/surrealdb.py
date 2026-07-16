@@ -1,6 +1,6 @@
 """Database connection management."""
 
-from surrealdb import AsyncSurreal
+from surrealdb import AsyncSurreal, AsyncSurrealConnection
 
 from config import config
 
@@ -9,7 +9,7 @@ class DatabaseManager:
     """Manages SurrealDB connections."""
 
     def __init__(self):
-        self.db: AsyncSurreal | None = None
+        self.db: AsyncSurrealConnection | None = None
 
     async def connect(self) -> None:
         """Initialize database connection."""
@@ -29,7 +29,7 @@ class DatabaseManager:
             await self.db.close()
             self.db = None
 
-    def get_db(self) -> AsyncSurreal:
+    def get_db(self) -> AsyncSurrealConnection:
         """Get the database connection."""
         if not self.db:
             raise RuntimeError("Database not connected")

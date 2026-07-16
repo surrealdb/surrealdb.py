@@ -44,7 +44,9 @@ async def test_live_subscription_via_query(
     async_ws_connection_secondary: AsyncWsSurrealConnection,
 ) -> None:
     # Start the live query using query() method
-    query_uuid = await async_ws_connection_with_user.query("LIVE SELECT * FROM user;")
+    query_uuid = await async_ws_connection_with_user.query(
+        "LIVE SELECT * FROM user;"
+    ).first()
     assert isinstance(query_uuid, UUID)
 
     # Start the live subscription

@@ -3,7 +3,7 @@
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from surrealdb import AsyncSurreal
+from surrealdb import AsyncSurrealConnection
 
 from database import get_db
 from models import UserCreate, UserResponse, UserUpdate
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     user: UserCreate,
-    db: AsyncSurreal = Depends(get_db),
+    db: AsyncSurrealConnection = Depends(get_db),
 ) -> UserResponse:
     """Create a new user."""
     try:
@@ -51,7 +51,7 @@ async def create_user(
 
 @router.get("", response_model=List[UserResponse])
 async def list_users(
-    db: AsyncSurreal = Depends(get_db),
+    db: AsyncSurrealConnection = Depends(get_db),
 ) -> List[UserResponse]:
     """Get all users."""
     try:
@@ -82,7 +82,7 @@ async def list_users(
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: str,
-    db: AsyncSurreal = Depends(get_db),
+    db: AsyncSurrealConnection = Depends(get_db),
 ) -> UserResponse:
     """Get a user by ID."""
     try:
@@ -116,7 +116,7 @@ async def get_user(
 async def update_user(
     user_id: str,
     user: UserUpdate,
-    db: AsyncSurreal = Depends(get_db),
+    db: AsyncSurrealConnection = Depends(get_db),
 ) -> UserResponse:
     """Update a user."""
     try:
@@ -164,7 +164,7 @@ async def update_user(
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
     user_id: str,
-    db: AsyncSurreal = Depends(get_db),
+    db: AsyncSurrealConnection = Depends(get_db),
 ) -> None:
     """Delete a user."""
     try:

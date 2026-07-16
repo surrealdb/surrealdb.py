@@ -1,4 +1,4 @@
-"""``query_raw`` bound-variable kwarg is unified to ``vars`` (#5).
+"""``query_raw`` bound-variable kwarg is unified to ``vars``.
 
 Every connection previously spelled the bound-variable argument ``params``
 while ``query`` spelled it ``vars``. These server-independent tests pin the

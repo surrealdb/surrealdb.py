@@ -1,4 +1,4 @@
-"""Static + runtime guards for connection CRUD overload precision (#16).
+"""Static + runtime guards for connection CRUD overload precision.
 
 ``AsyncSurrealSession`` / ``AsyncSurrealTransaction`` (and their blocking
 equivalents) must expose the same ``@overload`` precision as the base
@@ -107,11 +107,10 @@ def test_blocking_session_crud_overload_precision() -> None:
     assert_type(session.upsert(Table("person")), SyncCrudBuilder[list[Value]])
     assert_type(session.upsert("person"), SyncCrudBuilder[Value])
 
-    assert_type(
-        session.delete(RecordID("person", 1)), SyncCrudBuilder[dict[str, Value]]
-    )
-    assert_type(session.delete(Table("person")), SyncCrudBuilder[list[Value]])
-    assert_type(session.delete("person"), SyncCrudBuilder[Value])
+    # delete is eager on sync connections: it returns the result directly.
+    assert_type(session.delete(RecordID("person", 1)), dict[str, Value])
+    assert_type(session.delete(Table("person")), list[Value])
+    assert_type(session.delete("person"), Value)
 
 
 def test_blocking_transaction_crud_overload_precision() -> None:
@@ -130,6 +129,7 @@ def test_blocking_transaction_crud_overload_precision() -> None:
     assert_type(txn.upsert(Table("person")), SyncCrudBuilder[list[Value]])
     assert_type(txn.upsert("person"), SyncCrudBuilder[Value])
 
-    assert_type(txn.delete(RecordID("person", 1)), SyncCrudBuilder[dict[str, Value]])
-    assert_type(txn.delete(Table("person")), SyncCrudBuilder[list[Value]])
-    assert_type(txn.delete("person"), SyncCrudBuilder[Value])
+    # delete is eager on sync connections: it returns the result directly.
+    assert_type(txn.delete(RecordID("person", 1)), dict[str, Value])
+    assert_type(txn.delete(Table("person")), list[Value])
+    assert_type(txn.delete("person"), Value)

@@ -23,10 +23,14 @@ def test_bearer_access_system_user(bearer_v3_root_ws: dict) -> None:
     namespace = bearer_v3_root_ws["namespace"]
     database_name = bearer_v3_root_ws["database_name"]
 
-    root.query("DEFINE USER IF NOT EXISTS testuser ON DATABASE PASSWORD 'testpass' ROLES EDITOR").execute()
-    root.query("DEFINE ACCESS IF NOT EXISTS bearer_api ON DATABASE TYPE BEARER FOR USER").execute()
+    root.query(
+        "DEFINE USER IF NOT EXISTS testuser ON DATABASE PASSWORD 'testpass' ROLES EDITOR"
+    ).execute()
+    root.query(
+        "DEFINE ACCESS IF NOT EXISTS bearer_api ON DATABASE TYPE BEARER FOR USER"
+    ).execute()
 
-    grant_result = root.query("ACCESS bearer_api GRANT FOR USER testuser").execute()
+    grant_result = root.query("ACCESS bearer_api GRANT FOR USER testuser").first()
     assert grant_result is not None
     assert isinstance(grant_result, dict)
     grant_info = grant_result.get("grant")
@@ -51,7 +55,7 @@ def test_bearer_access_system_user(bearer_v3_root_ws: dict) -> None:
         assert tokens.access is not None
         assert tokens.access != ""
 
-        result = conn.query("RETURN 1")
+        result = conn.query("RETURN 1").first()
         assert result == 1
     finally:
         if conn.socket:
@@ -70,9 +74,15 @@ def test_bearer_signin_token_not_usable_with_authenticate(
     namespace = bearer_v3_root_ws["namespace"]
     database_name = bearer_v3_root_ws["database_name"]
 
-    root.query("DEFINE USER IF NOT EXISTS auth_testuser ON DATABASE PASSWORD 'testpass' ROLES EDITOR").execute()
-    root.query("DEFINE ACCESS IF NOT EXISTS bearer_auth_test ON DATABASE TYPE BEARER FOR USER").execute()
-    grant_result = root.query("ACCESS bearer_auth_test GRANT FOR USER auth_testuser").execute()
+    root.query(
+        "DEFINE USER IF NOT EXISTS auth_testuser ON DATABASE PASSWORD 'testpass' ROLES EDITOR"
+    ).execute()
+    root.query(
+        "DEFINE ACCESS IF NOT EXISTS bearer_auth_test ON DATABASE TYPE BEARER FOR USER"
+    ).execute()
+    grant_result = root.query(
+        "ACCESS bearer_auth_test GRANT FOR USER auth_testuser"
+    ).first()
     bearer_key = grant_result["grant"]["key"]
 
     conn = BlockingWsSurrealConnection(url)

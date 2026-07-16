@@ -16,7 +16,7 @@ def test_unset(blocking_http_connection: BlockingHttpSurrealConnection) -> None:
     blocking_http_connection.query("CREATE person SET name = $name").execute()
     outcome = blocking_http_connection.query(
         "SELECT * FROM person WHERE name.first = $name.first"
-    )
+    ).first()
     assert len(outcome) == 1
     assert outcome[0]["name"] == {"first": "Tobie", "last": "Morgan Hitchcock"}
 
@@ -25,7 +25,7 @@ def test_unset(blocking_http_connection: BlockingHttpSurrealConnection) -> None:
     # because the key was unset then $name.first is None returning []
     outcome = blocking_http_connection.query(
         "SELECT * FROM person WHERE name.first = $name.first"
-    )
+    ).first()
     assert outcome == []
 
     blocking_http_connection.query("DELETE person;").execute()

@@ -8,7 +8,7 @@ def test_query(blocking_http_connection: BlockingHttpSurrealConnection) -> None:
     blocking_http_connection.query("DELETE user;").execute()
     result = blocking_http_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
-    )
+    ).first()
     assert result == [
         {
             "id": RecordID(table_name="user", identifier="tobie"),
@@ -21,7 +21,7 @@ def test_query(blocking_http_connection: BlockingHttpSurrealConnection) -> None:
 
     result = blocking_http_connection.query(
         "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', password = 'password456', enabled = true;"
-    )
+    ).first()
     assert result == [
         {
             "id": RecordID(table_name="user", identifier="jaime"),
@@ -32,7 +32,7 @@ def test_query(blocking_http_connection: BlockingHttpSurrealConnection) -> None:
         }
     ]
 
-    result = blocking_http_connection.query("SELECT * FROM user;")
+    result = blocking_http_connection.query("SELECT * FROM user;").first()
     assert result == [
         {
             "id": RecordID(table_name="user", identifier="jaime"),

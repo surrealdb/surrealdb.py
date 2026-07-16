@@ -120,7 +120,7 @@ async def test_dec_literal(surrealdb_connection: Any) -> None:
     await surrealdb_connection.query(
         "CREATE numeric_tests:literal_test SET value = 99.99dec;"
     )
-    result = await surrealdb_connection.query("SELECT * FROM numeric_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM numeric_tests;").first()
     stored_value = result[0]["value"]
     assert str(stored_value) == "99.99"
     assert isinstance(stored_value, decimal.Decimal)
@@ -132,10 +132,12 @@ async def test_float_parameter(surrealdb_connection: Any) -> None:
     initial_result = await surrealdb_connection.query(
         "CREATE numeric_tests:float_test SET value = $float_val;",
         vars={"float_val": float_value},
-    )
+    ).first()
     assert isinstance(initial_result[0]["value"], float)
     assert initial_result[0]["value"] == 3.141592653589793
-    second_result = await surrealdb_connection.query("SELECT * FROM numeric_tests;")
+    second_result = await surrealdb_connection.query(
+        "SELECT * FROM numeric_tests;"
+    ).first()
     assert isinstance(second_result[0]["value"], float)
     assert second_result[0]["value"] == 3.141592653589793
 
@@ -146,9 +148,11 @@ async def test_decimal_parameter(surrealdb_connection: Any) -> None:
     initial_result = await surrealdb_connection.query(
         "CREATE numeric_tests:decimal_test SET value = $decimal_val;",
         vars={"decimal_val": decimal_value},
-    )
+    ).first()
     assert isinstance(initial_result[0]["value"], decimal.Decimal)
     assert initial_result[0]["value"] == decimal.Decimal("3.141592653589793")
-    second_result = await surrealdb_connection.query("SELECT * FROM numeric_tests;")
+    second_result = await surrealdb_connection.query(
+        "SELECT * FROM numeric_tests;"
+    ).first()
     assert isinstance(second_result[0]["value"], decimal.Decimal)
     assert second_result[0]["value"] == decimal.Decimal("3.141592653589793")

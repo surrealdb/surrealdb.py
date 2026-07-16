@@ -6,7 +6,7 @@ from litestar import Controller, delete, get, post, put
 from litestar.di import Provide
 from litestar.exceptions import InternalServerException, NotFoundException
 from litestar.status_codes import HTTP_201_CREATED, HTTP_204_NO_CONTENT
-from surrealdb import AsyncSurreal
+from surrealdb import AsyncSurrealConnection
 
 from database import provide_db
 from models import (
@@ -26,7 +26,7 @@ class UserController(Controller):
     dependencies = {"db": Provide(provide_db)}
 
     @post(dto=UserCreateDTO, return_dto=UserResponseDTO, status_code=HTTP_201_CREATED)
-    async def create_user(self, data: UserCreate, db: AsyncSurreal) -> UserResponse:
+    async def create_user(self, data: UserCreate, db: AsyncSurrealConnection) -> UserResponse:
         """Create a new user."""
         try:
             result = await db.create(
@@ -54,7 +54,7 @@ class UserController(Controller):
             raise InternalServerException(f"Database error: {str(e)}")
 
     @get(return_dto=UserResponseDTO)
-    async def list_users(self, db: AsyncSurreal) -> List[UserResponse]:
+    async def list_users(self, db: AsyncSurrealConnection) -> List[UserResponse]:
         """Get all users."""
         try:
             result = await db.select("users")
@@ -78,7 +78,7 @@ class UserController(Controller):
             raise InternalServerException(f"Database error: {str(e)}")
 
     @get("/{user_id:str}", return_dto=UserResponseDTO)
-    async def get_user(self, user_id: str, db: AsyncSurreal) -> UserResponse:
+    async def get_user(self, user_id: str, db: AsyncSurrealConnection) -> UserResponse:
         """Get a user by ID."""
         try:
             result = await db.select(user_id)
@@ -105,7 +105,7 @@ class UserController(Controller):
         self,
         user_id: str,
         data: UserUpdate,
-        db: AsyncSurreal,
+        db: AsyncSurrealConnection,
     ) -> UserResponse:
         """Update a user."""
         try:
@@ -141,7 +141,7 @@ class UserController(Controller):
             raise InternalServerException(f"Database error: {str(e)}")
 
     @delete("/{user_id:str}", status_code=HTTP_204_NO_CONTENT)
-    async def delete_user(self, user_id: str, db: AsyncSurreal) -> None:
+    async def delete_user(self, user_id: str, db: AsyncSurrealConnection) -> None:
         """Delete a user."""
         try:
             result = await db.delete(user_id)

@@ -100,6 +100,39 @@ jobs:
       - name: Run pyright checks
         run: uv run pyright src/
 
+  package:
+    name: Check packaging (py.typed)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4
+        with:
+          python-version: 3.13
+
+      - name: Build wheel
+        run: uv build --wheel
+
+      - name: Assert py.typed ships in the wheel (PEP 561)
+        run: |
+          wheel=$(ls dist/*.whl)
+          echo "Inspecting $wheel"
+          if unzip -l "$wheel" | grep -q 'surrealdb/py.typed'; then
+            echo "OK: surrealdb/py.typed is present in the wheel"
+          else
+            echo "ERROR: surrealdb/py.typed is missing from the wheel; PEP 561 type information would not ship to users"
+            unzip -l "$wheel"
+            exit 1
+          fi
+
   test:
     runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.surrealdb-version == 'nightly' }}

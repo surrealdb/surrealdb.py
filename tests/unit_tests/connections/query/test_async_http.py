@@ -9,7 +9,7 @@ async def test_query(async_http_connection: AsyncHttpSurrealConnection) -> None:
     await async_http_connection.query("DELETE user;")
     result = await async_http_connection.query(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', password = 'password123', enabled = true;"
-    )
+    ).first()
     assert result == [
         {
             "id": RecordID(table_name="user", identifier="tobie"),
@@ -22,7 +22,7 @@ async def test_query(async_http_connection: AsyncHttpSurrealConnection) -> None:
 
     result = await async_http_connection.query(
         "CREATE user:jaime SET name = 'Jaime', email = 'jaime@example.com', password = 'password456', enabled = true;"
-    )
+    ).first()
     assert result == [
         {
             "id": RecordID(table_name="user", identifier="jaime"),
@@ -33,7 +33,7 @@ async def test_query(async_http_connection: AsyncHttpSurrealConnection) -> None:
         }
     ]
 
-    result = await async_http_connection.query("SELECT * FROM user;")
+    result = await async_http_connection.query("SELECT * FROM user;").first()
     assert result == [
         {
             "id": RecordID(table_name="user", identifier="jaime"),

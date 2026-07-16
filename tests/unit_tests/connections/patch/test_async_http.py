@@ -41,7 +41,7 @@ async def test_patch_string_with_data(
     assert outcome["name"] == "Jaime"
     assert outcome["email"] == "jaime@example.com"
     assert outcome["enabled"] is False
-    result = await async_http_connection.query("SELECT * FROM user;")
+    result = await async_http_connection.query("SELECT * FROM user;").first()
     assert result[0]["id"] == record_id
     assert result[0]["name"] == "Jaime"
     assert result[0]["email"] == "jaime@example.com"
@@ -60,7 +60,7 @@ async def test_patch_record_id_with_data(
     assert outcome["name"] == "Jaime"
     assert outcome["email"] == "jaime@example.com"
     assert outcome["enabled"] is False
-    result = await async_http_connection.query("SELECT * FROM user;")
+    result = await async_http_connection.query("SELECT * FROM user;").first()
     assert result[0]["id"] == record_id
     assert result[0]["name"] == "Jaime"
     assert result[0]["email"] == "jaime@example.com"
@@ -80,7 +80,7 @@ async def test_patch_table_with_data(
     assert outcome[0]["name"] == "Jaime"
     assert outcome[0]["email"] == "jaime@example.com"
     assert outcome[0]["enabled"] is False
-    result = await async_http_connection.query("SELECT * FROM user;")
+    result = await async_http_connection.query("SELECT * FROM user;").first()
     assert result[0]["id"] == record_id
     assert result[0]["name"] == "Jaime"
     assert result[0]["email"] == "jaime@example.com"

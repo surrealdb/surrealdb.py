@@ -8,6 +8,14 @@ from typing import Any
 from surrealdb.errors import InvalidGeometryError
 
 
+def _hashable(value: Any) -> Any:
+    """Recursively convert nested lists (as returned by ``get_coordinates``)
+    into tuples so a geometry's coordinates can be hashed."""
+    if isinstance(value, list):
+        return tuple(_hashable(item) for item in value)
+    return value
+
+
 def _coord_pair(point: "GeometryPoint") -> str:
     """``[longitude, latitude]`` — a point's coordinates as they appear nested
     inside another geometry's ``coordinates`` array (as opposed to a
@@ -53,6 +61,13 @@ class Geometry:
         Parses a list of coordinates into a specific geometry type. Should be implemented by subclasses.
         """
         pass
+
+    def __hash__(self) -> int:
+        """
+        Returns a hash of the geometry based on its coordinates. Nested
+        coordinate lists are converted to tuples so they can be hashed.
+        """
+        return hash(_hashable(self.get_coordinates()))
 
 
 @dataclass
@@ -106,6 +121,9 @@ class GeometryPoint(Geometry):
         if isinstance(other, GeometryPoint):
             return self.longitude == other.longitude and self.latitude == other.latitude
         return False
+
+    def __hash__(self) -> int:
+        return hash((self.longitude, self.latitude))
 
 
 @dataclass
@@ -168,6 +186,9 @@ class GeometryLine(Geometry):
         if isinstance(other, GeometryLine):
             return self.geometry_points == other.geometry_points
         return False
+
+    def __hash__(self) -> int:
+        return hash(_hashable(self.get_coordinates()))
 
 
 @dataclass
@@ -310,6 +331,9 @@ class GeometryPolygon(Geometry):
             return self.geometry_lines == other.geometry_lines
         return False
 
+    def __hash__(self) -> int:
+        return hash(_hashable(self.get_coordinates()))
+
 
 @dataclass
 class GeometryMultiPoint(Geometry):
@@ -368,6 +392,9 @@ class GeometryMultiPoint(Geometry):
         if isinstance(other, GeometryMultiPoint):
             return self.geometry_points == other.geometry_points
         return False
+
+    def __hash__(self) -> int:
+        return hash(_hashable(self.get_coordinates()))
 
 
 @dataclass
@@ -428,6 +455,9 @@ class GeometryMultiLine(Geometry):
             return self.geometry_lines == other.geometry_lines
         return False
 
+    def __hash__(self) -> int:
+        return hash(_hashable(self.get_coordinates()))
+
 
 @dataclass
 class GeometryMultiPolygon(Geometry):
@@ -487,6 +517,9 @@ class GeometryMultiPolygon(Geometry):
             return self.geometry_polygons == other.geometry_polygons
         return False
 
+    def __hash__(self) -> int:
+        return hash(_hashable(self.get_coordinates()))
+
 
 @dataclass
 class GeometryCollection:
@@ -521,3 +554,6 @@ class GeometryCollection:
         if isinstance(other, GeometryCollection):
             return self.geometries == other.geometries
         return False
+
+    def __hash__(self) -> int:
+        return hash(tuple(self.geometries))

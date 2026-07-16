@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- **Breaking:** Sync `select`, `create`, `update`, `upsert`, `delete`, and `insert` are now **eager**. `select(...)` and `delete(...)` run immediately and return the result. `create/update/upsert(record, data)` and `insert(table, data)` run immediately and return the result; the no-data form (`create(record)`, `insert(table)`) returns a builder whose clause methods (`.content` / `.replace` / `.merge` / `.patch` / `.relation`) and `.execute()` run the operation and return the result. Fixes the magic-consumption footguns (`bool()`, `==`, indexing, `__getattr__`) reported in findings #1/#4.
+- **Breaking:** Sync builders no longer implement any auto-executing magic methods (`__bool__`, `__eq__`, `__getitem__`, `__iter__`, `__len__`, `__contains__`, `__getattr__`, and the pending-`repr`/`str`). Inspecting a builder never triggers a query or mutation.
+- **Breaking:** `query()` now **always** returns a `list[Value]` (one entry per statement) — even for a single statement — for both async (`await db.query(...)` / `.execute()`) and sync (`.execute()`). This supersedes the earlier "single `Value` for one statement, `tuple` for many" behaviour (finding #2). Added `.first()` (async coroutine / sync method) returning the first statement's result, or `None` when there are no statements.
+- **Breaking:** `select(RecordID)` (or a single `"table:id"` string) now returns `dict[str, Value] | None` (the record, or `None` when it is absent) instead of a single-element list; `select(Table)` (or a bare table name) still returns `list[Value]`. `select()` is now typed via `@overload` on the templates, all four connections, and the session/transaction classes (findings #3/#15).
 
 ## [3.0.0-alpha.1] - 2026-07-13
 ### Added

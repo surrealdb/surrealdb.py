@@ -111,10 +111,24 @@ class RecordID:
             return self.table_name == other.table_name and self.id == other.id
         return False
 
+    def __hash__(self) -> int:
+        # ``id`` may be an unhashable value (e.g. a dict or list) for
+        # object/array record ids, so hash its string form to stay total.
+        # This mirrors ``__eq__``: equal RecordIDs have equal ``table_name``
+        # and equal ``id``, hence equal ``str(id)``.
+        return hash((self.table_name, str(self.id)))
+
     @staticmethod
     def parse(record_str: str) -> RecordID:
         """
         Converts a string to a RecordID object.
+
+        The string is split on the *first* colon only, so ids that
+        themselves contain colons are preserved intact (e.g.
+        ``"user:complex:id:here"`` yields table ``"user"`` and id
+        ``"complex:id:here"``). ``parse`` always yields a string id — use
+        the :class:`RecordID` constructor directly for numeric, array or
+        object ids.
 
         Args:
             record_str: The string representation of the record ID
@@ -127,7 +141,7 @@ class RecordID:
                 'invalid string provided for parse. the expected string format is "table_name:record_id"'
             )
 
-        table, record_id = record_str.split(":")
+        table, record_id = record_str.split(":", 1)
         return RecordID(table, record_id)
 
     @classmethod

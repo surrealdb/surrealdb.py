@@ -1,11 +1,11 @@
 """Database connection helpers."""
 
-from surrealdb import AsyncSurreal
+from surrealdb import AsyncSurreal, AsyncSurrealConnection
 
 from config import settings
 
 
-async def get_connection() -> AsyncSurreal:
+async def get_connection() -> AsyncSurrealConnection:
     """Get a connected SurrealDB instance.
 
     Returns:
@@ -23,7 +23,7 @@ async def get_connection() -> AsyncSurreal:
     return db
 
 
-async def close_connection(db: AsyncSurreal) -> None:
+async def close_connection(db: AsyncSurrealConnection) -> None:
     """Close database connection.
 
     Args:
