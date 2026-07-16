@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0-alpha.3] - 2026-07-16
+
+Follow-up to `3.0.0-alpha.2`: adds the `into=` row-model API, fixes session authentication propagation, aligns `delete` with `select`, and re-enables mypy type-checking on the test suite.
+
 ### Added
 - Keyword-only `into=` argument on `select`, `create`, `update`, `upsert`, `delete`, and `insert` (async and sync, including the session/transaction wrappers) mapping each returned record onto a model class — a dataclass, a pydantic `BaseModel`, or any class accepting the record's fields as keyword arguments. Return types are narrowed precisely per `@overload`: a single-record target resolves to `Model` (or `Model | None`), a `Table` target to `list[Model]`. The no-data builder forms (`create(record, into=Model)`, `update(record, into=Model)`, `insert(table, into=Model)`) carry the model through their clause methods (`.content` / `.merge` / … / `.execute`). Mapping reuses the existing `_map_to_class` helper.
 - `query(sql).into(Model, rows=True)` maps each **row** of a single statement's result onto `Model`, returning `list[Model]`. The default `.into(cls)` (statements-to-fields) behaviour is unchanged when `rows` is not set.
@@ -170,7 +174,8 @@ Follow-up to `3.0.0-alpha.1` that finalises the v3 API surface and fixes a batch
 ### Added
 - Initial stable release of the SurrealDB Python client.
 
-[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-alpha.2...HEAD
+[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-alpha.3...HEAD
+[3.0.0-alpha.3]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-alpha.2...v3.0.0-alpha.3
 [3.0.0-alpha.2]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-alpha.1...v3.0.0-alpha.2
 [3.0.0-alpha.1]: https://github.com/surrealdb/surrealdb.py/compare/v2.0.1...v3.0.0-alpha.1
 [2.0.1]: https://github.com/surrealdb/surrealdb.py/compare/v2.0.0...v2.0.1
