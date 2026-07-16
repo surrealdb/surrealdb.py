@@ -1,10 +1,10 @@
 """Database connection management."""
 
 from flask import current_app, g
-from surrealdb import Surreal
+from surrealdb import BlockingSurrealConnection, Surreal
 
 
-def get_db() -> Surreal:
+def get_db() -> BlockingSurrealConnection:
     """Get database connection for current request.
 
     Creates a new connection if one doesn't exist in the request context.

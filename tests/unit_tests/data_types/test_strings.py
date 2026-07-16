@@ -104,7 +104,7 @@ async def test_string_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE string_tests:test1 SET value = $val;",
         vars={"val": test_string},
     )
-    result = await surrealdb_connection.query("SELECT * FROM string_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM string_tests;").first()
     assert result[0]["value"] == test_string
 
 
@@ -116,7 +116,7 @@ async def test_empty_string_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE string_tests:test2 SET value = $val;",
         vars={"val": test_string},
     )
-    result = await surrealdb_connection.query("SELECT * FROM string_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM string_tests;").first()
     assert result[0]["value"] == test_string
 
 
@@ -128,7 +128,7 @@ async def test_unicode_string_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE string_tests:test3 SET value = $val;",
         vars={"val": test_string},
     )
-    result = await surrealdb_connection.query("SELECT * FROM string_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM string_tests;").first()
     assert result[0]["value"] == test_string
 
 
@@ -140,5 +140,5 @@ async def test_multiline_string_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE string_tests:test4 SET value = $val;",
         vars={"val": test_string},
     )
-    result = await surrealdb_connection.query("SELECT * FROM string_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM string_tests;").first()
     assert result[0]["value"] == test_string

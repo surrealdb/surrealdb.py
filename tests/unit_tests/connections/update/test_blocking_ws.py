@@ -43,10 +43,10 @@ def test_update_string(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
     ).execute()
 
-    outcome = blocking_ws_connection.update("user:tobie")
+    outcome = blocking_ws_connection.update("user:tobie").execute()
     assert outcome["id"] == record_id
     assert outcome["name"] == "Tobie"
-    outcome = blocking_ws_connection.query("SELECT * FROM user;")
+    outcome = blocking_ws_connection.query("SELECT * FROM user;").first()
     check_no_change(outcome[0], record_id)
 
 
@@ -62,7 +62,7 @@ def test_update_string_with_data(
 
     first_outcome = blocking_ws_connection.update("user:tobie", update_data)
     check_change(first_outcome, record_id)
-    outcome = blocking_ws_connection.query("SELECT * FROM user;")
+    outcome = blocking_ws_connection.query("SELECT * FROM user;").first()
     check_change(outcome[0], record_id)
 
 
@@ -76,9 +76,9 @@ def test_update_record_id(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
     ).execute()
 
-    first_outcome = blocking_ws_connection.update(record_id)
+    first_outcome = blocking_ws_connection.update(record_id).execute()
     check_no_change(first_outcome, record_id)
-    outcome = blocking_ws_connection.query("SELECT * FROM user;")
+    outcome = blocking_ws_connection.query("SELECT * FROM user;").first()
     check_no_change(outcome[0], record_id)
 
 
@@ -94,7 +94,7 @@ def test_update_record_id_with_data(
 
     outcome = blocking_ws_connection.update(record_id, update_data)
     check_change(outcome, record_id)
-    outcome = blocking_ws_connection.query("SELECT * FROM user;")
+    outcome = blocking_ws_connection.query("SELECT * FROM user;").first()
     check_change(outcome[0], record_id)
 
 
@@ -109,9 +109,9 @@ def test_update_table(
     ).execute()
 
     table = Table("user")
-    first_outcome = blocking_ws_connection.update(table)
+    first_outcome = blocking_ws_connection.update(table).execute()
     check_no_change(first_outcome[0], record_id)
-    outcome = blocking_ws_connection.query("SELECT * FROM user;")
+    outcome = blocking_ws_connection.query("SELECT * FROM user;").first()
     check_no_change(outcome[0], record_id)
 
 
@@ -128,5 +128,5 @@ def test_update_table_with_data(
     table = Table("user")
     outcome = blocking_ws_connection.update(table, update_data)
     check_change(outcome[0], record_id)
-    outcome = blocking_ws_connection.query("SELECT * FROM user;")
+    outcome = blocking_ws_connection.query("SELECT * FROM user;").first()
     check_change(outcome[0], record_id)

@@ -34,21 +34,21 @@ async def main_connection() -> None:
 async def test_invalidate_with_guest_mode_on(
     main_connection, async_ws_connection: AsyncWsSurrealConnection
 ) -> None:
-    outcome = await async_ws_connection.query("SELECT * FROM user;")
+    outcome = await async_ws_connection.query("SELECT * FROM user;").first()
     assert len(outcome) == 1
-    outcome = await main_connection.query("SELECT * FROM user;")
+    outcome = await main_connection.query("SELECT * FROM user;").first()
     assert len(outcome) == 1
 
     await async_ws_connection.invalidate()
 
     try:
-        outcome = await async_ws_connection.query("SELECT * FROM user;")
+        outcome = await async_ws_connection.query("SELECT * FROM user;").first()
         assert len(outcome) == 0
     except Exception as err:
         assert "Not enough permissions" in str(
             err
         ) or "Anonymous access not allowed" in str(err)
-    outcome = await main_connection.query("SELECT * FROM user;")
+    outcome = await main_connection.query("SELECT * FROM user;").first()
     assert len(outcome) == 1
 
 
@@ -56,16 +56,16 @@ async def test_invalidate_with_guest_mode_on(
 async def test_invalidate_test_for_no_guest_mode(
     main_connection, async_ws_connection: AsyncWsSurrealConnection
 ) -> None:
-    outcome = await async_ws_connection.query("SELECT * FROM user;")
+    outcome = await async_ws_connection.query("SELECT * FROM user;").first()
     assert len(outcome) == 1
-    outcome = await main_connection.query("SELECT * FROM user;")
+    outcome = await main_connection.query("SELECT * FROM user;").first()
     assert len(outcome) == 1
 
     await async_ws_connection.invalidate()
 
     # Try to query after invalidation - behavior depends on guest mode setting
     try:
-        outcome = await async_ws_connection.query("SELECT * FROM user;")
+        outcome = await async_ws_connection.query("SELECT * FROM user;").first()
         # If guest mode is enabled, we get empty results instead of an exception
         assert len(outcome) == 0
     except Exception as err:
@@ -74,5 +74,5 @@ async def test_invalidate_test_for_no_guest_mode(
             err
         ) or "Anonymous access not allowed" in str(err)
 
-    outcome = await main_connection.query("SELECT * FROM user;")
+    outcome = await main_connection.query("SELECT * FROM user;").first()
     assert len(outcome) == 1

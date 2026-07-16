@@ -54,6 +54,9 @@ class Duration:
             return self.elapsed == other.elapsed
         return False
 
+    def __hash__(self) -> int:
+        return hash(self.elapsed)
+
     @property
     def nanoseconds(self) -> int:
         return self.elapsed

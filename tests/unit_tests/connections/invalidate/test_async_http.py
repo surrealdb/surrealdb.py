@@ -42,22 +42,22 @@ async def test_invalidate_with_guest_mode_on(
     """
     This test only works if the SURREAL_CAPS_ALLOW_GUESTS=false is set in the docker container
     """
-    outcome = await secondary_connection.query("SELECT * FROM user;")
+    outcome = await secondary_connection.query("SELECT * FROM user;").first()
     assert len(outcome) == 1
-    outcome = await main_connection.query("SELECT * FROM user;")
+    outcome = await main_connection.query("SELECT * FROM user;").first()
     assert len(outcome) == 1
 
     await secondary_connection.invalidate()
 
     try:
-        outcome = await secondary_connection.query("SELECT * FROM user;")
+        outcome = await secondary_connection.query("SELECT * FROM user;").first()
         assert len(outcome) == 0
     except Exception as err:
         # Check for the actual error message from newer SurrealDB versions
         assert "Not enough permissions" in str(
             err
         ) or "Anonymous access not allowed" in str(err)
-    outcome = await main_connection.query("SELECT * FROM user;")
+    outcome = await main_connection.query("SELECT * FROM user;").first()
     assert len(outcome) == 1
 
 
@@ -69,16 +69,16 @@ async def test_invalidate_test_for_no_guest_mode(
     This test asserts that there is an error thrown due to no guest mode being allowed
     Only run this test if SURREAL_CAPS_ALLOW_GUESTS=false is set in the docker container
     """
-    outcome = await secondary_connection.query("SELECT * FROM user;")
+    outcome = await secondary_connection.query("SELECT * FROM user;").first()
     assert len(outcome) == 1
-    outcome = await main_connection.query("SELECT * FROM user;")
+    outcome = await main_connection.query("SELECT * FROM user;").first()
     assert len(outcome) == 1
 
     await secondary_connection.invalidate()
 
     # Try to query after invalidation - behavior depends on guest mode setting
     try:
-        outcome = await secondary_connection.query("SELECT * FROM user;")
+        outcome = await secondary_connection.query("SELECT * FROM user;").first()
         # If guest mode is enabled, we get empty results instead of an exception
         assert len(outcome) == 0
     except Exception as err:
@@ -87,5 +87,5 @@ async def test_invalidate_test_for_no_guest_mode(
             err
         ) or "Anonymous access not allowed" in str(err)
 
-    outcome = await main_connection.query("SELECT * FROM user;")
+    outcome = await main_connection.query("SELECT * FROM user;").first()
     assert len(outcome) == 1

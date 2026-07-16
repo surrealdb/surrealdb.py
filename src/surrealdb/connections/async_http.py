@@ -23,10 +23,13 @@ from surrealdb.types import Tokens, Value, parse_auth_result
 
 class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     """
-    A single async connection to a SurrealDB instance using HTTP. To be used once and discarded.
+    An async connection to a SurrealDB instance using HTTP.
 
     # Notes
-    A new HTTP session is created for each query to send a request to the SurrealDB server.
+    When used as an async context manager (``async with``) a single pooled
+    ``aiohttp.ClientSession`` is created and reused across every request, then
+    closed on exit. Outside a context manager a fresh session is created per
+    request.
 
     Attributes:
         url: The URL of the database to process queries for.
@@ -71,20 +74,37 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         if self.database:
             headers["Surreal-DB"] = self.database
 
+        # Reuse the pooled session when running inside a context manager,
+        # otherwise fall back to a fresh per-request session.
+        if self._session is not None and not self._session.closed:
+            return await self._request(
+                self._session, url, headers, data, operation, bypass
+            )
         async with aiohttp.ClientSession() as session:
-            async with session.request(
-                method="POST",
-                url=url,
-                headers=headers,
-                data=data,
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as response:
-                response.raise_for_status()
-                raw_cbor = await response.read()
-                data = decode(raw_cbor)
-                if bypass is False:
-                    self.check_response_for_error(data, operation)
-                return data
+            return await self._request(session, url, headers, data, operation, bypass)
+
+    async def _request(
+        self,
+        session: aiohttp.ClientSession,
+        url: str,
+        headers: dict[str, str],
+        data: bytes,
+        operation: str,
+        bypass: bool,
+    ) -> dict[str, Any]:
+        async with session.request(
+            method="POST",
+            url=url,
+            headers=headers,
+            data=data,
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as response:
+            response.raise_for_status()
+            raw_cbor = await response.read()
+            result = decode(raw_cbor)
+            if bypass is False:
+                self.check_response_for_error(result, operation)
+            return result
 
     def set_token(self, token: str) -> None:
         """
@@ -133,10 +153,10 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
         if response.get("error") is not None:
             # Record-auth sessions have no ROOT/NS/DB info; re-resolve the
-            # authenticated record via `$auth` (finding #23).
+            # authenticated record via `$auth`.
             if self._info_needs_auth_fallback(response):
                 record = self._extract_auth_record(
-                    await self.query(AUTH_FALLBACK_QUERY)
+                    await self.query(AUTH_FALLBACK_QUERY).first()
                 )
                 if record is not None:
                     return record
@@ -159,6 +179,13 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     def query(
         self, query: str, vars: dict[str, Value] | None = None
     ) -> AsyncQueryBuilder:
+        """Run SurrealQL and return an awaitable builder.
+
+        Awaiting it (or ``.execute()``) returns ``list[Value]`` - one entry per
+        statement, always a list (the v3 fix for issue #232). Use ``.first()``
+        for the first statement's result, or ``.into(cls)`` to map the results
+        onto a dataclass / class.
+        """
         return AsyncQueryBuilder(
             executor=self._make_executor(),
             query=query,
@@ -204,6 +231,13 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     def create(
         self, record: RecordIdType, data: Value | None = None
     ) -> AsyncCrudBuilder[Any]:
+        """Create a record; returns an awaitable builder.
+
+        ``await db.create(record, data)`` is sugar for
+        ``await db.create(record).content(data)``. Clause methods
+        (``.content`` / ``.replace`` / ``.merge`` / ``.patch``) return the
+        builder so it stays awaitable.
+        """
         return AsyncCrudBuilder(
             executor=self._make_executor(),
             operation="CREATE",
@@ -228,6 +262,11 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     def update(
         self, record: RecordIdType, data: Value | None = None
     ) -> AsyncCrudBuilder[Any]:
+        """Update records; returns an awaitable builder.
+
+        Optional clause methods ``.content`` / ``.replace`` / ``.merge`` /
+        ``.patch`` return the builder so it stays awaitable.
+        """
         return AsyncCrudBuilder(
             executor=self._make_executor(),
             operation="UPDATE",
@@ -251,6 +290,11 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     def upsert(
         self, record: RecordIdType, data: Value | None = None
     ) -> AsyncCrudBuilder[Any]:
+        """Insert or update records; returns an awaitable builder.
+
+        Optional clause methods ``.content`` / ``.replace`` / ``.merge`` /
+        ``.patch`` return the builder so it stays awaitable.
+        """
         return AsyncCrudBuilder(
             executor=self._make_executor(),
             operation="UPSERT",
@@ -266,6 +310,12 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     @overload
     def delete(self, record: str) -> AsyncCrudBuilder[Value]: ...
     def delete(self, record: RecordIdType) -> AsyncCrudBuilder[Any]:
+        """Delete records; returns an awaitable builder.
+
+        A ``RecordID`` (or ``"table:id"``) resolves to the deleted record; a
+        ``Table`` (or bare name) to the list of deleted records. ``DELETE`` has
+        no clause methods.
+        """
         return AsyncCrudBuilder(
             executor=self._make_executor(),
             operation="DELETE",
@@ -280,6 +330,11 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         *,
         relation: bool = False,
     ) -> AsyncInsertBuilder:
+        """Insert record(s) or relation(s); returns an awaitable builder.
+
+        Pass ``relation=True`` (or chain ``.relation()``) for ``INSERT
+        RELATION INTO``. Awaiting the builder (or ``.execute()``) runs it.
+        """
         return AsyncInsertBuilder(
             executor=self._make_executor(),
             table=table,
@@ -310,7 +365,19 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     async def unset(self, key: str) -> None:
         self.vars.pop(key)
 
+    @overload
+    async def select(self, record: RecordID) -> dict[str, Value] | None: ...
+    @overload
+    async def select(self, record: Table) -> list[Value]: ...
+    @overload
+    async def select(self, record: str) -> Value: ...
     async def select(self, record: RecordIdType) -> Value:
+        """Select records.
+
+        A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
+        when it is absent. A ``Table`` (or bare table-name string) returns the
+        list of records.
+        """
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"SELECT * FROM {resource_ref}"
@@ -318,7 +385,14 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         response = await self.query_raw(query, variables)
         self.check_response_for_error(response, "select")
         self._check_query_result(response["result"][0])
-        return response["result"][0]["result"]
+        result = response["result"][0]["result"]
+        # Single-record targets (RecordID / "table:id") unwrap the one-element
+        # result list to the record dict, or None when the record is absent.
+        if self._is_single_record_operation(record):
+            if isinstance(result, list):
+                return result[0] if result else None
+            return result
+        return result
 
     async def version(self) -> str:
         message = RequestMessage(RequestMethod.VERSION)
@@ -326,6 +400,16 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         response = await self._send(message, "getting database version")
         self.check_response_for_result(response, "getting database version")
         return response["result"]
+
+    async def close(self) -> None:
+        """Close the pooled HTTP session if one is open.
+
+        Idempotent: a no-op when no session has been opened (for example
+        outside an ``async with`` block) and safe to call more than once.
+        """
+        if self._session is not None and not self._session.closed:
+            await self._session.close()
+        self._session = None
 
     async def __aenter__(self) -> "AsyncHttpSurrealConnection":
         """
@@ -345,8 +429,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         Asynchronous context manager exit.
         Closes the aiohttp session upon exiting the context.
         """
-        if self._session is not None:
-            await self._session.close()
+        await self.close()
 
     async def attach(self) -> None:
         raise UnsupportedFeatureError(

@@ -105,9 +105,7 @@ async def test_async_update_patch_record_id(
     _async_setup: None,
     _sync_setup: None,
 ) -> None:
-    await async_ws_connection.create(
-        RecordID("bld", "d"), {"name": "dora", "score": 1}
-    )
+    await async_ws_connection.create(RecordID("bld", "d"), {"name": "dora", "score": 1})
     out = await async_ws_connection.update(RecordID("bld", "d")).patch(
         [{"op": "replace", "path": "/score", "value": 99}]
     )
@@ -149,8 +147,10 @@ async def test_async_insert_relation_chained(
 ) -> None:
     await async_ws_connection.create(RecordID("bld", "u3"))
     await async_ws_connection.create(RecordID("bld", "u4"))
-    out = await async_ws_connection.insert(Table("rel_y")).relation().content(
-        {"in": RecordID("bld", "u3"), "out": RecordID("bld", "u4")}
+    out = (
+        await async_ws_connection.insert(Table("rel_y"))
+        .relation()
+        .content({"in": RecordID("bld", "u3"), "out": RecordID("bld", "u4")})
     )
     assert isinstance(out, list)
 
@@ -172,20 +172,21 @@ def test_sync_update_merge_table(
     blocking_ws_connection: BlockingWsSurrealConnection,
     _sync_setup: None,
 ) -> None:
-    blocking_ws_connection.create(RecordID("bld", "s2"), {"y": 1}).execute()
+    blocking_ws_connection.create(RecordID("bld", "s2"), {"y": 1})
     out = blocking_ws_connection.update(Table("bld")).merge({"flag": True})
     assert isinstance(out, list)
 
 
-def test_sync_builder_auto_execute_on_index(
+def test_sync_builder_execute_no_clause(
     blocking_ws_connection: BlockingWsSurrealConnection,
     _sync_setup: None,
 ) -> None:
-    """Indexing into a sync builder triggers execution."""
-    blocking_ws_connection.create(RecordID("bld", "s3"), {"name": "x"}).execute()
+    """The no-data builder runs the clause-less op via ``.execute()``."""
+    blocking_ws_connection.create(RecordID("bld", "s3"), {"name": "x"})
     builder = blocking_ws_connection.update(RecordID("bld", "s3"))
-    # accessing a key triggers __getitem__ -> _run_once()
-    assert builder["name"] == "x"
+    # No magic auto-execute anymore - callers run it explicitly.
+    out = builder.execute()
+    assert out["name"] == "x"
 
 
 def test_sync_builder_explicit_execute(
@@ -245,7 +246,7 @@ def test_sync_insert_table_with_hyphen(
     out = blocking_ws_connection.insert(
         Table("hyphen-table"),
         {"name": "bob"},
-    ).execute()
+    )
     assert isinstance(out, list)
     assert len(out) == 1
     assert out[0]["name"] == "bob"
@@ -264,4 +265,4 @@ def test_sync_insert_raw_string_with_hyphen_rejected(
     from surrealdb.errors import SurrealError
 
     with pytest.raises(SurrealError, match="raw string target"):
-        blocking_ws_connection.insert("hyphen-table", {"name": "charlie"}).execute()
+        blocking_ws_connection.insert("hyphen-table", {"name": "charlie"})

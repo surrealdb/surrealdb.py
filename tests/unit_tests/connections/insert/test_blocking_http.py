@@ -43,7 +43,7 @@ def test_insert_string_with_data(
     blocking_http_connection.query("DELETE user;").execute()
     outcome = blocking_http_connection.insert("user", insert_bulk_data)
     assert 2 == len(outcome)
-    assert len(blocking_http_connection.query("SELECT * FROM user;")) == 2
+    assert len(blocking_http_connection.query("SELECT * FROM user;").first()) == 2
     blocking_http_connection.query("DELETE user;").execute()
 
 

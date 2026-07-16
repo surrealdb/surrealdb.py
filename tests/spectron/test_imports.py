@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 
-def test_top_level_clients_importable():
-    from surrealdb import AsyncSpectron, Spectron
+def test_clients_importable_from_subpackage():
+    from surrealdb.spectron import AsyncSpectron, Spectron
 
     assert Spectron.__name__ == "Spectron"
     assert AsyncSpectron.__name__ == "AsyncSpectron"
 
 
-def test_top_level_exception_aliases_importable():
-    from surrealdb import (
+def test_exception_aliases_importable_from_subpackage():
+    from surrealdb.spectron import (
         SpectronAPIError,
         SpectronAuthError,
         SpectronError,
@@ -26,6 +26,15 @@ def test_removed_aliases_no_longer_exposed():
     import surrealdb
 
     for name in (
+        # Spectron lives under ``surrealdb.spectron``; it is no longer
+        # re-exported at the top level of ``surrealdb``.
+        "Spectron",
+        "AsyncSpectron",
+        "SpectronError",
+        "SpectronAPIError",
+        "SpectronAuthError",
+        "SpectronScopeError",
+        "SpectronNotFoundError",
         "SpectronValidationError",
         "SpectronRateLimitError",
         "SpectronServerError",

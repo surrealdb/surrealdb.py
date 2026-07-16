@@ -176,7 +176,7 @@ async def test_positive_int_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE number_tests:test1 SET value = $val;",
         vars={"val": test_int},
     )
-    result = await surrealdb_connection.query("SELECT * FROM number_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM number_tests;").first()
     assert result[0]["value"] == test_int
 
 
@@ -188,7 +188,7 @@ async def test_negative_int_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE number_tests:test2 SET value = $val;",
         vars={"val": test_int},
     )
-    result = await surrealdb_connection.query("SELECT * FROM number_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM number_tests;").first()
     assert result[0]["value"] == test_int
 
 
@@ -199,7 +199,7 @@ async def test_zero_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE number_tests:test3 SET value = $val;",
         vars={"val": 0},
     )
-    result = await surrealdb_connection.query("SELECT * FROM number_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM number_tests;").first()
     assert result[0]["value"] == 0
 
 
@@ -211,7 +211,7 @@ async def test_large_int_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE number_tests:test4 SET value = $val;",
         vars={"val": test_int},
     )
-    result = await surrealdb_connection.query("SELECT * FROM number_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM number_tests;").first()
     assert result[0]["value"] == test_int
 
 
@@ -224,7 +224,7 @@ async def test_float_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE number_tests:test5 SET value = $val;",
         vars={"val": test_float},
     )
-    result = await surrealdb_connection.query("SELECT * FROM number_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM number_tests;").first()
     assert result[0]["value"] == test_float
 
 
@@ -236,7 +236,7 @@ async def test_negative_float_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE number_tests:test6 SET value = $val;",
         vars={"val": test_float},
     )
-    result = await surrealdb_connection.query("SELECT * FROM number_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM number_tests;").first()
     assert result[0]["value"] == test_float
 
 
@@ -247,6 +247,6 @@ async def test_mixed_numbers_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE number_tests:test7 SET int_val = $int_val, float_val = $float_val;",
         vars={"int_val": 100, "float_val": 99.99},
     )
-    result = await surrealdb_connection.query("SELECT * FROM number_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM number_tests;").first()
     assert result[0]["int_val"] == 100
     assert result[0]["float_val"] == 99.99

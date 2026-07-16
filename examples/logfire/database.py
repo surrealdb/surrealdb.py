@@ -3,7 +3,7 @@
 import logfire
 from config import config
 
-from surrealdb import AsyncSurreal
+from surrealdb import AsyncSurreal, AsyncSurrealConnection
 
 
 def setup_logfire() -> None:
@@ -38,7 +38,7 @@ def setup_logfire() -> None:
     print("   ✅ All SurrealDB operations will now be traced\n")
 
 
-async def get_database() -> AsyncSurreal:
+async def get_database() -> AsyncSurrealConnection:
     """Create and return a configured database connection.
 
     Returns:

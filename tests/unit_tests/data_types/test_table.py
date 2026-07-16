@@ -31,6 +31,17 @@ def test_table_equality() -> None:
     assert table1 != "users"
 
 
+def test_table_hashable() -> None:
+    """Table defines __eq__, so it must define a consistent __hash__ to
+    remain usable as a dict key / set member (issue #9)."""
+    table1 = Table("users")
+    table2 = Table("users")
+
+    assert hash(table1) == hash(table2)
+    assert table1 in {table2}
+    assert {table1: "value"}[Table("users")] == "value"
+
+
 # Unit tests for encoding
 def test_table_encode() -> None:
     """Test encoding Table to CBOR bytes."""
@@ -139,7 +150,7 @@ async def test_table_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE table_tests:test1 SET table_ref = $val;",
         vars={"val": table},
     )
-    result = await surrealdb_connection.query("SELECT * FROM table_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM table_tests;").first()
     assert result[0]["table_ref"] == table
 
 
@@ -156,7 +167,7 @@ async def test_multiple_tables_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE table_tests:test2 SET t1 = $table1, t2 = $table2, t3 = $table3;",
         vars=tables,
     )
-    result = await surrealdb_connection.query("SELECT * FROM table_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM table_tests;").first()
     assert result[0]["t1"] == tables["table1"]
     assert result[0]["t2"] == tables["table2"]
     assert result[0]["t3"] == tables["table3"]
@@ -175,5 +186,5 @@ async def test_table_in_array_db_roundtrip(surrealdb_connection: Any) -> None:
         "CREATE table_tests:test3 SET tables = $val;",
         vars={"val": tables_array},
     )
-    result = await surrealdb_connection.query("SELECT * FROM table_tests;")
+    result = await surrealdb_connection.query("SELECT * FROM table_tests;").first()
     assert result[0]["tables"] == tables_array

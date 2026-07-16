@@ -34,7 +34,7 @@ async def test_create_string(
     outcome = await async_http_connection.create("user")
     assert "user" == outcome["id"].table_name
 
-    assert len(await async_http_connection.query("SELECT * FROM user;")) == 1
+    assert len(await async_http_connection.query("SELECT * FROM user;").first()) == 1
 
 
 @pytest.mark.asyncio
@@ -49,7 +49,7 @@ async def test_create_string_with_data(
     assert create_data["email"] == outcome["email"]
     assert create_data["enabled"] == outcome["enabled"]
 
-    result = await async_http_connection.query("SELECT * FROM user;")
+    result = await async_http_connection.query("SELECT * FROM user;").first()
     assert len(result) == 1
     assert "user" == result[0]["id"].table_name
     assert create_data["name"] == result[0]["name"]
@@ -68,7 +68,7 @@ async def test_create_string_with_data_and_id(
     assert create_data["email"] == first_outcome["email"]
     assert create_data["enabled"] == first_outcome["enabled"]
 
-    result = await async_http_connection.query("SELECT * FROM user;")
+    result = await async_http_connection.query("SELECT * FROM user;").first()
     assert len(result) == 1
     assert "user" == result[0]["id"].table_name
     assert "tobie" == result[0]["id"].id
@@ -86,7 +86,7 @@ async def test_create_record_id(
     assert "user" == outcome["id"].table_name
     assert 1 == outcome["id"].id
 
-    assert len(await async_http_connection.query("SELECT * FROM user;")) == 1
+    assert len(await async_http_connection.query("SELECT * FROM user;").first()) == 1
 
 
 @pytest.mark.asyncio
@@ -101,7 +101,7 @@ async def test_create_record_id_with_data(
     assert create_data["email"] == outcome["email"]
     assert create_data["enabled"] == outcome["enabled"]
 
-    result = await async_http_connection.query("SELECT * FROM user;")
+    result = await async_http_connection.query("SELECT * FROM user;").first()
     assert len(result) == 1
     assert "user" == result[0]["id"].table_name
     assert create_data["name"] == result[0]["name"]
@@ -117,7 +117,7 @@ async def test_create_table(
     outcome = await async_http_connection.create(table)
     assert "user" == outcome["id"].table_name
 
-    assert len(await async_http_connection.query("SELECT * FROM user;")) == 1
+    assert len(await async_http_connection.query("SELECT * FROM user;").first()) == 1
 
 
 @pytest.mark.asyncio
@@ -133,7 +133,7 @@ async def test_create_table_with_data(
     assert create_data["email"] == outcome["email"]
     assert create_data["enabled"] == outcome["enabled"]
 
-    result = await async_http_connection.query("SELECT * FROM user;")
+    result = await async_http_connection.query("SELECT * FROM user;").first()
     assert len(result) == 1
     assert "user" == result[0]["id"].table_name
     assert create_data["name"] == result[0]["name"]
