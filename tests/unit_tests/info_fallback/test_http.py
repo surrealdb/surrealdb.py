@@ -20,11 +20,12 @@ from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.data.cbor import encode
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.errors import NotAllowedError, ServerError
+from surrealdb.types import Value
 
 RPC_URL = "http://localhost:8000/rpc"
 
 # A representative record-auth sign-in payload; the mocked server ignores it.
-RECORD_SIGNIN = {
+RECORD_SIGNIN: dict[str, Value] = {
     "namespace": "test_ns",
     "database": "test_db",
     "access": "user",

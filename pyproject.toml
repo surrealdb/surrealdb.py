@@ -164,19 +164,13 @@ disallow_any_generics = false
 warn_return_any = false
 # Don't warn about type narrowing issues
 strict_optional = false
-# Error codes the test suite still needs suppressed. The bulk (index,
-# union-attr, call-overload, arg-type) come from the public `Value` union that
-# query()/CRUD builders return and that tests index into pervasively (~2.1k
-# occurrences across ~100 files) - enabling them would require rewriting test
-# result handling, not a config change. "operator" was dropped from this list
-# because it no longer fires anywhere. Re-enabling the data-flow codes to catch
-# public-API regressions is tracked as a dedicated test-typing follow-up.
-disable_error_code = [
-    "index", "call-overload", "arg-type", "assignment", "return-value",
-    "union-attr", "func-returns-value", "name-defined", "misc",
-    "comparison-overlap", "str-bytes-safe", "unused-ignore",
-    "var-annotated", "no-untyped-def"
-]
+# Only these three codes remain suppressed because the public `Value` union is
+# indexed into pervasively across the test suite (~3,700 sites) - the resulting
+# index/union-attr/call-overload noise has no bug-catching value and enabling it
+# would mean rewriting test result handling rather than a config change. Every
+# other error code is now enabled, so `mypy tests/` guards against public-API
+# type regressions.
+disable_error_code = ["index", "union-attr", "call-overload"]
 
 # --------------------------------------------------
 # pyright
