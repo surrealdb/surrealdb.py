@@ -307,8 +307,15 @@ class _CrudState:
     def _extract(self, response: dict[str, Any]) -> Any:
         stmts = _check_response(response, self._op_name)
         result = _check_first_statement(stmts)
-        if self._single and isinstance(result, list) and len(result) == 1:
-            return result[0]
+        if self._single and isinstance(result, list):
+            # Single-record DELETE aligns with select's absent-record
+            # handling: an empty result (no record was deleted) unwraps to
+            # None, otherwise the deleted record dict. Other single-record
+            # operations only unwrap the one-element list they produce.
+            if self._operation == "DELETE":
+                return result[0] if result else None
+            if len(result) == 1:
+                return result[0]
         return result
 
 

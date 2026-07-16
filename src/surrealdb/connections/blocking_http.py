@@ -262,7 +262,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         return builder.content(data)
 
     @overload
-    def delete(self, record: RecordID) -> dict[str, Value]: ...
+    def delete(self, record: RecordID) -> dict[str, Value] | None: ...
     @overload
     def delete(self, record: Table) -> list[Value]: ...
     @overload
@@ -270,8 +270,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     def delete(self, record: RecordIdType) -> Value:
         """Delete records eagerly and return the deleted record(s).
 
-        A ``RecordID`` (or ``"table:id"``) returns the single deleted record; a
-        ``Table`` (or bare name) returns the list of deleted records.
+        A ``RecordID`` (or ``"table:id"``) returns the deleted record, or
+        ``None`` when no record was deleted (matching select); a ``Table`` (or
+        bare name) returns the list of deleted records.
         """
         builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(),

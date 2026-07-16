@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `delete(RecordID)` now returns `dict | None` (the deleted record, or `None` when absent), matching `select`; `delete(Table)` still returns a list.
+
 ## [3.0.0-alpha.2] - 2026-07-16
 
 Follow-up to `3.0.0-alpha.1` that finalises the v3 API surface and fixes a batch of issues found in review.

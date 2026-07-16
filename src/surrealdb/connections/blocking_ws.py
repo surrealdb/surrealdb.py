@@ -566,7 +566,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> dict[str, Value]: ...
+    ) -> dict[str, Value] | None: ...
     @overload
     def delete(
         self,
@@ -592,8 +592,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     ) -> Value:
         """Delete records eagerly and return the deleted record(s).
 
-        A ``RecordID`` (or ``"table:id"``) returns the single deleted record; a
-        ``Table`` (or bare name) returns the list of deleted records.
+        A ``RecordID`` (or ``"table:id"``) returns the deleted record, or
+        ``None`` when no record was deleted (matching select); a ``Table`` (or
+        bare name) returns the list of deleted records.
         """
         builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
@@ -966,7 +967,7 @@ class BlockingSurrealSession:
         return self._connection.upsert(record, data, session_id=self._session_id)
 
     @overload
-    def delete(self, record: RecordID) -> dict[str, Value]: ...
+    def delete(self, record: RecordID) -> dict[str, Value] | None: ...
     @overload
     def delete(self, record: Table) -> list[Value]: ...
     @overload
@@ -1120,7 +1121,7 @@ class BlockingSurrealTransaction:
         )
 
     @overload
-    def delete(self, record: RecordID) -> dict[str, Value]: ...
+    def delete(self, record: RecordID) -> dict[str, Value] | None: ...
     @overload
     def delete(self, record: Table) -> list[Value]: ...
     @overload

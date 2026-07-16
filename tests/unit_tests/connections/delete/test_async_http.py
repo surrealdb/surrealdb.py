@@ -49,6 +49,28 @@ async def test_delete_record_id(
 
 
 @pytest.mark.asyncio
+async def test_delete_record_id_absent(
+    async_http_connection: AsyncHttpSurrealConnection,
+) -> None:
+    await async_http_connection.query("DELETE user;")
+
+    # Deleting an absent record returns None (matching select).
+    outcome = await async_http_connection.delete(RecordID("user", "missing"))
+    assert outcome is None
+
+
+@pytest.mark.asyncio
+async def test_delete_string_absent(
+    async_http_connection: AsyncHttpSurrealConnection,
+) -> None:
+    await async_http_connection.query("DELETE user;")
+
+    # Deleting an absent "table:id" record returns None (matching select).
+    outcome = await async_http_connection.delete("user:missing")
+    assert outcome is None
+
+
+@pytest.mark.asyncio
 async def test_delete_table(async_http_connection: AsyncHttpSurrealConnection) -> None:
     await async_http_connection.query("DELETE user;")
     await async_http_connection.query("CREATE user:tobie SET name = 'Tobie';")
