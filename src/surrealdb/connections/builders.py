@@ -489,6 +489,22 @@ def _statement_rows(values: list[Any]) -> list[Any]:
     return [first]
 
 
+def _require_record(into: type[Any], row: Any) -> Mapping[str, Any]:
+    """Ensure a value mapped via ``into=`` is a record object (mapping).
+
+    Raises a clear error rather than letting a non-record value fall through
+    to the positional ``_map_to_class`` path (which would raise an opaque
+    ``TypeError``). Reachable only via a malformed response or a ``SELECT
+    VALUE`` scalar projection through ``.into(cls, rows=True)``.
+    """
+    if not isinstance(row, Mapping):
+        raise UnexpectedResponseError(
+            f"into={into.__name__} expects record (object) rows; "
+            f"got {type(row).__name__}: {row!r}"
+        )
+    return row
+
+
 def _map_result(into: type[Any] | None, result: Any) -> Any:
     """Map an extracted ``select`` / CRUD result onto ``into`` by runtime shape.
 
@@ -508,10 +524,10 @@ def _map_result(into: type[Any] | None, result: Any) -> Any:
     if into is None:
         return result
     if isinstance(result, list):
-        return [_map_to_class(into, row) for row in result]
+        return [_map_to_class(into, _require_record(into, row)) for row in result]
     if result is None:
         return None
-    return _map_to_class(into, result)
+    return _map_to_class(into, _require_record(into, result))
 
 
 # ---------------------------------------------------------------------------
@@ -812,7 +828,10 @@ class AsyncQueryIntoBuilder(Generic[T_co]):
         if self._rows:
             return cast(
                 "T_co",
-                [_map_to_class(self._cls, row) for row in _statement_rows(values)],
+                [
+                    _map_to_class(self._cls, _require_record(self._cls, row))
+                    for row in _statement_rows(values)
+                ],
             )
         return cast("T_co", _map_to_class(self._cls, values))
 
@@ -1012,7 +1031,10 @@ class SyncQueryBuilder(_QueryState):
         """
         values = self._run_once()
         if rows:
-            return [_map_to_class(cls, row) for row in _statement_rows(values)]
+            return [
+                _map_to_class(cls, _require_record(cls, row))
+                for row in _statement_rows(values)
+            ]
         return _map_to_class(cls, values)
 
     def execute(self) -> list[Value]:

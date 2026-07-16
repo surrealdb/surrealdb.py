@@ -368,3 +368,15 @@ def test_sync_select_without_into_returns_raw_dict(
     out = conn.select(RecordID("person", "tobie"))
     assert out == record
     assert not isinstance(out, Person)
+
+
+def test_into_rejects_non_record_rows() -> None:
+    """A non-record (scalar) row raises a clear error, not an opaque TypeError."""
+    from surrealdb.connections.builders import _map_result
+    from surrealdb.errors import UnexpectedResponseError
+
+    assert _map_result(Person, None) is None  # absent single record stays None
+    with pytest.raises(UnexpectedResponseError):
+        _map_result(Person, [1, 2])
+    with pytest.raises(UnexpectedResponseError):
+        _map_result(Person, 42)
