@@ -31,6 +31,17 @@ def test_table_equality() -> None:
     assert table1 != "users"
 
 
+def test_table_hashable() -> None:
+    """Table defines __eq__, so it must define a consistent __hash__ to
+    remain usable as a dict key / set member (issue #9)."""
+    table1 = Table("users")
+    table2 = Table("users")
+
+    assert hash(table1) == hash(table2)
+    assert table1 in {table2}
+    assert {table1: "value"}[Table("users")] == "value"
+
+
 # Unit tests for encoding
 def test_table_encode() -> None:
     """Test encoding Table to CBOR bytes."""

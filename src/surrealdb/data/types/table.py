@@ -55,3 +55,12 @@ class Table:
         if isinstance(other, Table):
             return self.table_name == other.table_name
         return False
+
+    def __hash__(self) -> int:
+        """
+        Returns a hash of the table, consistent with ``__eq__``.
+
+        Returns:
+            The hash of the table name.
+        """
+        return hash(self.table_name)

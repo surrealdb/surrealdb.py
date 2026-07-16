@@ -6,8 +6,10 @@ import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data import cbor
+from surrealdb.data.models import table_or_record_id
 from surrealdb.data.types.record_id import RecordID, escape_identifier
-from surrealdb.errors import InvalidRecordIdError
+from surrealdb.data.types.table import Table
+from surrealdb.errors import InvalidRecordIdError, InvalidTableError
 
 
 # Unit tests for RecordID class
@@ -101,10 +103,55 @@ def test_record_id_pydantic_model_dump_json_stringifies() -> None:
     assert dumped["id"] == "person:abc"
 
 
+def test_record_id_parse_with_colons_in_id() -> None:
+    """RecordID.parse splits on the first colon only, so an id that itself
+    contains colons is preserved intact (issue #13)."""
+    record_id = RecordID.parse("user:complex:id:here")
+    assert record_id.table_name == "user"
+    assert record_id.id == "complex:id:here"
+
+
+def test_record_id_parse_always_yields_string_id() -> None:
+    """RecordID.parse always yields a string id, even for all-digit ids."""
+    record_id = RecordID.parse("user:123")
+    assert record_id.table_name == "user"
+    assert record_id.id == "123"
+    assert isinstance(record_id.id, str)
+
+
 def test_record_id_parse_invalid() -> None:
     """Test RecordID.parse with invalid string."""
     with pytest.raises(InvalidRecordIdError, match="invalid string provided for parse"):
         RecordID.parse("invalid_string")
+
+
+def test_record_id_hashable() -> None:
+    """RecordID defines __eq__, so it must define a consistent __hash__ to
+    remain usable as a dict key / set member (issue #9)."""
+    record_id1 = RecordID("users", "john")
+    record_id2 = RecordID("users", "john")
+
+    # Equal objects hash equally.
+    assert record_id1 == record_id2
+    assert hash(record_id1) == hash(record_id2)
+
+    # Usable as a set member and dict key.
+    assert record_id1 in {record_id2}
+    mapping = {record_id1: "value"}
+    assert mapping[RecordID("users", "john")] == "value"
+
+
+def test_record_id_hashable_with_unhashable_id() -> None:
+    """RecordID stays hashable even when its id is an unhashable value such
+    as a dict or list (hashed via its string form)."""
+    dict_id = RecordID("person", {"name": "Tobie", "location": "London"})
+    list_id = RecordID("events", [1, 2, 3])
+
+    assert dict_id in {RecordID("person", {"name": "Tobie", "location": "London"})}
+    assert list_id in {RecordID("events", [1, 2, 3])}
+    assert hash(dict_id) == hash(
+        RecordID("person", {"name": "Tobie", "location": "London"})
+    )
 
 
 def test_record_id_str() -> None:
@@ -214,6 +261,39 @@ def test_record_id_equality() -> None:
     assert record_id1 != record_id3
     assert record_id1 != record_id4
     assert record_id1 != "not a record id"
+
+
+# Unit tests for table_or_record_id (surrealdb.data.models)
+def test_table_or_record_id_plain_table() -> None:
+    """A string without a colon resolves to a Table."""
+    resource = table_or_record_id("users")
+    assert isinstance(resource, Table)
+    assert resource.table_name == "users"
+
+
+def test_table_or_record_id_simple() -> None:
+    """A ``table:id`` string resolves to a RecordID."""
+    resource = table_or_record_id("users:john")
+    assert isinstance(resource, RecordID)
+    assert resource.table_name == "users"
+    assert resource.id == "john"
+
+
+def test_table_or_record_id_with_colons_in_id() -> None:
+    """table_or_record_id splits on the first colon only, preserving an id
+    that itself contains colons (issue #13)."""
+    resource = table_or_record_id("user:complex:id:here")
+    assert isinstance(resource, RecordID)
+    assert resource.table_name == "user"
+    assert resource.id == "complex:id:here"
+
+
+def test_table_or_record_id_empty_parts_invalid() -> None:
+    """An empty table or id part is rejected."""
+    with pytest.raises(InvalidTableError):
+        table_or_record_id("users:")
+    with pytest.raises(InvalidTableError):
+        table_or_record_id(":john")
 
 
 # Unit tests for encoding
