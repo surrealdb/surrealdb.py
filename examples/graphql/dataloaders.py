@@ -3,13 +3,13 @@
 from typing import List, Optional
 
 from strawberry.dataloader import DataLoader
-from surrealdb import AsyncSurreal
+from surrealdb import AsyncSurrealConnection
 
 
 class UserDataLoader(DataLoader):
     """DataLoader for batching user queries."""
 
-    def __init__(self, db: AsyncSurreal):
+    def __init__(self, db: AsyncSurrealConnection):
         super().__init__(load_fn=self.load_users)
         self.db = db
 

@@ -4,7 +4,7 @@ import json
 from typing import Any, List
 
 import pandas as pd
-from surrealdb import AsyncSurreal
+from surrealdb import AsyncSurrealConnection
 
 
 def pretty_print(data: Any) -> None:
@@ -51,7 +51,7 @@ def to_dataframe(data: List[dict]) -> pd.DataFrame:
     return pd.DataFrame(cleaned_data)
 
 
-async def sample_data(db: AsyncSurreal) -> None:
+async def sample_data(db: AsyncSurrealConnection) -> None:
     """Load sample data into the database.
 
     Args:
@@ -72,7 +72,7 @@ async def sample_data(db: AsyncSurreal) -> None:
     print(f"✅ Loaded {len(users)} sample users")
 
 
-async def clear_table(db: AsyncSurreal, table: str) -> None:
+async def clear_table(db: AsyncSurrealConnection, table: str) -> None:
     """Clear all records from a table.
 
     Args:
