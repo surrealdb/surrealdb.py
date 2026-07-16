@@ -5,6 +5,7 @@ from typing import Any, cast, overload
 import requests
 
 from surrealdb.connections.builders import (
+    _UNSET,
     SyncCrudBuilder,
     SyncInsertBuilder,
     SyncQueryBuilder,
@@ -131,6 +132,13 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     def query(
         self, query: str, vars: dict[str, Value] | None = None
     ) -> SyncQueryBuilder:
+        """Run SurrealQL and return a builder; trigger it explicitly.
+
+        ``.execute()`` returns ``list[Value]`` (one entry per statement, always
+        a list - the v3 fix for issue #232), ``.first()`` returns the first
+        statement's result (or ``None``), and ``.into(cls)`` maps the statement
+        results onto a dataclass / class.
+        """
         return SyncQueryBuilder(
             executor=self._make_executor(),
             query=query,
@@ -169,19 +177,26 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def create(self, record: RecordIdType, data: Value) -> dict[str, Value]: ...
     def create(
-        self, record: RecordIdType, data: Value | None = None
+        self, record: RecordIdType, data: Value = _UNSET
     ) -> SyncCrudBuilder[dict[str, Value]] | dict[str, Value]:
+        """Create a record (eager).
+
+        ``db.create(record, data)`` runs ``CREATE ... CONTENT $data``
+        immediately and returns the created record (``data=None`` runs
+        ``CONTENT NULL``). ``db.create(record)`` (no data) returns a
+        :class:`SyncCrudBuilder` so the caller can pick a terminal clause
+        (``.content`` / ``.replace`` / ``.merge`` / ``.patch`` / ``.execute``).
+        """
         builder: SyncCrudBuilder[dict[str, Value]] = SyncCrudBuilder(
             executor=self._make_executor(),
             operation="CREATE",
             record=record,
             op_name="create",
-            data=data,
             always_unwrap=True,
         )
-        if data is not None:
-            return builder.execute()
-        return builder
+        if data is _UNSET:
+            return builder
+        return builder.content(data)
 
     @overload
     def update(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
@@ -196,18 +211,23 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def update(self, record: str, data: Value) -> Value: ...
     def update(
-        self, record: RecordIdType, data: Value | None = None
+        self, record: RecordIdType, data: Value = _UNSET
     ) -> SyncCrudBuilder[Any] | Value:
+        """Update records, replacing existing content by default (eager).
+
+        ``db.update(record, data)`` runs eagerly and returns the result
+        (``data=None`` runs ``CONTENT NULL``); the no-data form returns a
+        :class:`SyncCrudBuilder` with terminal clause methods.
+        """
         builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(),
             operation="UPDATE",
             record=record,
             op_name="update",
-            data=data,
         )
-        if data is not None:
-            return builder.execute()
-        return builder
+        if data is _UNSET:
+            return builder
+        return builder.content(data)
 
     @overload
     def upsert(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
@@ -222,18 +242,23 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def upsert(self, record: str, data: Value) -> Value: ...
     def upsert(
-        self, record: RecordIdType, data: Value | None = None
+        self, record: RecordIdType, data: Value = _UNSET
     ) -> SyncCrudBuilder[Any] | Value:
+        """Insert or update records (eager).
+
+        ``db.upsert(record, data)`` runs eagerly and returns the result
+        (``data=None`` runs ``CONTENT NULL``); the no-data form returns a
+        :class:`SyncCrudBuilder` with terminal clause methods.
+        """
         builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(),
             operation="UPSERT",
             record=record,
             op_name="upsert",
-            data=data,
         )
-        if data is not None:
-            return builder.execute()
-        return builder
+        if data is _UNSET:
+            return builder
+        return builder.content(data)
 
     @overload
     def delete(self, record: RecordID) -> dict[str, Value]: ...
@@ -242,6 +267,11 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def delete(self, record: str) -> Value: ...
     def delete(self, record: RecordIdType) -> Value:
+        """Delete records eagerly and return the deleted record(s).
+
+        A ``RecordID`` (or ``"table:id"``) returns the single deleted record; a
+        ``Table`` (or bare name) returns the list of deleted records.
+        """
         builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(),
             operation="DELETE",
@@ -261,19 +291,26 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     def insert(
         self,
         table: str | Table,
-        data: Value | None = None,
+        data: Value = _UNSET,
         *,
         relation: bool = False,
     ) -> SyncInsertBuilder | list[Value]:
+        """Insert record(s) or relation(s) into a table (eager).
+
+        ``db.insert(table, data)`` runs immediately and returns the inserted
+        records. ``db.insert(table)`` (no data) returns a
+        :class:`SyncInsertBuilder`; pass ``relation=True`` (or chain
+        ``.relation()``) for ``INSERT RELATION INTO`` and run it with
+        ``.content(data)`` / ``.execute()``.
+        """
         builder = SyncInsertBuilder(
             executor=self._make_executor(),
             table=table,
-            data=data,
             relation=relation,
         )
-        if data is not None:
-            return builder.execute()
-        return builder
+        if data is _UNSET:
+            return builder
+        return builder.content(data)
 
     def run(
         self,
@@ -305,6 +342,12 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def select(self, record: str) -> Value: ...
     def select(self, record: RecordIdType) -> Value:
+        """Select records eagerly.
+
+        A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
+        when it is absent. A ``Table`` (or bare table-name string) returns the
+        list of records.
+        """
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"SELECT * FROM {resource_ref}"

@@ -14,6 +14,7 @@ import websockets.sync.client as ws_sync
 from websockets.sync.client import ClientConnection
 
 from surrealdb.connections.builders import (
+    _UNSET,
     SyncCrudBuilder,
     SyncInsertBuilder,
     SyncQueryBuilder,
@@ -165,6 +166,13 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> SyncQueryBuilder:
+        """Run SurrealQL and return a builder; trigger it explicitly.
+
+        ``.execute()`` returns ``list[Value]`` (one entry per statement, always
+        a list - the v3 fix for issue #232), ``.first()`` returns the first
+        statement's result (or ``None``), and ``.into(cls)`` maps the statement
+        results onto a dataclass / class.
+        """
         return SyncQueryBuilder(
             executor=self._make_executor(session_id, txn_id),
             query=query,
@@ -262,6 +270,12 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> Value:
+        """Select records eagerly.
+
+        A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
+        when it is absent. A ``Table`` (or bare table-name string) returns the
+        list of records.
+        """
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"SELECT * FROM {resource_ref}"
@@ -319,22 +333,29 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def create(
         self,
         record: RecordIdType,
-        data: Value | None = None,
+        data: Value = _UNSET,
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> SyncCrudBuilder[dict[str, Value]] | dict[str, Value]:
+        """Create a record (eager).
+
+        ``db.create(record, data)`` runs ``CREATE ... CONTENT $data``
+        immediately and returns the created record (``data=None`` runs
+        ``CONTENT NULL``). ``db.create(record)`` (no data) returns a
+        :class:`SyncCrudBuilder` so the caller can pick a terminal clause
+        (``.content`` / ``.replace`` / ``.merge`` / ``.patch`` / ``.execute``).
+        """
         builder: SyncCrudBuilder[dict[str, Value]] = SyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
             operation="CREATE",
             record=record,
             op_name="create",
-            data=data,
             always_unwrap=True,
         )
-        if data is not None:
-            return builder.execute()
-        return builder
+        if data is _UNSET:
+            return builder
+        return builder.content(data)
 
     @overload
     def update(
@@ -390,21 +411,27 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def update(
         self,
         record: RecordIdType,
-        data: Value | None = None,
+        data: Value = _UNSET,
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> SyncCrudBuilder[Any] | Value:
+        """Update records, replacing existing content by default (eager).
+
+        ``db.update(record, data)`` runs ``UPDATE ... CONTENT $data``
+        immediately and returns the result (``data=None`` runs ``CONTENT
+        NULL``). ``db.update(record)`` (no data) returns a
+        :class:`SyncCrudBuilder` with terminal clause methods.
+        """
         builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
             operation="UPDATE",
             record=record,
             op_name="update",
-            data=data,
         )
-        if data is not None:
-            return builder.execute()
-        return builder
+        if data is _UNSET:
+            return builder
+        return builder.content(data)
 
     @overload
     def upsert(
@@ -460,21 +487,27 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def upsert(
         self,
         record: RecordIdType,
-        data: Value | None = None,
+        data: Value = _UNSET,
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> SyncCrudBuilder[Any] | Value:
+        """Insert or update records (eager).
+
+        ``db.upsert(record, data)`` runs ``UPSERT ... CONTENT $data``
+        immediately and returns the result (``data=None`` runs ``CONTENT
+        NULL``). ``db.upsert(record)`` (no data) returns a
+        :class:`SyncCrudBuilder` with terminal clause methods.
+        """
         builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
             operation="UPSERT",
             record=record,
             op_name="upsert",
-            data=data,
         )
-        if data is not None:
-            return builder.execute()
-        return builder
+        if data is _UNSET:
+            return builder
+        return builder.content(data)
 
     @overload
     def delete(
@@ -507,6 +540,11 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> Value:
+        """Delete records eagerly and return the deleted record(s).
+
+        A ``RecordID`` (or ``"table:id"``) returns the single deleted record; a
+        ``Table`` (or bare name) returns the list of deleted records.
+        """
         builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
             operation="DELETE",
@@ -537,21 +575,28 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def insert(
         self,
         table: str | Table,
-        data: Value | None = None,
+        data: Value = _UNSET,
         *,
         relation: bool = False,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> SyncInsertBuilder | list[Value]:
+        """Insert record(s) or relation(s) into a table (eager).
+
+        ``db.insert(table, data)`` runs immediately and returns the inserted
+        records. ``db.insert(table)`` (no data) returns a
+        :class:`SyncInsertBuilder`; pass ``relation=True`` (or chain
+        ``.relation()``) for ``INSERT RELATION INTO`` and run it with
+        ``.content(data)`` / ``.execute()``.
+        """
         builder = SyncInsertBuilder(
             executor=self._make_executor(session_id, txn_id),
             table=table,
-            data=data,
             relation=relation,
         )
-        if data is not None:
-            return builder.execute()
-        return builder
+        if data is _UNSET:
+            return builder
+        return builder.content(data)
 
     def run(
         self,
@@ -583,6 +628,11 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         diff: bool = False,
         session_id: UUID | None = None,
     ) -> UUID:
+        """Start a live query on *table* and return its UUID.
+
+        Pass ``diff=True`` for JSON-Patch notifications. Consume notifications
+        with :meth:`subscribe_live` and stop the query with :meth:`kill`.
+        """
         kwargs: dict[str, Any] = {"table": table}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -597,6 +647,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         query_uuid: str | UUID,
         session_id: UUID | None = None,
     ) -> None:
+        """Kill a running live query by its UUID."""
         kwargs: dict[str, Any] = {"uuid": query_uuid}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -608,6 +659,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self,
         query_uuid: str | UUID,
     ) -> Generator[dict[str, Value], None, None]:
+        """Yield live-query notifications for the given live query id."""
         try:
             while True:
                 try:
@@ -773,7 +825,7 @@ class BlockingSurrealSession:
     def create(
         self,
         record: RecordIdType,
-        data: Value | None = None,
+        data: Value = _UNSET,
     ) -> SyncCrudBuilder[dict[str, Value]] | dict[str, Value]:
         return self._connection.create(record, data, session_id=self._session_id)
 
@@ -792,7 +844,7 @@ class BlockingSurrealSession:
     def update(
         self,
         record: RecordIdType,
-        data: Value | None = None,
+        data: Value = _UNSET,
     ) -> SyncCrudBuilder[Any] | Value:
         return self._connection.update(record, data, session_id=self._session_id)
 
@@ -811,7 +863,7 @@ class BlockingSurrealSession:
     def upsert(
         self,
         record: RecordIdType,
-        data: Value | None = None,
+        data: Value = _UNSET,
     ) -> SyncCrudBuilder[Any] | Value:
         return self._connection.upsert(record, data, session_id=self._session_id)
 
@@ -835,7 +887,7 @@ class BlockingSurrealSession:
     def insert(
         self,
         table: str | Table,
-        data: Value | None = None,
+        data: Value = _UNSET,
         *,
         relation: bool = False,
     ) -> SyncInsertBuilder | list[Value]:
@@ -912,7 +964,7 @@ class BlockingSurrealTransaction:
     def create(
         self,
         record: RecordIdType,
-        data: Value | None = None,
+        data: Value = _UNSET,
     ) -> SyncCrudBuilder[dict[str, Value]] | dict[str, Value]:
         return self._connection.create(
             record,
@@ -936,7 +988,7 @@ class BlockingSurrealTransaction:
     def update(
         self,
         record: RecordIdType,
-        data: Value | None = None,
+        data: Value = _UNSET,
     ) -> SyncCrudBuilder[Any] | Value:
         return self._connection.update(
             record,
@@ -960,7 +1012,7 @@ class BlockingSurrealTransaction:
     def upsert(
         self,
         record: RecordIdType,
-        data: Value | None = None,
+        data: Value = _UNSET,
     ) -> SyncCrudBuilder[Any] | Value:
         return self._connection.upsert(
             record,
@@ -993,7 +1045,7 @@ class BlockingSurrealTransaction:
     def insert(
         self,
         table: str | Table,
-        data: Value | None = None,
+        data: Value = _UNSET,
         *,
         relation: bool = False,
     ) -> SyncInsertBuilder | list[Value]:

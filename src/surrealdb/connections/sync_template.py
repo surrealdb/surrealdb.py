@@ -3,6 +3,7 @@ from typing import Any, overload
 from uuid import UUID
 
 from surrealdb.connections.builders import (
+    _UNSET,
     SyncCrudBuilder,
     SyncInsertBuilder,
     SyncQueryBuilder,
@@ -83,13 +84,14 @@ class SyncTemplate:
     @overload
     def create(self, record: RecordIdType, data: Value) -> dict[str, Value]: ...
     def create(
-        self, record: RecordIdType, data: Value | None = None
+        self, record: RecordIdType, data: Value = _UNSET
     ) -> SyncCrudBuilder[dict[str, Value]] | dict[str, Value]:
         """Create a record.
 
         ``db.create(record, data)`` runs ``CREATE ... CONTENT $data`` eagerly
-        and returns the created record. ``db.create(record)`` (no data)
-        returns a :class:`SyncCrudBuilder`; pick a terminal clause to run it:
+        and returns the created record (``data=None`` runs ``CONTENT NULL``).
+        ``db.create(record)`` (no data) returns a :class:`SyncCrudBuilder`;
+        pick a terminal clause to run it:
 
         - ``.content(data)``  -> ``CREATE ... CONTENT $data``
         - ``.replace(data)``  -> ``CREATE ... REPLACE $data``
@@ -112,7 +114,7 @@ class SyncTemplate:
     @overload
     def update(self, record: str, data: Value) -> Value: ...
     def update(
-        self, record: RecordIdType, data: Value | None = None
+        self, record: RecordIdType, data: Value = _UNSET
     ) -> SyncCrudBuilder[Any] | Value:
         """Update records (replacing the existing data by default).
 
@@ -136,7 +138,7 @@ class SyncTemplate:
     @overload
     def upsert(self, record: str, data: Value) -> Value: ...
     def upsert(
-        self, record: RecordIdType, data: Value | None = None
+        self, record: RecordIdType, data: Value = _UNSET
     ) -> SyncCrudBuilder[Any] | Value:
         """Insert or update records.
 
@@ -171,7 +173,7 @@ class SyncTemplate:
     def insert(
         self,
         table: str | Table,
-        data: Value | None = None,
+        data: Value = _UNSET,
         *,
         relation: bool = False,
     ) -> SyncInsertBuilder | list[Value]:

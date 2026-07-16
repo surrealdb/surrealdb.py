@@ -76,6 +76,14 @@ U = TypeVar("U")
 AsyncExecutor = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
 SyncExecutor = Callable[[str, dict[str, Any]], dict[str, Any]]
 
+# Sentinel marking "no data argument was supplied". The eager sync CRUD
+# methods must distinguish ``db.create(rec)`` (defer - return a builder) from
+# ``db.create(rec, None)`` (execute eagerly with ``CONTENT NULL``). ``None`` is
+# a valid ``Value`` so it cannot double as the "absent" marker. Typed as
+# ``Any`` so it is accepted as the default of a ``data: Value`` parameter
+# without widening the public signature to ``Value | None``.
+_UNSET: Any = object()
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -891,4 +899,5 @@ __all__ = [
     "SyncCrudBuilder",
     "SyncInsertBuilder",
     "SyncQueryBuilder",
+    "_UNSET",
 ]

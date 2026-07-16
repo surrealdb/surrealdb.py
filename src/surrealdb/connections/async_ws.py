@@ -215,6 +215,13 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> AsyncQueryBuilder:
+        """Run SurrealQL and return an awaitable builder.
+
+        Awaiting it (or ``.execute()``) returns ``list[Value]`` - one entry per
+        statement, always a list (the v3 fix for issue #232). Use ``.first()``
+        for the first statement's result, or ``.into(cls)`` to map the results
+        onto a dataclass / class.
+        """
         return AsyncQueryBuilder(
             executor=self._make_executor(session_id, txn_id),
             query=query,
@@ -308,6 +315,12 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> Value:
+        """Select records.
+
+        A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
+        when it is absent. A ``Table`` (or bare table-name string) returns the
+        list of records.
+        """
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"SELECT * FROM {resource_ref}"
@@ -377,6 +390,13 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> AsyncCrudBuilder[Any]:
+        """Create a record; returns an awaitable builder.
+
+        ``await db.create(record, data)`` is sugar for
+        ``await db.create(record).content(data)``. Clause methods
+        (``.content`` / ``.replace`` / ``.merge`` / ``.patch``) return the
+        builder so it stays awaitable.
+        """
         return AsyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
             operation="CREATE",
@@ -421,6 +441,11 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> AsyncCrudBuilder[Any]:
+        """Update records; returns an awaitable builder.
+
+        Optional clause methods ``.content`` / ``.replace`` / ``.merge`` /
+        ``.patch`` return the builder so it stays awaitable.
+        """
         return AsyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
             operation="UPDATE",
@@ -464,6 +489,11 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> AsyncCrudBuilder[Any]:
+        """Insert or update records; returns an awaitable builder.
+
+        Optional clause methods ``.content`` / ``.replace`` / ``.merge`` /
+        ``.patch`` return the builder so it stays awaitable.
+        """
         return AsyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
             operation="UPSERT",
@@ -503,6 +533,12 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> AsyncCrudBuilder[Any]:
+        """Delete records; returns an awaitable builder.
+
+        A ``RecordID`` (or ``"table:id"``) resolves to the deleted record; a
+        ``Table`` (or bare name) to the list of deleted records. ``DELETE`` has
+        no clause methods.
+        """
         return AsyncCrudBuilder(
             executor=self._make_executor(session_id, txn_id),
             operation="DELETE",
@@ -519,6 +555,11 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> AsyncInsertBuilder:
+        """Insert record(s) or relation(s); returns an awaitable builder.
+
+        Pass ``relation=True`` (or chain ``.relation()``) for ``INSERT
+        RELATION INTO``. Awaiting the builder (or ``.execute()``) runs it.
+        """
         return AsyncInsertBuilder(
             executor=self._make_executor(session_id, txn_id),
             table=table,
@@ -555,6 +596,11 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         diff: bool = False,
         session_id: UUID | None = None,
     ) -> UUID:
+        """Start a live query on *table* and return its UUID.
+
+        Pass ``diff=True`` for JSON-Patch notifications. Consume notifications
+        with :meth:`subscribe_live` and stop the query with :meth:`kill`.
+        """
         kwargs: dict[str, Any] = {"table": table}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -569,6 +615,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     async def subscribe_live(
         self, query_uuid: str | UUID
     ) -> AsyncGenerator[dict[str, Value], None]:
+        """Return an async generator of notifications for a live query id."""
         result_queue: Queue[dict[str, Any]] = Queue()
         suid = str(query_uuid)
 
@@ -590,6 +637,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         query_uuid: str | UUID,
         session_id: UUID | None = None,
     ) -> None:
+        """Kill a running live query by its UUID."""
         kwargs: dict[str, Any] = {"uuid": query_uuid}
         if session_id is not None:
             kwargs["session"] = session_id

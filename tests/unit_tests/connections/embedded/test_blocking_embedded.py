@@ -56,11 +56,17 @@ def test_query_operation() -> None:
     with Surreal("mem://") as db:
         db.use("test", "test")
 
-        result = db.query("CREATE person SET name = 'Charlie', age = 25")
-        assert result is not None
+        # query() returns a builder under eager-sync; a terminal (.first() /
+        # .execute()) is required to actually run the statement.
+        created = db.query("CREATE person SET name = 'Charlie', age = 25").first()
+        assert isinstance(created, list)
+        assert created[0]["name"] == "Charlie"
 
-        result = db.query("SELECT * FROM person WHERE age > $min_age", {"min_age": 20})
-        assert result is not None
+        rows = db.query(
+            "SELECT * FROM person WHERE age > $min_age", {"min_age": 20}
+        ).first()
+        assert isinstance(rows, list)
+        assert any(row["name"] == "Charlie" for row in rows)
 
 
 def test_let_and_unset() -> None:

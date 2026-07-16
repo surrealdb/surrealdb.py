@@ -148,6 +148,13 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     def query(
         self, query: str, vars: dict[str, Value] | None = None
     ) -> AsyncQueryBuilder:
+        """Run SurrealQL and return an awaitable builder.
+
+        Awaiting it (or ``.execute()``) returns ``list[Value]`` - one entry per
+        statement, always a list (the v3 fix for issue #232). Use ``.first()``
+        for the first statement's result, or ``.into(cls)`` to map the results
+        onto a dataclass / class.
+        """
         return AsyncQueryBuilder(
             executor=self._make_executor(),
             query=query,
@@ -193,6 +200,13 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     def create(
         self, record: RecordIdType, data: Value | None = None
     ) -> AsyncCrudBuilder[Any]:
+        """Create a record; returns an awaitable builder.
+
+        ``await db.create(record, data)`` is sugar for
+        ``await db.create(record).content(data)``. Clause methods
+        (``.content`` / ``.replace`` / ``.merge`` / ``.patch``) return the
+        builder so it stays awaitable.
+        """
         return AsyncCrudBuilder(
             executor=self._make_executor(),
             operation="CREATE",
@@ -217,6 +231,11 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     def update(
         self, record: RecordIdType, data: Value | None = None
     ) -> AsyncCrudBuilder[Any]:
+        """Update records; returns an awaitable builder.
+
+        Optional clause methods ``.content`` / ``.replace`` / ``.merge`` /
+        ``.patch`` return the builder so it stays awaitable.
+        """
         return AsyncCrudBuilder(
             executor=self._make_executor(),
             operation="UPDATE",
@@ -240,6 +259,11 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     def upsert(
         self, record: RecordIdType, data: Value | None = None
     ) -> AsyncCrudBuilder[Any]:
+        """Insert or update records; returns an awaitable builder.
+
+        Optional clause methods ``.content`` / ``.replace`` / ``.merge`` /
+        ``.patch`` return the builder so it stays awaitable.
+        """
         return AsyncCrudBuilder(
             executor=self._make_executor(),
             operation="UPSERT",
@@ -255,6 +279,12 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     @overload
     def delete(self, record: str) -> AsyncCrudBuilder[Value]: ...
     def delete(self, record: RecordIdType) -> AsyncCrudBuilder[Any]:
+        """Delete records; returns an awaitable builder.
+
+        A ``RecordID`` (or ``"table:id"``) resolves to the deleted record; a
+        ``Table`` (or bare name) to the list of deleted records. ``DELETE`` has
+        no clause methods.
+        """
         return AsyncCrudBuilder(
             executor=self._make_executor(),
             operation="DELETE",
@@ -269,6 +299,11 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         *,
         relation: bool = False,
     ) -> AsyncInsertBuilder:
+        """Insert record(s) or relation(s); returns an awaitable builder.
+
+        Pass ``relation=True`` (or chain ``.relation()``) for ``INSERT
+        RELATION INTO``. Awaiting the builder (or ``.execute()``) runs it.
+        """
         return AsyncInsertBuilder(
             executor=self._make_executor(),
             table=table,
@@ -306,6 +341,12 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     @overload
     async def select(self, record: str) -> Value: ...
     async def select(self, record: RecordIdType) -> Value:
+        """Select records.
+
+        A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
+        when it is absent. A ``Table`` (or bare table-name string) returns the
+        list of records.
+        """
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
         query = f"SELECT * FROM {resource_ref}"
