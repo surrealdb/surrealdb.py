@@ -371,7 +371,10 @@ async with AsyncSurreal("ws://localhost:8000/rpc") as db:
 
 The same CRUD builder, query, and `run()` API is available on both
 `AsyncSurrealSession` / `BlockingSurrealSession` and
-`AsyncSurrealTransaction` / `BlockingSurrealTransaction`.
+`AsyncSurrealTransaction` / `BlockingSurrealTransaction`, along with
+`query_raw()`, `info()`, and `version()`. Every one of them scopes to the
+session (and transaction) it was called on, so you never pass `session_id`
+or `txn_id` by hand.
 
 ## `run()` - calling SurrealDB functions
 

@@ -1135,6 +1135,13 @@ class BlockingSurrealSession:
     ) -> SyncQueryBuilder:
         return self._connection.query(query, vars, session_id=self._session_id)
 
+    def query_raw(
+        self,
+        query: str,
+        vars: dict[str, Value] | None = None,
+    ) -> dict[str, Any]:
+        return self._connection.query_raw(query, vars, session_id=self._session_id)
+
     def signin(self, vars: dict[str, Value]) -> Tokens:
         return self._connection.signin(vars, session_id=self._session_id)
 
@@ -1146,6 +1153,12 @@ class BlockingSurrealSession:
 
     def invalidate(self) -> None:
         self._connection.invalidate(session_id=self._session_id)
+
+    def info(self) -> Value:
+        return self._connection.info(session_id=self._session_id)
+
+    def version(self) -> str:
+        return self._connection.version(session_id=self._session_id)
 
     def let(self, key: str, value: Value) -> None:
         self._connection.let(key, value, session_id=self._session_id)
@@ -1362,6 +1375,24 @@ class BlockingSurrealTransaction:
             session_id=self._session_id,
             txn_id=self._txn_id,
         )
+
+    def query_raw(
+        self,
+        query: str,
+        vars: dict[str, Value] | None = None,
+    ) -> dict[str, Any]:
+        return self._connection.query_raw(
+            query,
+            vars,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+        )
+
+    def info(self) -> Value:
+        return self._connection.info(session_id=self._session_id)
+
+    def version(self) -> str:
+        return self._connection.version(session_id=self._session_id)
 
     @overload
     def select(self, record: RecordID, *, into: type[M]) -> M | None: ...

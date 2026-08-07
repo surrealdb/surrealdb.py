@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `query_raw()`, `info()`, and `version()` on the session and transaction wrapper classes (`AsyncSurrealSession` / `BlockingSurrealSession`, `AsyncSurrealTransaction` / `BlockingSurrealTransaction`). These were the only connection RPCs missing from the wrappers, so calling `session.query_raw(...)` raised `AttributeError` even though the underlying connection method already accepted `session_id` / `txn_id`. Each forwards the session (and, on a transaction, the txn) like every other wrapper method.
+
 ## [3.0.0-alpha.4] - 2026-07-16
 
 ### Security
