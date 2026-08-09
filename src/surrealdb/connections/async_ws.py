@@ -1000,6 +1000,15 @@ class AsyncSurrealSession:
     ) -> AsyncQueryBuilder:
         return self._connection.query(query, vars, session_id=self._session_id)
 
+    async def query_raw(
+        self,
+        query: str,
+        vars: dict[str, Value] | None = None,
+    ) -> dict[str, Any]:
+        return await self._connection.query_raw(
+            query, vars, session_id=self._session_id
+        )
+
     async def signin(self, vars: dict[str, Value]) -> Tokens:
         return await self._connection.signin(vars, session_id=self._session_id)
 
@@ -1011,6 +1020,12 @@ class AsyncSurrealSession:
 
     async def invalidate(self) -> None:
         await self._connection.invalidate(session_id=self._session_id)
+
+    async def info(self) -> Value:
+        return await self._connection.info(session_id=self._session_id)
+
+    async def version(self) -> str:
+        return await self._connection.version(session_id=self._session_id)
 
     async def let(self, key: str, value: Value) -> None:
         await self._connection.let(key, value, session_id=self._session_id)
@@ -1242,6 +1257,24 @@ class AsyncSurrealTransaction:
             session_id=self._session_id,
             txn_id=self._txn_id,
         )
+
+    async def query_raw(
+        self,
+        query: str,
+        vars: dict[str, Value] | None = None,
+    ) -> dict[str, Any]:
+        return await self._connection.query_raw(
+            query,
+            vars,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+        )
+
+    async def info(self) -> Value:
+        return await self._connection.info(session_id=self._session_id)
+
+    async def version(self) -> str:
+        return await self._connection.version(session_id=self._session_id)
 
     @overload
     async def select(self, record: RecordID, *, into: type[M]) -> M | None: ...

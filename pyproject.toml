@@ -93,7 +93,11 @@ packages = ["src/surrealdb"]
 # --------------------------------------------------
 
 [tool.ruff]
-exclude = ["src/surrealdb/__init__.py"]
+# Markdown is excluded because ruff >= 0.16 formats Python code blocks inside
+# `.md` files, which reflows the hand-aligned examples in our docs (notably
+# `src/surrealdb/spectron/README.md`, which sits under the `./src` path CI
+# checks). Docs prose is not formatter-owned.
+exclude = ["src/surrealdb/__init__.py", "*.md"]
 
 [tool.ruff.lint]
 select = [
