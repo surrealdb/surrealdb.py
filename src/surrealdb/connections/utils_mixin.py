@@ -3,11 +3,14 @@ from typing import Any
 from surrealdb.connections.builders import (
     _resource_to_variable,  # pyright: ignore[reportPrivateUsage]
 )
+from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     ErrorKind,
+    HttpStatusError,
     SurrealError,
+    UnexpectedResponseError,
     parse_query_error,
     parse_rpc_error,
 )
@@ -23,6 +26,19 @@ _NO_RESULT_RPC_CODE = -32000
 # The SurrealQL used to resolve the currently authenticated record for
 # record-level ("scope") users when ``info`` reports no result.
 AUTH_FALLBACK_QUERY = "SELECT * FROM $auth"
+
+# How much of a non-2xx HTTP body to keep in the raised error message. Enough
+# to identify the failure, short enough to stay readable in a traceback.
+_MAX_BODY_CHARS = 300
+
+
+def _body_text(body: bytes) -> str:
+    """Render an HTTP error body as short, printable text."""
+    text = body.decode("utf-8", errors="replace").strip()
+    if len(text) > _MAX_BODY_CHARS:
+        return text[:_MAX_BODY_CHARS] + "..."
+    return text
+
 
 # These are re-exported for backwards compatibility with downstream code
 # that imported them via ``surrealdb.connections.utils_mixin``.
@@ -41,6 +57,39 @@ class UtilsMixin:
         error = response.get("error")
         if error is not None:
             raise parse_rpc_error(error)
+
+    @staticmethod
+    def check_status_for_error(status: int, body: bytes, url: str) -> None:
+        """Raise when an HTTP RPC response carries a non-2xx status.
+
+        A non-2xx ``/rpc`` response normally carries an HTTP-layer body — plain
+        text or a JSON envelope — rather than the CBOR RPC envelope, so there
+        is no structured error to map and the status is reported as
+        :class:`HttpStatusError`. The RPC body is still tried first so that a
+        server which does report a structured error alongside a non-2xx status
+        keeps its ``ServerError`` mapping.
+        """
+        if 200 <= status < 300:
+            return
+        try:
+            decoded = decode(body)
+        except Exception:
+            decoded = None
+        if isinstance(decoded, dict):
+            error = decoded.get("error")
+            if error is not None:
+                raise parse_rpc_error(error)
+        raise HttpStatusError(status, _body_text(body), url)
+
+    @staticmethod
+    def decode_response(body: bytes, process: str) -> Any:
+        """Decode a CBOR response body, or raise ``UnexpectedResponseError``."""
+        try:
+            return decode(body)
+        except Exception as exc:
+            raise UnexpectedResponseError(
+                f"could not decode the response while {process}: {exc}"
+            ) from exc
 
     @staticmethod
     def check_response_for_result(response: dict[str, Any], process: str) -> None:

@@ -51,6 +51,7 @@ from surrealdb.errors import (
     ConnectionDetailKind,
     ConnectionUnavailableError,
     ErrorKind,
+    HttpStatusError,
     InternalError,
     InvalidDurationError,
     InvalidGeometryError,
@@ -68,6 +69,8 @@ from surrealdb.errors import (
     SurrealDBMethodError,
     SurrealError,
     ThrownError,
+    TransportError,
+    TransportTimeoutError,
     UnexpectedResponseError,
     UnsupportedEngineError,
     UnsupportedFeatureError,
@@ -135,8 +138,12 @@ __all__ = [
     "NotFoundDetailKind",
     "AlreadyExistsDetailKind",
     "ConnectionDetailKind",
-    # Errors – SDK-side
+    # Errors – transport
+    "TransportError",
     "ConnectionUnavailableError",
+    "TransportTimeoutError",
+    "HttpStatusError",
+    # Errors – SDK-side
     "UnsupportedEngineError",
     "UnsupportedFeatureError",
     "UnexpectedResponseError",

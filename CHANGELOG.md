@@ -8,7 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `TransportError`, a new branch of the error hierarchy for failures that produced no structured server response, alongside the existing `ServerError` branch. `ConnectionUnavailableError` now derives from it, joined by `TransportTimeoutError` (the request timed out) and `HttpStatusError` (a non-2xx HTTP response, carrying `.status`, `.body`, and `.url`). The split is what retry logic keys on: a `TransportError` may succeed if retried, a `ServerError` describes a decision the server already made.
 - `query_raw()`, `info()`, and `version()` on the session and transaction wrapper classes (`AsyncSurrealSession` / `BlockingSurrealSession`, `AsyncSurrealTransaction` / `BlockingSurrealTransaction`). These were the only connection RPCs missing from the wrappers, so calling `session.query_raw(...)` raised `AttributeError` even though the underlying connection method already accepted `session_id` / `txn_id`. Each forwards the session (and, on a transaction, the txn) like every other wrapper method.
+
+### Fixed
+- Transport failures no longer escape as third-party exceptions, so `except SurrealError` now reliably covers every failure the SDK raises. Previously the exception type depended on how a failure was represented: an RPC error in a 2xx body became a `ServerError`, but a non-2xx `/rpc` response leaked `requests.exceptions.HTTPError` or `aiohttp.ClientResponseError`, an unreachable host leaked `requests.exceptions.ConnectionError` / `aiohttp.ClientConnectorError` / `ConnectionRefusedError`, and an undecodable body leaked a CBOR decode error. All four transports (blocking/async, HTTP/WebSocket) now map these to `HttpStatusError`, `ConnectionUnavailableError`, `TransportTimeoutError`, or `UnexpectedResponseError`, each preserving the original exception as `__cause__`. A non-2xx response whose body *does* contain a structured RPC error still maps to its `ServerError` subclass.
 
 ## [3.0.0-alpha.4] - 2026-07-16
 

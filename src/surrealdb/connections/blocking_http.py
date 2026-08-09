@@ -15,10 +15,14 @@ from surrealdb.connections.builders import (
 from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import AUTH_FALLBACK_QUERY, UtilsMixin
-from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
-from surrealdb.errors import UnsupportedFeatureError, parse_rpc_error
+from surrealdb.errors import (
+    ConnectionUnavailableError,
+    TransportTimeoutError,
+    UnsupportedFeatureError,
+    parse_rpc_error,
+)
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 from surrealdb.types import Tokens, Value, parse_auth_result
@@ -55,14 +59,27 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
 
         # Reuse the pooled session when running inside a context manager,
         # otherwise fall back to a fresh per-request request.
-        if self.session is not None:
-            response = self.session.post(url, headers=headers, data=data, timeout=30)
-        else:
-            response = requests.post(url, headers=headers, data=data, timeout=30)
-        response.raise_for_status()
+        try:
+            if self.session is not None:
+                response = self.session.post(
+                    url, headers=headers, data=data, timeout=30
+                )
+            else:
+                response = requests.post(url, headers=headers, data=data, timeout=30)
+        except requests.exceptions.Timeout as exc:
+            raise TransportTimeoutError(
+                f"timed out while {operation} against {url}: {exc}"
+            ) from exc
+        except requests.exceptions.RequestException as exc:
+            raise ConnectionUnavailableError(
+                f"could not reach {url} while {operation}: {exc}"
+            ) from exc
 
-        raw_cbor = response.content
-        data_dict = cast(dict[str, Any], decode(raw_cbor))
+        self.check_status_for_error(response.status_code, response.content, url)
+
+        data_dict = cast(
+            dict[str, Any], self.decode_response(response.content, operation)
+        )
 
         if not bypass:
             self.check_response_for_error(data_dict, operation)

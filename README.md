@@ -473,6 +473,54 @@ with Surreal("ws://localhost:8000/rpc") as db:
   separate connection per live subscription (or the async client, which
   fans notifications out to per-subscriber queues).
 
+## Error handling
+
+Every error the SDK raises derives from `SurrealError`, so a single
+`except SurrealError` covers all of them regardless of transport.
+
+Below that base, errors split into two branches that mean different things:
+
+| Branch            | Meaning                                                     | Retry?                |
+| ----------------- | ----------------------------------------------------------- | --------------------- |
+| `ServerError`     | The server ran your request and rejected it                  | No — it will fail again |
+| `TransportError`  | The request never produced a structured server response      | Maybe — it may succeed |
+
+`ServerError` mirrors SurrealDB's structured error format, so you can match
+on `kind` and read typed details rather than parsing messages:
+
+```python
+from surrealdb import Surreal
+from surrealdb.errors import NotFoundError, ServerError, SurrealError, TransportError
+
+with Surreal("ws://localhost:8000/rpc") as db:
+    db.signin({"username": "root", "password": "root"})
+    db.use("ns", "db")
+
+    try:
+        db.query("SELECT * FROM nonexistent:1").execute()
+    except NotFoundError as error:
+        print(error.kind, error.table_name)   # NotFound nonexistent
+    except ServerError as error:
+        print(error.kind, error.details)
+    except TransportError as error:
+        print("could not reach the server:", error)
+```
+
+The `TransportError` branch is `ConnectionUnavailableError` (the host was
+unreachable or the socket closed), `TransportTimeoutError` (the request timed
+out), and `HttpStatusError` (a non-2xx HTTP response, carrying `.status`,
+`.body`, and `.url`). Each keeps the underlying library exception as
+`__cause__` when you need the original detail.
+
+Note that a non-2xx HTTP response is reported as `HttpStatusError` rather than
+a `ServerError` subclass, because SurrealDB answers those at the HTTP layer
+with a plain-text or JSON body and no structured RPC error to map. An invalid
+bearer token over HTTP, for example, surfaces as `HttpStatusError` with
+`.status == 401`, not `NotAllowedError`.
+
+Invalid *inputs* are still rejected with plain `ValueError` / `TypeError`
+before anything is sent, following normal Python convention.
+
 ## Migrating from 2.x
 
 v3.0 is a breaking change. Highlights:
