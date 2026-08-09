@@ -27,11 +27,11 @@ from surrealdb.connections.builders import (
 from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import AUTH_FALLBACK_QUERY, UtilsMixin
-from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     ConnectionUnavailableError,
+    TransportTimeoutError,
     UnexpectedResponseError,
     parse_rpc_error,
 )
@@ -79,6 +79,23 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         # handed off instead of being lost.
         self.live_queues: dict[str, list[queue.Queue[dict[str, Any]]]] = {}
 
+    def _connect_socket(self) -> ClientConnection:
+        """Open the websocket, mapping transport failures to SDK errors."""
+        try:
+            return ws_sync.connect(
+                self.raw_url,
+                max_size=None,
+                subprotocols=[websockets.Subprotocol("cbor")],
+            )
+        except TimeoutError as exc:
+            raise TransportTimeoutError(
+                f"timed out connecting to {self.raw_url}: {exc}"
+            ) from exc
+        except (WebSocketException, OSError) as exc:
+            raise ConnectionUnavailableError(
+                f"could not connect to {self.raw_url}: {exc}"
+            ) from exc
+
     def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
     ) -> dict[str, Any]:
@@ -86,32 +103,39 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         # This prevents race conditions when multiple threads share the same connection
         with self._lock:
             if self.socket is None:
-                self.socket = ws_sync.connect(
-                    self.raw_url,
-                    max_size=None,
-                    subprotocols=[websockets.Subprotocol("cbor")],
-                )
-            self.socket.send(message.WS_CBOR_DESCRIPTOR)
+                self.socket = self._connect_socket()
 
             # Correlate the reply to this request. Live-query notifications
             # carry no top-level "id" and may be delivered between our send and
             # our reply; route those to their live queue (if a subscriber is
             # registered, else drop) and keep reading, so a notification is
             # never returned as an RPC result.
-            while True:
-                data = self.socket.recv()
-                response = decode(data if isinstance(data, bytes) else data.encode())
-                response_id = response.get("id")
-                if response_id is None:
-                    self._route_live_notification(response)
-                    continue
-                if response_id != message.id:
-                    raise UnexpectedResponseError(
-                        f"Response ID mismatch: expected {message.id}, got "
-                        f"{response_id}. This should not happen with proper "
-                        "locking."
+            try:
+                self.socket.send(message.WS_CBOR_DESCRIPTOR)
+                while True:
+                    data = self.socket.recv()
+                    response = self.decode_response(
+                        data if isinstance(data, bytes) else data.encode(), process
                     )
-                break
+                    response_id = response.get("id")
+                    if response_id is None:
+                        self._route_live_notification(response)
+                        continue
+                    if response_id != message.id:
+                        raise UnexpectedResponseError(
+                            f"Response ID mismatch: expected {message.id}, got "
+                            f"{response_id}. This should not happen with proper "
+                            "locking."
+                        )
+                    break
+            except TimeoutError as exc:
+                raise TransportTimeoutError(
+                    f"timed out while {process} on {self.raw_url}: {exc}"
+                ) from exc
+            except (WebSocketException, OSError) as exc:
+                raise ConnectionUnavailableError(
+                    f"the connection to {self.raw_url} failed while {process}: {exc}"
+                ) from exc
 
             if bypass is False:
                 self.check_response_for_error(response, process)
@@ -987,7 +1011,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                         data = self.socket.recv(timeout=_LIVE_RECV_TIMEOUT)
                     except TimeoutError:
                         data = None
-                    except (ConnectionClosed, WebSocketException) as exc:
+                    except (ConnectionClosed, WebSocketException, OSError) as exc:
                         logger.warning("Live subscription socket closed: %s", exc)
                         raise ConnectionUnavailableError(
                             "WebSocket connection closed while subscribed to a "
@@ -997,7 +1021,10 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 if data is None:
                     continue
 
-                response = decode(data if isinstance(data, bytes) else data.encode())
+                response = self.decode_response(
+                    data if isinstance(data, bytes) else data.encode(),
+                    "reading a live notification",
+                )
                 if response.get("id") is not None:
                     # Stray RPC reply with no waiter (should not happen while
                     # the lock serialises RPCs); ignore rather than yield it.
@@ -1097,9 +1124,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         Synchronous context manager entry.
         Initializes a websocket connection and returns the connection instance.
         """
-        self.socket = ws_sync.connect(
-            self.raw_url, max_size=None, subprotocols=[websockets.Subprotocol("cbor")]
-        )
+        self.socket = self._connect_socket()
         return self
 
     def __exit__(

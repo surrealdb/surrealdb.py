@@ -28,6 +28,7 @@ from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     ConnectionUnavailableError,
+    TransportTimeoutError,
     UnexpectedResponseError,
     parse_rpc_error,
 )
@@ -122,7 +123,12 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.qry[query_id] = fut
         try:
             # correlate message to query, send and forget it
-            await self.socket.send(message.WS_CBOR_DESCRIPTOR)
+            try:
+                await self.socket.send(message.WS_CBOR_DESCRIPTOR)
+            except (WebSocketException, OSError) as exc:
+                raise ConnectionUnavailableError(
+                    f"the connection to {self.raw_url} failed while {process}: {exc}"
+                ) from exc
             del message
 
             # wait for response
@@ -155,11 +161,20 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             self.host = self.url.hostname
             self.port = self.url.port
 
-        self.socket = await websockets.connect(
-            self.raw_url,
-            max_size=None,
-            subprotocols=[websockets.Subprotocol("cbor")],
-        )
+        try:
+            self.socket = await websockets.connect(
+                self.raw_url,
+                max_size=None,
+                subprotocols=[websockets.Subprotocol("cbor")],
+            )
+        except asyncio.TimeoutError as exc:
+            raise TransportTimeoutError(
+                f"timed out connecting to {self.raw_url}: {exc}"
+            ) from exc
+        except (WebSocketException, OSError) as exc:
+            raise ConnectionUnavailableError(
+                f"could not connect to {self.raw_url}: {exc}"
+            ) from exc
         self.loop = asyncio.get_running_loop()
         self.recv_task = asyncio.create_task(self._recv_task())
 

@@ -6,6 +6,11 @@ All errors raised by this SDK extend ``SurrealError`` so that callers can
 the ``ServerError`` sub-tree which mirrors the structured error format
 (kind / details / cause) introduced in SurrealDB 3.x while remaining
 backward-compatible with the legacy code-only format.
+
+Failures that never reached the server, or that came back in a form with no
+structured error to parse, use the ``TransportError`` sub-tree instead.  The
+split is what retry logic keys on: a ``TransportError`` may succeed if tried
+again, a ``ServerError`` describes a decision the server already made.
 """
 
 from __future__ import annotations
@@ -394,8 +399,40 @@ class InternalError(ServerError):
 # ------------------------------------------------------------------ #
 
 
-class ConnectionUnavailableError(SurrealError):
+class TransportError(SurrealError):
+    """Transport-level failure that produced no structured server response.
+
+    Raised when a request could not be sent, could not be completed, or came
+    back in a form the SDK cannot interpret as an RPC result.  Distinct from
+    ``ServerError``, which represents a failure the server described in its
+    own structured error format.
+    """
+
+
+class ConnectionUnavailableError(TransportError):
     """No active connection to the database."""
+
+
+class TransportTimeoutError(TransportError):
+    """The request timed out before the server responded."""
+
+
+class HttpStatusError(TransportError):
+    """The server returned a non-2xx HTTP response for an RPC request.
+
+    Attributes:
+        status: The HTTP status code.
+        body: The response body decoded as text, truncated.  Empty when the
+            response had no body.
+        url: The URL the request was sent to.
+    """
+
+    def __init__(self, status: int, body: str, url: str) -> None:
+        detail = f": {body}" if body else ""
+        super().__init__(f"HTTP {status} from {url}{detail}")
+        self.status: int = status
+        self.body: str = body
+        self.url: str = url
 
 
 class UnsupportedEngineError(SurrealError):

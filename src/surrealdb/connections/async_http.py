@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from types import TracebackType
 from typing import Any, cast, overload
@@ -14,10 +15,14 @@ from surrealdb.connections.builders import (
 )
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import AUTH_FALLBACK_QUERY, UtilsMixin
-from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
-from surrealdb.errors import UnsupportedFeatureError, parse_rpc_error
+from surrealdb.errors import (
+    ConnectionUnavailableError,
+    TransportTimeoutError,
+    UnsupportedFeatureError,
+    parse_rpc_error,
+)
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 from surrealdb.types import Tokens, Value, parse_auth_result
@@ -94,19 +99,31 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         operation: str,
         bypass: bool,
     ) -> dict[str, Any]:
-        async with session.request(
-            method="POST",
-            url=url,
-            headers=headers,
-            data=data,
-            timeout=aiohttp.ClientTimeout(total=30),
-        ) as response:
-            response.raise_for_status()
-            raw_cbor = await response.read()
-            result = decode(raw_cbor)
-            if bypass is False:
-                self.check_response_for_error(result, operation)
-            return result
+        try:
+            async with session.request(
+                method="POST",
+                url=url,
+                headers=headers,
+                data=data,
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as response:
+                status = response.status
+                raw_cbor = await response.read()
+        except asyncio.TimeoutError as exc:
+            raise TransportTimeoutError(
+                f"timed out while {operation} against {url}: {exc}"
+            ) from exc
+        except aiohttp.ClientError as exc:
+            raise ConnectionUnavailableError(
+                f"could not reach {url} while {operation}: {exc}"
+            ) from exc
+
+        self.check_status_for_error(status, raw_cbor, url)
+
+        result = self.decode_response(raw_cbor, operation)
+        if bypass is False:
+            self.check_response_for_error(result, operation)
+        return result
 
     def set_token(self, token: str) -> None:
         """
