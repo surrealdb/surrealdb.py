@@ -1,23 +1,29 @@
 """Mocked regression tests for the ``info()`` record-auth ``$auth`` fallback
 over the HTTP transports (finding #23, finding #8-fragile-match).
 
-These tests do not need a running SurrealDB server: the RPC endpoint is
-mocked with ``responses`` (blocking) / ``aioresponses`` (async) and the
-bodies are real CBOR payloads, so the full encode/decode + fallback path is
-exercised end to end.
+These tests do not need a running SurrealDB server. The blocking transport's
+RPC endpoint is mocked with ``responses``; the async transport is pointed at a
+real, throwaway ``aiohttp`` server bound to an ephemeral port on 127.0.0.1 that
+answers the RPC calls itself (``aioresponses`` cannot construct aiohttp >=
+3.14's ``ClientResponse``, so aiohttp's own ``TestServer`` plays the server
+instead). Either way the bodies are real CBOR payloads, so the full
+encode/decode + fallback path is exercised end to end.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from types import TracebackType
 from typing import Any
 
 import pytest
 import responses
-from aioresponses import aioresponses
+from aiohttp import web
+from aiohttp.test_utils import TestServer
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
-from surrealdb.data.cbor import encode
+from surrealdb.data.cbor import decode, encode
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.errors import NotAllowedError, ServerError
 from surrealdb.types import Value
@@ -142,33 +148,114 @@ def test_blocking_http_info_empty_auth_reraises() -> None:
 # Async HTTP
 # --------------------------------------------------------------------------- #
 
+Responder = Callable[[dict[str, Any]], bytes]
+
+
+def _make_responder(
+    info_error: dict[str, Any],
+    auth_records: list[dict[str, Any]],
+) -> Responder:
+    """Build a responder that answers signin/info/query RPCs with CBOR bodies.
+
+    A single ``info()`` call spans several requests to the same endpoint
+    (signin, then info, then the ``$auth`` fallback query), so the reply is
+    keyed on the RPC ``method`` rather than on the arrival order.
+    """
+
+    def _responder(request: dict[str, Any]) -> bytes:
+        method = request["method"]
+        if method == "signin":
+            return _signin_ok()
+        if method == "info":
+            return _info_error(info_error)
+        if method == "query":
+            return _auth_query_result(auth_records)
+        raise AssertionError(f"unexpected RPC method: {method}")
+
+    return _responder
+
+
+class _RpcServer:
+    """A real local ``/rpc`` endpoint that records what the SDK sent it.
+
+    Requests are decoded from CBOR and appended to :attr:`requests`, which
+    replaces the request introspection ``aioresponses`` used to provide (it
+    cannot be used at all from aiohttp 3.14 onwards).
+    """
+
+    def __init__(self, responder: Responder) -> None:
+        self._responder = responder
+        self._server: TestServer | None = None
+        self.requests: list[dict[str, Any]] = []
+
+    async def __aenter__(self) -> _RpcServer:
+        app = web.Application()
+        # Pinned to ``POST /rpc``, not a catch-all: that is the only request the
+        # transport should make, and matching nothing else preserves the
+        # implicit assertion the previous mock enforced. A transport that
+        # changed method or path now 404s here rather than being answered.
+        app.router.add_route("POST", "/rpc", self._handle)
+        self._server = TestServer(app)
+        await self._server.start_server()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        # Always shut the server down so the tests do not leak sockets.
+        if self._server is not None:
+            await self._server.close()
+            self._server = None
+
+    async def _handle(self, request: web.Request) -> web.Response:
+        payload = decode(await request.read())
+        self.requests.append(payload)
+        return web.Response(
+            body=self._responder(payload),
+            status=200,
+            content_type="application/cbor",
+        )
+
+    @property
+    def url(self) -> str:
+        """The base URL to point a connection at (no trailing slash)."""
+        assert self._server is not None, "server not started"
+        return str(self._server.make_url("/")).rstrip("/")
+
+    @property
+    def methods(self) -> list[str]:
+        """The RPC method of every request the SDK made, in order."""
+        return [request["method"] for request in self.requests]
+
 
 @pytest.mark.parametrize("error", _NOT_FOUND_ERRORS)
 async def test_async_http_info_uses_auth_fallback(error: dict[str, Any]) -> None:
     record = _auth_record()
-    with aioresponses() as mocked:
-        mocked.post(RPC_URL, body=_signin_ok(), status=200)
-        mocked.post(RPC_URL, body=_info_error(error), status=200)
-        mocked.post(RPC_URL, body=_auth_query_result([record]), status=200)
-
-        db = AsyncHttpSurrealConnection("http://localhost:8000")
+    async with _RpcServer(_make_responder(error, [record])) as rpc:
+        db = AsyncHttpSurrealConnection(rpc.url)
         await db.signin(RECORD_SIGNIN)
         outcome = await db.info()
 
     assert outcome == record
     assert outcome["id"] == RecordID("user", "tobie")
+    # signin + info + $auth query
+    assert rpc.methods == ["signin", "info", "query"]
+    assert rpc.requests[2]["params"][0] == "SELECT * FROM $auth"
 
 
 async def test_async_http_info_non_not_found_error_raises() -> None:
-    with aioresponses() as mocked:
-        mocked.post(RPC_URL, body=_signin_ok(), status=200)
-        mocked.post(
-            RPC_URL,
-            body=_info_error({"code": -32602, "message": "Not allowed"}),
-            status=200,
-        )
-
-        db = AsyncHttpSurrealConnection("http://localhost:8000")
+    """A non not-found error must be raised, not silently swallowed, and must
+    not trigger a second ``$auth`` query."""
+    async with _RpcServer(
+        _make_responder({"code": -32602, "message": "Not allowed"}, [])
+    ) as rpc:
+        db = AsyncHttpSurrealConnection(rpc.url)
         await db.signin(RECORD_SIGNIN)
         with pytest.raises(NotAllowedError):
             await db.info()
+
+    # Only signin + info: the fallback query must NOT have fired.
+    assert rpc.methods == ["signin", "info"]

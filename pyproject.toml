@@ -27,7 +27,12 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "aiohttp>=3.13.4",
+    # 3.14.0 is the first release carrying the fix for CVE-2026-34993
+    # (GHSA-jg22-mg44-37j8) in `CookieJar.load()`. The SDK never touches
+    # `CookieJar`, so the path is unreachable through it, but pulling the floor
+    # up keeps users off the affected range. 3.14 still supports Python 3.10,
+    # so this costs no platform coverage.
+    "aiohttp>=3.14.0",
     "pydantic-core>=2.0.1",
     "requests>=2.25.0",
     "typing_extensions>=4.0.0; python_version<'3.12'",
@@ -58,7 +63,6 @@ dev = [
     "types-requests>=2.32.4",   # Type stubs for requests
 ]
 test = [
-    "aioresponses>=0.7.6",
     "coverage>=7.0.0",
     "hypothesis>=6.135.16",
     "pytest>=7.0.0",
@@ -70,13 +74,6 @@ test = [
 # --------------------------------------------------
 # uv
 # --------------------------------------------------
-
-# aioresponses (test-only) cannot construct aiohttp>=3.14's ClientResponse,
-# which now requires a `stream_writer` argument. Cap aiohttp during resolution
-# until aioresponses supports 3.14. This is a resolution-only constraint and is
-# NOT published in the wheel metadata, so downstream users keep `aiohttp>=3.13.4`.
-[tool.uv]
-constraint-dependencies = ["aiohttp<3.14"]
 
 [tool.uv.sources]
 surrealdb-embedded = { path = "embedded", editable = true }
