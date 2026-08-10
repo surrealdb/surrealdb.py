@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0-beta.4] - 2026-08-10
+
+Seven defects found by verifying the 3.0.0-beta.3 artifacts as a user installs them, rather than from the working tree. Most sit on the default `pip install surrealdb` path, which the test suite never exercised because it always has the optional engine present.
+
 ### Fixed
 - `from surrealdb import *` no longer raises `AttributeError` on a plain `pip install surrealdb`. `__all__` advertised `AsyncEmbeddedSurrealConnection` and `BlockingEmbeddedSurrealConnection` unconditionally, but both are imported under a `try`/`except ImportError` and are absent without the optional `surrealdb[embedded]` engine - so the default install exported two names that did not exist, breaking star imports and anything that walks `__all__`. They now join `__all__` only when the engine is present, and accessing either without it raises an `AttributeError` naming the extra to install.
 - An unsupported URL scheme now raises `UnsupportedEngineError` rather than a bare `ValueError` escaping from enum construction. `Surreal("ftp://...")`, `Surreal("rocksdb://...")` and `Surreal("localhost:8000")` all previously raised `ValueError: '...' is not a valid UrlScheme`, which `except SurrealError` did not catch - contradicting the guarantee that every failure the SDK raises is a `SurrealError`. The original `ValueError` is preserved as `__cause__`. **This changes the exception type**: code catching `ValueError` from connection construction should catch `SurrealError` (or `UnsupportedEngineError`) instead.
@@ -226,7 +230,8 @@ Follow-up to `3.0.0-alpha.1` that finalises the v3 API surface and fixes a batch
 ### Added
 - Initial stable release of the SurrealDB Python client.
 
-[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.3...HEAD
+[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.4...HEAD
+[3.0.0-beta.4]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.3...v3.0.0-beta.4
 [3.0.0-beta.3]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.2...v3.0.0-beta.3
 [3.0.0-beta.2]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.1...v3.0.0-beta.2
 [3.0.0-beta.1]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-alpha.4...v3.0.0-beta.1
