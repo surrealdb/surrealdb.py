@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0-beta.3] - 2026-08-10
+
+A small correctness and dependency release. Embedded connections now report the engine version they actually run, and the `aiohttp` floor moves onto the release carrying CVE-2026-34993's fix.
+
 ### Fixed
 - `version()` on an embedded connection now reports the SurrealDB engine version rather than the version of the `surrealdb-embedded` extension. The RPC handler formatted the extension crate's own `CARGO_PKG_VERSION`, so `mem://`, `file://` and `surrealkv://` connections answered `surrealdb-3.0.0-beta.2` while the engine they actually run is `surrealdb-core` 3.2.4 - the opposite of what the same call returns over HTTP or WebSocket, and misleading in the very release that moved the embedded engine to 3.2. Both the async and blocking implementations now read `surrealdb_core::env::VERSION`, which is compiled into the engine and so cannot disagree with what the wheel links. The extension's own version remains available as `importlib.metadata.version("surrealdb-embedded")`. Embedded version strings carry no `+<date>.<sha>` build metadata, because that suffix is derived from a git checkout of the SurrealDB monorepo and does not exist for an engine built from a published crate.
 
@@ -211,7 +215,8 @@ Follow-up to `3.0.0-alpha.1` that finalises the v3 API surface and fixes a batch
 ### Added
 - Initial stable release of the SurrealDB Python client.
 
-[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.2...HEAD
+[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.3...HEAD
+[3.0.0-beta.3]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.2...v3.0.0-beta.3
 [3.0.0-beta.2]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.1...v3.0.0-beta.2
 [3.0.0-beta.1]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-alpha.4...v3.0.0-beta.1
 [3.0.0-alpha.4]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-alpha.3...v3.0.0-alpha.4

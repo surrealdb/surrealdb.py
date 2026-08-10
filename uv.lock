@@ -1581,7 +1581,7 @@ wheels = [
 
 [[package]]
 name = "surrealdb"
-version = "3.0.0b2"
+version = "3.0.0b3"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -1662,7 +1662,7 @@ test = [
 
 [[package]]
 name = "surrealdb-embedded"
-version = "3.0.0b2"
+version = "3.0.0b3"
 source = { editable = "embedded" }
 
 [[package]]
