@@ -85,6 +85,19 @@ surrealdb-embedded = { path = "embedded", editable = true }
 [tool.hatch.build.targets.wheel]
 packages = ["src/surrealdb"]
 
+# Without this the sdist is the whole working tree - CI workflows, the Rust
+# crate for the separate `surrealdb-embedded` package, Docker files, editor
+# config. Ship what is needed to build the package and run its tests against
+# the source, which is what downstream packagers rebuild from.
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/README.md",
+    "/LICENSE",
+    "/CHANGELOG.md",
+]
+
 # --------------------------------------------------
 # ruff
 # --------------------------------------------------
