@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `version()` on an embedded connection now reports the SurrealDB engine version rather than the version of the `surrealdb-embedded` extension. The RPC handler formatted the extension crate's own `CARGO_PKG_VERSION`, so `mem://`, `file://` and `surrealkv://` connections answered `surrealdb-3.0.0-beta.2` while the engine they actually run is `surrealdb-core` 3.2.4 - the opposite of what the same call returns over HTTP or WebSocket, and misleading in the very release that moved the embedded engine to 3.2. Both the async and blocking implementations now read `surrealdb_core::env::VERSION`, which is compiled into the engine and so cannot disagree with what the wheel links. The extension's own version remains available as `importlib.metadata.version("surrealdb-embedded")`. Embedded version strings carry no `+<date>.<sha>` build metadata, because that suffix is derived from a git checkout of the SurrealDB monorepo and does not exist for an engine built from a published crate.
+
 ## [3.0.0-beta.2] - 2026-08-10
 
 A maintenance beta. No API changes: the notable part is that the embedded engine moves from SurrealDB 3.0 to 3.2, and that the dependency surface is now watched rather than hand-bumped.
