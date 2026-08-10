@@ -1,7 +1,7 @@
 services:
   # Default service for local development
   surrealdb:
-    image: surrealdb/surrealdb:${SURREALDB_VERSION:-v3.0.0}
+    image: surrealdb/surrealdb:${SURREALDB_VERSION:-v3.0.5}
     command: "start --allow-all"
     environment:
       - SURREAL_USER=root
@@ -16,7 +16,7 @@ services:
 
   # Service for testing specific v2.x versions
   surrealdb-test:
-    image: surrealdb/surrealdb:${TEST_SURREALDB_VERSION:-v2.1.8}
+    image: surrealdb/surrealdb:${TEST_SURREALDB_VERSION:-v2.1.9}
     command: "start --allow-all"
     environment:
       - SURREAL_USER=root
@@ -43,7 +43,7 @@ services:
 
   # v2.1.x testing
   surrealdb-v2-1:
-    image: surrealdb/surrealdb:v2.1.8
+    image: surrealdb/surrealdb:v2.1.9
     command: "start --allow-all"
     environment:
       - SURREAL_USER=root
@@ -56,7 +56,7 @@ services:
 
   # v2.2.x testing
   surrealdb-v2-2:
-    image: surrealdb/surrealdb:v2.2.6
+    image: surrealdb/surrealdb:v2.2.8
     command: "start --allow-all"
     environment:
       - SURREAL_USER=root
@@ -69,7 +69,7 @@ services:
 
   # Latest v2.3.x testing
   surrealdb-v2-3:
-    image: surrealdb/surrealdb:v2.3.6
+    image: surrealdb/surrealdb:v2.3.10
     command: "start --allow-all"
     environment:
       - SURREAL_USER=root
@@ -82,7 +82,7 @@ services:
 
   # SurrealDB 3.x (bearer access tests)
   surrealdb-v3:
-    image: surrealdb/surrealdb:v3.0.0
+    image: surrealdb/surrealdb:v3.0.5
     command: "start --allow-all"
     environment:
       - SURREAL_USER=root

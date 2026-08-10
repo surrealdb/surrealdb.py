@@ -1,0 +1,76 @@
+version: 2
+
+updates:
+  # --------------------------------------------------
+  # GitHub Actions
+  # --------------------------------------------------
+  #
+  # Every `uses:` in this repo is pinned to a commit SHA with the release tag in
+  # a trailing comment. Dependabot understands that convention and moves both
+  # the SHA and the comment, so pinning does not mean going stale.
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+    groups:
+      # One PR for the whole workflow surface: these move together often enough
+      # (a runner Node bump lands across every actions/* release at once) that
+      # separate PRs would just mean re-running the same matrix N times.
+      actions:
+        patterns:
+          - "*"
+
+  # --------------------------------------------------
+  # Python (uv)
+  # --------------------------------------------------
+  #
+  # Updates `pyproject.toml` lower bounds and `uv.lock` together. The dev and
+  # test groups are separated from the runtime dependencies: a lint/type-check
+  # bump that fails CI is a self-contained fix, whereas an `aiohttp`,
+  # `websockets` or `requests` bump changes what users install and deserves to
+  # be reviewed on its own.
+
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: deps
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        patterns:
+          - "*"
+
+  # --------------------------------------------------
+  # Rust (embedded extension)
+  # --------------------------------------------------
+  #
+  # `surrealdb-core`/`surrealdb-types` are deliberately left out of the group
+  # below. They are the embedded engine itself, they have changed the
+  # `RpcProtocol` trait within a minor release before, and a bump decides which
+  # SurrealDB version the `surrealdb-embedded` wheel ships - so each one gets
+  # its own PR to review rather than riding along with a transitive bump.
+
+  - package-ecosystem: cargo
+    directory: /embedded
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: deps
+    groups:
+      rust-dependencies:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - surrealdb-core
+          - surrealdb-types

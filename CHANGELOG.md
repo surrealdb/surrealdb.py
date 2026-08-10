@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The `surrealdb-embedded` extension now builds against `surrealdb-core` 3.2.4, up from 3.0.5, so `mem://`, `file://` and `surrealkv://` connections run the 3.2 engine and pick up everything that landed in 3.1 and 3.2. The native glue moved with the `RpcProtocol` trait: its session map is now keyed by a concrete `Uuid` rather than `Option<Uuid>`, so the embedded connection's single implicit session is registered under a generated id and every request without a session id routes to it. Behaviour is unchanged - the embedded connection has never supported `attach`/`detach` or client-side transactions, and `use`/`signin` state still persists across calls on a connection. CBOR request decoding now bounds nesting with the datastore's `max_object_parsing_depth` (default 100), matching what the server applies to its own parsers.
+- Refreshed the rest of the dependency surface: every pinned GitHub Actions workflow dependency moved to its current release, the Python lockfile moved to current (notably `mypy` 2.3.0 and `ruff` 0.16.2), and the CI/docker-compose SurrealDB server versions moved to the latest patch of each series already covered (`v2.1.9`, `v3.0.5`). `aiohttp` stays capped below 3.14 for resolution only - `aioresponses` 0.7.9 still cannot construct 3.14's `ClientResponse` - and the cap remains absent from published wheel metadata.
+
+### Added
+- A Dependabot configuration covering GitHub Actions, the `uv` Python lockfile, and the embedded extension's Cargo manifest, so these no longer drift silently between releases. `surrealdb-core` and `surrealdb-types` are excluded from the grouped Rust updates: a bump there decides which SurrealDB engine the embedded wheel ships and has changed the `RpcProtocol` trait within a minor release, so each gets its own reviewable pull request.
+
 ## [3.0.0-beta.1] - 2026-08-09
 
 First beta on the 3.0.0 track. The v3 API surface settled over the alpha series is now considered feature-complete, and this release closes the last two gaps in it: every failure the SDK raises is a `SurrealError`, and the session/transaction wrappers expose the full connection RPC set. Both packages move to the `Development Status :: 4 - Beta` classifier.
