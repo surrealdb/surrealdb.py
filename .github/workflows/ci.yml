@@ -135,6 +135,21 @@ jobs:
             exit 1
           fi
 
+      # The embedded package ships hand-written stubs (_ext.pyi) for the native
+      # module, but PEP 561 says a type checker must ignore them unless the
+      # package is also marked. This is a source-tree check rather than a wheel
+      # check because building that wheel needs a full Rust release build;
+      # maturin includes the whole `python-source` package directory, so the
+      # marker existing here is what puts it in the wheel.
+      - name: Assert py.typed is present in the embedded package (PEP 561)
+        run: |
+          if [ -f embedded/src/surrealdb_embedded/py.typed ]; then
+            echo "OK: embedded/src/surrealdb_embedded/py.typed is present"
+          else
+            echo "ERROR: py.typed is missing, so the _ext.pyi stubs would be ignored by type checkers"
+            exit 1
+          fi
+
   test:
     runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.surrealdb-version == 'nightly' }}

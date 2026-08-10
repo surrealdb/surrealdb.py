@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `from surrealdb import *` no longer raises `AttributeError` on a plain `pip install surrealdb`. `__all__` advertised `AsyncEmbeddedSurrealConnection` and `BlockingEmbeddedSurrealConnection` unconditionally, but both are imported under a `try`/`except ImportError` and are absent without the optional `surrealdb[embedded]` engine - so the default install exported two names that did not exist, breaking star imports and anything that walks `__all__`. They now join `__all__` only when the engine is present, and accessing either without it raises an `AttributeError` naming the extra to install.
+- An unsupported URL scheme now raises `UnsupportedEngineError` rather than a bare `ValueError` escaping from enum construction. `Surreal("ftp://...")`, `Surreal("rocksdb://...")` and `Surreal("localhost:8000")` all previously raised `ValueError: '...' is not a valid UrlScheme`, which `except SurrealError` did not catch - contradicting the guarantee that every failure the SDK raises is a `SurrealError`. The original `ValueError` is preserved as `__cause__`. **This changes the exception type**: code catching `ValueError` from connection construction should catch `SurrealError` (or `UnsupportedEngineError`) instead.
+- `Surreal("memory")` works. The bare form is documented in the README as equivalent to `mem://` and is named as valid in `UnsupportedEngineError`'s own message, but `urlparse` reports an empty scheme without a `://` separator, so it raised `ValueError: '' is not a valid UrlScheme`. Only the documented bare spellings are matched, so scheme-less nonsense such as `Surreal("http")` is still rejected.
+- The `surrealdb-embedded` wheel now ships a `py.typed` marker. It already included hand-written stubs for the native module (`_ext.pyi`), but PEP 561 requires type checkers to ignore stubs in a package that is not marked, so the stubs had no effect.
+
 ## [3.0.0-beta.3] - 2026-08-10
 
 A small correctness and dependency release. Embedded connections now report the engine version they actually run, and the `aiohttp` floor moves onto the release carrying CVE-2026-34993's fix.

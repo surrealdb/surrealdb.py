@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Any, Union
 
 _EMBEDDED_AVAILABLE = False
 try:
@@ -79,16 +79,23 @@ from surrealdb.errors import (
 )
 from surrealdb.types import Tokens, Value
 
+# Names that only exist when the optional native engine is installed
+# (``pip install surrealdb[embedded]``). They are pruned from ``__all__`` below
+# when it is absent, so ``from surrealdb import *`` reflects what is actually
+# importable rather than advertising names that raise ``AttributeError``.
+_EMBEDDED_ONLY = (
+    "AsyncEmbeddedSurrealConnection",
+    "BlockingEmbeddedSurrealConnection",
+)
+
 __all__ = [
     "AsyncSurreal",
     "Surreal",
     # Connections
-    "AsyncEmbeddedSurrealConnection",
     "AsyncHttpSurrealConnection",
     "AsyncSurrealSession",
     "AsyncSurrealTransaction",
     "AsyncWsSurrealConnection",
-    "BlockingEmbeddedSurrealConnection",
     "BlockingHttpSurrealConnection",
     "BlockingSurrealSession",
     "BlockingSurrealTransaction",
@@ -215,3 +222,28 @@ def AsyncSurreal(
         return AsyncWsSurrealConnection(url=url)
     else:
         raise UnsupportedEngineError(url)
+
+
+if _EMBEDDED_AVAILABLE:
+    # Appended rather than pruned from a full literal, so `__all__` stays a
+    # statically analyzable list for type checkers - reassigning it stops
+    # pyright recognising the re-exports above and flags every one as unused.
+    __all__ += [
+        "AsyncEmbeddedSurrealConnection",
+        "BlockingEmbeddedSurrealConnection",
+    ]
+else:
+
+    def __getattr__(name: str) -> Any:
+        """Explain the missing extra instead of a bare ``AttributeError``.
+
+        Only reached for names this module does not define, so an explicit
+        ``from surrealdb import BlockingEmbeddedSurrealConnection`` on an
+        install without the engine says what to install.
+        """
+        if name in _EMBEDDED_ONLY:
+            raise AttributeError(
+                f"{name} requires the embedded engine, which is not installed. "
+                "Install it with: pip install surrealdb[embedded]"
+            )
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

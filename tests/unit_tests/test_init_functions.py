@@ -8,6 +8,7 @@ from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.connections.url import UrlScheme
+from surrealdb.errors import SurrealError, UnsupportedEngineError
 
 
 def test_surreal_http() -> None:
@@ -35,9 +36,17 @@ def test_surreal_wss() -> None:
 
 
 def test_surreal_invalid_protocol() -> None:
-    """Test Surreal function with invalid protocol raises ValueError."""
-    with pytest.raises(ValueError, match="'ftp' is not a valid UrlScheme"):
+    """An unsupported protocol raises a ``SurrealError``, not a bare ``ValueError``.
+
+    This previously escaped as ``ValueError: 'ftp' is not a valid UrlScheme``
+    straight from enum construction, so ``except SurrealError`` did not cover
+    it. The original ``ValueError`` is kept as ``__cause__``.
+    """
+    with pytest.raises(UnsupportedEngineError) as exc_info:
         Surreal("ftp://localhost:8000")
+
+    assert isinstance(exc_info.value, SurrealError)
+    assert isinstance(exc_info.value.__cause__, ValueError)
 
 
 def test_async_surreal_http() -> None:
@@ -65,9 +74,12 @@ def test_async_surreal_wss() -> None:
 
 
 def test_async_surreal_invalid_protocol() -> None:
-    """Test AsyncSurreal function with invalid protocol raises ValueError."""
-    with pytest.raises(ValueError, match="'ftp' is not a valid UrlScheme"):
+    """The async factory rejects an unsupported protocol the same way."""
+    with pytest.raises(UnsupportedEngineError) as exc_info:
         AsyncSurreal("ftp://localhost:8000")
+
+    assert isinstance(exc_info.value, SurrealError)
+    assert isinstance(exc_info.value.__cause__, ValueError)
 
 
 def test_surreal_keyword_arg() -> None:
@@ -80,3 +92,39 @@ def test_async_surreal_keyword_arg() -> None:
     """Test AsyncSurreal function accepts the url as a keyword argument."""
     connection = AsyncSurreal(url="http://localhost:8000")
     assert isinstance(connection, AsyncHttpSurrealConnection)
+
+
+def test_all_names_are_importable() -> None:
+    """Every name in ``surrealdb.__all__`` actually exists.
+
+    ``__all__`` used to advertise ``AsyncEmbeddedSurrealConnection`` and
+    ``BlockingEmbeddedSurrealConnection`` unconditionally, even though both are
+    imported under a ``try``/``except ImportError`` and are absent unless the
+    optional native engine is installed. On a plain ``pip install surrealdb``
+    that made ``from surrealdb import *`` raise ``AttributeError``.
+
+    This runs in both configurations: the core CI test job installs no embedded
+    engine, while the embedded job builds one, so the guard covers each path.
+    """
+    import surrealdb
+
+    missing = [name for name in surrealdb.__all__ if not hasattr(surrealdb, name)]
+    assert missing == [], f"__all__ advertises names that do not exist: {missing}"
+
+
+def test_star_import_succeeds() -> None:
+    """``from surrealdb import *`` works whatever is installed."""
+    namespace: dict[str, object] = {}
+    exec("from surrealdb import *", namespace)  # noqa: S102
+
+    assert "Surreal" in namespace
+    assert "AsyncSurreal" in namespace
+
+
+def test_unsupported_scheme_raises_surreal_error() -> None:
+    """``Surreal`` rejects an unknown scheme inside the error hierarchy."""
+    with pytest.raises(SurrealError):
+        Surreal("rocksdb://tmp/db")
+
+    with pytest.raises(SurrealError):
+        AsyncSurreal("rocksdb://tmp/db")
