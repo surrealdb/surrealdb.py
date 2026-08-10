@@ -74,10 +74,11 @@ python examples/embedded/persistence.py
 
 ## Installation Note
 
-The embedded database functionality is included in the standard `surrealdb` package:
+The embedded database ships as an optional native extension, `surrealdb-embedded`, so
+it is **not** part of the default install. Request it with the `embedded` extra:
 
 ```bash
-pip install surrealdb
+pip install 'surrealdb[embedded]'
 ```
 
 Pre-built wheels are available for:

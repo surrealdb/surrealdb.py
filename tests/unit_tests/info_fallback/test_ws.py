@@ -79,7 +79,11 @@ class _FakeBlockingWsSocket:
     def send(self, data: bytes) -> None:
         self._pending = encode(self._responder(decode(data)))
 
-    def recv(self) -> bytes:
+    def recv(self, timeout: float | None = None) -> bytes:
+        # `websockets.sync.client.ClientConnection.recv` takes a timeout, and
+        # the transport passes one so a missing reply cannot block forever.
+        # The double has to accept it to stay faithful to what it stands in for.
+        del timeout
         assert self._pending is not None, "recv() called before send()"
         payload, self._pending = self._pending, None
         return payload

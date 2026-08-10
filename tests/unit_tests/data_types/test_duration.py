@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 
-from surrealdb.cbor import CBORTag
+from surrealdb.cbor import CBORTag, loads
 from surrealdb.data import cbor
 from surrealdb.data.types import constants
 from surrealdb.data.types.duration import Duration
@@ -258,3 +258,25 @@ def test_duration_cbor_encode_decode_roundtrip() -> None:
 
     assert isinstance(decoded_whole, Duration)
     assert decoded_whole == original_whole
+
+
+def test_duration_encodes_with_the_compact_tag() -> None:
+    """A ``Duration`` goes on the wire as tag 14 with ``[seconds, nanos]``.
+
+    Tag 13 carries the *string* form (``"1h30m"``); tag 14 carries the compact
+    ``[seconds, nanoseconds]`` array. The encoder previously paired tag 13 with
+    the array payload, which the server rejects with HTTP 400 - a ``Duration``
+    could be read back but never sent, on every transport and engine.
+
+    Asserted on the emitted tag rather than through a round trip, because the
+    SDK's own decoder accepts either shape: an encode/decode round trip passes
+    with the wrong tag, which is how this survived four releases.
+    """
+    raw = loads(cbor.encode(Duration.parse("1h30m")))
+
+    assert isinstance(raw, CBORTag), f"expected a tagged value, got {raw!r}"
+    assert raw.tag == constants.TAG_DURATION_COMPACT, (
+        f"expected tag {constants.TAG_DURATION_COMPACT} (TAG_DURATION_COMPACT), "
+        f"got {raw.tag}"
+    )
+    assert list(raw.value) == [5400, 0]

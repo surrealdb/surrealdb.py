@@ -568,6 +568,10 @@ Without the extra, an embedded URL raises `UnsupportedEngineError` telling you t
 install it - the remote `http://`, `https://`, `ws://` and `wss://` connections work
 either way.
 
+Embedded connections do not authenticate: there is no server and no root user, so
+calling `signin()` on one raises `NotAllowedError`. Use `use()` to select a namespace
+and database and start querying.
+
 For source builds, you'll need Rust toolchain and maturin:
 
 ```sh
@@ -586,7 +590,6 @@ async def main():
     # Create an in-memory database (can use "mem://" or "memory")
     async with AsyncSurreal("memory") as db:
         await db.use("test", "test")
-        await db.signin({"username": "root", "password": "root"})
         
         # Use like any other SurrealDB connection
         person = await db.create("person", {
@@ -612,7 +615,6 @@ from surrealdb import AsyncSurreal
 async def main():
     async with AsyncSurreal("file://mydb") as db:
         await db.use("test", "test")
-        await db.signin({"username": "root", "password": "root"})
         
         # Data persists across connections
         await db.create("company", {
@@ -636,7 +638,6 @@ from surrealdb import Surreal
 # In-memory (can use "mem://" or "memory")
 with Surreal("memory") as db:
     db.use("test", "test")
-    db.signin({"username": "root", "password": "root"})
     
     person = db.create("person", {"name": "Jane"})
     print(person)
@@ -644,7 +645,6 @@ with Surreal("memory") as db:
 # File-based
 with Surreal("file://mydb") as db:
     db.use("test", "test")
-    db.signin({"username": "root", "password": "root"})
     
     company = db.create("company", {"name": "TechStart"})
     print(company)
