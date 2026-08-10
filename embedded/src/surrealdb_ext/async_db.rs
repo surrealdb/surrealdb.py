@@ -50,13 +50,23 @@ impl AsyncEmbeddedDB {
             })?;
             Ok::<Datastore, PyErr>(ds)
         })?;
-        let sessions: HashMap<Option<Uuid>, Arc<RwLock<Session>>> = HashMap::new();
-        let sess = Session::default().with_rt(false);
-        sessions.insert(None, Arc::new(RwLock::new(sess)));
+        // The embedded engine exposes a single implicit session: `attach`,
+        // `detach` and client-side transactions all raise
+        // `UnsupportedFeatureError` on the Python side, so requests never carry
+        // a session id. `RpcProtocol` keys its session map by a concrete
+        // `Uuid`, so mint one here and route every unnamed request to it - that
+        // keeps `use`/`signin` state on the connection, as it was when the map
+        // was keyed by `Option<Uuid>` and this session lived under `None`.
+        let session_id = Uuid::new_v4();
+        let sessions: HashMap<Uuid, Arc<RwLock<Session>>> = HashMap::new();
+        let mut sess = Session::default().with_rt(false);
+        sess.id = Some(session_id);
+        sessions.insert(session_id, Arc::new(RwLock::new(sess)));
         Ok(AsyncEmbeddedDB {
             inner: Mutex::new(Some(Arc::new(AsyncEmbeddedDBInner {
                 kvs: Arc::new(kvs),
                 sessions,
+                session_id,
             }))),
         })
     }
@@ -104,7 +114,10 @@ impl AsyncEmbeddedDB {
             })?.clone()
         };
         future_into_py(py, async move {
-            let value = cbor::decode(&data).map_err(|e| {
+            // Bound request nesting with the same knob the server feeds its
+            // parsers (`SURREAL_MAX_OBJECT_PARSING_DEPTH`, default 100).
+            let recursion_limit = inner.kvs.config().max_object_parsing_depth as usize;
+            let value = cbor::decode(&data, recursion_limit).map_err(|e| {
                 PyErr::new::<PyValueError, _>(format!("Failed to decode CBOR request: {e}"))
             })?;
             let obj = match value {
@@ -119,19 +132,21 @@ impl AsyncEmbeddedDB {
                 PyErr::new::<PyValueError, _>(format!("Failed to parse request: {e}"))
             })?;
             let rid = req.id.clone();
-            let session_id = req.session_id.map(Uuid::from);
+            let client_session = req.session_id.map(Uuid::from);
+            let session = client_session.unwrap_or(inner.session_id);
             let txn = req.txn.map(Uuid::from);
             let response = match RpcProtocol::execute(
                 inner.as_ref(),
                 txn,
-                session_id,
+                session,
+                client_session,
                 req.method,
                 req.params,
             )
             .await
             {
-                Ok(result) => DbResponse::success(rid, session_id, result),
-                Err(error) => DbResponse::failure(rid, session_id, error),
+                Ok(result) => DbResponse::success(rid, client_session, result),
+                Err(error) => DbResponse::failure(rid, client_session, error),
             };
             let response_value: PublicValue =
                 surrealdb_types::SurrealValue::into_value(response);
@@ -145,12 +160,18 @@ impl AsyncEmbeddedDB {
 
 pub struct AsyncEmbeddedDBInner {
     kvs: Arc<Datastore>,
-    sessions: HashMap<Option<Uuid>, Arc<RwLock<Session>>>,
+    sessions: HashMap<Uuid, Arc<RwLock<Session>>>,
+    /// The implicit session every unnamed request runs under.
+    session_id: Uuid,
 }
 
 impl RpcProtocol for AsyncEmbeddedDBInner {
     fn kvs(&self) -> &Datastore {
         &self.kvs
+    }
+
+    fn kvs_arc(&self) -> Arc<Datastore> {
+        Arc::clone(&self.kvs)
     }
 
     fn version_data(&self) -> DbResult {
@@ -159,7 +180,7 @@ impl RpcProtocol for AsyncEmbeddedDBInner {
         ))
     }
 
-    fn session_map(&self) -> &HashMap<Option<Uuid>, Arc<RwLock<Session>>> {
+    fn session_map(&self) -> &HashMap<Uuid, Arc<RwLock<Session>>> {
         &self.sessions
     }
 
@@ -168,7 +189,9 @@ impl RpcProtocol for AsyncEmbeddedDBInner {
     fn handle_live(
         &self,
         _lqid: &Uuid,
-        _session_id: Option<Uuid>,
+        _session_id: Uuid,
+        _namespace: Option<String>,
+        _database: Option<String>,
     ) -> impl std::future::Future<Output = ()> + Send {
         async {}
     }
@@ -177,10 +200,7 @@ impl RpcProtocol for AsyncEmbeddedDBInner {
         async {}
     }
 
-    fn cleanup_lqs(
-        &self,
-        _session_id: Option<&Uuid>,
-    ) -> impl std::future::Future<Output = ()> + Send {
+    fn cleanup_lqs(&self, _session_id: &Uuid) -> impl std::future::Future<Output = ()> + Send {
         async {}
     }
 
