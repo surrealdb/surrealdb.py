@@ -96,6 +96,29 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 f"could not connect to {self.raw_url}: {exc}"
             ) from exc
 
+    def connect(self, url: str | None = None) -> None:
+        """Open the websocket.
+
+        ``_send`` connects lazily on first use, so this is not required - but
+        it was the only connection class without it, which meant code written
+        against the connection API raised ``AttributeError`` here while every
+        other transport connected. Calling it eagerly also surfaces an
+        unreachable endpoint at ``connect()`` rather than at the first query.
+
+        Idempotent: a no-op when the socket is already open. Passing *url*
+        re-points the connection, matching the other transports.
+        """
+        if self.socket:
+            return
+
+        if url is not None:
+            self.url = Url(url)
+            self.raw_url = f"{self.url.raw_url}/rpc"
+            self.host = self.url.hostname
+            self.port = self.url.port
+
+        self.socket = self._connect_socket()
+
     def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
     ) -> dict[str, Any]:

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `connect()` now exists on `BlockingWsSurrealConnection`. It was the only connection class without it, so calling `connect()` raised `AttributeError` there while the other five transports connected - the same transport-agnostic breakage that adding `connect()` to the HTTP connections in 3.0.0-beta.4 was meant to remove. It opens the socket eagerly (the connection otherwise connects lazily on first use), is a no-op when already connected, and re-points the connection when passed a url, matching the other transports. Both connection templates now declare `connect()` as well, so a transport that omits it fails with a diagnosable `NotImplementedError` rather than `AttributeError`.
+- The README no longer states that the embedded database is included in the default install. It is an optional native extension behind the `embedded` extra, so the documented `pip install surrealdb` left readers without the engine they had just been told they had. The section now shows `pip install 'surrealdb[embedded]'`, and its source-build command gained the `--manifest-path embedded/Cargo.toml` it needs to build the Rust crate rather than the root project.
+
 ## [3.0.0-beta.4] - 2026-08-10
 
 Seven defects found by verifying the 3.0.0-beta.3 artifacts as a user installs them, rather than from the working tree. Most sit on the default `pip install surrealdb` path, which the test suite never exercised because it always has the optional engine present.

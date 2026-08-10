@@ -15,6 +15,16 @@ from surrealdb.types import Tokens, Value
 
 
 class SyncTemplate:
+    def connect(self, url: str | None = None) -> None:
+        """Connects to a local or remote database endpoint.
+
+        Declared here so the contract is part of the template rather than
+        implemented ad hoc: a class that forgets it used to raise
+        ``AttributeError`` rather than a diagnosable ``NotImplementedError``.
+        Every concrete connection overrides this.
+        """
+        raise NotImplementedError(f"connect not implemented for: {self}")
+
     def close(self) -> None:
         """Closes the persistent connection to the database."""
         raise NotImplementedError(f"close not implemented for: {self}")
