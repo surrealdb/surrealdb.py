@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0-beta.2] - 2026-08-10
+
+A maintenance beta. No API changes: the notable part is that the embedded engine moves from SurrealDB 3.0 to 3.2, and that the dependency surface is now watched rather than hand-bumped.
+
 ### Changed
 - The `surrealdb-embedded` extension now builds against `surrealdb-core` 3.2.4, up from 3.0.5, so `mem://`, `file://` and `surrealkv://` connections run the 3.2 engine and pick up everything that landed in 3.1 and 3.2. The native glue moved with the `RpcProtocol` trait: its session map is now keyed by a concrete `Uuid` rather than `Option<Uuid>`, so the embedded connection's single implicit session is registered under a generated id and every request without a session id routes to it. Behaviour is unchanged - the embedded connection has never supported `attach`/`detach` or client-side transactions, and `use`/`signin` state still persists across calls on a connection. CBOR request decoding now bounds nesting with the datastore's `max_object_parsing_depth` (default 100), matching what the server applies to its own parsers.
 - Refreshed the rest of the dependency surface: every pinned GitHub Actions workflow dependency moved to its current release, the Python lockfile moved to current (notably `mypy` 2.3.0 and `ruff` 0.16.2), and the CI/docker-compose SurrealDB server versions moved to the latest patch of each series already covered (`v2.1.9`, `v3.0.5`). `aiohttp` stays capped below 3.14 for resolution only - `aioresponses` 0.7.9 still cannot construct 3.14's `ClientResponse` - and the cap remains absent from published wheel metadata.
@@ -200,7 +204,8 @@ Follow-up to `3.0.0-alpha.1` that finalises the v3 API surface and fixes a batch
 ### Added
 - Initial stable release of the SurrealDB Python client.
 
-[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.1...HEAD
+[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.2...HEAD
+[3.0.0-beta.2]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.1...v3.0.0-beta.2
 [3.0.0-beta.1]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-alpha.4...v3.0.0-beta.1
 [3.0.0-alpha.4]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-alpha.3...v3.0.0-alpha.4
 [3.0.0-alpha.3]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-alpha.2...v3.0.0-alpha.3
