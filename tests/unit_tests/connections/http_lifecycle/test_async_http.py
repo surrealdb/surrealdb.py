@@ -1,23 +1,63 @@
 """Lifecycle tests for the async HTTP connection (issues #8 and #10).
 
-These are fully mocked with ``aioresponses`` and need no live server.
+These drive the connection against a throwaway local ``aiohttp`` server
+started by the test itself, so they need no live SurrealDB.
 """
 
-from typing import Any
+import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Any, NamedTuple
 
 import aiohttp
 import pytest
-from aioresponses import aioresponses
+from aiohttp import web
+from aiohttp.test_utils import TestServer
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.data.cbor import encode
 
 URL = "http://localhost:8000"
-RPC = f"{URL}/rpc"
 
 
 def _version_body(version: str = "surrealdb-2.0.0") -> bytes:
     return encode({"id": "1", "result": version})
+
+
+class _Recorded(NamedTuple):
+    """One request as the stub server saw it.
+
+    ``transport`` identifies the TCP connection the request arrived on, which
+    is how a reused pooled session (one connection) is told apart from a fresh
+    session per request (one connection each).
+    """
+
+    method: str
+    path: str
+    transport: asyncio.Transport | None
+
+
+@asynccontextmanager
+async def _version_server(recorded: list[_Recorded]) -> AsyncIterator[str]:
+    """Serve a canned ``version`` RPC reply, recording every request.
+
+    Yields the base URL to point the connection at. The server is always shut
+    down on the way out so tests do not leak sockets.
+    """
+
+    async def handler(request: web.Request) -> web.Response:
+        await request.read()
+        recorded.append(_Recorded(request.method, request.path, request.transport))
+        return web.Response(body=_version_body(), content_type="application/cbor")
+
+    app = web.Application()
+    app.router.add_route("*", "/{tail:.*}", handler)
+    server = TestServer(app)
+    await server.start_server()
+    try:
+        yield str(server.make_url("/")).rstrip("/")
+    finally:
+        await server.close()
 
 
 @pytest.mark.asyncio
@@ -37,15 +77,14 @@ async def test_pooled_session_reused_across_requests(
         "surrealdb.connections.async_http.aiohttp.ClientSession", _factory
     )
 
-    connection = AsyncHttpSurrealConnection(URL)
-    with aioresponses() as mocked:
-        mocked.post(RPC, body=_version_body(), status=200)
-        mocked.post(RPC, body=_version_body(), status=200)
+    recorded: list[_Recorded] = []
+    async with _version_server(recorded) as url:
+        connection = AsyncHttpSurrealConnection(url)
         async with connection:
             pooled = connection._session
             assert pooled is not None
-            await connection.version()
-            await connection.version()
+            assert await connection.version() == "surrealdb-2.0.0"
+            assert await connection.version() == "surrealdb-2.0.0"
             # Both requests reused the same pooled session object.
             assert connection._session is pooled
 
@@ -55,6 +94,15 @@ async def test_pooled_session_reused_across_requests(
     # It was closed on exit and the reference cleared.
     assert created[0].closed is True
     assert connection._session is None
+
+    # The server really served both RPCs, and both arrived on the single
+    # connection the pooled session keeps alive.
+    assert [(entry.method, entry.path) for entry in recorded] == [
+        ("POST", "/rpc"),
+        ("POST", "/rpc"),
+    ]
+    assert recorded[0].transport is not None
+    assert recorded[0].transport is recorded[1].transport
 
 
 @pytest.mark.asyncio
@@ -74,15 +122,21 @@ async def test_new_session_per_request_without_context_manager(
         "surrealdb.connections.async_http.aiohttp.ClientSession", _factory
     )
 
-    connection = AsyncHttpSurrealConnection(URL)
-    with aioresponses() as mocked:
-        mocked.post(RPC, body=_version_body(), status=200)
-        mocked.post(RPC, body=_version_body(), status=200)
-        await connection.version()
-        await connection.version()
+    recorded: list[_Recorded] = []
+    async with _version_server(recorded) as url:
+        connection = AsyncHttpSurrealConnection(url)
+        assert await connection.version() == "surrealdb-2.0.0"
+        assert await connection.version() == "surrealdb-2.0.0"
 
     assert connection._session is None
     assert len(created) == 2
+
+    # Each per-request session brought its own connection, and closed it.
+    assert [(entry.method, entry.path) for entry in recorded] == [
+        ("POST", "/rpc"),
+        ("POST", "/rpc"),
+    ]
+    assert recorded[0].transport is not recorded[1].transport
 
 
 @pytest.mark.asyncio
