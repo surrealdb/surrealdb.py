@@ -458,6 +458,24 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.check_response_for_result(response, "getting database version")
         return response["result"]
 
+    def connect(self, url: str | None = None) -> None:
+        """Accept the connect step; HTTP opens no persistent connection.
+
+        Requests are sent per call, so there is nothing to establish up front.
+        This exists so code written against the connection API works on every
+        transport - previously the inherited default raised
+        ``NotImplementedError`` here while the websocket transports connected,
+        so transport-agnostic code broke on HTTP alone.
+
+        Passing *url* re-points the connection, matching the websocket
+        transports.
+        """
+        if url is not None:
+            self.url = Url(url)
+            self.raw_url = url.rstrip("/")
+            self.host = self.url.hostname
+            self.port = self.url.port
+
     def close(self) -> None:
         """Close the pooled HTTP session if one is open.
 

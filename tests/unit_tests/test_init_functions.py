@@ -128,3 +128,26 @@ def test_unsupported_scheme_raises_surreal_error() -> None:
 
     with pytest.raises(SurrealError):
         AsyncSurreal("rocksdb://tmp/db")
+
+
+def test_http_connections_implement_connect() -> None:
+    """``connect()`` works on HTTP, not just the websocket transports.
+
+    HTTP opens no persistent connection, but the inherited default raised
+    ``NotImplementedError``, so transport-agnostic code calling ``connect()``
+    broke on HTTP alone.
+    """
+    connection = Surreal("http://localhost:8000")
+    connection.connect()
+
+    assert connection.raw_url == "http://localhost:8000"
+
+
+def test_http_connect_repoints_the_url() -> None:
+    """Passing a url to ``connect()`` re-points it, as websockets do."""
+    connection = Surreal("http://localhost:8000")
+    connection.connect("http://localhost:9000/")
+
+    assert connection.host == "localhost"
+    assert connection.port == 9000
+    assert connection.raw_url == "http://localhost:9000"

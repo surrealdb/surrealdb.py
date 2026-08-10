@@ -26,8 +26,13 @@ _BARE_SCHEMES = {"memory"}
 
 class Url:
     def __init__(self, url: str) -> None:
-        self.raw_url = url.replace("/rpc", "")
         parsed_url = urlparse(url)
+        cleaned = url.replace("/rpc", "")
+        # Every remote transport appends `/rpc` to this, so a trailing slash on
+        # the endpoint doubles up: `http://host/` became `http://host//rpc`,
+        # which surfaced in connection error messages. Only strip when there is
+        # a netloc, so `mem://` does not collapse to `mem:`.
+        self.raw_url = cleaned.rstrip("/") if parsed_url.netloc else cleaned
         scheme = url if url in _BARE_SCHEMES else parsed_url.scheme
         try:
             self.scheme = UrlScheme(scheme)
