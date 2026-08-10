@@ -175,9 +175,16 @@ impl RpcProtocol for AsyncEmbeddedDBInner {
     }
 
     fn version_data(&self) -> DbResult {
-        DbResult::Other(PublicValue::String(
-            format!("surrealdb-{}", env!("CARGO_PKG_VERSION")).into(),
-        ))
+        // The engine that is linked, not this wrapper crate. `CARGO_PKG_VERSION`
+        // here would be surrealdb-embedded's own version, which says nothing
+        // about the database being run and disagrees with what the same call
+        // returns over HTTP or WebSocket. `env::VERSION` is baked into
+        // surrealdb-core when it is compiled, so it cannot drift from the
+        // engine actually inside the wheel.
+        DbResult::Other(PublicValue::String(format!(
+            "surrealdb-{}",
+            surrealdb_core::env::VERSION
+        )))
     }
 
     fn session_map(&self) -> &HashMap<Uuid, Arc<RwLock<Session>>> {
