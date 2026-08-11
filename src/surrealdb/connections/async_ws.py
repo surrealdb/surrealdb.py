@@ -196,6 +196,19 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         return response
 
     async def connect(self, url: str | None = None) -> None:
+        if (
+            url is not None
+            and self.socket is not None
+            and f"{Url(url).raw_url}/rpc" != self.raw_url
+        ):
+            # Re-pointing an open connection has to replace the socket, or it
+            # keeps talking to the previous endpoint while reporting the new
+            # URL - the early return below would otherwise swallow *url*. Only
+            # for a *different* endpoint: re-pointing costs the server-side
+            # session, so a defensive `connect(url)` naming the endpoint
+            # already in use must not quietly discard a completed `signin()`.
+            await self.close()
+
         if self.socket is not None:
             if self.recv_task is None or not self.recv_task.done():
                 return

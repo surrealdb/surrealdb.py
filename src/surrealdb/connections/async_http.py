@@ -1,7 +1,9 @@
 import asyncio
 import uuid
+from collections.abc import AsyncGenerator
 from types import TracebackType
 from typing import Any, cast, overload
+from uuid import UUID
 
 import aiohttp
 
@@ -27,6 +29,13 @@ from surrealdb.errors import (
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 from surrealdb.types import Tokens, Value, parse_auth_result
+
+# Live queries need a persistent connection to push notifications down, which
+# is what makes them a websocket-only feature - as the README documents.
+_NO_LIVE_QUERIES = (
+    "Live queries are only supported for WebSocket connections; HTTP has no "
+    "persistent connection for notifications to arrive on"
+)
 
 
 class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
@@ -69,14 +78,21 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         message: RequestMessage,
         operation: str,
         bypass: bool = False,
+        token: str | None = None,
     ) -> dict[str, Any]:
+        """Send one RPC over HTTP.
+
+        *token* authorises this request alone, without adopting it as the
+        connection's identity - see :meth:`authenticate`.
+        """
         data = message.WS_CBOR_DESCRIPTOR
         url = f"{self.url.raw_url}/rpc"
         headers: dict[str, str] = {}
         headers["Accept"] = "application/cbor"
         headers["content-type"] = "application/cbor"
-        if self.token:
-            headers["Authorization"] = f"Bearer {self.token}"
+        bearer = self.token if token is None else token
+        if bearer:
+            headers["Authorization"] = f"Bearer {bearer}"
         if self.namespace:
             headers["Surreal-NS"] = self.namespace
         if self.database:
@@ -127,10 +143,20 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         return result
 
     async def authenticate(self, token: str) -> None:
-        self.token = token
-        message = RequestMessage(RequestMethod.AUTHENTICATE, token=self.token)
+        """Authenticate this connection with an existing token.
+
+        The token authorises the ``authenticate`` request itself and is only
+        adopted as the connection's identity once the server accepts it.
+        Assigning it up front attached a rejected token to every later request
+        - including the ``signin`` that would have recovered the connection,
+        which the server then answered ``401`` - so one failed ``authenticate``
+        left the connection permanently unusable, with no way back short of
+        building a new one.
+        """
+        message = RequestMessage(RequestMethod.AUTHENTICATE, token=token)
         self.id = message.id
-        await self._send(message, "authenticating")
+        await self._send(message, "authenticating", token=token)
+        self.token = token
 
     async def invalidate(self) -> None:
         message = RequestMessage(RequestMethod.INVALIDATE)
@@ -551,6 +577,24 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         Closes the aiohttp session upon exiting the context.
         """
         await self.close()
+
+    # Live queries -----------------------------------------------------------
+    #
+    # Refused the same way the session and transaction methods below are.
+    # Inherited, they raised ``NotImplementedError`` from the template - which
+    # is not a ``SurrealError``, so ``except SurrealError`` missed it even
+    # though ``attach()`` beside it was covered.
+
+    async def live(self, table: str | Table, diff: bool = False) -> UUID:
+        raise UnsupportedFeatureError(_NO_LIVE_QUERIES)
+
+    async def kill(self, query_uuid: str | UUID) -> None:
+        raise UnsupportedFeatureError(_NO_LIVE_QUERIES)
+
+    async def subscribe_live(
+        self, query_uuid: str | UUID
+    ) -> AsyncGenerator[dict[str, Value], None]:
+        raise UnsupportedFeatureError(_NO_LIVE_QUERIES)
 
     async def attach(self) -> None:
         raise UnsupportedFeatureError(

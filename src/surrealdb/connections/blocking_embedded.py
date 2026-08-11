@@ -4,8 +4,7 @@ Blocking embedded SurrealDB connection using the Rust extension with CBOR messag
 
 from __future__ import annotations
 
-import threading
-import uuid
+from collections.abc import Generator
 from typing import Any
 from uuid import UUID
 
@@ -18,8 +17,18 @@ from surrealdb.connections.blocking_ws import (
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import mapped_engine_errors
 from surrealdb.data.cbor import decode
+from surrealdb.data.types.table import Table
 from surrealdb.errors import UnsupportedFeatureError
 from surrealdb.request_message.message import RequestMessage
+from surrealdb.types import Value
+
+# The embedded engine builds no live-query notification channel (the Rust
+# extension reports ``LQ_SUPPORT = false``), so there is nowhere for
+# notifications to arrive.
+_NO_LIVE_QUERIES = (
+    "Live queries are only supported for WebSocket connections; the embedded "
+    "engine has no notification channel to deliver them over"
+)
 
 
 class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
@@ -41,21 +50,18 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
 
         :param url: (str) The URL of the embedded database (mem:// or file://).
         """
-        # Initialize without calling super().__init__() to avoid WebSocket setup
-        self.url: Url = Url(url)
-        self.raw_url: str = url
-        self.host: str | None = self.url.hostname
-        self.port: int | None = self.url.port
-        self.id: str = str(uuid.uuid4())
-        self.token: str | None = None
+        # The parent constructor opens nothing - it only sets attributes - and
+        # running it is what guarantees every inherited method finds the state
+        # it expects. Hand-copying a subset of it is how ``subscribe_live``
+        # came to fail with a bare ``AttributeError`` on ``live_queues``.
+        super().__init__(url)
+        # Embedded URLs address a local engine, not an HTTP endpoint, so they
+        # keep their original form instead of the parent's ``/rpc`` suffix.
+        self.raw_url = url
 
         # Embedded database handle
         with mapped_engine_errors("opening the database"):
             self._db: SyncEmbeddedDB = SyncEmbeddedDB(url)
-
-        # Not used for embedded, but needed for compatibility
-        self.socket = None
-        self._lock: threading.Lock = threading.Lock()
 
     def __enter__(self) -> BlockingEmbeddedSurrealConnection:
         """Context manager entry - connect to the embedded database."""
@@ -166,6 +172,37 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
         raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
+
+    # Live queries -----------------------------------------------------------
+    #
+    # Refused up front rather than inherited. ``live`` and ``kill`` reached the
+    # engine and came back as "Unable to perform the realtime query", which
+    # says nothing about why; ``subscribe_live`` would have read notifications
+    # off a websocket this connection does not have.
+
+    def live(
+        self,
+        table: str | Table,
+        diff: bool = False,
+        session_id: UUID | None = None,
+    ) -> UUID:
+        raise UnsupportedFeatureError(_NO_LIVE_QUERIES)
+
+    def kill(
+        self,
+        query_uuid: str | UUID,
+        session_id: UUID | None = None,
+    ) -> None:
+        raise UnsupportedFeatureError(_NO_LIVE_QUERIES)
+
+    def subscribe_live(
+        self,
+        query_uuid: str | UUID,
+    ) -> Generator[dict[str, Value], None, None]:
+        # Deliberately not a generator function: raising on the call itself
+        # reports the problem where it is made, rather than on the first
+        # ``next()`` somewhere further away.
+        raise UnsupportedFeatureError(_NO_LIVE_QUERIES)
 
     # All other methods (query, select, create, update, delete, merge, patch, etc.)
     # are inherited from BlockingWsSurrealConnection and work automatically via _send()!
