@@ -551,24 +551,31 @@ SurrealDB can also run embedded directly within your Python application natively
 
 ### Installation
 
-The embedded database is included when you install `surrealdb`.
-
-Install the SDK using `pip`:
+The embedded database ships as an optional native extension, `surrealdb-embedded`,
+so it is **not** part of the default install. Request it with the `embedded` extra:
 
 ```bash
-pip install surrealdb
+pip install 'surrealdb[embedded]'
 ```
 
 Or install using `uv`:
 
 ```bash
-uv add surrealdb
+uv add 'surrealdb[embedded]'
 ```
+
+Without the extra, an embedded URL raises `UnsupportedEngineError` telling you to
+install it - the remote `http://`, `https://`, `ws://` and `wss://` connections work
+either way.
+
+Embedded connections do not authenticate: there is no server and no root user, so
+calling `signin()` on one raises `NotAllowedError`. Use `use()` to select a namespace
+and database and start querying.
 
 For source builds, you'll need Rust toolchain and maturin:
 
 ```sh
-uv run maturin develop --release
+uv run maturin develop --release --manifest-path embedded/Cargo.toml
 ```
 
 ### In-Memory Database
@@ -583,7 +590,6 @@ async def main():
     # Create an in-memory database (can use "mem://" or "memory")
     async with AsyncSurreal("memory") as db:
         await db.use("test", "test")
-        await db.signin({"username": "root", "password": "root"})
         
         # Use like any other SurrealDB connection
         person = await db.create("person", {
@@ -609,7 +615,6 @@ from surrealdb import AsyncSurreal
 async def main():
     async with AsyncSurreal("file://mydb") as db:
         await db.use("test", "test")
-        await db.signin({"username": "root", "password": "root"})
         
         # Data persists across connections
         await db.create("company", {
@@ -633,7 +638,6 @@ from surrealdb import Surreal
 # In-memory (can use "mem://" or "memory")
 with Surreal("memory") as db:
     db.use("test", "test")
-    db.signin({"username": "root", "password": "root"})
     
     person = db.create("person", {"name": "Jane"})
     print(person)
@@ -641,7 +645,6 @@ with Surreal("memory") as db:
 # File-based
 with Surreal("file://mydb") as db:
     db.use("test", "test")
-    db.signin({"username": "root", "password": "root"})
     
     company = db.create("company", {"name": "TechStart"})
     print(company)

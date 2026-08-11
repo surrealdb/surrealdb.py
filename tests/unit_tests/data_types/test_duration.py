@@ -1,12 +1,15 @@
+from collections.abc import AsyncGenerator
 from typing import Any
 
 import pytest
 
-from surrealdb.cbor import CBORTag
+from surrealdb.cbor import CBORTag, loads
+from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data import cbor
 from surrealdb.data.types import constants
 from surrealdb.data.types.duration import Duration
 from surrealdb.errors import InvalidDurationError
+from surrealdb.types import Value
 
 
 def test_duration_init() -> None:
@@ -258,3 +261,61 @@ def test_duration_cbor_encode_decode_roundtrip() -> None:
 
     assert isinstance(decoded_whole, Duration)
     assert decoded_whole == original_whole
+
+
+def test_duration_encodes_with_the_compact_tag() -> None:
+    """A ``Duration`` goes on the wire as tag 14 with ``[seconds, nanos]``.
+
+    Tag 13 carries the *string* form (``"1h30m"``); tag 14 carries the compact
+    ``[seconds, nanoseconds]`` array. The encoder previously paired tag 13 with
+    the array payload, which the server rejects with HTTP 400 - a ``Duration``
+    could be read back but never sent, on every transport and engine.
+
+    Asserted on the emitted tag rather than through a round trip, because the
+    SDK's own decoder accepts either shape: an encode/decode round trip passes
+    with the wrong tag, which is how this survived four releases.
+    """
+    raw = loads(cbor.encode(Duration.parse("1h30m")))
+
+    assert isinstance(raw, CBORTag), f"expected a tagged value, got {raw!r}"
+    assert raw.tag == constants.TAG_DURATION_COMPACT, (
+        f"expected tag {constants.TAG_DURATION_COMPACT} (TAG_DURATION_COMPACT), "
+        f"got {raw.tag}"
+    )
+    assert list(raw.value) == [5400, 0]
+
+
+# Database fixture
+
+
+@pytest.fixture
+async def surrealdb_connection() -> AsyncGenerator[AsyncWsSurrealConnection, None]:
+    url = "ws://localhost:8000/rpc"
+    vars_params: dict[str, Value] = {"username": "root", "password": "root"}
+    connection = AsyncWsSurrealConnection(url)
+    await connection.signin(vars_params)
+    await connection.use(namespace="test_ns", database="test_db")
+    await connection.query("DEFINE TABLE duration_tests SCHEMALESS;")
+    await connection.query("DELETE duration_tests;")
+    yield connection
+    await connection.query("REMOVE TABLE IF EXISTS duration_tests;")
+    await connection.close()
+
+
+@pytest.mark.asyncio
+async def test_duration_db_roundtrip(surrealdb_connection: Any) -> None:
+    """A ``Duration`` survives a trip through a real server.
+
+    Nothing sent a ``Duration`` to a server before, which is how the wrong CBOR
+    tag shipped: it was rejected with HTTP 400 on every write while the
+    in-process encode/decode round trip passed. This runs against every server
+    version in the CI matrix, so a tag the server does not accept fails here.
+    """
+    original = Duration.parse("1h30m")
+
+    await surrealdb_connection.query(
+        "CREATE duration_tests:test1 SET value = $val;", vars={"val": original}
+    )
+    result = await surrealdb_connection.query("SELECT * FROM duration_tests;").first()
+
+    assert result[0]["value"] == original

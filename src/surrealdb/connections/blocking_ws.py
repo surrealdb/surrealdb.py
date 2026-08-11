@@ -5,6 +5,7 @@ A basic blocking connection to a SurrealDB instance.
 import logging
 import queue
 import threading
+import time
 import uuid
 from collections.abc import Generator
 from types import TracebackType
@@ -44,6 +45,13 @@ logger = logging.getLogger(__name__)
 # How long ``subscribe_live`` blocks on a single socket read before releasing
 # the connection lock so concurrent RPCs on the same socket can proceed.
 _LIVE_RECV_TIMEOUT = 0.1
+
+# Upper bound on how long a single RPC waits for its reply. Without it the
+# receive loop below blocks forever if the reply never arrives - which it does
+# not when the server answers with a protocol-level error, since those carry no
+# `id` to correlate. Matches the 30s total the HTTP transports give aiohttp and
+# requests.
+_RPC_RECV_TIMEOUT = 30.0
 
 
 class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
@@ -96,6 +104,29 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 f"could not connect to {self.raw_url}: {exc}"
             ) from exc
 
+    def connect(self, url: str | None = None) -> None:
+        """Open the websocket.
+
+        ``_send`` connects lazily on first use, so this is not required - but
+        it was the only connection class without it, which meant code written
+        against the connection API raised ``AttributeError`` here while every
+        other transport connected. Calling it eagerly also surfaces an
+        unreachable endpoint at ``connect()`` rather than at the first query.
+
+        Idempotent: a no-op when the socket is already open. Passing *url*
+        re-points the connection, matching the other transports.
+        """
+        if self.socket:
+            return
+
+        if url is not None:
+            self.url = Url(url)
+            self.raw_url = f"{self.url.raw_url}/rpc"
+            self.host = self.url.hostname
+            self.port = self.url.port
+
+        self.socket = self._connect_socket()
+
     def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
     ) -> dict[str, Any]:
@@ -112,13 +143,28 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             # never returned as an RPC result.
             try:
                 self.socket.send(message.WS_CBOR_DESCRIPTOR)
+                deadline = time.monotonic() + _RPC_RECV_TIMEOUT
                 while True:
-                    data = self.socket.recv()
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise TransportTimeoutError(
+                            f"timed out while {process} on {self.raw_url}: no "
+                            f"reply within {_RPC_RECV_TIMEOUT}s"
+                        )
+                    data = self.socket.recv(timeout=remaining)
                     response = self.decode_response(
                         data if isinstance(data, bytes) else data.encode(), process
                     )
                     response_id = response.get("id")
                     if response_id is None:
+                        # A frame with no `id` is normally a live-query
+                        # notification. A protocol-level error - a request the
+                        # server could not parse or correlate - also arrives
+                        # without one, and routing that to the notification
+                        # path discarded the only reply this call would ever
+                        # get, leaving the loop blocked on recv() forever.
+                        if response.get("error") is not None:
+                            self.check_response_for_error(response, process)
                         self._route_live_notification(response)
                         continue
                     if response_id != message.id:

@@ -13,8 +13,10 @@ below (``Any`` does not match the asserted concrete type).
 
 import sys
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
+
+import pytest
 
 if sys.version_info >= (3, 11):
     from typing import assert_type
@@ -339,3 +341,79 @@ def test_blocking_wrapper_into_overload_precision() -> None:
         assert_type(
             wrapper.insert(Table("person"), into=_Person), SyncInsertBuilder[_Person]
         )
+
+
+def test_every_connection_class_exposes_connect() -> None:
+    """``connect()`` exists on every transport, not just most of them.
+
+    ``BlockingWsSurrealConnection`` was the one connection class without it, so
+    ``connect()`` raised ``AttributeError`` there while the other five
+    connected - which is exactly the transport-agnostic breakage that adding it
+    to the HTTP connections was meant to remove.
+
+    Asserted over the classes rather than one at a time so a new transport
+    cannot quietly omit it.
+    """
+    import inspect
+
+    from surrealdb.connections.async_http import AsyncHttpSurrealConnection
+    from surrealdb.connections.async_ws import AsyncWsSurrealConnection
+    from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
+    from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+
+    # `list[Any]`: these are heterogeneous connection classes, and the point of
+    # the test is to reach `connect` on each without a shared static base.
+    classes: list[Any] = [
+        AsyncHttpSurrealConnection,
+        AsyncWsSurrealConnection,
+        BlockingHttpSurrealConnection,
+        BlockingWsSurrealConnection,
+    ]
+    try:  # only present with the optional native engine installed
+        from surrealdb.connections.async_embedded import AsyncEmbeddedSurrealConnection
+        from surrealdb.connections.blocking_embedded import (
+            BlockingEmbeddedSurrealConnection,
+        )
+    except ImportError:
+        pass
+    else:
+        classes += [AsyncEmbeddedSurrealConnection, BlockingEmbeddedSurrealConnection]
+
+    # `hasattr` is not enough: both templates now declare `connect()` as a
+    # raising stub, so an inherited one would satisfy it. Require each concrete
+    # class to override, which is what the mutation test exercises.
+    from surrealdb.connections.async_template import AsyncTemplate
+    from surrealdb.connections.sync_template import SyncTemplate
+
+    stubs = (SyncTemplate.connect, AsyncTemplate.connect)
+    missing = [
+        cls.__name__
+        for cls in classes
+        if not hasattr(cls, "connect") or cls.connect in stubs
+    ]
+    assert missing == [], f"connection classes not implementing connect(): {missing}"
+
+    # `url` must be optional everywhere, so `connect()` works with no argument.
+    for cls in classes:
+        signature = inspect.signature(cls.connect)
+        url = signature.parameters["url"]
+        assert url.default is None, f"{cls.__name__}.connect url is not optional"
+
+
+def test_blocking_ws_connect_is_idempotent_and_maps_errors() -> None:
+    """The new blocking websocket ``connect()`` behaves like its async twin."""
+    import socket
+
+    from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+    from surrealdb.errors import SurrealError
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        closed_port = int(probe.getsockname()[1])
+
+    connection = BlockingWsSurrealConnection(f"ws://127.0.0.1:{closed_port}")
+
+    # An unreachable endpoint fails inside the error hierarchy, not with a
+    # raw OSError, and not with AttributeError as it did before.
+    with pytest.raises(SurrealError):
+        connection.connect()

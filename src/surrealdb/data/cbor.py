@@ -67,7 +67,12 @@ def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
         tagged = CBORTag(constants.TAG_RANGE, [obj.begin, obj.end])
 
     elif isinstance(obj, Duration):
-        tagged = CBORTag(constants.TAG_DURATION, obj.get_seconds_and_nano())
+        # Tag 14 (compact) is the `[seconds, nanoseconds]` form. Tag 13 carries
+        # the *string* form ("1h30m"), so pairing it with the array payload
+        # produced a frame the server rejects with HTTP 400 - a `Duration`
+        # could be read back but never sent. The SDK's own decoder accepts
+        # either shape, which is why this survived round-trip tests.
+        tagged = CBORTag(constants.TAG_DURATION_COMPACT, obj.get_seconds_and_nano())
 
     elif isinstance(obj, Datetime):
         tagged = CBORTag(constants.TAG_DATETIME, obj.dt)
