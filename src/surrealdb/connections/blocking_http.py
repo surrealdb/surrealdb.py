@@ -86,9 +86,6 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
 
         return data_dict
 
-    def set_token(self, token: str) -> None:
-        self.token = token
-
     def authenticate(self, token: str) -> None:
         self.token = token
         message = RequestMessage(RequestMethod.AUTHENTICATE, token=token)
