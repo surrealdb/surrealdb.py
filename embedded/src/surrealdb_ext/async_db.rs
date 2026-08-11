@@ -24,8 +24,16 @@ impl AsyncEmbeddedDB {
             "memory".to_string()
         } else if url.starts_with("memory") {
             "memory".to_string()
-        } else if url.starts_with("surrealkv+versioned://") {
-            url
+        } else if let Some(rest) = url.strip_prefix("surrealkv+versioned://") {
+            // The engine matches the scheme exactly and takes MVCC versioning
+            // as a query parameter, so `surrealkv+versioned://` reached it as
+            // an unknown flavour and every path failed with "Unable to load
+            // the specified datastore" - a scheme this SDK documents and
+            // recommends in its own error text, that could never work.
+            // Translate it into the form the engine parses, preserving any
+            // query string the caller supplied.
+            let separator = if rest.contains('?') { '&' } else { '?' };
+            format!("surrealkv://{rest}{separator}versioned=true")
         } else if url.starts_with("surrealkv://") {
             url
         } else if url.starts_with("file://") {
