@@ -8,13 +8,15 @@ calls such as passing an out-of-range integer.
 """
 
 import threading
+import time
 from typing import Any
 
 import pytest
 
+from surrealdb.connections import blocking_ws
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
-from surrealdb.errors import SurrealError
+from surrealdb.errors import SurrealError, TransportTimeoutError
 
 # Generous enough that a slow CI box does not flake, far below the hang.
 _BUDGET_SECONDS = 20.0
@@ -75,3 +77,26 @@ def test_connection_still_usable_after_a_protocol_error(
         blocking_ws_connection.query("RETURN $v", {"v": 2**200}).first()
 
     assert blocking_ws_connection.query("RETURN 1").first() == 1
+
+
+def test_connection_recovers_after_an_rpc_timeout(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A timed-out request does not desynchronise every later one.
+
+    The RPC deadline that stopped protocol errors hanging forever introduced
+    its own failure: the request had already been sent, so the server's late
+    reply stayed in the socket, and the next call read *that* instead of its
+    own - mismatching ids from then on, permanently one behind.
+    """
+    monkeypatch.setattr(blocking_ws, "_RPC_RECV_TIMEOUT", 2.0)
+
+    with pytest.raises(TransportTimeoutError):
+        blocking_ws_connection.query("RETURN sleep(5s)").first()
+
+    # Let the abandoned reply land in the socket buffer before continuing.
+    time.sleep(4)
+
+    assert blocking_ws_connection.query("RETURN 1").first() == 1
+    assert blocking_ws_connection.query("RETURN 2").first() == 2
