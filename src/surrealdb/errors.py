@@ -472,6 +472,16 @@ class InvalidTableError(SurrealError):
     """Table or record ID string is invalid."""
 
 
+class InvalidUrlError(SurrealError):
+    """Connection URL could not be parsed.
+
+    Raised for a URL whose *scheme* is recognised but whose remainder is
+    malformed - an out-of-range port, a non-numeric port, an unterminated IPv6
+    literal. An unrecognised scheme raises :class:`UnsupportedEngineError`
+    instead, since that is a different mistake with a different fix.
+    """
+
+
 # ------------------------------------------------------------------ #
 #  Backward compatibility                                              #
 # ------------------------------------------------------------------ #

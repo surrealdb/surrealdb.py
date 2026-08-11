@@ -13,6 +13,7 @@ from surrealdb_embedded import AsyncEmbeddedDB
 
 from surrealdb.connections.async_ws import AsyncSurrealSession, AsyncWsSurrealConnection
 from surrealdb.connections.url import Url
+from surrealdb.connections.utils_mixin import mapped_engine_errors
 from surrealdb.data.cbor import decode
 from surrealdb.errors import UnsupportedFeatureError
 from surrealdb.request_message.message import RequestMessage
@@ -49,7 +50,8 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         self.vars: dict[str, Any] = dict()
 
         # Embedded database handle
-        self._db: AsyncEmbeddedDB = AsyncEmbeddedDB(url)
+        with mapped_engine_errors("opening the database"):
+            self._db: AsyncEmbeddedDB = AsyncEmbeddedDB(url)
 
         # Not used for embedded, but needed for compatibility
         self.socket = None
@@ -83,9 +85,11 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         if url is not None:
             self.url = Url(url)
             self.raw_url = url
-            self._db = AsyncEmbeddedDB(url)
+            with mapped_engine_errors("opening the database"):
+                self._db = AsyncEmbeddedDB(url)
 
-        await self._db.connect()
+        with mapped_engine_errors("connecting"):
+            await self._db.connect()
 
     async def close(self) -> None:
         """Closes the connection to the database.
@@ -93,7 +97,8 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         Example:
             await db.close()
         """
-        await self._db.close()
+        with mapped_engine_errors("closing"):
+            await self._db.close()
 
     async def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
@@ -117,7 +122,8 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         cbor_request = message.WS_CBOR_DESCRIPTOR
 
         # Execute via Rust extension
-        cbor_response_bytes = await self._db.execute(cbor_request)
+        with mapped_engine_errors(process):
+            cbor_response_bytes = await self._db.execute(cbor_request)
 
         # Decode CBOR response (reuses existing CBOR decoding)
         response = decode(cbor_response_bytes)

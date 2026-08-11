@@ -26,6 +26,7 @@ from surrealdb.data.types.geometry import (
 from surrealdb.data.types.range import BoundExcluded, BoundIncluded, Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
+from surrealdb.errors import UnexpectedResponseError
 
 
 @shareable_encoder
@@ -83,7 +84,17 @@ def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
         tagged = CBORTag(constants.TAG_SET, list(obj))
 
     else:
-        raise BufferError("no encoder for type ", type(obj))
+        # `BufferError` means a buffer operation failed; this is "you handed me
+        # a value I have no encoder for", which is a type problem. Raising the
+        # semantically correct builtin also keeps it distinguishable from the
+        # SurrealError tree, which covers operational failures rather than
+        # unserialisable arguments.
+        raise TypeError(
+            f"cannot encode {type(obj).__name__} for SurrealDB; supported types "
+            "are the JSON scalars, list, dict, set, bytes, and the surrealdb "
+            "data types (RecordID, Table, Datetime, Duration, Range, Geometry, "
+            "Decimal, UUID)"
+        )
 
     encoder.encode(tagged)
 
@@ -169,7 +180,14 @@ def tag_decoder(
         return set(tag.value) if isinstance(tag.value, list) else tag.value
 
     else:
-        raise BufferError("no decoder for tag", tag.tag)
+        # Unlike the encoder's unsupported-type case, this is not a caller
+        # mistake: the server sent a tag this SDK does not know, which is an
+        # operational failure and belongs in the SurrealError hierarchy so
+        # `except SurrealError` covers it.
+        raise UnexpectedResponseError(
+            f"no decoder for CBOR tag {tag.tag}; the server sent a value this "
+            "version of the SDK does not understand"
+        )
 
 
 class _SurrealEncoder(CBOREncoder):

@@ -1,3 +1,5 @@
+from collections.abc import Generator
+from contextlib import contextmanager
 from typing import Any
 
 from surrealdb.connections.builders import (
@@ -7,6 +9,7 @@ from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
+    ConnectionUnavailableError,
     ErrorKind,
     HttpStatusError,
     SurrealError,
@@ -15,6 +18,32 @@ from surrealdb.errors import (
     parse_rpc_error,
 )
 from surrealdb.types import Value
+
+
+@contextmanager
+def mapped_engine_errors(operation: str) -> Generator[None]:
+    """Map the native extension's exceptions into the ``SurrealError`` tree.
+
+    The embedded engine is a PyO3 extension, so its failures arrive as plain
+    ``RuntimeError`` - including "Database connection is closed", which the
+    websocket and HTTP transports report as
+    :class:`~surrealdb.errors.ConnectionUnavailableError`. The same operation
+    on the same SDK therefore raised a different, uncatchable exception type
+    depending only on which engine was behind it.
+
+    The original exception is preserved as ``__cause__``, so the engine's own
+    message is never lost.
+    """
+    try:
+        yield
+    except SurrealError:
+        # Already mapped - decoded RPC errors from the engine arrive this way.
+        raise
+    except RuntimeError as error:
+        raise ConnectionUnavailableError(
+            f"the embedded engine failed while {operation}: {error}"
+        ) from error
+
 
 # Legacy JSON-RPC error code historically returned by the ``info`` RPC when a
 # record-authenticated session has no ROOT/NS/DB scope to report (the message
