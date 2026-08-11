@@ -7,6 +7,7 @@ import aiohttp
 
 from surrealdb.connections.async_template import AsyncTemplate
 from surrealdb.connections.builders import (
+    _UNSET,
     AsyncCrudBuilder,
     AsyncInsertBuilder,
     AsyncQueryBuilder,
@@ -125,14 +126,6 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
             self.check_response_for_error(result, operation)
         return result
 
-    def set_token(self, token: str) -> None:
-        """
-        Sets the token for authentication.
-
-        :param token: (str) The token to use for the connection.
-        """
-        self.token = token
-
     async def authenticate(self, token: str) -> None:
         self.token = token
         message = RequestMessage(RequestMethod.AUTHENTICATE, token=self.token)
@@ -237,24 +230,24 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     @overload
     def create(
-        self, record: RecordIdType, data: Value | None = None, *, into: type[M]
+        self, record: RecordIdType, data: Value = _UNSET, *, into: type[M]
     ) -> AsyncCrudBuilder[M]: ...
     @overload
     def create(
-        self, record: RecordID, data: Value | None = None
+        self, record: RecordID, data: Value = _UNSET
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def create(
-        self, record: Table, data: Value | None = None
+        self, record: Table, data: Value = _UNSET
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def create(
-        self, record: str, data: Value | None = None
+        self, record: str, data: Value = _UNSET
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     def create(
         self,
         record: RecordIdType,
-        data: Value | None = None,
+        data: Value = _UNSET,
         *,
         into: type[M] | None = None,
     ) -> AsyncCrudBuilder[Any]:
@@ -266,44 +259,44 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         builder so it stays awaitable. Pass ``into=Model`` to map the created
         record onto ``Model``.
         """
-        return AsyncCrudBuilder(
+        builder: AsyncCrudBuilder[Any] = AsyncCrudBuilder(
             executor=self._make_executor(),
             operation="CREATE",
             record=record,
             op_name="create",
-            data=data,
             always_unwrap=True,
             into=into,
         )
+        if data is _UNSET:
+            return builder
+        return builder.content(data)
 
     @overload
     def update(
-        self, record: RecordID, data: Value | None = None, *, into: type[M]
+        self, record: RecordID, data: Value = _UNSET, *, into: type[M]
     ) -> AsyncCrudBuilder[M]: ...
     @overload
     def update(
-        self, record: Table, data: Value | None = None, *, into: type[M]
+        self, record: Table, data: Value = _UNSET, *, into: type[M]
     ) -> AsyncCrudBuilder[list[M]]: ...
     @overload
     def update(
-        self, record: str, data: Value | None = None, *, into: type[M]
+        self, record: str, data: Value = _UNSET, *, into: type[M]
     ) -> AsyncCrudBuilder[M | list[M]]: ...
     @overload
     def update(
-        self, record: RecordID, data: Value | None = None
+        self, record: RecordID, data: Value = _UNSET
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def update(
-        self, record: Table, data: Value | None = None
+        self, record: Table, data: Value = _UNSET
     ) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
-    def update(
-        self, record: str, data: Value | None = None
-    ) -> AsyncCrudBuilder[Value]: ...
+    def update(self, record: str, data: Value = _UNSET) -> AsyncCrudBuilder[Value]: ...
     def update(
         self,
         record: RecordIdType,
-        data: Value | None = None,
+        data: Value = _UNSET,
         *,
         into: type[M] | None = None,
     ) -> AsyncCrudBuilder[Any]:
@@ -313,43 +306,43 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         ``.patch`` return the builder so it stays awaitable. Pass ``into=Model``
         to map the returned record(s) onto ``Model`` / ``list[Model]``.
         """
-        return AsyncCrudBuilder(
+        builder: AsyncCrudBuilder[Any] = AsyncCrudBuilder(
             executor=self._make_executor(),
             operation="UPDATE",
             record=record,
             op_name="update",
-            data=data,
             into=into,
         )
+        if data is _UNSET:
+            return builder
+        return builder.content(data)
 
     @overload
     def upsert(
-        self, record: RecordID, data: Value | None = None, *, into: type[M]
+        self, record: RecordID, data: Value = _UNSET, *, into: type[M]
     ) -> AsyncCrudBuilder[M]: ...
     @overload
     def upsert(
-        self, record: Table, data: Value | None = None, *, into: type[M]
+        self, record: Table, data: Value = _UNSET, *, into: type[M]
     ) -> AsyncCrudBuilder[list[M]]: ...
     @overload
     def upsert(
-        self, record: str, data: Value | None = None, *, into: type[M]
+        self, record: str, data: Value = _UNSET, *, into: type[M]
     ) -> AsyncCrudBuilder[M | list[M]]: ...
     @overload
     def upsert(
-        self, record: RecordID, data: Value | None = None
+        self, record: RecordID, data: Value = _UNSET
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def upsert(
-        self, record: Table, data: Value | None = None
+        self, record: Table, data: Value = _UNSET
     ) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
-    def upsert(
-        self, record: str, data: Value | None = None
-    ) -> AsyncCrudBuilder[Value]: ...
+    def upsert(self, record: str, data: Value = _UNSET) -> AsyncCrudBuilder[Value]: ...
     def upsert(
         self,
         record: RecordIdType,
-        data: Value | None = None,
+        data: Value = _UNSET,
         *,
         into: type[M] | None = None,
     ) -> AsyncCrudBuilder[Any]:
@@ -359,14 +352,16 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         ``.patch`` return the builder so it stays awaitable. Pass ``into=Model``
         to map the returned record(s) onto ``Model`` / ``list[Model]``.
         """
-        return AsyncCrudBuilder(
+        builder: AsyncCrudBuilder[Any] = AsyncCrudBuilder(
             executor=self._make_executor(),
             operation="UPSERT",
             record=record,
             op_name="upsert",
-            data=data,
             into=into,
         )
+        if data is _UNSET:
+            return builder
+        return builder.content(data)
 
     @overload
     def delete(
@@ -404,13 +399,13 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
 
     @overload
     def insert(
-        self, table: str | Table, data: Value | None = None, *, relation: bool = False
+        self, table: str | Table, data: Value = _UNSET, *, relation: bool = False
     ) -> AsyncInsertBuilder[Value]: ...
     @overload
     def insert(
         self,
         table: str | Table,
-        data: Value | None = None,
+        data: Value = _UNSET,
         *,
         into: type[M],
         relation: bool = False,
@@ -418,7 +413,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     def insert(
         self,
         table: str | Table,
-        data: Value | None = None,
+        data: Value = _UNSET,
         *,
         into: type[M] | None = None,
         relation: bool = False,
@@ -429,13 +424,15 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         RELATION INTO``. Awaiting the builder (or ``.execute()``) runs it. Pass
         ``into=Model`` to map the inserted records onto ``list[Model]``.
         """
-        return AsyncInsertBuilder(
+        builder: AsyncInsertBuilder[Any] = AsyncInsertBuilder(
             executor=self._make_executor(),
             table=table,
-            data=data,
             relation=relation,
             into=into,
         )
+        if data is _UNSET:
+            return builder
+        return builder.content(data)
 
     async def run(
         self,

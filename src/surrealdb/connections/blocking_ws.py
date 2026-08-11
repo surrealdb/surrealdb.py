@@ -1416,6 +1416,19 @@ class BlockingSurrealSession:
     def kill(self, query_uuid: str | UUID) -> None:
         self._connection.kill(query_uuid, session_id=self._session_id)
 
+    def subscribe_live(
+        self, query_uuid: str | UUID
+    ) -> Generator[dict[str, Value], None, None]:
+        """Yield notifications for a live query started on this session.
+
+        The session exposed :meth:`live` and :meth:`kill` but not this, so a
+        session could start a live query it had no way to consume - callers had
+        to reach past the wrapper to the underlying connection. Subscriptions
+        are keyed by the live-query id rather than the session, so this
+        forwards unchanged.
+        """
+        return self._connection.subscribe_live(query_uuid)
+
     def begin_transaction(self) -> "BlockingSurrealTransaction":
         txn_id = self._connection.begin(session_id=self._session_id)
         return BlockingSurrealTransaction(self._connection, self._session_id, txn_id)
