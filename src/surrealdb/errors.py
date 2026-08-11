@@ -528,12 +528,36 @@ KIND_TO_CLASS: dict[str, type[ServerError]] = {
 
 
 def _resolve_kind(kind: str | None, code: int | None) -> str:
-    """Determine the error kind from *kind* and/or legacy *code*."""
+    """Determine the error kind from *kind* and/or legacy *code*.
+
+    SurrealDB 2.x sends no ``kind`` and only the generic ``-32000`` code, so
+    everything it rejects resolves to ``Internal`` - see the compatibility note
+    in the README's error-handling section.
+    """
     if kind:
         return kind
     if code is not None:
         return CODE_TO_KIND.get(code, "Internal")
     return "Internal"
+
+
+# SurrealDB 3.x added the CBOR set tag; 2.x has no set representation at all -
+# it returns SurrealQL sets as plain arrays - and answers anything carrying the
+# tag with "unknown CBOR tag". Sets are the only value this SDK encodes that a
+# supported 2.x server cannot read, so the bare message is worth explaining
+# rather than passing straight through.
+_UNKNOWN_TAG_HINT = (
+    " (the server did not recognise a CBOR tag in the request: this SDK "
+    "encodes a Python set with SurrealDB 3.x's set tag, which SurrealDB 2.x "
+    "does not understand - send a list instead)"
+)
+
+
+def _explain(message: str) -> str:
+    """Add the likely cause to a server message that does not carry one."""
+    if "unknown CBOR tag" in message:
+        return message + _UNKNOWN_TAG_HINT
+    return message
 
 
 def parse_rpc_error(raw: dict[str, Any]) -> ServerError:
@@ -549,7 +573,7 @@ def parse_rpc_error(raw: dict[str, Any]) -> ServerError:
     cls = KIND_TO_CLASS.get(kind, ServerError)
     return cls(
         kind=kind,
-        message=raw.get("message", ""),
+        message=_explain(raw.get("message", "")),
         code=raw.get("code", 0),
         details=raw.get("details"),
         cause=cause,
@@ -579,7 +603,7 @@ def parse_query_error(raw: dict[str, Any]) -> ServerError:
     cls = KIND_TO_CLASS.get(kind, ServerError)
     return cls(
         kind=kind,
-        message=raw.get("result", ""),
+        message=_explain(raw.get("result", "")),
         code=0,
         details=details,
         cause=cause,

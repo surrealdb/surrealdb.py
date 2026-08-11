@@ -506,6 +506,33 @@ with Surreal("ws://localhost:8000/rpc") as db:
         print("could not reach the server:", error)
 ```
 
+### Talking to a SurrealDB 2.x server
+
+Two things behave differently against SurrealDB 2.x, both because of what the
+2.x wire format carries rather than anything the SDK chooses.
+
+**Error kinds need 3.x.** The subclasses below `ServerError` come from the
+`kind` the server reports, and 2.x does not send one — its error payload has
+only a generic `-32000` code and a message string. So every server-side failure
+arrives as `InternalError`:
+
+| | SurrealDB 3.x | SurrealDB 2.x |
+| --- | --- | --- |
+| `db.query("SELECT * FROM")` | `ValidationError` | `InternalError` |
+| `db.query("THROW 'nope'")` | `ThrownError` | `InternalError` |
+
+`except SurrealError` and `except ServerError` work on every version. A narrower
+`except ThrownError` matches only on 3.x and will silently *not* match on 2.x,
+so if you support both, catch the branch rather than the leaf, or read the
+message with `str(error)`. The SDK cannot recover the classification — it is not sent.
+
+**Python sets need 3.x.** Sets are encoded with SurrealDB 3.x's CBOR set tag.
+2.x has no set representation at all — it returns SurrealQL sets as plain
+arrays — and rejects anything carrying the tag. Send a `list` instead when
+targeting 2.x; a list is what 2.x uses for a `set<…>` field anyway, and the
+server deduplicates it. On 3.x a list is *not* interchangeable with a set: a
+`set<…>` field rejects one.
+
 The `TransportError` branch is `ConnectionUnavailableError` (the host was
 unreachable or the socket closed), `TransportTimeoutError` (the request timed
 out), and `HttpStatusError` (a non-2xx HTTP response, carrying `.status`,
