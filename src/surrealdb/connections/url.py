@@ -1,7 +1,7 @@
 from enum import Enum
 from urllib.parse import urlparse
 
-from surrealdb.errors import UnsupportedEngineError
+from surrealdb.errors import InvalidUrlError, UnsupportedEngineError
 
 
 class UrlScheme(Enum):
@@ -26,21 +26,35 @@ _BARE_SCHEMES = {"memory"}
 
 class Url:
     def __init__(self, url: str) -> None:
-        parsed_url = urlparse(url)
+        # `urlparse` raises for an unterminated IPv6 literal, and `.hostname` /
+        # `.port` raise for a malformed or out-of-range port. Those are bare
+        # `ValueError`s, so `except SurrealError` did not cover them even though
+        # an unrecognised *scheme* was already mapped into the hierarchy - the
+        # same call failed inside or outside the hierarchy depending on which
+        # part of the URL was wrong.
+        try:
+            parsed_url = urlparse(url)
+        except ValueError as error:
+            raise InvalidUrlError(f"Could not parse URL {url!r}: {error}") from error
+
         cleaned = url.replace("/rpc", "")
         # Every remote transport appends `/rpc` to this, so a trailing slash on
         # the endpoint doubles up: `http://host/` became `http://host//rpc`,
         # which surfaced in connection error messages. Only strip when there is
         # a netloc, so `mem://` does not collapse to `mem:`.
         self.raw_url = cleaned.rstrip("/") if parsed_url.netloc else cleaned
+
         scheme = url if url in _BARE_SCHEMES else parsed_url.scheme
         try:
             self.scheme = UrlScheme(scheme)
         except ValueError as error:
             # `UrlScheme(...)` raises a bare `ValueError` for anything it does
             # not recognise, which escaped the `SurrealError` hierarchy and so
-            # was not caught by `except SurrealError`. Every failure this SDK
-            # raises is meant to be a `SurrealError`.
+            # was not caught by `except SurrealError`.
             raise UnsupportedEngineError(url) from error
-        self.hostname = parsed_url.hostname
-        self.port = parsed_url.port
+
+        try:
+            self.hostname = parsed_url.hostname
+            self.port = parsed_url.port
+        except ValueError as error:
+            raise InvalidUrlError(f"Could not parse URL {url!r}: {error}") from error

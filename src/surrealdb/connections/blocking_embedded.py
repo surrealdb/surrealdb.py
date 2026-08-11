@@ -16,6 +16,7 @@ from surrealdb.connections.blocking_ws import (
     BlockingWsSurrealConnection,
 )
 from surrealdb.connections.url import Url
+from surrealdb.connections.utils_mixin import mapped_engine_errors
 from surrealdb.data.cbor import decode
 from surrealdb.errors import UnsupportedFeatureError
 from surrealdb.request_message.message import RequestMessage
@@ -49,7 +50,8 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
         self.token: str | None = None
 
         # Embedded database handle
-        self._db: SyncEmbeddedDB = SyncEmbeddedDB(url)
+        with mapped_engine_errors("opening the database"):
+            self._db: SyncEmbeddedDB = SyncEmbeddedDB(url)
 
         # Not used for embedded, but needed for compatibility
         self.socket = None
@@ -81,9 +83,11 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
         if url is not None:
             self.url = Url(url)
             self.raw_url = url
-            self._db = SyncEmbeddedDB(url)
+            with mapped_engine_errors("opening the database"):
+                self._db = SyncEmbeddedDB(url)
 
-        self._db.connect()
+        with mapped_engine_errors("connecting"):
+            self._db.connect()
 
     def close(self) -> None:
         """Closes the connection to the database.
@@ -91,7 +95,8 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
         Example:
             db.close()
         """
-        self._db.close()
+        with mapped_engine_errors("closing"):
+            self._db.close()
         self.socket = None
 
     def _send(
@@ -116,7 +121,8 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
         cbor_request = message.WS_CBOR_DESCRIPTOR
 
         # Execute via Rust extension
-        cbor_response_bytes = self._db.execute(cbor_request)
+        with mapped_engine_errors(process):
+            cbor_response_bytes = self._db.execute(cbor_request)
 
         # Decode CBOR response (reuses existing CBOR decoding)
         response = decode(cbor_response_bytes)

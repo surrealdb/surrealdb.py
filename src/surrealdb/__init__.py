@@ -57,6 +57,7 @@ from surrealdb.errors import (
     InvalidGeometryError,
     InvalidRecordIdError,
     InvalidTableError,
+    InvalidUrlError,
     NotAllowedDetailKind,
     NotAllowedError,
     NotFoundDetailKind,
@@ -158,6 +159,7 @@ __all__ = [
     "InvalidDurationError",
     "InvalidGeometryError",
     "InvalidTableError",
+    "InvalidUrlError",
     # Errors – backward compat
     "SurrealDBMethodError",
 ]
