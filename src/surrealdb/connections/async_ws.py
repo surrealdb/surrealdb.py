@@ -3,6 +3,7 @@ A basic async connection to a SurrealDB instance.
 """
 
 import asyncio
+import logging
 import uuid
 from asyncio import AbstractEventLoop, Future, Queue, Task
 from collections.abc import AsyncGenerator
@@ -29,6 +30,7 @@ from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     ConnectionUnavailableError,
+    SurrealError,
     TransportTimeoutError,
     UnexpectedResponseError,
     parse_rpc_error,
@@ -37,10 +39,18 @@ from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 from surrealdb.types import Tokens, Value, parse_auth_result
 
+logger = logging.getLogger(__name__)
+
 # Sentinel pushed into a live-query queue to tell a ``subscribe_live`` consumer
 # to stop iterating. Emitted by ``kill`` (the query was killed) and ``close``
 # (the connection is going away) so waiting consumers do not leak.
 _LIVE_QUEUE_CLOSED = object()
+
+
+# Upper bound on how long a single RPC waits for its reply. The blocking
+# transport has had one since it was found hanging on a protocol error; without
+# the same bound here a caller can wait forever if the reply never arrives.
+_RPC_RECV_TIMEOUT = 30.0
 
 
 class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
@@ -73,42 +83,69 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         # sentinel, so the value type is ``Any``.
         self.live_queues: dict[str, list[Queue[Any]]] = {}
 
+    def _fail_pending(self, error: BaseException) -> None:
+        """Hand *error* to every caller currently awaiting a reply."""
+        for fut in self.qry.values():
+            if not fut.done():
+                fut.set_exception(error)
+        self.qry.clear()
+
     async def _recv_task(self) -> None:
         assert self.socket
         try:
             async for data in self.socket:
-                response = decode(data)
-                if response_id := response.get("id"):
-                    if fut := self.qry.get(response_id):
-                        fut.set_result(response)
-                elif response_result := response.get("result"):
-                    live_id = str(response_result["id"])
-                    for queue in self.live_queues.get(live_id, []):
-                        queue.put_nowait(response_result)
-                else:
-                    self.check_response_for_error(response, "_recv_task")
+                # A single frame this loop cannot handle must not end it. When
+                # it did, the socket stayed open - so `connect()` saw a live
+                # socket and no-opped, and every later request registered a
+                # future that nothing would ever resolve. The caller then
+                # waited forever, with no timeout anywhere on this path.
+                try:
+                    response = decode(data)
+                except Exception as exc:
+                    self._fail_pending(
+                        UnexpectedResponseError(
+                            f"could not decode a websocket frame: {exc}"
+                        )
+                    )
+                    continue
+
+                try:
+                    if response_id := response.get("id"):
+                        if fut := self.qry.get(response_id):
+                            if not fut.done():
+                                fut.set_result(response)
+                    elif response_result := response.get("result"):
+                        live_id = str(response_result["id"])
+                        for queue in self.live_queues.get(live_id, []):
+                            queue.put_nowait(response_result)
+                    else:
+                        # An id-less frame carrying no result is a
+                        # protocol-level error the server could not correlate
+                        # to a request, so everyone in flight has to hear it.
+                        try:
+                            self.check_response_for_error(response, "_recv_task")
+                        except SurrealError as exc:
+                            self._fail_pending(exc)
+                except Exception as exc:
+                    self._fail_pending(
+                        UnexpectedResponseError(
+                            f"could not route a websocket frame: {exc}"
+                        )
+                    )
         except (ConnectionClosed, WebSocketException, asyncio.CancelledError):
             # Connection was closed or cancelled, this is expected
             pass
         except Exception as e:
-            # Log unexpected errors but don't let them propagate
-            import logging
-
-            logger = logging.getLogger(__name__)
             logger.debug(f"Unexpected error in _recv_task: {e}")
         finally:
             # Fail any pending futures with a typed error so awaiting callers
             # surface ``ConnectionUnavailableError`` instead of a raw
             # ``CancelledError`` when the socket closes mid-request.
-            for fut in self.qry.values():
-                if not fut.done():
-                    fut.set_exception(
-                        ConnectionUnavailableError(
-                            "WebSocket connection closed before a response "
-                            "was received."
-                        )
-                    )
-            self.qry.clear()
+            self._fail_pending(
+                ConnectionUnavailableError(
+                    "WebSocket connection closed before a response was received."
+                )
+            )
 
     async def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
@@ -132,8 +169,15 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
                 ) from exc
             del message
 
-            # wait for response
-            response = await fut
+            # wait for response, bounded so a reply that never arrives cannot
+            # block the caller forever
+            try:
+                response = await asyncio.wait_for(fut, _RPC_RECV_TIMEOUT)
+            except asyncio.TimeoutError as exc:
+                raise TransportTimeoutError(
+                    f"timed out while {process} on {self.raw_url}: no reply "
+                    f"within {_RPC_RECV_TIMEOUT}s"
+                ) from exc
         finally:
             # ``_recv_task`` clears ``self.qry`` when the socket closes, so the
             # key may already be gone; ``pop`` avoids a spurious ``KeyError``.
@@ -152,8 +196,16 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         return response
 
     async def connect(self, url: str | None = None) -> None:
-        if self.socket:
-            return
+        if self.socket is not None:
+            if self.recv_task is None or not self.recv_task.done():
+                return
+            # The reader ran and stopped while the socket stayed open, so this
+            # used to be a silent no-op that left the connection permanently
+            # unusable - every later request waited on a future nothing would
+            # resolve. Tear it down and reconnect. Deliberately narrow: a
+            # socket with no reader at all is left alone, since that is not the
+            # state this guards against.
+            await self.close()
 
         # overwrite params if passed in
         if url is not None:

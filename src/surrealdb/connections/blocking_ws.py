@@ -86,6 +86,11 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         # notifications ``_send`` reads while correlating an RPC reply are
         # handed off instead of being lost.
         self.live_queues: dict[str, list[queue.Queue[dict[str, Any]]]] = {}
+        # Ids of requests abandoned by a timeout. The server still answers
+        # them, and that reply arrives while some later request is waiting, so
+        # it has to be recognised and dropped rather than mistaken for the
+        # later request's reply.
+        self._abandoned: set[str] = set()
 
     def _connect_socket(self) -> ClientConnection:
         """Open the websocket, mapping transport failures to SDK errors."""
@@ -147,6 +152,11 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 while True:
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
+                        # The request was sent, so a reply is still coming.
+                        # Remember it, or the next call reads this reply,
+                        # mismatches the id and fails - and so does every call
+                        # after it, permanently out of step by one.
+                        self._abandoned.add(message.id)
                         raise TransportTimeoutError(
                             f"timed out while {process} on {self.raw_url}: no "
                             f"reply within {_RPC_RECV_TIMEOUT}s"
@@ -167,6 +177,11 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                             self.check_response_for_error(response, process)
                         self._route_live_notification(response)
                         continue
+                    if response_id in self._abandoned:
+                        # The late reply to a timed-out request. Drop it and
+                        # keep reading for this request's own reply.
+                        self._abandoned.discard(response_id)
+                        continue
                     if response_id != message.id:
                         raise UnexpectedResponseError(
                             f"Response ID mismatch: expected {message.id}, got "
@@ -175,6 +190,11 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                         )
                     break
             except TimeoutError as exc:
+                # `recv(timeout=...)` expiring is the path that actually fires;
+                # the deadline check above only catches the next iteration.
+                # Both have to record the id, or the abandoned reply is still
+                # waiting in the socket for the next caller to trip over.
+                self._abandoned.add(message.id)
                 raise TransportTimeoutError(
                     f"timed out while {process} on {self.raw_url}: {exc}"
                 ) from exc
