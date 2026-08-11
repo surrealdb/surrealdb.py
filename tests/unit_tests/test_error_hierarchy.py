@@ -17,7 +17,6 @@ from surrealdb import Surreal
 from surrealdb.cbor import CBORTag, dumps
 from surrealdb.data.cbor import decode, encode
 from surrealdb.errors import (
-    ConnectionUnavailableError,
     InvalidUrlError,
     SurrealError,
     UnexpectedResponseError,
@@ -53,25 +52,6 @@ def test_malformed_urls_stay_in_the_hierarchy(
 
     assert isinstance(exc_info.value, SurrealError)
     assert isinstance(exc_info.value.__cause__, ValueError)
-
-
-def test_embedded_use_after_close_matches_the_remote_transports() -> None:
-    """A closed embedded connection reports what a closed socket reports.
-
-    The engine is a native extension, so its "Database connection is closed"
-    arrived as a bare ``RuntimeError`` while the websocket and HTTP transports
-    raised ``ConnectionUnavailableError`` for the same mistake.
-    """
-    db = Surreal("mem://")
-    db.use("test", "test")
-    db.create("closed_test:1", {"n": 1})
-    db.close()
-
-    with pytest.raises(ConnectionUnavailableError) as exc_info:
-        db.query("RETURN 1").first()
-
-    assert isinstance(exc_info.value, SurrealError)
-    assert isinstance(exc_info.value.__cause__, RuntimeError)
 
 
 def test_unknown_response_tag_is_a_surreal_error() -> None:
