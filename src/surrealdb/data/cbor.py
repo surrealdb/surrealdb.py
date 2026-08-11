@@ -1,6 +1,6 @@
 import decimal
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import timezone
 from io import BytesIO
 from typing import Any
 
@@ -12,7 +12,7 @@ from surrealdb.cbor import (
     shareable_encoder,
 )
 from surrealdb.data.types import constants
-from surrealdb.data.types.datetime import Datetime
+from surrealdb.data.types.datetime import Datetime, PreciseDatetime
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.geometry import (
     GeometryCollection,
@@ -164,14 +164,14 @@ def tag_decoder(
             raise ValueError(f"Unexpected TAG_DURATION value format: {tag.value}")
 
     elif tag.tag == constants.TAG_DATETIME_COMPACT:
-        # Convert [seconds, nanoseconds] into a datetime. Note that nanosecond
-        # precision is truncated to microseconds (datetime's resolution).
-        seconds = tag.value[0]
-        nanoseconds = tag.value[1]
-        microseconds = nanoseconds // 1000  # Convert nanoseconds to microseconds
-        return datetime.fromtimestamp(seconds, timezone.utc) + timedelta(
-            microseconds=microseconds
-        )
+        # `[seconds, nanoseconds]`. `datetime` resolves to microseconds, so
+        # this used to drop the last three digits - and writing the value back
+        # then stored the truncated form, destroying precision in the database
+        # on an ordinary read-modify-write. `PreciseDatetime` is a `datetime`
+        # that keeps the remainder, so the value can be written back unchanged.
+        seconds = tag.value[0] if tag.value else 0
+        nanoseconds = tag.value[1] if len(tag.value) > 1 else 0
+        return PreciseDatetime.from_seconds_and_nanos(seconds, nanoseconds)
 
     elif tag.tag == constants.TAG_UUID_STRING:
         # Defensive: the server encodes UUIDs with native tag 37, but decode a
@@ -203,6 +203,11 @@ _I64_MIN = -(2**63)
 _I64_MAX = 2**63 - 1
 
 
+def _encode_precise_datetime(encoder: CBOREncoder, value: PreciseDatetime) -> None:
+    """Send all nine fractional digits, which SurrealDB stores faithfully."""
+    encoder.encode(CBORTag(constants.TAG_DATETIME, value.isoformat_with_nanoseconds()))
+
+
 class _SurrealEncoder(CBOREncoder):
     """CBOR encoder that routes Python sets through SurrealDB's set tag.
 
@@ -219,6 +224,12 @@ class _SurrealEncoder(CBOREncoder):
         super().__init__(*args, **kwargs)
         self._encoders.pop(set, None)
         self._encoders.pop(frozenset, None)
+
+        # Registered for the exact subclass only, so a plain `datetime` keeps
+        # cbor2's native encoding untouched. Without this the native encoder
+        # claims the subclass through the MRO and silently drops the
+        # nanoseconds again - the `default=` hook never sees it.
+        self._encoders[PreciseDatetime] = _encode_precise_datetime
 
         encode_int = self._encoders[int]
 

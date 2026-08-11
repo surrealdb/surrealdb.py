@@ -36,7 +36,7 @@ from surrealdb.connections.builders import (
     SyncQueryBuilder,
 )
 from surrealdb.connections.url import Url, UrlScheme
-from surrealdb.data.types.datetime import Datetime
+from surrealdb.data.types.datetime import Datetime, PreciseDatetime
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.geometry import Geometry
 from surrealdb.data.types.range import Range
@@ -119,6 +119,7 @@ __all__ = [
     "Range",
     "RecordID",
     "Datetime",
+    "PreciseDatetime",
     "Tokens",
     "Value",
     "escape_identifier",
