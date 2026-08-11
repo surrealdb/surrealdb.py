@@ -3,7 +3,7 @@ from typing import Any
 
 import pytest
 
-from surrealdb.cbor import CBORTag, loads
+from surrealdb.cbor import CBORTag, dumps, loads
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data import cbor
 from surrealdb.data.types import constants
@@ -319,3 +319,16 @@ async def test_duration_db_roundtrip(surrealdb_connection: Any) -> None:
     result = await surrealdb_connection.query("SELECT * FROM duration_tests;").first()
 
     assert result[0]["value"] == original
+
+
+def test_zero_duration_decodes_from_an_empty_array() -> None:
+    """The server sends a zero duration as tag 14 with an EMPTY array.
+
+    The decoder handled one and two elements and indexed ``[0]`` otherwise, so
+    a zero duration raised ``IndexError`` and destroyed the whole response -
+    not just that field. Ordinary expressions produce one.
+    """
+    assert cbor.decode(dumps(CBORTag(constants.TAG_DURATION_COMPACT, []))) == Duration(0)
+
+    # And it still round-trips through the SDK's own encoder.
+    assert cbor.decode(cbor.encode(Duration(0))) == Duration(0)

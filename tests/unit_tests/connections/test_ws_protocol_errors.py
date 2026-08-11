@@ -42,17 +42,18 @@ def _within_budget(call: Any) -> tuple[str, Any]:
     return outcome["r"]
 
 
-# Both inputs are rejected by every server version in the support matrix. A
+# The trigger has to be something the SDK encodes happily but the server cannot
+# correlate, so the reply carries no `id`. An oversized integer used to serve;
+# it no longer reaches the server, because the encoder now refuses an int
+# outside SurrealDB's signed 64-bit range rather than letting it wrap silently.
+#
+# Rejected by every server version in the support matrix. A
 # non-string mapping key is deliberately NOT used here: SurrealDB 2.x coerces
 # `{1: "a"}` to `{"1": "a"}` and returns it successfully, so it only triggers a
 # protocol error on 3.x.
 @pytest.mark.parametrize(
     ("label", "make_call"),
     [
-        (
-            "integer too large to encode",
-            lambda db: db.query("RETURN $v", {"v": 2**200}).first(),
-        ),
         ("record id with a null table", lambda db: db.select(RecordID(None, 1))),
     ],
 )
@@ -74,7 +75,7 @@ def test_connection_still_usable_after_a_protocol_error(
 ) -> None:
     """The socket survives the error frame, so the connection is not poisoned."""
     with pytest.raises(SurrealError):
-        blocking_ws_connection.query("RETURN $v", {"v": 2**200}).first()
+        blocking_ws_connection.select(RecordID(None, 1))
 
     assert blocking_ws_connection.query("RETURN 1").first() == 1
 

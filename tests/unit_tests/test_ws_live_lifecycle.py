@@ -23,7 +23,7 @@ import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
-from surrealdb.data.cbor import encode
+from surrealdb.data.cbor import decode, encode
 from surrealdb.errors import ConnectionUnavailableError
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
@@ -287,3 +287,63 @@ async def test_async_subscribe_live_multi_subscriber(
     with pytest.raises(StopAsyncIteration):
         await asyncio.wait_for(sub2.__anext__(), timeout=1)
     assert suid not in conn.live_queues
+
+
+class _OneBadFrameThenRepliesSocket:
+    """Async socket that yields one undecodable frame, then real replies."""
+
+    def __init__(self) -> None:
+        # A truncated CBOR sequence. Note `b"\xff..."` does NOT work: 0xff is
+        # the CBOR break byte and decodes cleanly, so it never exercised the
+        # failure path this test exists for.
+        self._frames: list[bytes] = [b"\x82\x01"]
+        self._ready = asyncio.Event()
+        self.sent: list[bytes] = []
+
+    async def send(self, data: bytes) -> None:
+        self.sent.append(data)
+        # Reply to whatever was just asked, after the bad frame.
+        request = decode(data)
+        self._frames.append(encode({"id": request["id"], "result": "pong"}))
+        self._ready.set()
+
+    def __aiter__(self) -> "_OneBadFrameThenRepliesSocket":
+        return self
+
+    async def __anext__(self) -> bytes:
+        while not self._frames:
+            self._ready.clear()
+            await self._ready.wait()
+        return self._frames.pop(0)
+
+    async def close(self) -> None:
+        pass
+
+
+async def test_async_recv_task_survives_an_undecodable_frame() -> None:
+    """A frame the SDK cannot decode fails the waiters, not the reader.
+
+    ``_recv_task`` used to end on the first undecodable frame. The socket
+    stayed open, so ``connect()`` saw a live connection and did nothing, and
+    every later request waited on a future nothing would resolve - an
+    unbounded hang. Driven through a fake socket rather than a server-produced
+    value, because the specific values a server cannot round-trip get fixed
+    (a zero-valued duration used to serve here) while the resilience
+    requirement stays.
+    """
+    conn = AsyncWsSurrealConnection(WS_URL)
+    conn.loop = asyncio.get_running_loop()
+    socket = _OneBadFrameThenRepliesSocket()
+    conn.socket = socket
+    conn.recv_task = asyncio.create_task(conn._recv_task())
+
+    # Give the reader the bad frame first.
+    await asyncio.sleep(0)
+
+    message = RequestMessage(RequestMethod.QUERY, query="RETURN 1", params={})
+    response = await asyncio.wait_for(conn._send(message, "query"), timeout=5)
+
+    assert response["result"] == "pong"
+    assert not conn.recv_task.done(), "the reader died on the undecodable frame"
+
+    conn.recv_task.cancel()

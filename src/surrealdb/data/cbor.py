@@ -142,11 +142,16 @@ def tag_decoder(
         return Range(tag.value[0], tag.value[1])
 
     elif tag.tag == constants.TAG_DURATION_COMPACT:
+        # The server omits trailing zero components, so a zero duration arrives
+        # as an EMPTY array. Indexing [0] then raised IndexError and destroyed
+        # the whole response, not just the field - and an ordinary expression
+        # such as `time::now() - time::now()` produces one.
+        if not tag.value:
+            return Duration.parse(0, 0)
         if len(tag.value) == 1:
             return Duration.parse(tag.value[0], 0)  # seconds only
-        else:
-            # seconds and nanoseconds
-            return Duration.parse(tag.value[0], tag.value[1])
+        # seconds and nanoseconds
+        return Duration.parse(tag.value[0], tag.value[1])
 
     elif tag.tag == constants.TAG_DURATION:
         # TAG_DURATION is encoded as [seconds, nanoseconds] tuple
@@ -190,6 +195,14 @@ def tag_decoder(
         )
 
 
+# SurrealDB stores integers as signed 64-bit. A Python int above the signed
+# maximum still fits CBOR's unsigned range, so it encoded cleanly and the
+# server reinterpreted the bits - 2**63 came back as -9223372036854775808 and
+# 2**64-1 as -1, with no error anywhere.
+_I64_MIN = -(2**63)
+_I64_MAX = 2**63 - 1
+
+
 class _SurrealEncoder(CBOREncoder):
     """CBOR encoder that routes Python sets through SurrealDB's set tag.
 
@@ -197,12 +210,28 @@ class _SurrealEncoder(CBOREncoder):
     CBOR tag 258, but SurrealDB expects its own set tag (56). Dropping the
     built-in set encoders lets sets fall through to :func:`default_encoder`,
     which emits ``constants.TAG_SET``.
+
+    It also refuses an integer SurrealDB cannot represent, rather than letting
+    it wrap silently on the server.
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._encoders.pop(set, None)
         self._encoders.pop(frozenset, None)
+
+        encode_int = self._encoders[int]
+
+        def _encode_checked_int(encoder: CBOREncoder, value: int) -> None:
+            if not _I64_MIN <= value <= _I64_MAX:
+                raise ValueError(
+                    f"integer {value} is outside SurrealDB's signed 64-bit "
+                    f"range ({_I64_MIN} to {_I64_MAX}); it would be stored as a "
+                    "different number. Send it as a string or a Decimal instead."
+                )
+            encode_int(encoder, value)
+
+        self._encoders[int] = _encode_checked_int
 
 
 def encode(obj: Any) -> bytes:
