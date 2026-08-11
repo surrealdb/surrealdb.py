@@ -93,7 +93,7 @@ class Mutation:
             if not update_data:
                 raise Exception("No fields to update")
 
-            result = await db.merge(id, update_data)
+            result = await db.update(id).merge(update_data)
 
             if not result:
                 raise Exception(f"User {id} not found")

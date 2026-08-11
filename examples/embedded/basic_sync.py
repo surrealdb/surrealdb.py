@@ -29,12 +29,14 @@ def main() -> None:
         print(f"Updated person: {updated}")
 
         # Run a SurrealQL query
+        # `query()` returns a builder; `.execute()` is what runs it. The async
+        # form above is awaited, which runs it - the sync form has to say so.
         result = db.query(
             """
             SELECT * FROM person WHERE age < $max_age
         """,
             {"max_age": 30},
-        )
+        ).execute()
         print(f"Query result: {result}")
 
         # Delete all people

@@ -100,8 +100,7 @@ async def demonstrate_crud_operations(db: Any) -> None:
     # MERGE: Partially update a user (only specified fields)
     # Span: "surrealdb merge"
     print("🔄 Merging user data...")
-    merged_user = await db.merge(
-        user2["id"],
+    merged_user = await db.update(user2["id"]).merge(
         {"role": "moderator"},  # Only update the role field
     )
     print(f"   Merged user: {merged_user['id']}\n")

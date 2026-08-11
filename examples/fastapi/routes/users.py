@@ -135,7 +135,7 @@ async def update_user(
                 detail="No fields to update",
             )
 
-        result = await db.merge(user_id, update_data)
+        result = await db.update(user_id).merge(update_data)
 
         if not result:
             raise HTTPException(

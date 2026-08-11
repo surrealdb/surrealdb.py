@@ -9,9 +9,13 @@ database*, silently.
 from SurrealDB can be written back unchanged.
 """
 
+import contextlib
 import copy
 import datetime as dt
+import os
 import pickle
+import time
+from collections.abc import Iterator
 
 import pytest
 
@@ -24,6 +28,28 @@ from surrealdb.data.types import constants
 def _compact(seconds: int, nanoseconds: int) -> bytes:
     """The `[seconds, nanoseconds]` frame SurrealDB sends for a datetime."""
     return dumps(CBORTag(constants.TAG_DATETIME_COMPACT, [seconds, nanoseconds]))
+
+
+@contextlib.contextmanager
+def _machine_timezone(name: str) -> Iterator[None]:
+    """Run the block as though the machine's local timezone were *name*.
+
+    ``TZ`` plus ``tzset()`` is what CPython reads for the local zone, which is
+    what ``astimezone()`` assumes when given a naive value. CI and most
+    developer machines run on UTC, where the naive-datetime bug below is
+    invisible, so the zone has to be imposed rather than observed.
+    """
+    previous = os.environ.get("TZ")
+    os.environ["TZ"] = name
+    time.tzset()
+    try:
+        yield
+    finally:
+        if previous is None:
+            del os.environ["TZ"]
+        else:
+            os.environ["TZ"] = previous
+        time.tzset()
 
 
 def test_decoding_keeps_the_sub_microsecond_remainder() -> None:
@@ -65,6 +91,66 @@ def test_a_plain_datetime_is_encoded_exactly_as_before() -> None:
     plain = dt.datetime(2026, 1, 1, 0, 0, 0, 123456, tzinfo=dt.timezone.utc)
 
     assert loads(encode(plain)) == plain
+
+
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="needs a POSIX TZ database")
+@pytest.mark.parametrize(
+    "zone", ["UTC", "America/New_York", "Asia/Tokyo", "Australia/Adelaide"]
+)
+def test_a_naive_value_is_read_as_utc_whatever_the_machine_is_set_to(
+    zone: str,
+) -> None:
+    """The same wall clock must be the same instant on every machine.
+
+    ``astimezone`` treats a naive datetime as *local*, so this rendered a naive
+    ``PreciseDatetime`` in whatever zone the host happened to be configured
+    for - five hours off on a US East Coast machine, and exactly right on a UTC
+    one, which is what every CI leg runs on. Nothing the caller wrote decided
+    which; the host did.
+    """
+    with _machine_timezone(zone):
+        value = PreciseDatetime(2026, 1, 1, 12, 0, 0, nanosecond=7)
+
+        assert value.isoformat_with_nanoseconds() == "2026-01-01T12:00:00.000000007Z"
+
+
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="needs a POSIX TZ database")
+@pytest.mark.parametrize("zone", ["UTC", "America/New_York", "Asia/Tokyo"])
+def test_a_naive_value_agrees_with_a_naive_plain_datetime(zone: str) -> None:
+    """The two spellings of "no timezone" have to mean the same instant.
+
+    ``encode`` passes ``timezone=utc`` to cbor2, so a naive ``datetime`` has
+    always gone out as UTC. A naive ``PreciseDatetime`` is the same value with
+    more digits, and diverging from it turned adding precision into a silent
+    change of instant.
+    """
+    with _machine_timezone(zone):
+        naive = dt.datetime(2026, 1, 1, 12, 0, 0)
+        precise = PreciseDatetime(2026, 1, 1, 12, 0, 0)
+
+        assert loads(encode(naive)) == dt.datetime(
+            2026, 1, 1, 12, 0, 0, tzinfo=dt.timezone.utc
+        )
+        assert precise.isoformat_with_nanoseconds().startswith("2026-01-01T12:00:00")
+
+
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="needs a POSIX TZ database")
+@pytest.mark.parametrize("zone", ["UTC", "America/New_York"])
+def test_an_aware_value_is_still_converted_to_utc(zone: str) -> None:
+    """Reading naive values as UTC must not stop aware ones being converted."""
+    with _machine_timezone(zone):
+        value = PreciseDatetime(
+            2026,
+            1,
+            1,
+            12,
+            0,
+            0,
+            tzinfo=dt.timezone(dt.timedelta(hours=5)),
+            nanosecond=7,
+        )
+
+        assert value.isoformat_with_nanoseconds() == "2026-01-01T07:00:00.000000007Z"
 
 
 @pytest.mark.parametrize(

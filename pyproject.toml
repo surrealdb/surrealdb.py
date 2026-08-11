@@ -33,10 +33,26 @@ dependencies = [
     # up keeps users off the affected range. 3.14 still supports Python 3.10,
     # so this costs no platform coverage.
     "aiohttp>=3.14.0",
-    "pydantic-core>=2.0.1",
+    # 2.10.0 is the first release whose `typed-dict` schema takes the
+    # `typed-dict-field` wrappers `cbor_ws` builds. Below it the module-scope
+    # `SchemaValidator` raises `SchemaError` on construction, so `import
+    # surrealdb` fails outright - the declared floor of 2.0.1 named a version
+    # at which the package could not be imported at all.
+    "pydantic-core>=2.10.0",
     "requests>=2.25.0",
-    "typing_extensions>=4.0.0; python_version<'3.12'",
-    "websockets>=10.0",
+    # `Buffer` (PEP 688) lands in 4.6.0. The import is `TYPE_CHECKING`-only, so
+    # an older version still runs - but this package ships `py.typed`, and a
+    # type checker resolving the SDK against 4.0.0 cannot find the name.
+    "typing_extensions>=4.6.0; python_version<'3.12'",
+    # `websockets.sync`, which the whole blocking transport is built on, only
+    # exists from 11.0 - so the declared floor of 10.0 was another version at
+    # which importing the package failed. 11.0 imports but deadlocks: its
+    # message assembler blocks the reader thread until an unread frame is
+    # consumed, and `close()` joins that thread, so closing a connection with
+    # an undelivered live notification never returns. 12.0 through 13.1 avoid
+    # the deadlock but still pay the full 10s close timeout for it. 14.0 is the
+    # first release where closing such a connection is immediate.
+    "websockets>=14.0",
 ]
 
 [project.urls]

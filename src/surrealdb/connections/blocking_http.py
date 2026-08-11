@@ -1,7 +1,7 @@
 import uuid
 from collections.abc import Generator
 from types import TracebackType
-from typing import Any, cast, overload
+from typing import Any, overload
 from uuid import UUID
 
 import requests
@@ -16,7 +16,11 @@ from surrealdb.connections.builders import (
 )
 from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.url import Url
-from surrealdb.connections.utils_mixin import AUTH_FALLBACK_QUERY, UtilsMixin
+from surrealdb.connections.utils_mixin import (
+    AUTH_FALLBACK_QUERY,
+    UtilsMixin,
+    merge_query_vars,
+)
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
@@ -96,9 +100,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
 
         self.check_status_for_error(response.status_code, response.content, url)
 
-        data_dict = cast(
-            dict[str, Any], self.decode_response(response.content, operation)
-        )
+        data_dict = self.decode_response(response.content, operation)
 
         if not bypass:
             self.check_response_for_error(data_dict, operation)
@@ -194,14 +196,10 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     def query_raw(
         self, query: str, vars: dict[str, Value] | None = None
     ) -> dict[str, Any]:
-        if vars is None:
-            vars = {}
-        for key, value in self.vars.items():
-            vars[key] = value
         message = RequestMessage(
             RequestMethod.QUERY,
             query=query,
-            params=vars,
+            params=merge_query_vars(self.vars, vars),
         )
         self.id = message.id
         response = self._send(message, "query", bypass=True)
@@ -435,7 +433,12 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.vars[key] = value
 
     def unset(self, key: str) -> None:
-        self.vars.pop(key)
+        # Unsetting a name that was never set is not an error: the websocket
+        # and embedded engines answer the `unset` RPC for an unknown key
+        # without complaint, and only here did it raise `KeyError` - an
+        # exception outside the `SurrealError` tree, so `except SurrealError`
+        # around transport-agnostic cleanup code did not catch it.
+        self.vars.pop(key, None)
 
     @overload
     def select(self, record: RecordID, *, into: type[M]) -> M | None: ...

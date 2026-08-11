@@ -508,8 +508,8 @@ with Surreal("ws://localhost:8000/rpc") as db:
 
 ### Talking to a SurrealDB 2.x server
 
-Two things behave differently against SurrealDB 2.x, both because of what the
-2.x wire format carries rather than anything the SDK chooses.
+Three things behave differently against SurrealDB 2.x, all because of what the
+2.x server does rather than anything the SDK chooses.
 
 **Error kinds need 3.x.** The subclasses below `ServerError` come from the
 `kind` the server reports, and 2.x does not send one — its error payload has
@@ -532,6 +532,21 @@ arrays — and rejects anything carrying the tag. Send a `list` instead when
 targeting 2.x; a list is what 2.x uses for a `set<…>` field anyway, and the
 server deduplicates it. On 3.x a list is *not* interchangeable with a set: a
 `set<…>` field rejects one.
+
+**`let()` wins over a query's own variables on a 2.x websocket.** Passing a
+variable to `query()` shadows a `let()` binding of the same name for that one
+query — on 3.x, and on HTTP against any version, where the SDK replays `let()`
+bindings itself. On a 2.x websocket `let()` is a server-side session binding and
+that server resolves it the other way round:
+
+```python
+db.let("limit", 99)
+db.query("RETURN $limit", {"limit": 5})   # 5, except on a 2.x websocket: 99
+```
+
+The SDK sends the same request in both cases, so there is nothing for it to fix
+without knowing the server version up front. Use distinct names for session
+bindings and per-query variables if you target 2.x over a websocket.
 
 The `TransportError` branch is `ConnectionUnavailableError` (the host was
 unreachable or the socket closed), `TransportTimeoutError` (the request timed

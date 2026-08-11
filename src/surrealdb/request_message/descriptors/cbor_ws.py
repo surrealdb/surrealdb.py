@@ -348,7 +348,12 @@ class WsCborDescriptor:
         table = obj.kwargs.get("table")
         if isinstance(table, str):
             table = Table(table)
-        data = {"id": obj.id, "method": obj.method.value, "params": [table]}
+        # The `live` RPC takes `[what, diff]`. Sending only `[what]` left the
+        # server on its default of full records, so `live(table, diff=True)`
+        # was accepted, documented, and typed - and silently delivered
+        # something other than the JSON Patch it promised.
+        params: list[Any] = [table, bool(obj.kwargs.get("diff", False))]
+        data = {"id": obj.id, "method": obj.method.value, "params": params}
         _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
         return encode(data)

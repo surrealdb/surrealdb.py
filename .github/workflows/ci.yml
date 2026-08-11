@@ -150,6 +150,74 @@ jobs:
             exit 1
           fi
 
+  # Every other job installs the lockfile, which pins current versions - so
+  # nothing here has ever exercised the *declared* minimums. Two of them named
+  # versions at which `import surrealdb` raised, and both shipped.
+  #
+  # Deliberately runs the built wheel out of site-packages with no PYTHONPATH:
+  # the point is what a user gets from `pip install surrealdb`, resolved the
+  # way a user with old pins would resolve it.
+  floors:
+    name: Minimum declared dependency versions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9
+        with:
+          version: "latest"
+          enable-cache: true
+
+      # The oldest interpreter we support: the one a user still on old pins is
+      # most likely to be running, and the one old dependencies have wheels for.
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.10"
+
+      - name: Install surrealdb
+        run: curl -sSf https://install.surrealdb.com | sh -s -- --version v3.0.5
+
+      - name: Start surrealdb
+        run: surreal start --allow-all -u root -p root --log trace &
+
+      - name: Wait for startup
+        run: sleep 5
+
+      - name: Build wheel
+        run: uv build --wheel
+
+      # Resolved from pyproject.toml rather than repeated here, so the job
+      # cannot drift from what is declared. `lowest-direct` pins our own
+      # dependencies to their floors while letting everything they pull in
+      # resolve normally - which is what a user with no pins of their own gets,
+      # not an artificial combination no resolver would produce.
+      - name: Resolve the declared floors
+        run: |
+          # Explicit, so the resolve cannot silently land on a different
+          # interpreter than the one the tests then run under - the markers on
+          # some dependencies are keyed to the Python version.
+          uv venv --python 3.10 .floors
+          uv pip compile --python .floors/bin/python \
+            --resolution lowest-direct pyproject.toml -o floor-lock.txt
+          echo "Floors under test:"
+          grep -vE '^\s*#|^$' floor-lock.txt
+
+      # The lock goes in as a *constraint*, so the test tools resolve normally
+      # while every dependency of the SDK is held at its floor.
+      - name: Install the wheel at those floors
+        run: |
+          uv pip install --python .floors/bin/python --constraint floor-lock.txt \
+            dist/*.whl pytest pytest-asyncio hypothesis responses coverage
+          uv pip list --python .floors/bin/python
+
+      - name: Run unit tests against the floors
+        run: .floors/bin/python -m pytest --ignore=tests/unit_tests/connections/embedded
+        env:
+          PYTHONWARNINGS: ignore::ResourceWarning
+
   test:
     runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.surrealdb-version == 'nightly' }}
