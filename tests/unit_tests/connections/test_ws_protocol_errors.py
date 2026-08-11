@@ -40,11 +40,17 @@ def _within_budget(call: Any) -> tuple[str, Any]:
     return outcome["r"]
 
 
+# Both inputs are rejected by every server version in the support matrix. A
+# non-string mapping key is deliberately NOT used here: SurrealDB 2.x coerces
+# `{1: "a"}` to `{"1": "a"}` and returns it successfully, so it only triggers a
+# protocol error on 3.x.
 @pytest.mark.parametrize(
     ("label", "make_call"),
     [
-        ("integer too large to encode", lambda db: db.query("RETURN $v", {"v": 2**200}).first()),
-        ("non-string mapping key", lambda db: db.query("RETURN $v", {"v": {1: "a"}}).first()),
+        (
+            "integer too large to encode",
+            lambda db: db.query("RETURN $v", {"v": 2**200}).first(),
+        ),
         ("record id with a null table", lambda db: db.select(RecordID(None, 1))),
     ],
 )
@@ -56,7 +62,9 @@ def test_protocol_error_raises_instead_of_hanging(
     kind, value = _within_budget(lambda: make_call(blocking_ws_connection))
 
     assert kind != "hung", f"{label}: blocked for over {_BUDGET_SECONDS}s"
-    assert kind == "surreal-error", f"{label}: expected a SurrealError, got {kind} {value!r}"
+    assert kind == "surreal-error", (
+        f"{label}: expected a SurrealError, got {kind} {value!r}"
+    )
 
 
 def test_connection_still_usable_after_a_protocol_error(
