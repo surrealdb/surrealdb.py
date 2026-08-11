@@ -118,17 +118,29 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         other transport connected. Calling it eagerly also surfaces an
         unreachable endpoint at ``connect()`` rather than at the first query.
 
-        Idempotent: a no-op when the socket is already open. Passing *url*
-        re-points the connection, matching the other transports.
+        Idempotent: a no-op when the socket is already open and *url* names
+        the endpoint it is already connected to. Passing a *different* url
+        re-points the connection, matching the other transports, and replaces
+        an open socket - keeping it would leave the connection talking to the
+        previous endpoint while reporting the new URL. Re-pointing costs the
+        server-side session, so the same-url case is left alone: a defensive
+        ``connect(url)`` must not quietly discard a completed ``signin()``.
         """
-        if self.socket:
-            return
-
         if url is not None:
-            self.url = Url(url)
-            self.raw_url = f"{self.url.raw_url}/rpc"
-            self.host = self.url.hostname
-            self.port = self.url.port
+            target = Url(url)
+            target_raw = f"{target.raw_url}/rpc"
+            if self.socket is not None and target_raw != self.raw_url:
+                self.close()
+            # Applied whether or not the socket had to go: skipping this when
+            # the endpoint compares equal means any part of the URL the
+            # comparison does not look at gets silently dropped.
+            self.url = target
+            self.raw_url = target_raw
+            self.host = target.hostname
+            self.port = target.port
+
+        if self.socket is not None:
+            return
 
         self.socket = self._connect_socket()
 
@@ -1182,8 +1194,54 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         return BlockingSurrealSession(self, session_id)
 
     def close(self) -> None:
+        """Close the websocket, if one is open.
+
+        Idempotent, and leaves the connection reusable: ``connect()`` opens a
+        fresh socket afterwards. Dropping the reference is what makes that
+        work - while the attribute still held the closed socket, ``connect()``
+        saw a connection and returned without doing anything, and every later
+        call failed against the dead one. Matches ``AsyncWsSurrealConnection``,
+        which has always cleared it here.
+
+        The replacement socket is a new server-side session, so it starts
+        unauthenticated and with no namespace or database selected; sign in and
+        ``use()`` again after reconnecting.
+        """
         if self.socket is not None:
-            self.socket.close()
+            try:
+                self.socket.close()
+            finally:
+                self.socket = None
+
+    def __del__(self) -> None:
+        """Close the socket if the connection is dropped without ``close()``.
+
+        Every open websocket holds a TCP socket and two ``websockets`` worker
+        threads (``recv_events`` and ``keepalive``). Nothing else releases
+        them, so a program that built connections in a loop and let them go out
+        of scope accumulated all three per connection until the process
+        exited - ten live threads after five discarded connections.
+
+        Deliberately *not* the graceful :meth:`close`. That performs a closing
+        handshake and then joins the reader thread, which is wrong in a
+        destructor twice over: at interpreter shutdown the reader has already
+        been stopped without releasing its lock, so the join never returns and
+        the process hangs instead of exiting; and whenever the peer has gone
+        quiet it stalls whoever dropped the last reference for the full close
+        timeout, at an arbitrary point in unrelated code. Shutting the socket
+        down without waiting for anyone releases everything this needs to -
+        ``websockets`` guarantees the reader terminates once it is closed, and
+        both worker threads are daemons, so neither can hold the process open.
+        """
+        connection = getattr(self, "socket", None)
+        if connection is None:
+            return
+        try:
+            connection.close_socket()
+        except Exception:
+            # Interpreter shutdown can pull what this needs out from under us,
+            # and an exception raised here is unraisable anyway.
+            pass
 
     def __enter__(self) -> "BlockingWsSurrealConnection":
         """
@@ -1203,8 +1261,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         Synchronous context manager exit.
         Closes the websocket connection upon exiting the context.
         """
-        if self.socket is not None:
-            self.socket.close()
+        self.close()
 
 
 class BlockingSurrealSession:

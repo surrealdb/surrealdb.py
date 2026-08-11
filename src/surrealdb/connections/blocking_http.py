@@ -1,6 +1,8 @@
 import uuid
+from collections.abc import Generator
 from types import TracebackType
 from typing import Any, cast, overload
+from uuid import UUID
 
 import requests
 
@@ -27,6 +29,13 @@ from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 from surrealdb.types import Tokens, Value, parse_auth_result
 
+# Live queries need a persistent connection to push notifications down, which
+# is what makes them a websocket-only feature - as the README documents.
+_NO_LIVE_QUERIES = (
+    "Live queries are only supported for WebSocket connections; HTTP has no "
+    "persistent connection for notifications to arrive on"
+)
+
 
 class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     def __init__(self, url: str) -> None:
@@ -42,16 +51,26 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.session: requests.Session | None = None
 
     def _send(
-        self, message: RequestMessage, operation: str, bypass: bool = False
+        self,
+        message: RequestMessage,
+        operation: str,
+        bypass: bool = False,
+        token: str | None = None,
     ) -> dict[str, Any]:
+        """Send one RPC over HTTP.
+
+        *token* authorises this request alone, without adopting it as the
+        connection's identity - see :meth:`authenticate`.
+        """
         data = message.WS_CBOR_DESCRIPTOR
         url = f"{self.url.raw_url}/rpc"
         headers = {
             "Accept": "application/cbor",
             "Content-Type": "application/cbor",
         }
-        if self.token:
-            headers["Authorization"] = f"Bearer {self.token}"
+        bearer = self.token if token is None else token
+        if bearer:
+            headers["Authorization"] = f"Bearer {bearer}"
         if self.namespace:
             headers["Surreal-NS"] = self.namespace
         if self.database:
@@ -87,10 +106,20 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         return data_dict
 
     def authenticate(self, token: str) -> None:
-        self.token = token
+        """Authenticate this connection with an existing token.
+
+        The token authorises the ``authenticate`` request itself and is only
+        adopted as the connection's identity once the server accepts it.
+        Assigning it up front attached a rejected token to every later request
+        - including the ``signin`` that would have recovered the connection,
+        which the server then answered ``401`` - so one failed ``authenticate``
+        left the connection permanently unusable, with no way back short of
+        building a new one.
+        """
         message = RequestMessage(RequestMethod.AUTHENTICATE, token=token)
         self.id = message.id
-        self._send(message, "authenticating")
+        self._send(message, "authenticating", token=token)
+        self.token = token
 
     def invalidate(self) -> None:
         message = RequestMessage(RequestMethod.INVALIDATE)
@@ -502,6 +531,27 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         Closes the HTTP session upon exiting the context.
         """
         self.close()
+
+    # Live queries -----------------------------------------------------------
+    #
+    # Refused the same way the session and transaction methods below are.
+    # Inherited, they raised ``NotImplementedError`` from the template - which
+    # is not a ``SurrealError``, so ``except SurrealError`` missed it even
+    # though ``attach()`` beside it was covered.
+
+    def live(self, table: str | Table, diff: bool = False) -> UUID:
+        raise UnsupportedFeatureError(_NO_LIVE_QUERIES)
+
+    def kill(self, query_uuid: str | UUID) -> None:
+        raise UnsupportedFeatureError(_NO_LIVE_QUERIES)
+
+    def subscribe_live(
+        self, query_uuid: str | UUID
+    ) -> Generator[dict[str, Value], None, None]:
+        # Deliberately not a generator function: raising on the call itself
+        # reports the problem where it is made, rather than on the first
+        # ``next()`` somewhere further away.
+        raise UnsupportedFeatureError(_NO_LIVE_QUERIES)
 
     def attach(self) -> None:
         raise UnsupportedFeatureError(
