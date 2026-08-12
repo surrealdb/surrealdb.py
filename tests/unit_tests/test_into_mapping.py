@@ -459,3 +459,97 @@ def test_into_rejects_non_record_rows() -> None:
         _map_result(Person, [1, 2])
     with pytest.raises(UnexpectedResponseError):
         _map_result(Person, 42)
+
+
+# --------------------------------------------------------------------------- #
+#  A record whose fields do not match the model                                #
+# --------------------------------------------------------------------------- #
+#
+# This surfaced as a bare ``TypeError: Person.__init__() got an unexpected
+# keyword argument 'active'``, raised from inside the model and naming neither
+# ``into=`` nor the record that failed to map - so the obvious reading was that
+# the caller had constructed a ``Person`` wrongly somewhere else. The README's
+# own ``into=`` example hit it: it declared a two-field ``Person`` and then
+# wrote a third field to the table.
+
+
+def _extra_field_error(model: type) -> str:
+    from surrealdb.connections.builders import _map_result
+    from surrealdb.errors import UnexpectedResponseError
+
+    with pytest.raises(UnexpectedResponseError) as caught:
+        _map_result(model, {"id": RecordID("person", "a"), "active": True})
+    return str(caught.value)
+
+
+@pytest.mark.parametrize("model", [Person, PlainPerson])
+def test_an_unmappable_record_names_both_sides(model: type) -> None:
+    message = _extra_field_error(model)
+
+    assert f"into={model.__name__}" in message
+    # What arrived, and what the model would have taken.
+    assert "'active'" in message and "'id'" in message
+    assert "'name'" in message
+
+
+@pytest.mark.parametrize("model", [Person, PlainPerson])
+def test_an_unmappable_record_raises_a_surreal_error(model: type) -> None:
+    """Catchable through the SDK's own tree, like every other mapping failure.
+
+    A bare ``TypeError`` escaped ``except SurrealError`` entirely.
+    """
+    from surrealdb.connections.builders import _map_result
+    from surrealdb.errors import SurrealError
+
+    with pytest.raises(SurrealError):
+        _map_result(model, {"id": RecordID("person", "a"), "active": True})
+
+
+def test_a_missing_field_is_reported_too() -> None:
+    """The other direction: the model wants more than the record carries."""
+    message = _extra_field_error(Person)
+    assert "into=Person" in message
+
+    from surrealdb.connections.builders import _map_result
+    from surrealdb.errors import UnexpectedResponseError
+
+    with pytest.raises(UnexpectedResponseError) as caught:
+        _map_result(Person, {"id": RecordID("person", "a")})
+    assert "into=Person" in str(caught.value)
+
+
+def test_the_original_error_is_kept_as_the_cause() -> None:
+    """The model's own message is the specific one; it must not be lost."""
+    from surrealdb.connections.builders import _map_result
+    from surrealdb.errors import UnexpectedResponseError
+
+    with pytest.raises(UnexpectedResponseError) as caught:
+        _map_result(Person, {"id": 1, "active": True})
+
+    assert isinstance(caught.value.__cause__, TypeError)
+
+
+def test_a_record_that_does_match_is_untouched() -> None:
+    """The wrapper must not change the successful path."""
+    from surrealdb.connections.builders import _map_result
+
+    mapped = _map_result(Person, {"id": RecordID("person", "a"), "name": "A"})
+
+    assert isinstance(mapped, Person)
+    assert mapped.name == "A"
+
+
+def test_a_model_raising_its_own_type_error_is_still_reported() -> None:
+    """A constructor that raises ``TypeError`` for its own reasons is reported
+    rather than swallowed - the message keeps the model's own text."""
+    from surrealdb.connections.builders import _map_result
+    from surrealdb.errors import UnexpectedResponseError
+
+    class Fussy:
+        def __init__(self, id: Any, name: str) -> None:
+            raise TypeError("name must be capitalised")
+
+    with pytest.raises(UnexpectedResponseError) as caught:
+        _map_result(Fussy, {"id": 1, "name": "a"})
+
+    assert "name must be capitalised" in str(caught.value)

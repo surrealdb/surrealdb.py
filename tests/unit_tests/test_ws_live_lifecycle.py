@@ -17,11 +17,12 @@ Covers:
 import asyncio
 import queue
 import uuid
+import weakref
 from typing import Any
 
 import pytest
 
-from surrealdb.connections.async_ws import AsyncWsSurrealConnection
+from surrealdb.connections.async_ws import AsyncWsSurrealConnection, _read_frames
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.cbor import decode, encode
 from surrealdb.errors import ConnectionUnavailableError
@@ -173,7 +174,7 @@ async def test_async_recv_task_fails_pending_with_connection_error() -> None:
     fut: asyncio.Future[dict[str, Any]] = conn.loop.create_future()
     conn.qry["req-1"] = fut
 
-    await conn._recv_task()
+    await _read_frames(weakref.ref(conn), conn.socket)
 
     assert conn.qry == {}
     assert fut.done()
@@ -335,7 +336,7 @@ async def test_async_recv_task_survives_an_undecodable_frame() -> None:
     conn.loop = asyncio.get_running_loop()
     socket = _OneBadFrameThenRepliesSocket()
     conn.socket = socket
-    conn.recv_task = asyncio.create_task(conn._recv_task())
+    conn.recv_task = asyncio.create_task(_read_frames(weakref.ref(conn), conn.socket))
 
     # Give the reader the bad frame first.
     await asyncio.sleep(0)

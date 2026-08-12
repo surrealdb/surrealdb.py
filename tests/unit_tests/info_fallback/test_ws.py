@@ -12,12 +12,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import weakref
 from collections.abc import Callable
 from typing import Any
 
 import pytest
 
-from surrealdb.connections.async_ws import AsyncWsSurrealConnection
+from surrealdb.connections.async_ws import AsyncWsSurrealConnection, _read_frames
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.cbor import decode, encode
 from surrealdb.data.types.record_id import RecordID
@@ -165,7 +166,7 @@ async def _run_async_ws(responder: Responder) -> AsyncWsSurrealConnection:
     db = AsyncWsSurrealConnection("ws://localhost:8000")
     db.socket = _FakeAsyncWsSocket(responder)
     db.loop = asyncio.get_running_loop()
-    db.recv_task = asyncio.create_task(db._recv_task())
+    db.recv_task = asyncio.create_task(_read_frames(weakref.ref(db), db.socket))
     return db
 
 
