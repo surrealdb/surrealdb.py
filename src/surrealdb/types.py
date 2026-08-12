@@ -26,6 +26,7 @@ from surrealdb.data.types.geometry import (
 from surrealdb.data.types.null import NullType
 from surrealdb.data.types.range import Range
 from surrealdb.data.types.record_id import RecordID
+from surrealdb.data.types.set import SurrealSet
 from surrealdb.data.types.table import Table
 
 # Define recursive Value type that represents all possible SurrealDB values
@@ -53,6 +54,16 @@ Value = (
     | GeometryMultiLine
     | GeometryMultiPolygon
     | GeometryCollection
+    # A SurrealDB set. A `list` subclass, so `list["Value"]` below already
+    # covers it structurally - named explicitly so the distinct type is
+    # visible in the public union rather than hidden inside it.
+    | SurrealSet
+    # A Python set is accepted on the way *in* and encoded under the set tag;
+    # it has been since sets were supported, but the union never said so, so
+    # passing one failed a type check on perfectly valid code. `Any` members
+    # rather than "Value" because a set can only hold the hashable ones.
+    | set[Any]
+    | frozenset[Any]
     | dict[str, "Value"]
     | list["Value"]
 )

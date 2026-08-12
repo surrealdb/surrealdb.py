@@ -5,6 +5,7 @@ A basic async connection to a SurrealDB instance.
 import asyncio
 import logging
 import uuid
+import weakref
 from asyncio import AbstractEventLoop, Future, Queue, Task
 from collections.abc import AsyncGenerator
 from types import TracebackType
@@ -68,6 +69,21 @@ _LIVE_KILLED = "KILLED"
 _RPC_RECV_TIMEOUT = 30.0
 
 
+def _release_live_queue(
+    live_queues: dict[str, list["Queue[Any]"]],
+    suid: str,
+    result_queue: "Queue[Any]",
+) -> None:
+    """Deregister one subscriber's queue. Safe to call twice."""
+    queues = live_queues.get(suid)
+    if queues is None:
+        return
+    if result_queue in queues:
+        queues.remove(result_queue)
+    if not queues:
+        live_queues.pop(suid, None)
+
+
 class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     """
     A single async connection to a SurrealDB instance. To be used once and discarded.
@@ -105,8 +121,11 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self._connect_lock_loop: AbstractEventLoop | None = None
         # A protocol error the server could not correlate to a request, held
         # until the request it belongs to hits its deadline - see
-        # `_deliver_uncorrelated`.
+        # `_deliver_uncorrelated`. `_uncorrelated_for` is the set of request ids
+        # that were in flight when it arrived: the rejected frame belongs to one
+        # of those and to nothing else.
         self._uncorrelated_error: SurrealError | None = None
+        self._uncorrelated_for: set[str] = set()
 
     def _connect_guard(self) -> asyncio.Lock:
         """The lock serialising ``connect()``, bound to the running loop.
@@ -166,11 +185,41 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             self.qry.pop(query_id, None)
             return
         self._uncorrelated_error = error
+        self._uncorrelated_for = {query_id for query_id, _ in pending}
 
-    def _take_uncorrelated(self) -> SurrealError | None:
-        """Consume a held protocol error, if one is waiting."""
-        error, self._uncorrelated_error = self._uncorrelated_error, None
+    def _take_uncorrelated(self, query_id: str) -> SurrealError | None:
+        """Consume a held protocol error if it can belong to *query_id*.
+
+        Only a request that was already in flight when the error arrived can be
+        the one whose frame the server rejected; anything started afterwards has
+        its own reply coming. Handing the error to whichever request happened to
+        time out next told a caller its own perfectly valid query had a parse
+        error - a request that was not even sent when the failure happened.
+        """
+        if self._uncorrelated_error is None or query_id not in self._uncorrelated_for:
+            return None
+        error = self._uncorrelated_error
+        self._forget_uncorrelated()
         return error
+
+    def _forget_uncorrelated(self) -> None:
+        """Drop a held error once it can no longer belong to anyone."""
+        self._uncorrelated_error = None
+        self._uncorrelated_for = set()
+
+    def _prune_uncorrelated(self) -> None:
+        """Forget a held error whose candidates have all gone away.
+
+        A caller that abandons its request - an application-level timeout, a
+        cancelled task - never reaches the deadline that would have collected
+        the error, so without this it would sit there waiting to ambush an
+        unrelated request much later.
+        """
+        if self._uncorrelated_error is None:
+            return
+        self._uncorrelated_for &= self.qry.keys()
+        if not self._uncorrelated_for:
+            self._forget_uncorrelated()
 
     async def _recv_task(self) -> None:
         assert self.socket
@@ -269,7 +318,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
                 # no reply is ever coming. That error was held rather than
                 # failing every other request in flight; this is the request it
                 # belongs to, so report it instead of a bare deadline.
-                uncorrelated = self._take_uncorrelated()
+                uncorrelated = self._take_uncorrelated(query_id)
                 if uncorrelated is not None:
                     raise uncorrelated from exc
                 raise TransportTimeoutError(
@@ -280,6 +329,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             # ``_recv_task`` clears ``self.qry`` when the socket closes, so the
             # key may already be gone; ``pop`` avoids a spurious ``KeyError``.
             self.qry.pop(query_id, None)
+            self._prune_uncorrelated()
 
         if bypass is False:
             self.check_response_for_error(response, process)
@@ -1062,7 +1112,19 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
                 if queues is not None and result_queue in queues:
                     queues.remove(result_queue)
 
-        return _iter()
+        subscription = _iter()
+        # Registration happens above, before anything is iterated, so release
+        # has to be reachable without iterating. A generator that is never
+        # started does not run its `finally` on close or GC, so a subscription
+        # set up and then abandoned stayed registered for the life of the
+        # connection while notifications kept filling a queue nobody drains.
+        #
+        # Closing over `live_queues` rather than `self`, so the finalizer does
+        # not keep the connection alive for as long as the generator.
+        weakref.finalize(
+            subscription, _release_live_queue, self.live_queues, suid, result_queue
+        )
+        return subscription
 
     async def kill(
         self,
@@ -1170,7 +1232,11 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             finally:
                 self.socket = None
                 self.recv_task = None
-                self._uncorrelated_error = None
+
+        # Unconditionally, not only when there was a socket to close: a new
+        # socket is a new conversation, and nothing about the old one may be
+        # waiting to be delivered into it.
+        self._forget_uncorrelated()
 
     async def __aenter__(self) -> "AsyncWsSurrealConnection":
         """

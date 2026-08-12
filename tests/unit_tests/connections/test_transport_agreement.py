@@ -178,20 +178,75 @@ def test_a_version_cannot_be_combined_with_bindings_over_http(
     [
         "fn::x(); DROP TABLE users; --",
         "fn::x) OR true --",
-        "",
         "1fn::x",
         "fn::x y",
         "⟨injected⟩",
     ],
 )
-def test_a_function_name_that_is_not_an_identifier_is_refused(name: str) -> None:
+def test_a_hostile_function_name_is_quoted_not_executed(name: str) -> None:
     """The name is the one part that cannot be parameter-bound.
 
-    Everything else in the generated query is a bound parameter, so this is the
-    only inlining the SDK does here and it is anchored to a plain identifier.
+    It is rendered as a *quoted identifier* rather than refused, because
+    SurrealDB accepts backtick-quoted identifiers in a function name and
+    refusing them broke legal calls (``fn::`my-fn```). What matters is that
+    nothing in the name can escape the quoting and become SurrealQL: the
+    rendered call is one identifier and one pair of parentheses, whatever the
+    name contained.
     """
-    with pytest.raises(ValueError, match="function name"):
+    query, arguments = build_run_query(name, None)
+
+    assert arguments == {}
+    # Everything after `RETURN ` up to `()` is the rendered name, and every
+    # segment of it is either a plain identifier or backtick-quoted.
+    rendered = query.removeprefix("RETURN ").removesuffix("();")
+    for segment in rendered.split("::"):
+        plain = segment.replace("_", "a").isalnum() and not segment[0].isdigit()
+        assert plain or (segment.startswith("`") and segment.endswith("`")), (
+            f"segment {segment!r} is neither a plain identifier nor quoted"
+        )
+    # A quoted segment contains no backtick of its own, so it cannot end early.
+    assert rendered.count("`") % 2 == 0
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param("", id="empty"),
+        pytest.param("fn::", id="empty-segment"),
+        pytest.param("fn::x`; DROP", id="contains-backtick"),
+        pytest.param("fn::x\nDROP", id="contains-newline"),
+    ],
+)
+def test_a_function_name_that_cannot_be_quoted_is_refused(name: str) -> None:
+    """A backtick or newline would end the quoting, so those are refused."""
+    with pytest.raises(ValueError):
         build_run_query(name, None)
+
+
+def test_a_legal_quoted_function_name_is_accepted() -> None:
+    """``fn::`my-fn``` is definable and callable, so ``run()`` must allow it.
+
+    Rejecting it meant an unrelated ``let()`` elsewhere in the program broke a
+    ``run()`` call that had always worked, because only the bindings path
+    validated the name.
+    """
+    query, _ = build_run_query("fn::my-fn", None)
+
+    assert query == "RETURN fn::`my-fn`();"
+
+
+@pytest.mark.parametrize(
+    "args", [pytest.param("xy", id="str"), pytest.param({"a": 1}, id="dict")]
+)
+def test_run_args_must_be_a_sequence(args: object) -> None:
+    """``enumerate`` accepts any iterable, which silently spread a string.
+
+    ``run("fn::f", "ab")`` called ``f("a", "b")`` - two arguments from one
+    value. The server rejects a non-array ``args`` too, so this refuses the
+    same input, earlier and by name.
+    """
+    with pytest.raises(TypeError, match="list or tuple"):
+        build_run_query("fn::f", args)  # type: ignore[arg-type]
 
 
 def test_the_generated_query_binds_every_argument() -> None:

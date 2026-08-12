@@ -41,6 +41,7 @@ from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.geometry import Geometry
 from surrealdb.data.types.null import Null, NullType
 from surrealdb.data.types.range import Range
+from surrealdb.data.types.set import SurrealSet
 from surrealdb.data.types.record_id import RecordID, escape_identifier
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
@@ -123,6 +124,7 @@ __all__ = [
     "PreciseDatetime",
     "Null",
     "NullType",
+    "SurrealSet",
     "Tokens",
     "Value",
     "escape_identifier",

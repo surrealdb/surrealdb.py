@@ -514,16 +514,32 @@ the write-back above delete the field.
 > it touched. If you have code comparing a database value with `is None`,
 > check whether the column can be NULL.
 
-**Sets read back as lists.** SurrealDB's `set<T>` accepts any member type,
-including `set<object>` and `set<array>`, which a Python `set` cannot hold. A
-set therefore decodes to a `list` — the same shape SurrealDB 2.x and the
-server's own JSON endpoint return. Writing is unchanged: a Python `set` still
-goes out as a set, and the server deduplicates it.
+**Sets read back as `SurrealSet`.** SurrealDB's `set<T>` is a deduplicated
+sequence that accepts any member type, including `set<object>` and `set<array>`
+— which a Python `set` cannot hold, because its members must be hashable.
+
+`SurrealSet` is a `list` subclass, so it indexes and compares like the sequence
+it is, and it encodes back under the set tag, so writing a record back keeps the
+field a set:
 
 ```python
-db.create(rec, {"tags": {"a", "b"}})   # stored as a set
-db.select(rec)["tags"]                 # ['a', 'b'] — a list
+row = db.select(rec)                   # {"tags": SurrealSet(['a', 'b'])}
+row["name"] = "new name"
+db.update(rec, row)                    # tags is still a set
+
+db.select(rec)["tags"] == ["a", "b"]   # True — it is a list
 ```
+
+Writing a plain Python `set` still works and is still sent as a set. The order
+is whatever the server sent: SurrealDB normalises a set, so `<set>[3,1,2]` comes
+back as `[1, 2, 3]`.
+
+> Decoding a set to a plain `list` — as 3.0.0-beta.5 briefly did — loses the
+> type on the way back: a schemafull `set<T>` field rejects the array outright,
+> and a schemaless one silently becomes an array and stops deduplicating.
+>
+> Sets need SurrealDB 3.x. 2.x has no CBOR set representation at all — see
+> [Talking to a SurrealDB 2.x server](#talking-to-a-surrealdb-2x-server).
 
 ## Error handling
 
@@ -653,7 +669,7 @@ v3.0 is a breaking change. Highlights:
 | `db.select(RecordID(...))` -> `[record]`         | `db.select(RecordID(...))` -> `record` dict or `None`     |
 | `db.delete("my-table")` (silently inlined)       | `db.delete(Table("my-table"))` (raw string rejected)      |
 | A NULL field read as `None`                      | A NULL field reads as `Null` (`None` still means NONE)    |
-| `set<T>` read as a Python `set`                  | `set<T>` reads as a `list` (writing a `set` is unchanged) |
+| `set<T>` read as a Python `set`                  | `set<T>` reads as a `SurrealSet` (writing a `set` is unchanged) |
 
 > Bare-string resource targets are now strictly validated against the
 > safe-identifier pattern (`[A-Za-z_][A-Za-z0-9_]*`) so user-supplied
