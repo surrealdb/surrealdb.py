@@ -47,6 +47,12 @@ logger = logging.getLogger(__name__)
 # the connection lock so concurrent RPCs on the same socket can proceed.
 _LIVE_RECV_TIMEOUT = 0.1
 
+# The `action` SurrealDB puts on the notification it sends when a live query
+# ends. It reports the end of the subscription rather than a change to the
+# table - it carries no record and its `result` is None - so it terminates the
+# generator instead of being handed to the consumer.
+_LIVE_KILLED = "KILLED"
+
 # Upper bound on how long a single RPC waits for its reply. Without it the
 # receive loop below blocks forever if the reply never arrives - which it does
 # not when the server answers with a protocol-level error, since those carry no
@@ -1084,20 +1090,46 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             connection at a time; running several concurrently on one socket is
             not supported (use separate connections instead).
 
+        The subscription is registered before this returns, not on the first
+        ``next()``. As a plain generator function the body - registration
+        included - did not run until the consumer first iterated, and any
+        notification ``_send`` read in that window found no queue to route to
+        and was dropped with no error and no log. One RPC between ``live()``
+        and the first ``next()`` was enough to lose a change permanently.
+
+        Ends when the live query is killed, by :meth:`kill` here or by anyone
+        else. The server marks that with a ``KILLED`` notification, which is
+        not a change to the table - it carries no record - so it stops the
+        iteration instead of being yielded. Yielding it handed consumers a
+        notification whose ``result`` was ``None``, and the generator then ran
+        on forever waiting for a query that no longer existed.
+
         :raises ConnectionUnavailableError: if the socket is not established or
             is closed while the subscription is active.
         """
         suid = str(query_uuid)
         notifications: queue.Queue[dict[str, Any]] = queue.Queue()
         self.live_queues.setdefault(suid, []).append(notifications)
+        return self._iter_live(suid, notifications)
+
+    def _iter_live(
+        self,
+        suid: str,
+        notifications: "queue.Queue[dict[str, Any]]",
+    ) -> Generator[dict[str, Value], None, None]:
+        """The body of :meth:`subscribe_live`, split out so registration is eager."""
         try:
             while True:
                 # Hand back anything ``_send`` routed to us while correlating.
                 try:
-                    yield notifications.get_nowait()
-                    continue
+                    routed = notifications.get_nowait()
                 except queue.Empty:
                     pass
+                else:
+                    if routed.get("action") == _LIVE_KILLED:
+                        return
+                    yield routed
+                    continue
 
                 # Otherwise read from the socket ourselves, under the lock so
                 # we never race ``_send``. The short timeout releases the lock
@@ -1136,6 +1168,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 if rid is None:
                     continue
                 if str(rid) == suid:
+                    if result.get("action") == _LIVE_KILLED:
+                        return
                     yield result
                 else:
                     # Notification for a different live query; route it onward.

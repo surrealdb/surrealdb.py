@@ -55,6 +55,12 @@ _LIVE_QUEUE_CLOSED = object()
 # change to the table.
 _LIVE_QUEUE_BROKEN = object()
 
+# The `action` SurrealDB puts on the notification it sends when a live query
+# ends. It reports the end of the subscription rather than a change to the
+# table - it carries no record and its `result` is None - so it terminates the
+# generator instead of being handed to the consumer.
+_LIVE_KILLED = "KILLED"
+
 
 # Upper bound on how long a single RPC waits for its reply. The blocking
 # transport has had one since it was found hanging on a protocol error; without
@@ -1040,6 +1046,14 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
                             "WebSocket connection closed while subscribed to "
                             f"live query {suid}."
                         )
+                    # The server's own end-of-subscription marker. `kill()`
+                    # here pushes the sentinel above and never reaches this,
+                    # but a query killed by anyone else - another connection,
+                    # or the server - arrives only as this notification, and
+                    # yielding it handed the consumer a notification whose
+                    # `result` was None before iterating on forever.
+                    if isinstance(ret, dict) and ret.get("action") == _LIVE_KILLED:
+                        return
                     yield ret
             finally:
                 # Deregister this consumer's queue when the generator is

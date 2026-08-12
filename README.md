@@ -560,7 +560,7 @@ with Surreal("ws://localhost:8000/rpc") as db:
 
 ### Talking to a SurrealDB 2.x server
 
-Three things behave differently against SurrealDB 2.x, all because of what the
+Five things behave differently against SurrealDB 2.x, all because of what the
 2.x server does rather than anything the SDK chooses.
 
 **Error kinds need 3.x.** The subclasses below `ServerError` come from the
@@ -612,6 +612,13 @@ db.run("fn::readv")        # 42 on 3.x, None on 2.x
 
 Pass the value as an argument (`db.run("fn::add", [1, 2])`) if you target 2.x —
 arguments work on every version.
+
+**A 2.x server does not tell subscribers that a live query was killed.** On 3.x
+the server sends a `KILLED` notification and `subscribe_live()` ends, whoever
+killed the query. On 2.x nothing is sent, so a subscriber to a query killed from
+*another* connection simply stops hearing anything and keeps waiting — there is
+no signal for the SDK to end the generator on. Calling `kill()` on the same
+connection you subscribed from ends the subscription on every version.
 
 The `TransportError` branch is `ConnectionUnavailableError` (the host was
 unreachable or the socket closed), `TransportTimeoutError` (the request timed
