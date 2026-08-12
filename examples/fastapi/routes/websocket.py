@@ -43,7 +43,10 @@ async def users_live_query(websocket: WebSocket) -> None:
         async def process_live_results() -> None:
             """Process live query results and send to client."""
             try:
-                async for result in db.subscribe_live(live_query_id):
+                # `subscribe_live` is a coroutine returning an async generator, so it
+                # has to be awaited before it can be iterated.
+                subscription = await db.subscribe_live(live_query_id)
+                async for result in subscription:
                     await websocket.send_json(
                         {
                             "type": "update",
