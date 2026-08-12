@@ -120,6 +120,13 @@ jobs:
         with:
           python-version: "3.13"
 
+      # `uv sync` resolves and installs without complaining that the lockfile
+      # disagrees with pyproject.toml, so a dependency change that skipped
+      # `uv lock` went green everywhere and only surfaced at release time, when
+      # the release PR refreshes the lock and picks up someone else's edit.
+      - name: Assert uv.lock is up to date with pyproject.toml
+        run: uv lock --check
+
       - name: Build wheel
         run: uv build --wheel
 
