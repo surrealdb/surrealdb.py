@@ -326,12 +326,19 @@ class _CrudState:
         stmts = _check_response(response, self._op_name)
         result = _check_first_statement(stmts)
         if self._single and isinstance(result, list):
-            # Single-record DELETE aligns with select's absent-record
-            # handling: an empty result (no record was deleted) unwraps to
-            # None, otherwise the deleted record dict. Other single-record
-            # operations only unwrap the one-element list they produce.
-            if self._operation == "DELETE":
-                return result[0] if result else None
+            # A single-record target produces a single record, or nothing when
+            # there is no such record - which unwraps to None, the same answer
+            # `select()` gives for an absent record.
+            #
+            # Only DELETE used to do this. Every other single-record operation
+            # fell through and returned the raw `[]`, which is neither the
+            # `dict` the overloads promise nor the `None` `select()` returns -
+            # so `if db.update(rec, data):` was False for a record that did not
+            # exist and truthy otherwise, but `db.update(rec, data)["field"]`
+            # raised `TypeError: list indices must be integers`. With `into=`
+            # it was worse: a bare `[]` came back where a model was declared.
+            if not result:
+                return None
             if len(result) == 1:
                 return result[0]
         return result
