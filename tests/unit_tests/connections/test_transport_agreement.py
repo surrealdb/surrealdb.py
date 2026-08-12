@@ -53,23 +53,47 @@ def _clean(blocking_ws_connection: BlockingWsSurrealConnection) -> None:
 # ------------------------------------------------- run() sees let() bindings
 
 
+def _functions_see_outer_variables(version: str) -> bool:
+    """Whether this server lets a function body read a variable from outside.
+
+    A 3.x function body resolves ``$v`` from the session, and from the query's
+    own parameters. A 2.x one resolves nothing from outside itself - not a
+    session binding, not a query parameter - so there is nothing for either
+    transport to return there and no divergence between them to fix.
+    """
+    text = (version or "").strip().lower()
+    for prefix in ("surrealdb-", "v"):
+        if text.startswith(prefix):
+            text = text[len(prefix) :]
+    try:
+        return int(text.split(".")[0]) >= 3
+    except (ValueError, IndexError):
+        return False
+
+
 def test_blocking_http_run_sees_let_bindings(
     blocking_http_connection: BlockingHttpSurrealConnection,
 ) -> None:
     blocking_http_connection.query(READS_SESSION_VAR).execute()
     blocking_http_connection.let("probe", 42)
 
-    assert blocking_http_connection.run("fn::reads_session_var") == 42
+    supported = _functions_see_outer_variables(blocking_http_connection.version())
+    assert blocking_http_connection.run("fn::reads_session_var") == (
+        42 if supported else None
+    )
 
 
 def test_blocking_ws_run_sees_let_bindings(
     blocking_ws_connection: BlockingWsSurrealConnection,
 ) -> None:
-    """The transport that already worked, so the two stay in step."""
+    """The transport HTTP has to agree with, pinned alongside it."""
     blocking_ws_connection.query(READS_SESSION_VAR).execute()
     blocking_ws_connection.let("probe", 42)
 
-    assert blocking_ws_connection.run("fn::reads_session_var") == 42
+    supported = _functions_see_outer_variables(blocking_ws_connection.version())
+    assert blocking_ws_connection.run("fn::reads_session_var") == (
+        42 if supported else None
+    )
 
 
 async def test_async_http_run_sees_let_bindings(
@@ -78,7 +102,10 @@ async def test_async_http_run_sees_let_bindings(
     await async_http_connection.query(READS_SESSION_VAR).execute()
     await async_http_connection.let("probe", 42)
 
-    assert await async_http_connection.run("fn::reads_session_var") == 42
+    supported = _functions_see_outer_variables(await async_http_connection.version())
+    assert await async_http_connection.run("fn::reads_session_var") == (
+        42 if supported else None
+    )
 
 
 async def test_async_ws_run_sees_let_bindings(
@@ -87,7 +114,29 @@ async def test_async_ws_run_sees_let_bindings(
     await async_ws_connection.query(READS_SESSION_VAR).execute()
     await async_ws_connection.let("probe", 42)
 
-    assert await async_ws_connection.run("fn::reads_session_var") == 42
+    supported = _functions_see_outer_variables(await async_ws_connection.version())
+    assert await async_ws_connection.run("fn::reads_session_var") == (
+        42 if supported else None
+    )
+
+
+def test_both_transports_answer_the_same(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    blocking_http_connection: BlockingHttpSurrealConnection,
+) -> None:
+    """The point of the fix, stated without naming a server version.
+
+    Whatever this server does with a function reading a session binding, the
+    two transports have to do the same thing. That is what was broken: HTTP
+    answered ``None`` where the websocket answered ``42``.
+    """
+    blocking_ws_connection.query(READS_SESSION_VAR).execute()
+    blocking_ws_connection.let("probe", 42)
+    blocking_http_connection.let("probe", 42)
+
+    assert blocking_http_connection.run("fn::reads_session_var") == (
+        blocking_ws_connection.run("fn::reads_session_var")
+    )
 
 
 def test_run_with_arguments_still_works_alongside_bindings(
