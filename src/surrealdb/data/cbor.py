@@ -25,6 +25,7 @@ from surrealdb.data.types.geometry import (
 from surrealdb.data.types.null import Null, NullType
 from surrealdb.data.types.range import BoundExcluded, BoundIncluded, Range
 from surrealdb.data.types.record_id import RecordID
+from surrealdb.data.types.set import SurrealSet
 from surrealdb.data.types.table import Table
 from surrealdb.errors import UnexpectedResponseError
 
@@ -192,17 +193,15 @@ def tag_decoder(
         return decimal.Decimal(tag.value)
 
     elif tag.tag == constants.TAG_SET:
-        # A list, not a Python `set`. SurrealDB's set holds any value - a
-        # `set<object>` or `set<array>` field is ordinary - while a Python set
-        # takes only hashable members, so `set(...)` raised `unhashable type:
-        # 'dict'` and took the whole response with it. Every `SELECT *` over
-        # such a table failed, and the field could not be read at all.
-        #
-        # A list is also what SurrealDB 2.x returns for a set, and what the
-        # server's own JSON endpoint returns, so this is the shape the rest of
-        # the ecosystem already uses. Encoding is unchanged: a Python `set`
-        # still goes out under the set tag.
-        return list(tag.value) if isinstance(tag.value, list) else tag.value
+        # `SurrealSet`, not a Python `set` and not a plain list. A Python set
+        # cannot hold the objects and arrays a `set<object>` column contains, so
+        # decoding into one raised `unhashable type: 'dict'` and lost the whole
+        # response. A plain list can hold them but is a *different type* to the
+        # server, so writing a record back either failed on a schemafull field
+        # or silently turned a schemaless one into an array. `SurrealSet` reads
+        # like the sequence it is and encodes back as a set - see
+        # `surrealdb.data.types.set`.
+        return SurrealSet(tag.value) if isinstance(tag.value, list) else tag.value
 
     else:
         # Unlike the encoder's unsupported-type case, this is not a caller
@@ -244,6 +243,15 @@ class _SurrealEncoder(CBOREncoder):
         super().__init__(*args, **kwargs)
         self._encoders.pop(set, None)
         self._encoders.pop(frozenset, None)
+
+        # `SurrealSet` is a `list` subclass, and the generic lookup resolves a
+        # subclass through `issubclass`, so it would find `list`'s encoder and
+        # emit a plain array - which is exactly the bug this type exists to
+        # stop. An exact-type registration is consulted first, so this wins.
+        def _encode_surreal_set(encoder: CBOREncoder, value: SurrealSet) -> None:
+            encoder.encode(CBORTag(constants.TAG_SET, list(value)))
+
+        self._encoders[SurrealSet] = _encode_surreal_set
 
         # Registered for the exact subclass only, so a plain `datetime` keeps
         # cbor2's native encoding untouched. Without this the native encoder

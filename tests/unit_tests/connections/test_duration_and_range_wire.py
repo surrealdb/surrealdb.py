@@ -24,8 +24,36 @@ from surrealdb.data.types.null import Null
 from surrealdb.data.types.range import BoundExcluded, BoundIncluded, Range
 from surrealdb.errors import InvalidDurationError
 
-DURATIONS = ["1s", "0s", "1ns", "1us", "1µs", "500ms", "1h30m", "1s500ms", "1y"]
-NOT_DURATIONS = ["1.5s", "-1s", "1e3s", "0.5h", "1x", "1"]
+DURATIONS = [
+    "1s",
+    "0s",
+    "1ns",
+    "1us",
+    "1µs",
+    "500ms",
+    "1h30m",
+    "1s500ms",
+    "1y",
+    # Surrounding whitespace: the server takes it, so the SDK must too.
+    " 1s",
+    "1s ",
+    "1s\n",
+    "1s\t",
+]
+NOT_DURATIONS = [
+    "1.5s",
+    "-1s",
+    "1e3s",
+    "0.5h",
+    "1x",
+    "1",
+    # Units are case-sensitive on the server.
+    "1S",
+    "1MS",
+    "1NS",
+    "1H30M",
+    "1 s",
+]
 
 
 @pytest.mark.parametrize("text", DURATIONS)

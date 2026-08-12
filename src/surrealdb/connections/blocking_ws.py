@@ -7,6 +7,7 @@ import queue
 import threading
 import time
 import uuid
+import weakref
 from collections.abc import Generator
 from types import TracebackType
 from typing import Any, overload
@@ -53,12 +54,31 @@ _LIVE_RECV_TIMEOUT = 0.1
 # generator instead of being handed to the consumer.
 _LIVE_KILLED = "KILLED"
 
+# Pushed into a subscriber's queue by `kill()` on this connection, so the
+# generator ends without waiting for a server notification. 2.x never sends one.
+_LIVE_KILLED_SENTINEL: dict[str, Any] = {"action": _LIVE_KILLED, "id": None}
+
 # Upper bound on how long a single RPC waits for its reply. Without it the
 # receive loop below blocks forever if the reply never arrives - which it does
 # not when the server answers with a protocol-level error, since those carry no
 # `id` to correlate. Matches the 30s total the HTTP transports give aiohttp and
 # requests.
 _RPC_RECV_TIMEOUT = 30.0
+
+
+def _release_live_queue(
+    live_queues: dict[str, list["queue.Queue[dict[str, Any]]"]],
+    suid: str,
+    notifications: "queue.Queue[dict[str, Any]]",
+) -> None:
+    """Deregister one subscriber's queue. Safe to call twice."""
+    queues = live_queues.get(suid)
+    if queues is None:
+        return
+    if notifications in queues:
+        queues.remove(notifications)
+    if not queues:
+        live_queues.pop(suid, None)
 
 
 class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
@@ -1065,13 +1085,26 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         query_uuid: str | UUID,
         session_id: UUID | None = None,
     ) -> None:
-        """Kill a running live query by its UUID."""
+        """Kill a running live query by its UUID.
+
+        Any ``subscribe_live`` generator on this connection for that query ends
+        as a result, on every server version. 3.x announces the kill with a
+        ``KILLED`` notification and the generator stops on that, but 2.x sends
+        nothing at all - so waiting for the server left the caller's own
+        subscription blocked forever on a query it had just killed itself. The
+        sentinel below is pushed locally, which is what the async transport has
+        always done.
+        """
         kwargs: dict[str, Any] = {"uuid": query_uuid}
         if session_id is not None:
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.KILL, **kwargs)
         self.id = message.id
         self._send(message, "kill")
+
+        suid = str(query_uuid)
+        for notifications in self.live_queues.get(suid, []):
+            notifications.put(_LIVE_KILLED_SENTINEL)
 
     def subscribe_live(
         self,
@@ -1110,7 +1143,21 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         suid = str(query_uuid)
         notifications: queue.Queue[dict[str, Any]] = queue.Queue()
         self.live_queues.setdefault(suid, []).append(notifications)
-        return self._iter_live(suid, notifications)
+        subscription = self._iter_live(suid, notifications)
+        # Registration is eager, so release has to be reachable without ever
+        # iterating. A generator that is never started does not run its
+        # `finally` on close or GC, so a subscription that was set up and then
+        # abandoned - on an early error, a conditional consumer, a retry loop -
+        # stayed registered for the life of the connection while notifications
+        # kept being routed into a queue nobody would ever drain.
+        #
+        # The finalizer deliberately closes over `live_queues` rather than
+        # `self`: a bound method here would keep the whole connection alive for
+        # as long as the generator, trading one leak for another.
+        weakref.finalize(
+            subscription, _release_live_queue, self.live_queues, suid, notifications
+        )
+        return subscription
 
     def _iter_live(
         self,

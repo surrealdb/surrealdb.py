@@ -86,11 +86,12 @@ def merge_query_vars(
     return merged
 
 
-# A SurrealDB function name: `fn::mine`, `time::now`, or a nested `fn::a::b`.
-# Used to build `RETURN <name>(...)` for the HTTP `run()` path, so it is
-# anchored and deliberately narrow - nothing outside this subset is inlined
-# into a query.
-_FUNCTION_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$")
+# One segment of a function name that needs no quoting: `fn`, `time`, `now`.
+_PLAIN_SEGMENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+
+# Characters that cannot appear inside a backtick-quoted segment without
+# ending the quoting, so a name containing one cannot be rendered safely.
+_UNQUOTABLE = ("`", "\n", "\r")
 
 # Prefix for the generated argument parameters. Distinctive so it cannot
 # collide with a name someone bound with `let()`.
@@ -112,20 +113,58 @@ def build_run_query(
     bindings as parameters of a ``RETURN <name>(...)`` query makes HTTP behave
     the way the websocket does.
 
-    :raises ValueError: if *name* is not a plain function name. It is the one
-        part that cannot be parameter-bound, so anything outside the safe
-        subset is refused rather than inlined.
+    :raises ValueError: if *name* cannot be rendered as SurrealQL. The name is
+        the one part that cannot be parameter-bound, so a segment containing a
+        backtick or a newline - which would end the quoting - is refused rather
+        than inlined.
+    :raises TypeError: if *args* is not a list or tuple. ``enumerate`` accepts
+        any iterable, so a bare string used to be spread into one argument per
+        character: ``run("fn::f", "ab")`` called ``f("a", "b")``. The server
+        rejects a non-array ``args`` too ("Expected args to be array"), so this
+        refuses the same input, just earlier and by name.
     """
-    if not _FUNCTION_NAME_RE.match(name):
-        raise ValueError(
-            f"{name!r} is not a valid SurrealDB function name; expected "
-            "something like 'fn::my_function' or 'time::now'"
+    if args is not None and not isinstance(args, (list, tuple)):
+        raise TypeError(
+            f"run() args must be a list or tuple of values, got {type(args).__name__}"
         )
     arguments: dict[str, Value] = {
         f"{_RUN_ARG_PREFIX}{index}": value for index, value in enumerate(args or [])
     }
     rendered = ", ".join(f"${key}" for key in arguments)
-    return f"RETURN {name}({rendered});", arguments
+    return f"RETURN {_render_function_name(name)}({rendered});", arguments
+
+
+def _render_function_name(name: str) -> str:
+    """Render a function name as SurrealQL, quoting segments that need it.
+
+    SurrealDB accepts a backtick-quoted identifier in a function name, so
+    ``fn::`my-fn``` is legal, definable and callable. Requiring every segment to
+    be a bare identifier meant a name the ``run`` RPC executed happily was
+    rejected outright the moment a ``let()`` binding pushed the call onto the
+    query path - so an unrelated ``let()`` elsewhere in a program broke a
+    ``run()`` call that had always worked.
+    """
+    if not name:
+        raise ValueError("run() needs a function name, got an empty string")
+
+    segments = name.split("::")
+    rendered: list[str] = []
+    for segment in segments:
+        if not segment:
+            raise ValueError(
+                f"{name!r} is not a valid SurrealDB function name: it has an "
+                "empty segment"
+            )
+        if _PLAIN_SEGMENT_RE.match(segment):
+            rendered.append(segment)
+            continue
+        if any(char in segment for char in _UNQUOTABLE):
+            raise ValueError(
+                f"{name!r} is not a valid SurrealDB function name: the segment "
+                f"{segment!r} contains a character that cannot be quoted"
+            )
+        rendered.append(f"`{segment}`")
+    return "::".join(rendered)
 
 
 def _clip(text: str) -> str:
