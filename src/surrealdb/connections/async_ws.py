@@ -97,6 +97,10 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         # the loop that ends up running them.
         self._connect_lock: asyncio.Lock | None = None
         self._connect_lock_loop: AbstractEventLoop | None = None
+        # A protocol error the server could not correlate to a request, held
+        # until the request it belongs to hits its deadline - see
+        # `_deliver_uncorrelated`.
+        self._uncorrelated_error: SurrealError | None = None
 
     def _connect_guard(self) -> asyncio.Lock:
         """The lock serialising ``connect()``, bound to the running loop.
@@ -124,6 +128,43 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             if not fut.done():
                 fut.set_exception(error)
         self.qry.clear()
+
+    def _deliver_uncorrelated(self, error: SurrealError) -> None:
+        """Deliver an error the server could not tie to any request.
+
+        A protocol-level error arrives with no ``id`` because the server could
+        not parse the frame far enough to read one. Exactly *one* request is
+        affected - the one whose frame was rejected - and it is the one that
+        will never be answered. Every other request in flight is untouched and
+        gets its own reply as normal.
+
+        Failing every pending future, which is what this used to do, turned one
+        bad request into N failures: three unrelated queries on the same
+        connection all came back ``Parse error`` because a fourth, concurrent
+        one was malformed. The same three run alone succeeded.
+
+        With a single request in flight there is no ambiguity, so it is failed
+        straight away. With several, the error is held instead: the doomed
+        request is the one that never gets a reply, so it is the one that hits
+        its deadline, and :meth:`_send` reports this error there rather than a
+        bare timeout. That costs the doomed caller its timeout - which is
+        unavoidable, since nothing on the wire says which one it is - while
+        letting the others finish normally.
+        """
+        pending = [
+            (query_id, fut) for query_id, fut in self.qry.items() if not fut.done()
+        ]
+        if len(pending) == 1:
+            query_id, fut = pending[0]
+            fut.set_exception(error)
+            self.qry.pop(query_id, None)
+            return
+        self._uncorrelated_error = error
+
+    def _take_uncorrelated(self) -> SurrealError | None:
+        """Consume a held protocol error, if one is waiting."""
+        error, self._uncorrelated_error = self._uncorrelated_error, None
+        return error
 
     async def _recv_task(self) -> None:
         assert self.socket
@@ -160,7 +201,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
                         try:
                             self.check_response_for_error(response, "_recv_task")
                         except SurrealError as exc:
-                            self._fail_pending(exc)
+                            self._deliver_uncorrelated(exc)
                 except Exception as exc:
                     self._fail_pending(
                         UnexpectedResponseError(
@@ -217,6 +258,14 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             try:
                 response = await asyncio.wait_for(fut, _RPC_RECV_TIMEOUT)
             except asyncio.TimeoutError as exc:
+                # The server may have rejected this request's frame outright,
+                # in which case it answered with an error carrying no `id` and
+                # no reply is ever coming. That error was held rather than
+                # failing every other request in flight; this is the request it
+                # belongs to, so report it instead of a bare deadline.
+                uncorrelated = self._take_uncorrelated()
+                if uncorrelated is not None:
+                    raise uncorrelated from exc
                 raise TransportTimeoutError(
                     f"timed out while {process} on {self.raw_url}: no reply "
                     f"within {_RPC_RECV_TIMEOUT}s"
@@ -1107,6 +1156,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             finally:
                 self.socket = None
                 self.recv_task = None
+                self._uncorrelated_error = None
 
     async def __aenter__(self) -> "AsyncWsSurrealConnection":
         """
