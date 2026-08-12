@@ -8,7 +8,6 @@ from surrealdb.cbor import (
     CBORDecoder,
     CBOREncoder,
     CBORTag,
-    loads,
     shareable_encoder,
 )
 from surrealdb.data.types import constants
@@ -23,10 +22,14 @@ from surrealdb.data.types.geometry import (
     GeometryPoint,
     GeometryPolygon,
 )
+from surrealdb.data.types.null import Null, NullType
 from surrealdb.data.types.range import BoundExcluded, BoundIncluded, Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 from surrealdb.errors import UnexpectedResponseError
+
+# Plain CBOR null: major type 7, subtype 22.
+_CBOR_NULL_SUBTYPE = 22
 
 
 @shareable_encoder
@@ -82,6 +85,13 @@ def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
         # SurrealDB uses its own set tag (56); the bundled cbor2 encoder would
         # otherwise emit tag 258, which our decoder does not understand.
         tagged = CBORTag(constants.TAG_SET, list(obj))
+
+    elif isinstance(obj, NullType):
+        # Plain CBOR null, which SurrealDB reads as NULL. `None` is handled by
+        # the encoder's own `encode_none` and goes out as tag 6 (NONE) - see
+        # `surrealdb.data.types.null` for why the two are kept apart.
+        encoder.encode_length(7, _CBOR_NULL_SUBTYPE)
+        return
 
     else:
         # `BufferError` means a buffer operation failed; this is "you handed me
@@ -182,7 +192,17 @@ def tag_decoder(
         return decimal.Decimal(tag.value)
 
     elif tag.tag == constants.TAG_SET:
-        return set(tag.value) if isinstance(tag.value, list) else tag.value
+        # A list, not a Python `set`. SurrealDB's set holds any value - a
+        # `set<object>` or `set<array>` field is ordinary - while a Python set
+        # takes only hashable members, so `set(...)` raised `unhashable type:
+        # 'dict'` and took the whole response with it. Every `SELECT *` over
+        # such a table failed, and the field could not be read at all.
+        #
+        # A list is also what SurrealDB 2.x returns for a set, and what the
+        # server's own JSON endpoint returns, so this is the shape the rest of
+        # the ecosystem already uses. Encoding is unchanged: a Python `set`
+        # still goes out under the set tag.
+        return list(tag.value) if isinstance(tag.value, list) else tag.value
 
     else:
         # Unlike the encoder's unsupported-type case, this is not a caller
@@ -252,4 +272,14 @@ def encode(obj: Any) -> bytes:
 
 
 def decode(data: bytes) -> Any:
-    return loads(data, tag_hook=tag_decoder)
+    """Decode a SurrealDB CBOR payload.
+
+    Plain CBOR null becomes :data:`Null`, not ``None``: on this wire a null is
+    SurrealDB's NULL, which is a different value from its NONE. The public
+    ``surrealdb.cbor`` package is a general-purpose CBOR implementation and is
+    left alone - ``loads(b"\\xf6")`` there still returns ``None``.
+    """
+    with BytesIO(data) as fp:
+        decoder = CBORDecoder(fp, tag_hook=tag_decoder)
+        decoder.null_value = Null
+        return decoder.decode()

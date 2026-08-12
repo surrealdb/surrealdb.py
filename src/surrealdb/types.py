@@ -23,6 +23,7 @@ from surrealdb.data.types.geometry import (
     GeometryPoint,
     GeometryPolygon,
 )
+from surrealdb.data.types.null import NullType
 from surrealdb.data.types.range import Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
@@ -34,6 +35,9 @@ Value = (
     | float
     | bool
     | None
+    # SurrealDB's NULL, which is a different value from NONE (`None`) -
+    # see `surrealdb.data.types.null`.
+    | NullType
     | bytes
     | UUID
     | Decimal
