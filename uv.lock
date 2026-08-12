@@ -1632,7 +1632,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.25.0" },
     { name = "surrealdb-embedded", marker = "extra == 'embedded'", editable = "embedded" },
     { name = "typing-extensions", marker = "python_full_version < '3.12'", specifier = ">=4.6.0" },
-    { name = "websockets", specifier = ">=14.0" },
+    { name = "websockets", specifier = ">=14.1" },
 ]
 provides-extras = ["embedded", "pydantic"]
 

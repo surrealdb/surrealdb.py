@@ -16,6 +16,7 @@ import gc
 from typing import Any
 
 import pytest
+from websockets.protocol import State
 
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
@@ -29,17 +30,25 @@ class _FakeSocket:
     ``close()`` is the graceful handshake-then-join teardown; ``close_socket()``
     is the one that just drops the socket. They are counted separately because
     which one runs matters: the graceful close deadlocks in a destructor.
+
+    ``state`` is modelled because ``connect()`` reads it to tell a live socket
+    from one whose peer has gone away - a real ``ClientConnection`` reports
+    ``State.CLOSED`` there once the connection is gone, while the object itself
+    stays put.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, state: State = State.OPEN) -> None:
         self.close_calls = 0
         self.close_socket_calls = 0
+        self.state = state
 
     def close(self) -> None:
         self.close_calls += 1
+        self.state = State.CLOSED
 
     def close_socket(self) -> None:
         self.close_socket_calls += 1
+        self.state = State.CLOSED
 
     def send(self, data: Any) -> None:
         pass
@@ -254,3 +263,45 @@ def test_del_survives_a_socket_that_raises_on_teardown() -> None:
     # Calling it directly rather than via `del`: an exception escaping __del__
     # is printed and ignored, so a GC-driven test would pass either way.
     connection.__del__()
+
+
+def test_connect_replaces_a_socket_whose_peer_has_gone(
+    connection: BlockingWsSurrealConnection,
+) -> None:
+    """A dead socket is not a connection, however present the object is.
+
+    When the peer drops the connection the ``ClientConnection`` object stays
+    put and only its ``state`` changes, so ``connect()`` saw "already
+    connected" and returned. That left the connection permanently wedged:
+    every later request failed on the dead socket, and the documented way to
+    reopen one silently refused to.
+    """
+    connection.connect()
+    first = connection.socket
+    assert isinstance(first, _FakeSocket)
+
+    first.state = State.CLOSED  # the peer went away
+
+    connection.connect()
+
+    assert connection.socket is not first, "the dead socket was kept"
+    assert isinstance(connection.socket, _FakeSocket)
+    assert connection.socket.state is State.OPEN
+
+
+def test_connect_keeps_a_socket_that_is_still_open(
+    connection: BlockingWsSurrealConnection,
+) -> None:
+    """The liveness check must not tear down a working connection.
+
+    Reconnecting starts a fresh, anonymous server-side session, so replacing a
+    live socket would silently undo a completed ``signin()``.
+    """
+    connection.connect()
+    first = connection.socket
+
+    connection.connect()
+
+    assert connection.socket is first
+    assert isinstance(first, _FakeSocket)
+    assert first.close_calls == 0
