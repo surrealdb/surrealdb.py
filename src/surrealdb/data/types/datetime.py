@@ -93,8 +93,19 @@ class PreciseDatetime(datetime):
         )
 
     def isoformat_with_nanoseconds(self) -> str:
-        """Render with all nine fractional digits, as SurrealDB expects."""
+        """Render with all nine fractional digits, as SurrealDB expects.
+
+        A naive value is read as UTC rather than as the machine's local time.
+        ``astimezone`` assumes local for a naive datetime, while the encoder
+        hands a plain naive ``datetime`` to cbor2 as UTC - so the same wall
+        clock written both ways travelled as two different instants, five hours
+        apart on a US East Coast machine and identical on a UTC one. Which of
+        the two a value took depended on the host, not on anything the caller
+        wrote, and CI runs on UTC so nothing here ever saw the difference.
+        """
+        moment = self if self.tzinfo is not None else self.replace(tzinfo=timezone.utc)
+        utc = moment.astimezone(timezone.utc)
         return (
-            self.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.")
-            + f"{self.microsecond:06d}{self.nanosecond:03d}Z"
+            utc.strftime("%Y-%m-%dT%H:%M:%S.")
+            + f"{utc.microsecond:06d}{self.nanosecond:03d}Z"
         )

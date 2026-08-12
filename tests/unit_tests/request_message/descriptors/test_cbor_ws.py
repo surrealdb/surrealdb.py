@@ -142,6 +142,28 @@ def test_live_pass() -> None:
     assert isinstance(outcome, bytes)
 
 
+@pytest.mark.parametrize("diff", [True, False])
+def test_live_puts_diff_on_the_wire(diff: bool) -> None:
+    """``diff`` is the second parameter of the ``live`` RPC.
+
+    It was never encoded, so the server stayed on its default of full records
+    and ``live(table, diff=True)`` - accepted, typed and documented - silently
+    delivered something other than the JSON Patch it promised.
+    """
+    message = RequestMessage(RequestMethod.LIVE, table="person", diff=diff)
+
+    payload = decode(message.WS_CBOR_DESCRIPTOR)
+
+    assert payload["params"][1] is diff
+
+
+def test_live_defaults_diff_to_false() -> None:
+    """An omitted ``diff`` still has to be a bool, not a missing parameter."""
+    message = RequestMessage(RequestMethod.LIVE, table="person")
+
+    assert decode(message.WS_CBOR_DESCRIPTOR)["params"][1] is False
+
+
 def test_kill_pass() -> None:
     message = RequestMessage(
         RequestMethod.KILL, uuid="0189d6e3-8eac-703a-9a48-d9faa78b44b9"

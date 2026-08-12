@@ -68,7 +68,7 @@ class UserViewSet(viewsets.ViewSet):
 
         db = await get_connection()
         try:
-            result = await db.merge(pk, serializer.validated_data)
+            result = await db.update(pk).merge(serializer.validated_data)
             if not result:
                 return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 

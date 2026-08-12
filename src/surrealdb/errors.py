@@ -560,12 +560,22 @@ def _explain(message: str) -> str:
     return message
 
 
-def parse_rpc_error(raw: dict[str, Any]) -> ServerError:
+def parse_rpc_error(raw: Any) -> ServerError:
     """Parse an RPC-level error response into a ``ServerError``.
 
     Handles both the new format (``kind`` + ``details`` + ``cause``) and
     the legacy format (``code`` + ``message`` only).
+
+    An error that is not an object at all is still turned into a
+    ``ServerError`` carrying its text. SurrealDB 2.x answers some failures -
+    a NUL byte anywhere in a request, for one - with a bare string where the
+    protocol calls for an error object, and reading ``kind`` off that raised
+    ``AttributeError`` from inside the SDK: the caller got no message, and
+    nothing an ``except SurrealError`` would catch.
     """
+    if not isinstance(raw, dict):
+        return InternalError(kind="Internal", message=_explain(str(raw)), code=0)
+
     kind = _resolve_kind(raw.get("kind"), raw.get("code"))
     cause: ServerError | None = None
     if raw.get("cause") is not None:

@@ -125,7 +125,18 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         previous endpoint while reporting the new URL. Re-pointing costs the
         server-side session, so the same-url case is left alone: a defensive
         ``connect(url)`` must not quietly discard a completed ``signin()``.
+
+        Serialised on the same lock ``_send`` uses, so two threads opening a
+        connection at once produce one socket rather than one each. Unguarded,
+        both saw ``socket is None``, both connected, and the loser's socket -
+        with its ``recv_events`` and ``keepalive`` threads - was overwritten
+        and leaked with no reference left to close it.
         """
+        with self._lock:
+            self._connect_locked(url)
+
+    def _connect_locked(self, url: str | None = None) -> None:
+        """The body of :meth:`connect`, called with ``self._lock`` held."""
         if url is not None:
             target = Url(url)
             target_raw = f"{target.raw_url}/rpc"
@@ -1023,7 +1034,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         Pass ``diff=True`` for JSON-Patch notifications. Consume notifications
         with :meth:`subscribe_live` and stop the query with :meth:`kill`.
         """
-        kwargs: dict[str, Any] = {"table": table}
+        kwargs: dict[str, Any] = {"table": table, "diff": diff}
         if session_id is not None:
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.LIVE, **kwargs)

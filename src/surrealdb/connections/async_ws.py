@@ -46,6 +46,15 @@ logger = logging.getLogger(__name__)
 # (the connection is going away) so waiting consumers do not leak.
 _LIVE_QUEUE_CLOSED = object()
 
+# Sentinel pushed when the reader stops for any other reason - the peer went
+# away, the socket errored, the server restarted. Distinct from
+# ``_LIVE_QUEUE_CLOSED`` because it is not a clean end of stream: the consumer
+# has to hear that notifications stopped arriving because the connection broke,
+# not just that iteration finished. A silent ``return`` here is indistinguishable
+# from a ``kill()``, so a consumer would go on believing it had seen every
+# change to the table.
+_LIVE_QUEUE_BROKEN = object()
+
 
 # Upper bound on how long a single RPC waits for its reply. The blocking
 # transport has had one since it was found hanging on a protocol error; without
@@ -82,6 +91,32 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         # Queues hold live-notification dicts plus the ``_LIVE_QUEUE_CLOSED``
         # sentinel, so the value type is ``Any``.
         self.live_queues: dict[str, list[Queue[Any]]] = {}
+        # Guards socket creation - see `_connect_guard`. Built on first use
+        # rather than here: an `asyncio.Lock` binds to the loop that first
+        # awaits it, and these connections are routinely constructed outside
+        # the loop that ends up running them.
+        self._connect_lock: asyncio.Lock | None = None
+        self._connect_lock_loop: AbstractEventLoop | None = None
+
+    def _connect_guard(self) -> asyncio.Lock:
+        """The lock serialising ``connect()``, bound to the running loop.
+
+        Without it, concurrent first requests each saw ``socket is None`` and
+        each opened one: N sockets and N reader tasks for one connection, of
+        which the object kept only the last. The rest leaked, and every reader
+        but one raced to resolve futures on a socket nobody would ever read
+        the replies from - so most callers got a spurious
+        ``ConnectionUnavailableError`` from a connection that was in fact fine.
+
+        Re-made when the loop changes so a connection reused across
+        ``asyncio.run`` calls - each of which builds and discards a loop - does
+        not fail on a lock bound to a loop that is gone.
+        """
+        loop = asyncio.get_running_loop()
+        if self._connect_lock is None or self._connect_lock_loop is not loop:
+            self._connect_lock = asyncio.Lock()
+            self._connect_lock_loop = loop
+        return self._connect_lock
 
     def _fail_pending(self, error: BaseException) -> None:
         """Hand *error* to every caller currently awaiting a reply."""
@@ -146,6 +181,14 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
                     "WebSocket connection closed before a response was received."
                 )
             )
+            # Live subscribers wait on a queue, not on `self.qry`, so failing
+            # the pending futures left them untouched: nothing would ever be
+            # put in their queue again and `async for` waited forever, with no
+            # timeout on the path. The blocking transport has always raised
+            # `ConnectionUnavailableError` here.
+            for queues in self.live_queues.values():
+                for queue in queues:
+                    queue.put_nowait(_LIVE_QUEUE_BROKEN)
 
     async def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
@@ -196,6 +239,12 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         return response
 
     async def connect(self, url: str | None = None) -> None:
+        # Serialised: `_send` calls this on every request, so the first few
+        # requests of a gathered batch all arrive here at once.
+        async with self._connect_guard():
+            await self._connect_locked(url)
+
+    async def _connect_locked(self, url: str | None = None) -> None:
         if (
             url is not None
             and self.socket is not None
@@ -894,7 +943,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         Pass ``diff=True`` for JSON-Patch notifications. Consume notifications
         with :meth:`subscribe_live` and stop the query with :meth:`kill`.
         """
-        kwargs: dict[str, Any] = {"table": table}
+        kwargs: dict[str, Any] = {"table": table, "diff": diff}
         if session_id is not None:
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.LIVE, **kwargs)
@@ -914,6 +963,11 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         its own queue and receives every notification. The generator ends
         (a plain ``return``, so ``async for`` stops cleanly) when the query is
         killed via :meth:`kill` or the connection is closed via :meth:`close`.
+
+        :raises ConnectionUnavailableError: if the connection drops while the
+            subscription is active. That is not a clean end of stream - some
+            changes to the table went undelivered - so it is raised rather than
+            ending the iteration, matching the blocking transport.
         """
         result_queue: Queue[Any] = Queue()
         suid = str(query_uuid)
@@ -932,6 +986,11 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
                     # consumers so the generator terminates instead of leaking.
                     if ret is _LIVE_QUEUE_CLOSED:
                         return
+                    if ret is _LIVE_QUEUE_BROKEN:
+                        raise ConnectionUnavailableError(
+                            "WebSocket connection closed while subscribed to "
+                            f"live query {suid}."
+                        )
                     yield ret
             finally:
                 # Deregister this consumer's queue when the generator is

@@ -372,6 +372,83 @@ def test_sync_select_without_into_returns_raw_dict(
     assert not isinstance(out, Person)
 
 
+@pytest.mark.parametrize(
+    "not_a_class",
+    [
+        pytest.param(5, id="int"),
+        pytest.param("Person", id="str"),
+        pytest.param(None, id="none"),
+        pytest.param([Person], id="list"),
+        pytest.param(lambda **kwargs: kwargs, id="function"),
+    ],
+)
+def test_into_rejects_something_that_is_not_a_class(not_a_class: Any) -> None:
+    """A caller mistake reports itself, rather than crashing the formatter.
+
+    Everything downstream renders its complaints with ``cls.__name__``, so a
+    non-class raised ``AttributeError: 'int' object has no attribute
+    '__name__'`` from inside the SDK's own error message - naming neither
+    ``into=`` nor the value - and only after the query had already been sent.
+
+    ``TypeError`` rather than a ``SurrealError``: nothing went wrong with the
+    database.
+    """
+    sent = False
+
+    def stub(query: str, params: dict[str, Any]) -> dict[str, Any]:
+        nonlocal sent
+        sent = True
+        return _ok([])
+
+    builder = SyncQueryBuilder(executor=stub, query="SELECT * FROM person")
+
+    with pytest.raises(TypeError, match="into="):
+        builder.into(not_a_class)
+
+    assert not sent, "the query was sent before the argument was checked"
+
+
+def test_async_into_rejects_something_that_is_not_a_class() -> None:
+    """The async builder validates on the call, not on the await."""
+
+    async def stub(query: str, params: dict[str, Any]) -> dict[str, Any]:
+        return _ok([])
+
+    builder = AsyncQueryBuilder(executor=stub, query="SELECT * FROM person")
+
+    with pytest.raises(TypeError, match="into="):
+        builder.into(5)
+
+
+def test_select_into_rejects_something_that_is_not_a_class(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The ``into=`` keyword paths land on the same check."""
+    conn = BlockingHttpSurrealConnection("http://localhost:8000")
+
+    def fake_query_raw(
+        query: str, vars: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        return _ok([{"id": RecordID("person", "tobie"), "name": "Tobie"}])
+
+    monkeypatch.setattr(conn, "query_raw", fake_query_raw)
+
+    with pytest.raises(TypeError, match="into="):
+        conn.select(RecordID("person", "tobie"), into=5)
+
+
+def test_into_still_accepts_every_supported_model_kind() -> None:
+    """The guard must not turn away the classes that are meant to work."""
+    rows = [{"id": RecordID("person", "a"), "name": "A"}]
+
+    def stub(query: str, params: dict[str, Any]) -> dict[str, Any]:
+        return _ok(rows)
+
+    for model in (Person, PlainPerson):
+        builder = SyncQueryBuilder(executor=stub, query="SELECT * FROM person")
+        assert isinstance(builder.into(model, rows=True)[0], model)
+
+
 def test_into_rejects_non_record_rows() -> None:
     """A non-record (scalar) row raises a clear error, not an opaque TypeError."""
     from surrealdb.connections.builders import _map_result

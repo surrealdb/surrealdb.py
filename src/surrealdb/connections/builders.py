@@ -489,6 +489,24 @@ def _statement_rows(values: list[Any]) -> list[Any]:
     return [first]
 
 
+def _require_model_class(cls: Any) -> None:
+    """Reject a non-class model argument, at the call that passed it.
+
+    Every downstream message is formatted with ``cls.__name__``, so a non-class
+    surfaced as ``AttributeError: 'int' object has no attribute '__name__'``
+    raised from inside the SDK's own error formatter - naming neither the
+    argument nor the method that took it, and only after the query had already
+    been sent. Passing something that is not a class is a caller mistake, not
+    an operational failure, so this is a ``TypeError`` and deliberately outside
+    the ``SurrealError`` tree.
+    """
+    if not isinstance(cls, type):
+        raise TypeError(
+            f"into= expects a class to map results onto, got "
+            f"{type(cls).__name__}: {cls!r}"
+        )
+
+
 def _require_record(into: type[Any], row: Any) -> Mapping[str, Any]:
     """Ensure a value mapped via ``into=`` is a record object (mapping).
 
@@ -523,6 +541,7 @@ def _map_result(into: type[Any] | None, result: Any) -> Any:
     """
     if into is None:
         return result
+    _require_model_class(into)
     if isinstance(result, list):
         return [_map_to_class(into, _require_record(into, row)) for row in result]
     if result is None:
@@ -791,6 +810,7 @@ class AsyncQueryBuilder(_QueryState):
         Either way the into-builder reuses *self*'s cached fetch rather than
         issuing a second RPC.
         """
+        _require_model_class(cls)
         return AsyncQueryIntoBuilder(self, cls, rows=rows)
 
     async def execute(self) -> list[Value]:
@@ -1029,6 +1049,7 @@ class SyncQueryBuilder(_QueryState):
         Reuses this builder's cached fetch so ``.execute()`` plus ``.into(T)``
         on the same instance only issue one RPC.
         """
+        _require_model_class(cls)
         values = self._run_once()
         if rows:
             return [

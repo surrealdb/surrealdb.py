@@ -1,4 +1,4 @@
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from typing import Any
 
@@ -61,12 +61,40 @@ AUTH_FALLBACK_QUERY = "SELECT * FROM $auth"
 _MAX_BODY_CHARS = 300
 
 
-def _body_text(body: bytes) -> str:
-    """Render an HTTP error body as short, printable text."""
-    text = body.decode("utf-8", errors="replace").strip()
+def merge_query_vars(
+    session_vars: Mapping[str, Value], call_vars: Mapping[str, Value] | None
+) -> dict[str, Value]:
+    """Combine ``let()`` session variables with one query's own variables.
+
+    The HTTP transports have no server-side session to hold ``let()`` bindings,
+    so they replay them as query parameters. Which side wins when a name appears
+    twice is therefore an SDK decision, and it has to be the same answer the
+    websocket and embedded engines give: there ``let()`` is a real RPC and the
+    parameters sent with a query shadow the session binding for that query
+    alone. Writing the session variables on top instead made
+    ``query("RETURN $limit", {"limit": 5})`` return the ``let()`` value - the
+    caller's own argument, silently ignored, on one transport only.
+
+    The result is always a new dict. Merging into the caller's dict left
+    ``let()`` bindings - including credentials someone had bound to the
+    session - sitting in a dict the caller still held and might reuse.
+    """
+    merged: dict[str, Value] = dict(session_vars)
+    if call_vars:
+        merged.update(call_vars)
+    return merged
+
+
+def _clip(text: str) -> str:
+    """Trim *text* to something that still reads as a traceback line."""
     if len(text) > _MAX_BODY_CHARS:
         return text[:_MAX_BODY_CHARS] + "..."
     return text
+
+
+def _body_text(body: bytes) -> str:
+    """Render an HTTP error body as short, printable text."""
+    return _clip(body.decode("utf-8", errors="replace").strip())
 
 
 # These are re-exported for backwards compatibility with downstream code
@@ -77,6 +105,7 @@ __all__ = [
     "SurrealError",
     "Table",
     "UtilsMixin",
+    "merge_query_vars",
 ]
 
 
@@ -111,14 +140,28 @@ class UtilsMixin:
         raise HttpStatusError(status, _body_text(body), url)
 
     @staticmethod
-    def decode_response(body: bytes, process: str) -> Any:
-        """Decode a CBOR response body, or raise ``UnexpectedResponseError``."""
+    def decode_response(body: bytes, process: str) -> dict[str, Any]:
+        """Decode a CBOR RPC envelope, or raise ``UnexpectedResponseError``.
+
+        The envelope is always a map, and every caller reads it as one. Handing
+        back whatever the body happened to hold meant a response that decoded
+        to a list, a string or a number got as far as ``response.get("error")``
+        and raised ``AttributeError`` - outside the ``SurrealError`` tree, so
+        no documented ``except`` clause caught it, and the message named
+        neither the operation nor what had actually come back.
+        """
         try:
-            return decode(body)
+            decoded = decode(body)
         except Exception as exc:
             raise UnexpectedResponseError(
                 f"could not decode the response while {process}: {exc}"
             ) from exc
+        if not isinstance(decoded, dict):
+            raise UnexpectedResponseError(
+                f"expected a response object while {process}, got "
+                f"{type(decoded).__name__}: {_clip(repr(decoded))}"
+            )
+        return decoded
 
     @staticmethod
     def check_response_for_result(response: dict[str, Any], process: str) -> None:

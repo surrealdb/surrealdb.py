@@ -125,7 +125,7 @@ def update_user(user_id):
             return jsonify({"error": "No fields to update"}), 400
 
         db = get_db()
-        result = db.merge(user_id, update_data)
+        result = db.update(user_id).merge(update_data)
 
         if not result:
             return jsonify({"error": f"User {user_id} not found"}), 404

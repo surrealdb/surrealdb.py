@@ -132,7 +132,7 @@ async def update_user(
             return {"error": "No fields to update"}
 
         db = db_manager.get_db()
-        result = await db.merge(user_id, update_data)
+        result = await db.update(user_id).merge(update_data)
 
         if not result:
             return {"error": f"User {user_id} not found"}

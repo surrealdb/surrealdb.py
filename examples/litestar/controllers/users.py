@@ -121,7 +121,7 @@ class UserController(Controller):
             if not update_data:
                 raise InternalServerException("No fields to update")
 
-            result = await db.merge(user_id, update_data)
+            result = await db.update(user_id).merge(update_data)
 
             if not result:
                 raise NotFoundException(f"User {user_id} not found")
