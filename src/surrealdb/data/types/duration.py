@@ -18,31 +18,53 @@ UNITS = {
 }
 
 
+_UNIT_PATTERN = r"ns|µs|us|ms|[smhdwy]"
+
+# One `<digits><unit>` part, used to add the parts up.
+_PART_RE = re.compile(rf"(\d+)({_UNIT_PATTERN})")
+
+# The whole string must be nothing but those parts. Anchored on purpose:
+# `findall` alone matched parts *anywhere* and ignored everything around them,
+# so a string the server rejects outright silently became a different duration -
+# "1.5s" parsed as the "5s" inside it, "-1s" lost its sign and came out
+# positive, and "1e3s" became three seconds. Each produced a wrong value rather
+# than an error, which is the worst of the three possible outcomes.
+_DURATION_RE = re.compile(rf"^(?:\d+(?:{_UNIT_PATTERN}))+$")
+
+
 @dataclass
 class Duration:
     elapsed: int = 0  # nanoseconds
 
     @staticmethod
     def parse(value: str | int, nanoseconds: int = 0) -> "Duration":
+        """Build a ``Duration`` from ``"1h30m"``-style text, or from seconds.
+
+        Accepts one or more ``<digits><unit>`` parts and nothing else, matching
+        what SurrealDB itself accepts for a duration literal. Fractional
+        ("1.5s"), signed ("-1s") and exponent ("1e3s") forms are rejected here
+        because the server rejects them too.
+
+        :raises InvalidDurationError: if *value* is not a duration the server
+            would accept.
+        """
         if isinstance(value, int):
+            if value < 0:
+                raise InvalidDurationError(
+                    f"Duration cannot be negative, got {value} seconds"
+                )
             return Duration(nanoseconds + value * UNITS["s"])
-        else:
-            # Support compound durations: "1h30m", "2d3h15m", etc.
-            pattern = r"(\d+)(ns|µs|us|ms|[smhdwy])"
-            matches = re.findall(pattern, value.lower())
 
-            if not matches:
-                raise InvalidDurationError(f"Invalid duration format: {value}")
+        # Support compound durations: "1h30m", "2d3h15m", etc.
+        text = value.lower()
+        if not _DURATION_RE.match(text):
+            raise InvalidDurationError(f"Invalid duration format: {value}")
 
-            total_ns = nanoseconds
-            for num_str, unit in matches:
-                num = int(num_str)
-                if unit not in UNITS:
-                    # this will never happen because the regex only matches valid units
-                    raise InvalidDurationError(f"Unknown duration unit: {unit}")
-                total_ns += num * UNITS[unit]
+        total_ns = nanoseconds
+        for num_str, unit in _PART_RE.findall(text):
+            total_ns += int(num_str) * UNITS[unit]
 
-            return Duration(total_ns)
+        return Duration(total_ns)
 
     def get_seconds_and_nano(self) -> tuple[int, int]:
         sec = floor(self.elapsed / UNITS["s"])

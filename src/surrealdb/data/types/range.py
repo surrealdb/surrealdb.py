@@ -5,6 +5,8 @@ Defines classes for representing bounded ranges, including inclusive and exclusi
 from dataclasses import dataclass
 from typing import Any
 
+from surrealdb.data.types.null import Null
+
 
 class Bound:
     """
@@ -122,12 +124,32 @@ class Range:
     Represents a range with a beginning and an end bound.
 
     Attributes:
-        begin: The starting bound of the range (inclusive or exclusive).
-        end: The ending bound of the range (inclusive or exclusive).
+        begin: The starting bound of the range (inclusive or exclusive), or
+            ``None`` / ``Null`` for an open start.
+        end: The ending bound of the range, or ``None`` / ``Null`` for an
+            open end.
     """
 
-    begin: Bound
-    end: Bound
+    begin: Any
+    end: Any
+
+    def __post_init__(self) -> None:
+        """Normalise an open bound spelled ``None`` to ``Null``.
+
+        An open bound is a null on the wire. ``None`` is the natural way to
+        spell "no bound" in Python, but it encodes as SurrealDB's NONE, which
+        the server refuses inside a range - so ``Range(BoundIncluded(1), None)``
+        was rejected with a parse error while the identical range *read back
+        from the server* (whose open bound decodes to ``Null``) sent fine. Same
+        value, two spellings, one of them unusable.
+
+        Normalising here rather than in the encoder also keeps equality honest:
+        a hand-built open range and one read back compare equal.
+        """
+        if self.begin is None:
+            self.begin = Null
+        if self.end is None:
+            self.end = Null
 
     def __eq__(self, other: object) -> bool:
         """
