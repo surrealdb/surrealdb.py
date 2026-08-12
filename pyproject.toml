@@ -51,8 +51,11 @@ dependencies = [
     # consumed, and `close()` joins that thread, so closing a connection with
     # an undelivered live notification never returns. 12.0 through 13.1 avoid
     # the deadlock but still pay the full 10s close timeout for it. 14.0 is the
-    # first release where closing such a connection is immediate.
-    "websockets>=14.0",
+    # first release where closing such a connection is immediate, and 14.1 the
+    # first to expose `ClientConnection.state` - which is how the blocking
+    # transport tells a live socket from one whose peer has gone away, so that
+    # `connect()` can replace it rather than returning on a dead connection.
+    "websockets>=14.1",
 ]
 
 [project.urls]
