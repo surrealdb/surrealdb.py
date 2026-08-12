@@ -15,6 +15,7 @@ from uuid import UUID
 import websockets
 import websockets.sync.client as ws_sync
 from websockets.exceptions import ConnectionClosed, WebSocketException
+from websockets.protocol import State
 from websockets.sync.client import ClientConnection
 
 from surrealdb.connections.builders import (
@@ -151,7 +152,17 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             self.port = target.port
 
         if self.socket is not None:
-            return
+            if self.socket.state is State.OPEN:
+                return
+            # The socket object is still here but the connection behind it is
+            # gone - the peer dropped it, or the server restarted. Returning
+            # early left the connection permanently wedged: every later request
+            # failed on the dead socket, and `connect()` - the documented way
+            # to reopen one - silently refused to, so there was no way back
+            # short of building a new connection. The async transport already
+            # noticed this through its reader task; the blocking one has no
+            # reader, so the socket's own state is what says so.
+            self.close()
 
         self.socket = self._connect_socket()
 
