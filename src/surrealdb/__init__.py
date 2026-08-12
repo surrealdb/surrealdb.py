@@ -174,21 +174,57 @@ _EMBEDDED_SCHEMES = (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.
 # ``Surreal``/``AsyncSurreal`` names are factory *functions*, so they cannot be
 # used to annotate a connection instance (e.g. ``db: AsyncSurreal``). Use these
 # unions instead: ``db: AsyncSurrealConnection`` / ``db: BlockingSurrealConnection``.
-AsyncSurrealConnection = Union[
-    AsyncWsSurrealConnection,
-    AsyncHttpSurrealConnection,
-    "AsyncEmbeddedSurrealConnection",
-]
-BlockingSurrealConnection = Union[
-    BlockingWsSurrealConnection,
-    BlockingHttpSurrealConnection,
-    "BlockingEmbeddedSurrealConnection",
-]
+#
+# Built from real classes, never from a string. A ``"..."`` member becomes a
+# ``ForwardRef`` that is only resolved when something asks for the annotation at
+# runtime - and it is resolved in the *caller's* namespace, never in this
+# module's, so the name is not there to find. Anything that reads annotations at
+# runtime therefore raised ``NameError: name 'AsyncEmbeddedSurrealConnection' is
+# not defined`` from a module the caller never imported: ``typing
+# .get_type_hints``, ``inspect.signature(..., eval_str=True)``, pydantic's
+# ``validate_call``, and every framework that builds on them, including FastAPI
+# dependency injection. It failed that way even when the embedded extra *was*
+# installed, so following the advice above was enough to break a program.
+#
+# Without the extra the embedded classes do not exist, and neither can an
+# embedded connection: ``Surreal("mem://")`` raises ``UnsupportedEngineError``.
+# The union says so rather than naming a class that is not there.
+if TYPE_CHECKING:
+    AsyncSurrealConnection = Union[
+        AsyncWsSurrealConnection,
+        AsyncHttpSurrealConnection,
+        AsyncEmbeddedSurrealConnection,
+    ]
+    BlockingSurrealConnection = Union[
+        BlockingWsSurrealConnection,
+        BlockingHttpSurrealConnection,
+        BlockingEmbeddedSurrealConnection,
+    ]
+elif _EMBEDDED_AVAILABLE:
+    AsyncSurrealConnection = Union[
+        AsyncWsSurrealConnection,
+        AsyncHttpSurrealConnection,
+        AsyncEmbeddedSurrealConnection,
+    ]
+    BlockingSurrealConnection = Union[
+        BlockingWsSurrealConnection,
+        BlockingHttpSurrealConnection,
+        BlockingEmbeddedSurrealConnection,
+    ]
+else:
+    AsyncSurrealConnection = Union[
+        AsyncWsSurrealConnection,
+        AsyncHttpSurrealConnection,
+    ]
+    BlockingSurrealConnection = Union[
+        BlockingWsSurrealConnection,
+        BlockingHttpSurrealConnection,
+    ]
 
 
 def Surreal(
     url: str,
-) -> Union["BlockingEmbeddedSurrealConnection", BlockingWsSurrealConnection, BlockingHttpSurrealConnection]:
+) -> BlockingSurrealConnection:
     constructed_url = Url(url)
     if constructed_url.scheme in _EMBEDDED_SCHEMES:
         if not _EMBEDDED_AVAILABLE:
@@ -210,7 +246,7 @@ def Surreal(
 
 def AsyncSurreal(
     url: str,
-) -> Union["AsyncEmbeddedSurrealConnection", AsyncWsSurrealConnection, AsyncHttpSurrealConnection]:
+) -> AsyncSurrealConnection:
     constructed_url = Url(url)
     if constructed_url.scheme in _EMBEDDED_SCHEMES:
         if not _EMBEDDED_AVAILABLE:
