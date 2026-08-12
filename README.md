@@ -473,6 +473,58 @@ with Surreal("ws://localhost:8000/rpc") as db:
   separate connection per live subscription (or the async client, which
   fans notifications out to per-subscriber queues).
 
+## `None`, `Null`, and empty values
+
+SurrealDB has two ways for a field to hold nothing, and they are different
+values:
+
+| SurrealQL | meaning | Python |
+| --------- | ------- | ------ |
+| `NONE`    | the field is not there | `None` |
+| `NULL`    | the field is there and is null | `surrealdb.Null` |
+
+An unset `option<T>` column is NONE, and a NONE field does not appear in a
+record at all when you read it. NULL is a value the field holds, and a column
+has to be declared to permit it — `option<T>` alone does not, and rejects NULL.
+
+```python
+from surrealdb import Null
+
+db.create(rec, {"age": None})    # age is NONE — what option<int> expects
+db.create(rec, {"age": Null})    # age is NULL — rejected by option<int>
+```
+
+This matters most when you read a record and write it back. A NULL field reads
+as `Null`, and sending `Null` back writes NULL again, so the round trip keeps
+the field:
+
+```python
+row = db.select(rec)             # {"nickname": Null}
+row["name"] = "new name"
+db.update(rec, row)              # nickname is still NULL
+```
+
+`Null` is falsy, like `None`, so `if not row["nickname"]` reads the way you
+would expect. It is deliberately **not** equal to `None` — the two are
+different values to the server, and treating them as one is what used to make
+the write-back above delete the field.
+
+> Before 3.0.0-beta.5 a NULL field decoded to `None`, which encoded back to
+> NONE — so an ordinary read-modify-write silently *removed* every NULL field
+> it touched. If you have code comparing a database value with `is None`,
+> check whether the column can be NULL.
+
+**Sets read back as lists.** SurrealDB's `set<T>` accepts any member type,
+including `set<object>` and `set<array>`, which a Python `set` cannot hold. A
+set therefore decodes to a `list` — the same shape SurrealDB 2.x and the
+server's own JSON endpoint return. Writing is unchanged: a Python `set` still
+goes out as a set, and the server deduplicates it.
+
+```python
+db.create(rec, {"tags": {"a", "b"}})   # stored as a set
+db.select(rec)["tags"]                 # ['a', 'b'] — a list
+```
+
 ## Error handling
 
 Every error the SDK raises derives from `SurrealError`, so a single
@@ -580,6 +632,8 @@ v3.0 is a breaking change. Highlights:
 | Sync `db.create(rec)[...]` (magic auto-exec)     | Sync `db.create(rec, data)` eager, or `db.create(rec).execute()` |
 | `db.select(RecordID(...))` -> `[record]`         | `db.select(RecordID(...))` -> `record` dict or `None`     |
 | `db.delete("my-table")` (silently inlined)       | `db.delete(Table("my-table"))` (raw string rejected)      |
+| A NULL field read as `None`                      | A NULL field reads as `Null` (`None` still means NONE)    |
+| `set<T>` read as a Python `set`                  | `set<T>` reads as a `list` (writing a `set` is unchanged) |
 
 > Bare-string resource targets are now strictly validated against the
 > safe-identifier pattern (`[A-Za-z_][A-Za-z0-9_]*`) so user-supplied

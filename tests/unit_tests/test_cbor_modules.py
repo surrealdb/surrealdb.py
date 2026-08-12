@@ -14,6 +14,7 @@ from surrealdb.cbor import (
 )
 from surrealdb.data import cbor
 from surrealdb.data.types import constants
+from surrealdb.data.types.null import Null
 
 
 def test_public_cbor_api_exports() -> None:
@@ -89,35 +90,81 @@ def test_set_encodes_with_surreal_set_tag() -> None:
     assert encoded[:3] != b"\xd9\x01\x02"
 
 
-def test_set_roundtrip() -> None:
-    """A Python set round-trips back to a set."""
-    original = {1, 2, 3}
-    decoded = cbor.decode(cbor.encode(original))
-    assert isinstance(decoded, set)
-    assert decoded == original
+def test_set_encodes_from_a_set_and_decodes_to_a_list() -> None:
+    """A Python set is sent as a set and comes back as a list.
+
+    Deliberately asymmetric. SurrealDB's set holds any value - `set<object>`
+    is an ordinary column - while a Python set takes only hashable members, so
+    decoding into one raised `unhashable type: 'dict'` and lost the whole
+    response. A list is also what SurrealDB 2.x and the server's JSON endpoint
+    return for a set.
+    """
+    decoded = cbor.decode(cbor.encode({1, 2, 3}))
+    assert isinstance(decoded, list)
+    assert sorted(decoded) == [1, 2, 3]
 
 
-def test_frozenset_roundtrip() -> None:
-    """A frozenset encodes via the set tag and decodes back to a set."""
+def test_frozenset_encodes_via_the_set_tag() -> None:
+    """A frozenset encodes via the set tag and decodes to a list."""
     encoded = cbor.encode(frozenset({4, 5, 6}))
     assert encoded[:2] == b"\xd8\x38"
     decoded = cbor.decode(encoded)
-    assert isinstance(decoded, set)
-    assert decoded == {4, 5, 6}
+    assert isinstance(decoded, list)
+    assert sorted(decoded) == [4, 5, 6]
 
 
 def test_nested_set_roundtrip() -> None:
-    """Sets nested inside containers also use the set tag and round-trip."""
-    original = {"nums": {7, 8, 9}}
-    decoded = cbor.decode(cbor.encode(original))
-    assert decoded == {"nums": {7, 8, 9}}
-    assert isinstance(decoded["nums"], set)
+    """Sets nested inside containers also use the set tag."""
+    decoded = cbor.decode(cbor.encode({"nums": {7, 8, 9}}))
+    assert isinstance(decoded["nums"], list)
+    assert sorted(decoded["nums"]) == [7, 8, 9]
 
 
-def test_none_still_encodes_as_tag_6() -> None:
-    """None is encoded natively as SurrealDB's NONE tag (6): 0xc6 0xf6."""
+def test_a_set_of_unhashable_values_decodes() -> None:
+    """The defect: a `set<object>` could not be read at all.
+
+    `set(...)` on the decoded members raised `unhashable type: 'dict'`, which
+    `decode_response` turned into an `UnexpectedResponseError` covering the
+    whole reply - so any `SELECT *` touching such a field failed, and the row
+    was unreadable in its native form.
+    """
+    raw = dumps(CBORTag(constants.TAG_SET, [{"k": "a"}, {"k": "b"}]))
+    assert cbor.decode(raw) == [{"k": "a"}, {"k": "b"}]
+
+    raw = dumps(CBORTag(constants.TAG_SET, [[1, 2], [3, 4]]))
+    assert cbor.decode(raw) == [[1, 2], [3, 4]]
+
+
+def test_none_encodes_as_the_none_tag() -> None:
+    """``None`` means SurrealDB's NONE: tag 6, 0xc6 0xf6."""
     assert cbor.encode(None) == b"\xc6\xf6"
     assert cbor.decode(cbor.encode(None)) is None
+
+
+def test_null_encodes_as_plain_cbor_null() -> None:
+    """``Null`` means SurrealDB's NULL: plain CBOR null, 0xf6."""
+    assert cbor.encode(Null) == b"\xf6"
+    assert cbor.decode(cbor.encode(Null)) is Null
+
+
+def test_null_and_none_stay_distinct_through_a_round_trip() -> None:
+    """The whole point: the two must not collapse into each other.
+
+    They did, and it cost data - a NULL field read as ``None`` went back as
+    NONE, which deletes the field rather than nulling it.
+    """
+    payload = {"a": Null, "b": None, "c": [Null, None], "d": {"e": Null}}
+    assert cbor.decode(cbor.encode(payload)) == payload
+
+
+def test_the_generic_cbor_package_still_decodes_null_as_none() -> None:
+    """``surrealdb.cbor`` is a general-purpose CBOR codec and stays standard.
+
+    Only the SurrealDB layer knows that a null on its wire means NULL; a
+    caller using the re-exported cbor2 API must still get plain ``None``.
+    """
+    assert loads(b"\xf6") is None
+    assert loads(dumps(None)) is None
 
 
 def test_decimal_still_encodes_as_tag_10() -> None:
