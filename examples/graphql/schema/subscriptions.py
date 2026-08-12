@@ -28,7 +28,10 @@ class Subscription:
             live_query_id = await db.live("users")
 
             # Stream updates to subscribers
-            async for result in db.subscribe_live(live_query_id):
+            # `subscribe_live` is a coroutine returning an async generator, so it
+            # has to be awaited before it can be iterated.
+            subscription = await db.subscribe_live(live_query_id)
+            async for result in subscription:
                 # Parse the live query result
                 if isinstance(result, dict) and "result" in result:
                     user_data = result["result"]

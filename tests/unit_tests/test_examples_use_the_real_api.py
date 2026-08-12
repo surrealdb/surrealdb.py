@@ -15,6 +15,7 @@ Notebooks are included: the same call was in one of those too.
 """
 
 import ast
+import inspect
 import json
 import pathlib
 import re
@@ -109,3 +110,55 @@ def test_every_example_parses() -> None:
             broken.append(f"{path.name}: {error}")
 
     assert not broken, "examples that do not parse: " + "; ".join(broken)
+
+
+def _coroutine_methods() -> set[str]:
+    """Public methods that are coroutines on any async connection class."""
+    return {
+        name
+        for cls in _CONNECTIONS
+        for name, member in vars(cls).items()
+        if not name.startswith("_") and inspect.iscoroutinefunction(member)
+    }
+
+
+def test_no_example_iterates_a_coroutine() -> None:
+    """``async for`` over an un-awaited coroutine raises ``TypeError``.
+
+    ``subscribe_live`` is a coroutine that *returns* an async generator, so it
+    has to be awaited before it can be iterated. Six framework examples wrote
+
+        async for result in db.subscribe_live(live_query_id):
+
+    which raises ``TypeError: 'async for' requires an object with __aiter__
+    method, got coroutine`` the moment the endpoint is hit - so every
+    live-query WebSocket example never delivered a single update.
+
+    The existing check above only asks whether the method exists, which this
+    passes: `subscribe_live` is real, it is just being used wrongly. Iterating
+    a coroutine is wrong for any connection type, so this needs no guess about
+    which one an example holds.
+    """
+    coroutines = _coroutine_methods()
+    offenders: list[str] = []
+
+    for path, text in _sources():
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            continue  # reported by the parse test above
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.AsyncFor):
+                continue
+            call = node.iter
+            if not isinstance(call, ast.Call):
+                continue
+            func = call.func
+            if not isinstance(func, ast.Attribute) or func.attr not in coroutines:
+                continue
+            offenders.append(
+                f"{path.relative_to(_EXAMPLES.parent)}:{node.lineno} "
+                f"iterates db.{func.attr}() without awaiting it"
+            )
+
+    assert not offenders, "examples iterating a coroutine: " + "; ".join(offenders)
