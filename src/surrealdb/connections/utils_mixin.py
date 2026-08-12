@@ -1,4 +1,5 @@
-from collections.abc import Generator, Mapping
+import re
+from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from typing import Any
 
@@ -85,6 +86,48 @@ def merge_query_vars(
     return merged
 
 
+# A SurrealDB function name: `fn::mine`, `time::now`, or a nested `fn::a::b`.
+# Used to build `RETURN <name>(...)` for the HTTP `run()` path, so it is
+# anchored and deliberately narrow - nothing outside this subset is inlined
+# into a query.
+_FUNCTION_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$")
+
+# Prefix for the generated argument parameters. Distinctive so it cannot
+# collide with a name someone bound with `let()`.
+_RUN_ARG_PREFIX = "__surreal_run_arg"
+
+
+def build_run_query(
+    name: str, args: Sequence[Value] | None
+) -> tuple[str, dict[str, Value]]:
+    """Render ``run(name, args)`` as SurrealQL plus its bound parameters.
+
+    The HTTP transports have no server-side session, so a variable bound with
+    ``let()`` is not there for a server-side function to read - the ``run`` RPC
+    carries no parameters, and the function saw nothing. The same call over a
+    websocket, where ``let()`` is a real session binding, returned the value.
+    One transport silently answered ``None`` where the others answered.
+
+    Query *parameters* do reach a function body, so replaying the session
+    bindings as parameters of a ``RETURN <name>(...)`` query makes HTTP behave
+    the way the websocket does.
+
+    :raises ValueError: if *name* is not a plain function name. It is the one
+        part that cannot be parameter-bound, so anything outside the safe
+        subset is refused rather than inlined.
+    """
+    if not _FUNCTION_NAME_RE.match(name):
+        raise ValueError(
+            f"{name!r} is not a valid SurrealDB function name; expected "
+            "something like 'fn::my_function' or 'time::now'"
+        )
+    arguments: dict[str, Value] = {
+        f"{_RUN_ARG_PREFIX}{index}": value for index, value in enumerate(args or [])
+    }
+    rendered = ", ".join(f"${key}" for key in arguments)
+    return f"RETURN {name}({rendered});", arguments
+
+
 def _clip(text: str) -> str:
     """Trim *text* to something that still reads as a traceback line."""
     if len(text) > _MAX_BODY_CHARS:
@@ -105,6 +148,7 @@ __all__ = [
     "SurrealError",
     "Table",
     "UtilsMixin",
+    "build_run_query",
     "merge_query_vars",
 ]
 

@@ -19,6 +19,7 @@ from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import (
     AUTH_FALLBACK_QUERY,
     UtilsMixin,
+    build_run_query,
     merge_query_vars,
 )
 from surrealdb.data.types.record_id import RecordID, RecordIdType
@@ -418,6 +419,33 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         args: list[Value] | None = None,
         version: str | None = None,
     ) -> Value:
+        """Call a SurrealDB function and return its result.
+
+        When variables are bound with :meth:`let`, this is sent as a query
+        rather than as the ``run`` RPC. HTTP has no server-side session, so the
+        RPC - which carries no parameters - left a function reading a
+        ``let()``-bound variable seeing nothing, and the call quietly returned
+        ``None`` where the websocket transports returned the value. Query
+        parameters do reach a function body, so replaying the bindings that way
+        makes the two agree.
+
+        :raises UnsupportedFeatureError: if *version* is given while session
+            variables are bound. SurrealQL has no syntax for calling a specific
+            function version, so the two cannot be combined over HTTP.
+        """
+        if self.vars:
+            if version is not None:
+                raise UnsupportedFeatureError(
+                    "run() cannot combine a function version with let() "
+                    "variables over HTTP: the version needs the `run` RPC, "
+                    "which carries no parameters, and the variables need a "
+                    "query, which has no syntax for a version. Use a websocket "
+                    "connection, pass the values as arguments, or unset() the "
+                    "session variables first."
+                )
+            query, arguments = build_run_query(name, args)
+            return self.query(query, arguments).first()
+
         kwargs: dict[str, Any] = {"name": name}
         if version is not None:
             kwargs["version"] = version

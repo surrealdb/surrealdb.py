@@ -600,6 +600,19 @@ The SDK sends the same request in both cases, so there is nothing for it to fix
 without knowing the server version up front. Use distinct names for session
 bindings and per-query variables if you target 2.x over a websocket.
 
+**A 2.x function body cannot read a variable from outside itself.** On 3.x a
+stored function resolves `$v` from the session or from the query's parameters;
+on 2.x it resolves neither, on any transport:
+
+```python
+db.query("DEFINE FUNCTION fn::readv() { RETURN $v; };").execute()
+db.let("v", 42)
+db.run("fn::readv")        # 42 on 3.x, None on 2.x
+```
+
+Pass the value as an argument (`db.run("fn::add", [1, 2])`) if you target 2.x —
+arguments work on every version.
+
 The `TransportError` branch is `ConnectionUnavailableError` (the host was
 unreachable or the socket closed), `TransportTimeoutError` (the request timed
 out), and `HttpStatusError` (a non-2xx HTTP response, carrying `.status`,
