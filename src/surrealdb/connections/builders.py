@@ -62,6 +62,7 @@ from collections.abc import Awaitable, Callable, Generator, Mapping
 from dataclasses import fields, is_dataclass
 from typing import Any, Generic, Literal, TypeVar, cast, overload
 
+from surrealdb.data.types.range import Range
 from surrealdb.data.types.record_id import RecordID, RecordIdType, escape_identifier
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
@@ -186,6 +187,21 @@ def _resource_to_variable(
         variables[var_name] = resource.table_name
         return f"type::table(${var_name})"
 
+    if isinstance(resource, Range):
+        # A range on its own names no table, so there is nothing to select
+        # from - `1..=3` is a range of numbers, not of records. It reached the
+        # string branch below and came back as
+        # `TypeError: argument of type 'Range' is not iterable`, which named
+        # neither the argument nor what was wrong with it. Worse, the catch-all
+        # message at the bottom of this function used to tell callers to "pass
+        # a RecordID, Table, or Range instance" - so the SDK's own advice led
+        # straight here.
+        raise SurrealError(
+            f"Cannot use a bare Range as a SurrealDB resource target: {resource} "
+            "names no table. Pass RecordID(table, range) to target a range of "
+            f"records - e.g. RecordID('person', {resource!r})."
+        )
+
     if ":" in resource and ".." not in resource:
         variables[var_name] = _string_to_record_id(resource, var_name)
         return f"${var_name}"
@@ -201,15 +217,31 @@ def _resource_to_variable(
 
     raise SurrealError(
         f"Cannot use raw string {resource!r} as a SurrealDB resource target. "
-        "Pass a RecordID, Table, or Range instance, or simplify the string "
-        "to a bare identifier or 'table:id' form."
+        "Pass a RecordID or Table instance, or simplify the string to a bare "
+        "identifier, 'table:id', or 'table:start..=end' form."
     )
 
 
 def _is_single_record_operation(resource: RecordIdType) -> bool:
+    """Whether *resource* can name at most one record.
+
+    A ``RecordID`` whose id is a :class:`~surrealdb.data.types.range.Range`
+    is the exception: ``RecordID("person", Range(BoundIncluded(1),
+    BoundIncluded(3)))`` targets every record in ``person:1..=3``, and every
+    supported server returns all of them. Counting it as single-record meant
+    the caller was handed the first row and the rest were dropped on the floor
+    - three records read, one returned, no error. The equivalent
+    ``"person:1..=3"`` string has always been treated as multi-record, so the
+    two spellings of the same target disagreed about how much of the answer
+    the caller got to see.
+    """
     if isinstance(resource, RecordID):
-        return True
+        return not isinstance(resource.id, Range)
     if isinstance(resource, Table):
+        return False
+    if isinstance(resource, Range):
+        # Rejected by `_resource_to_variable` before it can be executed; the
+        # answer here only has to be defined, not meaningful.
         return False
     if ":" in resource and ".." not in resource:
         return True
@@ -421,6 +453,30 @@ class _QueryState:
         return [stmt.get("result") for stmt in stmts]
 
 
+def _constructor_parameters(cls: type[Any]) -> str:
+    """The keyword arguments *cls* accepts, for an error message.
+
+    Best-effort: a class whose constructor cannot be introspected (a C
+    extension type, say) reports that rather than failing inside the error
+    path, which would replace the message being built with a less useful one.
+    """
+    if is_dataclass(cls):
+        return str([f.name for f in fields(cls)])
+    try:
+        names = [
+            name
+            for name, param in inspect.signature(cls).parameters.items()
+            if param.kind
+            in (
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.KEYWORD_ONLY,
+            )
+        ]
+    except (ValueError, TypeError):
+        return "(constructor not introspectable)"
+    return str(names)
+
+
 def _map_to_class(cls: type[T], values: list[Any] | Mapping[str, Any]) -> T:
     """Construct ``cls`` from statement results or a single record row.
 
@@ -438,7 +494,23 @@ def _map_to_class(cls: type[T], values: list[Any] | Mapping[str, Any]) -> T:
     if isinstance(values, Mapping):
         # Row -> model: the record's keys are the constructor kwargs. Works
         # uniformly for dataclasses, pydantic models, and plain classes.
-        return cls(**values)
+        try:
+            return cls(**values)
+        except TypeError as exc:
+            # A record whose fields do not line up with the model surfaced as
+            # a bare `TypeError: Person.__init__() got an unexpected keyword
+            # argument 'active'` - raised from inside the model, naming neither
+            # `into=` nor the record that failed to map, so the obvious reading
+            # was that the caller had constructed a `Person` wrongly somewhere.
+            # The README's own `into=` example hit it: it declared a two-field
+            # `Person` and then wrote a third field to the table.
+            raise UnexpectedResponseError(
+                f"into={cls.__name__} could not be built from this record: {exc}. "
+                f"The record has {sorted(values)}; {cls.__name__} accepts "
+                f"{_constructor_parameters(cls)}. Add the missing field(s) to "
+                "the model, give them defaults, or select only the columns it "
+                "declares."
+            ) from exc
 
     if is_dataclass(cls):
         field_list = list(fields(cls))

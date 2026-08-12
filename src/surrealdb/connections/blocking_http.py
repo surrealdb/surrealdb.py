@@ -544,11 +544,17 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.session = None
 
     def __enter__(self) -> "BlockingHttpSurrealConnection":
+        """Open the pooled HTTP session if there isn't one, and return ``self``.
+
+        Reuses an existing session rather than assigning a fresh one. The
+        replaced session was never closed, so its pooled TCP connections and
+        their sockets leaked - and ``__exit__`` closed only the replacement, so
+        every ``with`` block entered on an already-open connection leaked one
+        more. This mirrors the websocket transport, where re-entering also cost
+        the server-side session.
         """
-        Synchronous context manager entry.
-        Initializes a session for HTTP requests.
-        """
-        self.session = requests.Session()
+        if self.session is None:
+            self.session = requests.Session()
         return self
 
     def __exit__(

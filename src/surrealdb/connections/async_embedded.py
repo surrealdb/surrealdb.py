@@ -65,6 +65,8 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         # Embedded database handle
         with mapped_engine_errors("opening the database"):
             self._db: AsyncEmbeddedDB = AsyncEmbeddedDB(url)
+        # Whether `close()` has shut the engine down - see `connect`.
+        self._closed: bool = False
 
     async def __aenter__(self) -> AsyncEmbeddedSurrealConnection:
         """Context manager entry - connect to the embedded database."""
@@ -81,7 +83,21 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         await self.close()
 
     async def connect(self, url: str | None = None) -> None:
-        """Connects to the embedded database endpoint.
+        """Connect to the embedded database endpoint.
+
+        Idempotent while the engine is open, and it reopens one that
+        :meth:`close` shut down. ``close()`` shuts the datastore down for good -
+        the handle it leaves behind answers every request with "Database
+        connection is closed" - while ``connect()`` on the native side is a
+        no-op that reports success, so reconnecting *said* it had worked and
+        then failed on the next query. The websocket transports have always
+        reopened here; this makes the embedded engine agree.
+
+        A reopened ``memory://`` database starts empty, because the one that
+        was closed is gone. That mirrors a reconnected websocket getting a new,
+        unauthenticated server-side session: closing a connection ends what was
+        behind it. A file-backed engine (``file://``, ``surrealkv://``) reopens
+        its store and keeps its data.
 
         Args:
             url: Optional new URL to connect to.
@@ -94,6 +110,11 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
             self.raw_url = url
             with mapped_engine_errors("opening the database"):
                 self._db = AsyncEmbeddedDB(url)
+            self._closed = False
+        elif self._closed:
+            with mapped_engine_errors("opening the database"):
+                self._db = AsyncEmbeddedDB(self.raw_url)
+            self._closed = False
 
         with mapped_engine_errors("connecting"):
             await self._db.connect()
@@ -101,11 +122,15 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
     async def close(self) -> None:
         """Closes the connection to the database.
 
+        Idempotent, and leaves the connection reusable: :meth:`connect` opens a
+        fresh engine afterwards.
+
         Example:
             await db.close()
         """
         with mapped_engine_errors("closing"):
             await self._db.close()
+        self._closed = True
 
     async def _send(
         self, message: RequestMessage, process: str, bypass: bool = False

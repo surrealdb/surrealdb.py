@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from typing import Any
 
 from surrealdb.connections.builders import (
+    _is_single_record_operation,  # pyright: ignore[reportPrivateUsage]
     _resource_to_variable,  # pyright: ignore[reportPrivateUsage]
 )
 from surrealdb.data.cbor import decode
@@ -298,25 +299,16 @@ class UtilsMixin:
 
     @staticmethod
     def _is_single_record_operation(resource: RecordIdType) -> bool:
-        """
-        Determines if a resource refers to a single record operation.
+        """Whether *resource* can name at most one record.
 
-        Args:
-            resource: The resource (Table, RecordID, or string)
-
-        Returns:
-            True if this is a single record operation, False if it's a table-level operation
+        Single source of truth, for the same reason
+        :meth:`_resource_to_variable` is one: this is the legacy ``select()``
+        path's copy of the rule the builders use, and a hand-maintained
+        second copy is how the two came to disagree about a ``RecordID`` whose
+        id is a ``Range`` - the builders' ``delete``/``update`` dropped every
+        row but the first, and so did this.
         """
-        if isinstance(resource, RecordID):
-            return True
-        elif isinstance(resource, Table):
-            return False
-        else:
-            # Check if it contains a colon (record ID format like "user:tobie")
-            # But exclude range syntax like "user:1..10"
-            if ":" in resource and ".." not in resource:
-                return True
-            return False
+        return _is_single_record_operation(resource)
 
     @staticmethod
     def _unwrap_result(result: Any, unwrap: bool) -> Any:

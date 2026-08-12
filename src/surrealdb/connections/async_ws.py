@@ -5,6 +5,7 @@ A basic async connection to a SurrealDB instance.
 import asyncio
 import logging
 import uuid
+import warnings
 import weakref
 from asyncio import AbstractEventLoop, Future, Queue, Task
 from collections.abc import AsyncGenerator
@@ -82,6 +83,108 @@ def _release_live_queue(
         queues.remove(result_queue)
     if not queues:
         live_queues.pop(suid, None)
+
+
+async def _read_frames(
+    ref: "weakref.ReferenceType[AsyncWsSurrealConnection]", socket: Any
+) -> None:
+    """Read frames off *socket* and route them to the connection behind *ref*.
+
+    A module-level function taking a weak reference, rather than a bound method
+    on the connection, so that the reader task does not keep the connection
+    alive. ``asyncio.create_task(self._recv_task())`` produced exactly that: the
+    running loop holds the task, the task holds its coroutine, and the coroutine
+    held ``self``. A connection whose last user reference was dropped was
+    therefore never collected - so no finaliser ran, and its socket, its file
+    descriptor and both worker tasks stayed for the life of the process. Fifty
+    connections built in a loop meant fifty live sockets.
+
+    The strong reference is taken per frame and dropped again immediately, so
+    between frames - which is where a suspended reader spends essentially all
+    of its time - nothing here refers to the connection.
+    """
+    try:
+        async for data in socket:
+            connection = ref()
+            if connection is None:
+                # Nobody is left to route to; stop reading rather than
+                # resurrect the connection for the length of a frame.
+                return
+            try:
+                connection._route_frame(data)  # pyright: ignore[reportPrivateUsage]
+            finally:
+                del connection
+    except (ConnectionClosed, WebSocketException, asyncio.CancelledError):
+        # Connection was closed or cancelled, this is expected
+        pass
+    except Exception as e:
+        logger.debug(f"Unexpected error in _read_frames: {e}")
+    finally:
+        connection = ref()
+        if connection is not None:
+            connection._reader_stopped()  # pyright: ignore[reportPrivateUsage]
+
+
+def _abandon_connection(
+    socket: Any, recv_task: "Task[None] | None", loop: AbstractEventLoop | None
+) -> None:
+    """Release a websocket nobody closed, without awaiting anything.
+
+    Deliberately not the graceful :meth:`AsyncWsSurrealConnection.close`, for
+    the same reason the blocking transport's ``__del__`` is not: a destructor
+    cannot await, and the loop that would run the closing handshake is often
+    already gone by the time the last reference is dropped (``asyncio.run``
+    closes its loop on the way out).
+
+    Two cases, because they need opposite treatment:
+
+    * the loop is still alive - schedule the cancel and the transport abort on
+      it, so the socket is torn down by the thread that owns it;
+    * the loop is closed - nothing can be scheduled, so close the underlying
+      socket object directly. That is what actually releases the file
+      descriptor, which is the resource that otherwise accumulates.
+    """
+    alive = loop if loop is not None and not loop.is_closed() else None
+
+    if recv_task is not None and not recv_task.done():
+        try:
+            if alive is not None:
+                alive.call_soon_threadsafe(recv_task.cancel)
+            else:
+                recv_task.cancel()
+        except RuntimeError:
+            pass
+
+    transport = getattr(socket, "transport", None)
+    if transport is None:
+        return
+    if alive is not None:
+        try:
+            alive.call_soon_threadsafe(transport.abort)
+            return
+        except RuntimeError:
+            pass
+    # The real socket, not the ``TransportSocket`` wrapper that
+    # `get_extra_info("socket")` returns: closing the wrapper works but is
+    # deprecated, and a destructor is the last place that should depend on a
+    # deprecated path still being there. Falls back to the wrapper if the
+    # private attribute ever goes, since a deprecated close beats a leaked
+    # descriptor.
+    raw = getattr(transport, "_sock", None)
+    if raw is None:
+        try:
+            raw = transport.get_extra_info("socket")
+        except Exception:
+            raw = None
+    if raw is not None:
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                raw.close()
+        except Exception:
+            # Interpreter shutdown can pull what this needs out from under us,
+            # and an exception raised here is unraisable anyway.
+            pass
 
 
 class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
@@ -221,70 +324,61 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         if not self._uncorrelated_for:
             self._forget_uncorrelated()
 
-    async def _recv_task(self) -> None:
-        assert self.socket
+    def _route_frame(self, data: Any) -> None:
+        """Hand one received frame to whoever is waiting for it."""
+        # A single frame this loop cannot handle must not end it. When it did,
+        # the socket stayed open - so `connect()` saw a live socket and
+        # no-opped, and every later request registered a future that nothing
+        # would ever resolve. The caller then waited forever, with no timeout
+        # anywhere on this path.
         try:
-            async for data in self.socket:
-                # A single frame this loop cannot handle must not end it. When
-                # it did, the socket stayed open - so `connect()` saw a live
-                # socket and no-opped, and every later request registered a
-                # future that nothing would ever resolve. The caller then
-                # waited forever, with no timeout anywhere on this path.
-                try:
-                    response = decode(data)
-                except Exception as exc:
-                    self._fail_pending(
-                        UnexpectedResponseError(
-                            f"could not decode a websocket frame: {exc}"
-                        )
-                    )
-                    continue
-
-                try:
-                    if response_id := response.get("id"):
-                        if fut := self.qry.get(response_id):
-                            if not fut.done():
-                                fut.set_result(response)
-                    elif response_result := response.get("result"):
-                        live_id = str(response_result["id"])
-                        for queue in self.live_queues.get(live_id, []):
-                            queue.put_nowait(response_result)
-                    else:
-                        # An id-less frame carrying no result is a
-                        # protocol-level error the server could not correlate
-                        # to a request, so everyone in flight has to hear it.
-                        try:
-                            self.check_response_for_error(response, "_recv_task")
-                        except SurrealError as exc:
-                            self._deliver_uncorrelated(exc)
-                except Exception as exc:
-                    self._fail_pending(
-                        UnexpectedResponseError(
-                            f"could not route a websocket frame: {exc}"
-                        )
-                    )
-        except (ConnectionClosed, WebSocketException, asyncio.CancelledError):
-            # Connection was closed or cancelled, this is expected
-            pass
-        except Exception as e:
-            logger.debug(f"Unexpected error in _recv_task: {e}")
-        finally:
-            # Fail any pending futures with a typed error so awaiting callers
-            # surface ``ConnectionUnavailableError`` instead of a raw
-            # ``CancelledError`` when the socket closes mid-request.
+            response = decode(data)
+        except Exception as exc:
             self._fail_pending(
-                ConnectionUnavailableError(
-                    "WebSocket connection closed before a response was received."
-                )
+                UnexpectedResponseError(f"could not decode a websocket frame: {exc}")
             )
-            # Live subscribers wait on a queue, not on `self.qry`, so failing
-            # the pending futures left them untouched: nothing would ever be
-            # put in their queue again and `async for` waited forever, with no
-            # timeout on the path. The blocking transport has always raised
-            # `ConnectionUnavailableError` here.
-            for queues in self.live_queues.values():
-                for queue in queues:
-                    queue.put_nowait(_LIVE_QUEUE_BROKEN)
+            return
+
+        try:
+            if response_id := response.get("id"):
+                if fut := self.qry.get(response_id):
+                    if not fut.done():
+                        fut.set_result(response)
+            elif response_result := response.get("result"):
+                live_id = str(response_result["id"])
+                for queue in self.live_queues.get(live_id, []):
+                    queue.put_nowait(response_result)
+            else:
+                # An id-less frame carrying no result is a protocol-level error
+                # the server could not correlate to a request, so everyone in
+                # flight has to hear it.
+                try:
+                    self.check_response_for_error(response, "_recv_task")
+                except SurrealError as exc:
+                    self._deliver_uncorrelated(exc)
+        except Exception as exc:
+            self._fail_pending(
+                UnexpectedResponseError(f"could not route a websocket frame: {exc}")
+            )
+
+    def _reader_stopped(self) -> None:
+        """Tell everyone still waiting that no more frames are coming."""
+        # Fail any pending futures with a typed error so awaiting callers
+        # surface ``ConnectionUnavailableError`` instead of a raw
+        # ``CancelledError`` when the socket closes mid-request.
+        self._fail_pending(
+            ConnectionUnavailableError(
+                "WebSocket connection closed before a response was received."
+            )
+        )
+        # Live subscribers wait on a queue, not on `self.qry`, so failing the
+        # pending futures left them untouched: nothing would ever be put in
+        # their queue again and `async for` waited forever, with no timeout on
+        # the path. The blocking transport has always raised
+        # `ConnectionUnavailableError` here.
+        for queues in self.live_queues.values():
+            for queue in queues:
+                queue.put_nowait(_LIVE_QUEUE_BROKEN)
 
     async def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
@@ -343,9 +437,43 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         # Cannot be more specific without runtime schema validation
         return response
 
+    def _check_event_loop(self) -> None:
+        """Refuse to use a socket that belongs to a different event loop.
+
+        Every awaiting caller's future is created on ``self.loop``, and the
+        reader that resolves them runs there too. Used from a second loop, the
+        first ``await`` failed deep inside asyncio with
+        ``ValueError: The future belongs to a different loop than the one
+        specified as the loop argument`` - a message with nothing in it about
+        connections, event loops the *caller* controls, or what to do next.
+        The connection was then wedged: the request stayed in ``self.qry``, and
+        every later call failed the same way.
+
+        Two loops in one program is not exotic - ``asyncio.run`` builds and
+        destroys one per call, so reusing a connection across two of them is
+        enough. Reconnecting silently instead would trade this for a worse
+        failure: a new socket is a new server-side session, so the next
+        statement would come back ``NotAllowedError`` from a connection the
+        caller had already signed in.
+        """
+        if self.socket is None or self.loop is None:
+            return
+        running = asyncio.get_running_loop()
+        if running is self.loop:
+            return
+        state = "closed" if self.loop.is_closed() else "still running"
+        raise ConnectionUnavailableError(
+            f"this connection to {self.raw_url} belongs to a different event "
+            f"loop (which is {state}), so it cannot be used from this one. A "
+            "connection is bound to the loop it was opened on - build a new "
+            "one for this loop, or keep all of its work on a single loop "
+            "(one asyncio.run call, not several)."
+        )
+
     async def connect(self, url: str | None = None) -> None:
         # Serialised: `_send` calls this on every request, so the first few
         # requests of a gathered batch all arrive here at once.
+        self._check_event_loop()
         async with self._connect_guard():
             await self._connect_locked(url)
 
@@ -396,7 +524,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
                 f"could not connect to {self.raw_url}: {exc}"
             ) from exc
         self.loop = asyncio.get_running_loop()
-        self.recv_task = asyncio.create_task(self._recv_task())
+        self.recv_task = asyncio.create_task(
+            _read_frames(weakref.ref(self), self.socket)
+        )
 
     async def authenticate(self, token: str, session_id: UUID | None = None) -> None:
         kwargs: dict[str, Any] = {"token": token}
@@ -1205,11 +1335,27 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         return AsyncSurrealSession(self, session_id)
 
     async def close(self) -> None:
+        """Close the websocket, if one is open. Idempotent.
+
+        Usable from a loop other than the one the connection was opened on,
+        unlike every other method: cancelling and awaiting a task that belongs
+        to another loop cannot work, so that case falls back to the same
+        non-awaiting teardown the destructor uses. Without it the advice
+        :meth:`_check_event_loop` gives - build a new connection for this loop -
+        left the old one with no way to release its socket.
+        """
         # Wake any live subscribers so their generators terminate instead of
         # waiting forever on a socket that is about to disappear.
         for queues in self.live_queues.values():
             for queue in queues:
                 queue.put_nowait(_LIVE_QUEUE_CLOSED)
+
+        if self.loop is not None and self.loop is not asyncio.get_running_loop():
+            _abandon_connection(self.socket, self.recv_task, self.loop)
+            self.socket = None
+            self.recv_task = None
+            self._forget_uncorrelated()
+            return
 
         # Cancel the receive task first
         if self.recv_task and not self.recv_task.done():
@@ -1237,6 +1383,35 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         # socket is a new conversation, and nothing about the old one may be
         # waiting to be delivered into it.
         self._forget_uncorrelated()
+
+    def __del__(self) -> None:
+        """Release the socket if the connection is dropped without ``close()``.
+
+        Each open connection holds a TCP socket and a file descriptor, plus its
+        own reader task and the ``websockets`` keepalive task. Nothing else
+        released them, so a program that built connections and let them go out
+        of scope accumulated all four per connection until the process exited -
+        and because ``asyncio.run`` closes its loop, the leftover tasks also
+        produced "Task was destroyed but it is pending!" on the way out, which
+        reads as a bug in the caller's code rather than in the connection.
+
+        The warning is a ``ResourceWarning``, like the one an unclosed file
+        gives: off by default, visible under ``-W default`` and in tests.
+        """
+        socket = getattr(self, "socket", None)
+        recv_task = getattr(self, "recv_task", None)
+        if socket is None and recv_task is None:
+            return
+        try:
+            warnings.warn(
+                f"unclosed connection to {getattr(self, 'raw_url', '?')} - "
+                "await close(), or use `async with`",
+                ResourceWarning,
+                source=self,
+            )
+        except Exception:
+            pass
+        _abandon_connection(socket, recv_task, getattr(self, "loop", None))
 
     async def __aenter__(self) -> "AsyncWsSurrealConnection":
         """

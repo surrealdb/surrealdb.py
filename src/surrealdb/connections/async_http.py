@@ -592,11 +592,17 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self._session = None
 
     async def __aenter__(self) -> "AsyncHttpSurrealConnection":
+        """Open the pooled HTTP session if there isn't one, and return ``self``.
+
+        Reuses an existing open session rather than assigning a fresh one. The
+        replaced ``ClientSession`` was never closed, so it leaked its connector
+        and sockets and emitted aiohttp's "Unclosed client session" warning -
+        and ``__aexit__`` closed only the replacement. This mirrors the
+        websocket transport, where re-entering also cost the server-side
+        session.
         """
-        Asynchronous context manager entry.
-        Initializes an aiohttp session and returns the connection instance.
-        """
-        self._session = aiohttp.ClientSession()
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
         return self
 
     async def __aexit__(

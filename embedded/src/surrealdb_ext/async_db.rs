@@ -50,9 +50,24 @@ impl AsyncEmbeddedDB {
                 PyErr::new::<PyRuntimeError, _>(format!("Failed to create runtime: {e}"))
             })?;
         let kvs = runtime.block_on(async {
-            let ds = Datastore::new(&endpoint).await.map_err(|e| {
-                PyErr::new::<PyRuntimeError, _>(format!("Failed to create datastore: {e}"))
-            })?;
+            // `with_auth(true)` plus an owner session below, rather than the
+            // default `Datastore::new` (which leaves authentication disabled).
+            // With authentication off the engine skips every permission check
+            // for an anonymous session, and `invalidate()` - whose whole job is
+            // to drop the caller's identity - resets the session to exactly
+            // that. So invalidating *raised* privilege: a record user who could
+            // not read a `PERMISSIONS NONE` table, and could not run
+            // `INFO FOR ROOT`, could do both afterwards. Enabling
+            // authentication makes the post-invalidate session anonymous in the
+            // enforced sense, matching what the same call does over websocket
+            // and HTTP.
+            let ds = Datastore::builder()
+                .with_auth(true)
+                .build_with_path(&endpoint)
+                .await
+                .map_err(|e| {
+                    PyErr::new::<PyRuntimeError, _>(format!("Failed to create datastore: {e}"))
+                })?;
             ds.bootstrap().await.map_err(|e| {
                 PyErr::new::<PyRuntimeError, _>(format!("Failed to bootstrap datastore: {e}"))
             })?;
@@ -65,9 +80,15 @@ impl AsyncEmbeddedDB {
         // `Uuid`, so mint one here and route every unnamed request to it - that
         // keeps `use`/`signin` state on the connection, as it was when the map
         // was keyed by `Option<Uuid>` and this session lived under `None`.
+        //
+        // `Session::owner()`, not `Session::default()`: opening an embedded
+        // database and using it without signing in is the documented way to use
+        // it, and that has to keep working now that authentication is enforced.
+        // The identity is explicit rather than implied by a disabled check, so
+        // dropping it with `invalidate()` actually drops something.
         let session_id = Uuid::new_v4();
         let sessions: HashMap<Uuid, Arc<RwLock<Session>>> = HashMap::new();
-        let mut sess = Session::default().with_rt(false);
+        let mut sess = Session::owner().with_rt(false);
         sess.id = Some(session_id);
         sessions.insert(session_id, Arc::new(RwLock::new(sess)));
         Ok(AsyncEmbeddedDB {

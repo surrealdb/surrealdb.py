@@ -1347,11 +1347,19 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             pass
 
     def __enter__(self) -> "BlockingWsSurrealConnection":
+        """Open the websocket if it is not already open, and return ``self``.
+
+        Goes through :meth:`connect`, which is idempotent and holds the lock,
+        rather than assigning a fresh socket unconditionally. Assigning
+        replaced a socket that was already open and signed in: the server-side
+        session went with it, the old socket leaked with its two worker
+        threads, and the first statement inside the block failed with
+        ``NotAllowedError: Anonymous access not allowed``. Signing in and
+        *then* using the connection as a context manager - the obvious reading
+        of "``with`` manages the connection I already have" - was exactly the
+        shape that broke.
         """
-        Synchronous context manager entry.
-        Initializes a websocket connection and returns the connection instance.
-        """
-        self.socket = self._connect_socket()
+        self.connect()
         return self
 
     def __exit__(

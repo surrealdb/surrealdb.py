@@ -191,6 +191,31 @@ row = await db.select(RecordID("person", "tobie"))  # dict | None
 rows = await db.select(Table("person"))             # list
 ```
 
+#### Record ranges
+
+A `RecordID` whose id is a `Range` targets every record in that range, and every
+CRUD method returns all of them — the same as the equivalent `"person:1..=3"`
+string:
+
+```python
+from surrealdb import RecordID, Range, BoundIncluded, BoundExcluded
+
+first_three = RecordID("person", Range(BoundIncluded(1), BoundIncluded(3)))
+await db.select(first_three)            # every record in person:1..=3
+await db.delete(first_three)            # deletes them all, returns them all
+await db.select("person:1..=3")         # the same target, spelled as a string
+```
+
+Use `BoundExcluded` for `..` rather than `..=`, and `None` for an open end
+(`Range(BoundIncluded(1), None)` is `person:1..`).
+
+Two caveats. A range needs a table, so a bare `Range` is not a resource target —
+`db.select(Range(...))` raises `SurrealError`; wrap it in a `RecordID`. And the
+`@overload`s above resolve on the *static* type `RecordID`, which says nothing
+about the id, so a type checker still reads `select(first_three)` as
+`dict | None` while it returns a list at runtime. Cast, or use the string form,
+if you need the narrower type.
+
 ### Mapping rows to a model (`into=`)
 
 Pass the keyword-only `into=` argument to map each returned record onto a model
@@ -213,7 +238,7 @@ people = await db.select(Table("person"), into=Person)              # list[Perso
 
 # create / update / upsert / delete map the written record(s) too
 created = await db.create(RecordID("person", "tobie"), {"name": "Tobie"}, into=Person)
-updated = await db.update(Table("person"), {"active": True}, into=Person)  # list[Person]
+updated = await db.update(Table("person"), {"name": "Updated"}, into=Person)  # list[Person]
 
 # insert maps the inserted records
 inserted = await db.insert(Table("person"), [{"name": "A"}], into=Person)  # list[Person]
@@ -235,6 +260,21 @@ rows = db.query("SELECT * FROM person").into(Person, rows=True)  # list[Person]
 
 Omitting `into=` leaves the raw `dict` / `list[Value]` results completely
 unchanged.
+
+The model has to accept every field of the records it is given. `update(record,
+data)` writes `data` as the record's whole content, so the example above leaves
+each `person` with just `id` and `name` — write a field `Person` does not
+declare and the mapping fails with an `UnexpectedResponseError` naming both
+sides:
+
+```
+into=Person could not be built from this record: Person.__init__() got an
+unexpected keyword argument 'active'. The record has ['active', 'id']; Person
+accepts ['id', 'name'].
+```
+
+Give the extra fields defaults, add them to the model, or `SELECT` only the
+columns it declares.
 
 Sync usage is **eager** - there is no `await` to defer to, so the
 connection methods run single-shot operations immediately and return the
@@ -264,8 +304,14 @@ with Surreal("ws://localhost:8000/rpc") as db:
     db.delete(RecordID("person", "bob"))
 
     # query() returns a builder; call .execute()/.first()/.into().
-    db.query("DELETE temp_data;").execute()
+    db.query("DELETE person;").execute()
 ```
+
+On 3.x, `DELETE` names a table that has to exist: `db.query("DELETE
+temp_data;")` raises `NotFoundError: The table 'temp_data' does not exist`
+rather than deleting nothing. (2.x returns an empty result instead — see
+[Talking to a SurrealDB 2.x server](#talking-to-a-surrealdb-2x-server).) Use
+`REMOVE TABLE IF EXISTS temp_data;` when you cannot be sure.
 
 ### Thread safety
 
@@ -576,7 +622,7 @@ with Surreal("ws://localhost:8000/rpc") as db:
 
 ### Talking to a SurrealDB 2.x server
 
-Five things behave differently against SurrealDB 2.x, all because of what the
+Six things behave differently against SurrealDB 2.x, all because of what the
 2.x server does rather than anything the SDK chooses.
 
 **Error kinds need 3.x.** The subclasses below `ServerError` come from the
@@ -628,6 +674,16 @@ db.run("fn::readv")        # 42 on 3.x, None on 2.x
 
 Pass the value as an argument (`db.run("fn::add", [1, 2])`) if you target 2.x —
 arguments work on every version.
+
+**`DELETE` on a table that does not exist is an error only on 3.x.** 3.x raises
+`NotFoundError: The table 'temp_data' does not exist`; 2.x returns an empty
+result, as though it had deleted nothing:
+
+```python
+db.query("DELETE temp_data;").execute()   # [[]] on 2.x, NotFoundError on 3.x
+```
+
+`REMOVE TABLE IF EXISTS temp_data;` behaves the same on both.
 
 **A 2.x server does not tell subscribers that a live query was killed.** On 3.x
 the server sends a `KILLED` notification and `subscribe_live()` ends, whoever
