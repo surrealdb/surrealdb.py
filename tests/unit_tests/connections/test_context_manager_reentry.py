@@ -104,16 +104,40 @@ async def test_async_http_reuses_the_pooled_session(
             )
 
 
-async def test_async_http_replaces_a_closed_session(
+async def test_async_http_reopens_after_exiting(
     connection_params: dict[str, Any],
 ) -> None:
-    """Reuse is of an *open* session; a closed one is no use to anybody."""
+    """``__aexit__`` nulls the session, so re-entering opens a fresh one."""
     connection = AsyncHttpSurrealConnection(connection_params["url"])
     async with connection:
         pass
     async with connection:
         session = connection._session  # pyright: ignore[reportPrivateUsage]
         assert session is not None and not session.closed
+
+
+async def test_async_http_replaces_a_session_closed_out_from_under_it(
+    connection_params: dict[str, Any],
+) -> None:
+    """Reuse is of an *open* session; a closed one is no use to anybody.
+
+    Reached by closing the session in place rather than by exiting the block:
+    ``close()`` ends with ``self._session = None``, so the ordinary paths never
+    leave a session that is both attached and closed, and a test that went
+    through them only ever exercised the ``is None`` half of the guard. Dropping
+    ``or self._session.closed`` left the whole suite green.
+    """
+    connection = AsyncHttpSurrealConnection(connection_params["url"])
+    async with connection:
+        stale = connection._session  # pyright: ignore[reportPrivateUsage]
+        assert stale is not None
+        await stale.close()
+        assert stale.closed
+
+        async with connection:
+            fresh = connection._session  # pyright: ignore[reportPrivateUsage]
+            assert fresh is not stale, "a closed session was reused"
+            assert fresh is not None and not fresh.closed
 
 
 @pytest.mark.parametrize("attempts", [3])

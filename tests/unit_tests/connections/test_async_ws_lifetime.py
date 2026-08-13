@@ -85,7 +85,19 @@ def test_close_works_from_a_different_loop(
     connection_params: dict[str, Any],
 ) -> None:
     """Otherwise the advice the error gives - build a new connection - leaves
-    the old one with no way to release its socket."""
+    the old one with no way to release its socket.
+
+    The descriptor is what this asserts on, not the two attributes. Checking
+    only that ``socket`` and ``recv_task`` are ``None`` is satisfied by an
+    implementation that forgets the socket without closing it, which is the
+    failure this branch exists to prevent: gutting the branch body down to
+    ``self.socket = None`` left all nine tests in this file green while the
+    connection leaked its descriptor.
+
+    ``state`` is no use here - it is the websocket protocol's own state, and a
+    socket closed underneath the protocol still reports ``OPEN``. ``fileno()``
+    returning ``-1`` is what says the descriptor is gone.
+    """
     connection = AsyncWsSurrealConnection(connection_params["ws_url"])
     first = asyncio.new_event_loop()
     try:
@@ -93,10 +105,14 @@ def test_close_works_from_a_different_loop(
     finally:
         first.close()
 
+    raw = connection.socket.transport._sock  # pyright: ignore[reportPrivateUsage]
+    assert raw.fileno() != -1, "precondition: the descriptor is open to begin with"
+
     asyncio.run(connection.close())
 
     assert connection.socket is None
     assert connection.recv_task is None
+    assert raw.fileno() == -1, "close() forgot the socket instead of releasing it"
 
 
 async def test_one_loop_is_unaffected(connection_params: dict[str, Any]) -> None:
@@ -156,22 +172,41 @@ async def test_dropping_connections_does_not_accumulate_descriptors(
     """A counter, because the leak only shows as a program stays up.
 
     Each connection used to keep its file descriptor for the life of the
-    process, so a loop that built and discarded them ran out. The bound is
-    generous - the loop's own bookkeeping moves a little - but it does not
-    scale with the number of connections, which is the point.
+    process, so a loop that built and discarded them ran out.
+
+    The settle before the baseline is load-bearing, not hygiene. Without it
+    this test passed against the *unfixed* reader whenever the file ran in its
+    normal order: the tests above leave collectable garbage, the ``gc.collect()``
+    calls inside the loop below released those descriptors, and the credit
+    cancelled out the eight this loop was leaking - measured delta 7 against a
+    bound of 8. Alone, the same test failed at 10. A guard that only holds when
+    it runs first is not a guard, and the bound was loose enough to hide half a
+    leak on top.
     """
+    # Whatever ran before this has to be finished releasing before the
+    # measurement starts, or its descriptors are counted as this loop's.
+    for _ in range(3):
+        gc.collect()
+        await asyncio.sleep(0.1)
+
+    connections = 8
     baseline = _open_fds()
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ResourceWarning)
-        for _ in range(8):
+        for _ in range(connections):
             connection = await _signed_in(connection_params)
             del connection
             gc.collect()
         await asyncio.sleep(0.3)
         gc.collect()
 
-    assert _open_fds() - baseline < 8
+    leaked = _open_fds() - baseline
+    # Held descriptors must not scale with the number of connections. Fixed,
+    # this is 0-2 whatever the order; unfixed it is one per connection.
+    assert leaked < connections // 2, (
+        f"{leaked} descriptors held after {connections} dropped connections"
+    )
 
 
 async def test_dropping_an_open_connection_warns(
