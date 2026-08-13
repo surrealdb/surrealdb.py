@@ -162,6 +162,34 @@ def test_update_returns_every_record_it_wrote(
     ]
 
 
+@pytest.mark.parametrize("operation", ["delete", "update", "select"])
+def test_a_range_matching_one_record_still_returns_a_list(
+    blocking_ws_connection: BlockingWsSurrealConnection, operation: str
+) -> None:
+    """The case that actually exercises the unwrap.
+
+    The builder collapses a *single-element* list and leaves anything longer
+    alone, so a range over three rows never reaches that branch: the
+    ``delete``/``update`` tests above passed with the defect still in place.
+    Only a range that matches exactly one record tells the two apart - it comes
+    back as a bare ``dict`` when the target is misclassified as single-record,
+    and as a one-element ``list`` when it is not.
+    """
+    table = _rows(blocking_ws_connection)
+    one = RecordID(table, Range(BoundIncluded(2), BoundIncluded(2)))
+
+    result: Any = (
+        blocking_ws_connection.update(one, {"n": 9})
+        if operation == "update"
+        else getattr(blocking_ws_connection, operation)(one)
+    )
+
+    assert isinstance(result, list), (
+        f"{operation}() collapsed a one-record range to a single record"
+    )
+    assert _ids(result) == [2]
+
+
 def test_into_maps_every_record_in_the_range(
     blocking_ws_connection: BlockingWsSurrealConnection,
 ) -> None:
