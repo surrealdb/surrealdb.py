@@ -4,13 +4,16 @@ Defines the data type for the record ID.
 
 from __future__ import annotations
 
+import uuid as uuid_module
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Union, cast
 
 from pydantic_core import core_schema
 from pydantic_core.core_schema import ValidationInfo
 
-from surrealdb.data.types.table import Table
+from surrealdb.data.types.range import Range
+from surrealdb.data.types.set import SurrealSet
+from surrealdb.data.types.table import Table, table_name_type_error
 from surrealdb.errors import InvalidRecordIdError
 
 if TYPE_CHECKING:
@@ -18,6 +21,68 @@ if TYPE_CHECKING:
     from pydantic.json_schema import JsonSchemaValue
 
 RecordIdType = Union[str, "RecordID", Table]
+
+#: What SurrealDB accepts as a record id. Exported so callers have a name to
+#: annotate or cast against - ``RecordID.id`` is deliberately wider (see the
+#: attribute's docs), so this is the type to use for a value you construct.
+RecordIdValue = Union[
+    str, int, uuid_module.UUID, "list[Any]", "tuple[Any, ...]", "dict[str, Any]", Range
+]
+
+# The runtime half of `RecordIdValue`. Derived by probing every candidate value
+# against live 2.0.5 and 3.2.3 servers rather than from the documentation: these
+# are exactly the id types a server accepts and hands back, plus `Range`, which
+# is never a *stored* id but is how this SDK spells the `person:1..=3` target.
+#
+# `tuple` earns its place empirically. `RecordID(t, ("a", 1))` round-trips on
+# both servers - cbor2 encodes a tuple as a CBOR array - so leaving it out would
+# have silently broken anyone using composite keys.
+_ID_TYPES: tuple[type, ...] = (str, int, uuid_module.UUID, list, tuple, dict, Range)
+
+# Two allowed types have subclasses the server refuses, and `isinstance` would
+# wave both through: `bool` is a subclass of `int`, and `SurrealSet` is a
+# subclass of `list`. They are excluded before the allowlist is consulted.
+_ID_TYPE_IMPOSTORS: tuple[type, ...] = (bool, SurrealSet)
+
+_ID_TYPE_NAMES = "str, int, uuid.UUID, list, tuple, dict or Range"
+
+
+def _id_type_error(identifier: Any) -> TypeError:
+    """Build the message for a record id of an unusable type.
+
+    Three types get a hint of their own, because the generic "use one of these
+    instead" reads as wrong to the caller who hit them: someone passing a bool
+    knows perfectly well that a bool is an int, someone passing ``None`` has not
+    made a typo at all, and someone passing a float wants to know which way to
+    round.
+    """
+    got = type(identifier).__name__
+    if isinstance(identifier, bool):
+        hint = (
+            " Python's bool is a subclass of int, but SurrealDB has no boolean"
+            " record id - pass 1 or 0 if you meant the numeric id."
+        )
+    elif identifier is None:
+        hint = (
+            " SurrealDB has no NONE record id. To have the server generate one,"
+            " pass the table instead - e.g. db.create(Table('person'), data)."
+        )
+    elif isinstance(identifier, float):
+        hint = (
+            f" SurrealDB has no float record id - use an int, or"
+            f" {str(identifier)!r} for a string id."
+        )
+    elif isinstance(identifier, SurrealSet):
+        hint = (
+            " A SurrealSet is a set on the wire, which is not a record id -"
+            " pass list(...) if you meant an array id."
+        )
+    else:
+        hint = ""
+    return TypeError(
+        f"RecordID() id must be one of {_ID_TYPE_NAMES}, got {got}:"
+        f" {identifier!r}.{hint}"
+    )
 
 
 def escape_identifier(identifier: str) -> str:
@@ -82,25 +147,79 @@ class RecordID:
             escaped id fragment.
     """
 
-    def __init__(self, table_name: str, identifier: Any) -> None:
+    def __init__(self, table_name: str, identifier: RecordIdValue) -> None:
         """
         The constructor for the RecordID class.
 
         Args:
             table_name: The table name associated with the record ID
             identifier: The ID of the row
+
+        Raises:
+            TypeError: if *table_name* is not a string, or *identifier* is not
+                a type SurrealDB accepts as a record id.
+
+        Both arguments used to accept anything at all, and the mistake surfaced
+        only after a round trip: ``RecordID(1, "x")``, ``RecordID("t", 1.5)``
+        and ``RecordID("t", None)`` all encoded cleanly and came back from the
+        server as ``ValidationError: Parse error`` - which names neither the
+        argument nor what was wrong with it, for a mistake that was fully
+        decidable before any I/O.
+
+        The check is *not* an invariant on the attributes: values decoded from
+        the wire bypass it (see :meth:`_unchecked`), so this catches what you
+        construct rather than guaranteeing what ``.id`` holds.
         """
         from surrealdb.types import Value  # imported here to prevent circular import
 
+        if not isinstance(table_name, str):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise table_name_type_error(
+                "RecordID", table_name, "table_name", identifier
+            )
+        if isinstance(identifier, _ID_TYPE_IMPOSTORS) or not isinstance(
+            identifier, _ID_TYPES
+        ):
+            raise _id_type_error(identifier)
+
         self.table_name: str = table_name
+        #: Deliberately wider than :data:`RecordIdValue`. Every record read back
+        #: is built through :meth:`_unchecked`, so a server the SDK has not been
+        #: taught about can put anything here; narrowing the annotation would
+        #: describe hand-built ids correctly and every decoded one wrongly.
         self.id: Value = cast(Value, identifier)
+
+    @classmethod
+    def _unchecked(cls, table_name: Any, identifier: Any) -> RecordID:
+        """Build a ``RecordID`` without validating, for the CBOR decoder.
+
+        The decoder builds one of these for every record it reads, so a check
+        here would run against whatever a server sends rather than against
+        anything a caller wrote - and a future server's new id type would stop
+        the record being *readable* at all. That is strictly worse than the
+        late error this validation exists to replace: you can work around a bad
+        write, but not a record you cannot load.
+
+        Worse still, ``tag_decoder`` runs inside the decode of a whole response,
+        so raising here loses every other row with it. This module has shipped
+        that failure twice already - the empty-``Duration`` ``IndexError`` and
+        the ``set``-of-dicts ``unhashable type`` - and neither is worth a third.
+        """
+        record = object.__new__(cls)
+        record.table_name = table_name
+        record.id = identifier
+        return record
 
     def __str__(self) -> str:
         # Only escape if the identifier is a string
         if isinstance(self.id, str):
             return f"{self.table_name}:{escape_identifier(self.id)}"
         if isinstance(self.id, bytes):
-            return f"{self.table_name}:{escape_identifier(self.id.decode())}"
+            # Rendered, not decoded. `_unchecked` means a wire value can still
+            # be bytes, so this branch is live - and decoding it was wrong
+            # twice over: it raised `UnicodeDecodeError` on anything that was
+            # not UTF-8, and it rendered b"xy" as `t:xy`, which is a *different*
+            # record from the one it names.
+            return f"{self.table_name}:{self.id!r}"
         return f"{self.table_name}:{self.id}"
 
     def __repr__(self) -> str:

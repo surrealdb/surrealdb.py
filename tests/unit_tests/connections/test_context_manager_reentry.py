@@ -144,14 +144,24 @@ async def test_async_http_replaces_a_session_closed_out_from_under_it(
 def test_the_websocket_session_survives_every_reentry(
     connection_params: dict[str, Any], attempts: int
 ) -> None:
-    """The regression as reported: sign in once, use ``with`` afterwards."""
+    """The regression as reported: sign in once, use ``with`` afterwards.
+
+    ``INFO FOR DB``, not ``RETURN 1``. A replacement socket is a new
+    server-side session with no namespace or database selected - but it can
+    still evaluate ``RETURN 1``, which touches nothing the session owns, so
+    that assertion passed with the socket being swapped underneath it and the
+    test caught nothing. The mutation harness found it: reverting
+    ``__enter__`` to assign a fresh socket left this test green.
+    ``INFO FOR DB`` needs the session, and fails with ``Specify a namespace to
+    use`` without it.
+    """
     connection = BlockingWsSurrealConnection(connection_params["ws_url"])
     connection.signin(connection_params["vars_params"])
     connection.use(connection_params["namespace"], connection_params["database_name"])
 
     for _ in range(attempts):
         with connection:
-            assert connection.query("RETURN 1").first() == 1
+            assert connection.query("INFO FOR DB").first() is not None
         connection.signin(connection_params["vars_params"])
         connection.use(
             connection_params["namespace"], connection_params["database_name"]

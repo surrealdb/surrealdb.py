@@ -29,7 +29,14 @@ from surrealdb.errors import SurrealError, TransportTimeoutError
 # A record id whose table name is not a string. The server cannot parse the
 # frame, so it answers with an error carrying no `id` - the shape this file is
 # about. Every non-string table name behaves the same way.
-UNPARSEABLE: Any = RecordID(1, "x")  # type: ignore[arg-type]
+#
+# Built through `_unchecked` because `RecordID(1, "x")` is now a `TypeError` at
+# the constructor - which is the point of that validation, and is why this file
+# has to reach past it. What is under test here is the reader's behaviour when
+# the *server* rejects a frame, so the frame still has to be sendable; the
+# constructor guard stops callers making this mistake by accident, it does not
+# change what the wire does with one.
+UNPARSEABLE: Any = RecordID._unchecked(1, "x")  # pyright: ignore[reportPrivateUsage]
 
 
 async def test_a_bad_request_does_not_fail_its_neighbours(

@@ -138,10 +138,17 @@ def tag_decoder(
         return None
 
     elif tag.tag == constants.TAG_RECORD_ID:
-        return RecordID(tag.value[0], tag.value[1])
+        # `_unchecked`, not the constructor: the constructor validates the id
+        # type, and applying that to a value the *server* chose would turn a
+        # future server's new id type into an unreadable record - and lose the
+        # rest of the response with it, since this runs inside the decode of the
+        # whole frame.
+        return RecordID._unchecked(  # pyright: ignore[reportPrivateUsage]
+            tag.value[0], tag.value[1]
+        )
 
     elif tag.tag == constants.TAG_TABLE_NAME:
-        return Table(tag.value)
+        return Table._unchecked(tag.value)  # pyright: ignore[reportPrivateUsage]
 
     elif tag.tag == constants.TAG_BOUND_INCLUDED:
         return BoundIncluded(tag.value)

@@ -191,6 +191,38 @@ row = await db.select(RecordID("person", "tobie"))  # dict | None
 rows = await db.select(Table("person"))             # list
 ```
 
+#### What a `RecordID` and a `Table` accept
+
+Both constructors check their arguments, so a mistake raises `TypeError` at the
+line that made it rather than coming back from the server as `Parse error`.
+
+A **table name** must be a `str`, and that is the only rule — SurrealDB accepts
+any string, including one that is empty, has spaces, is unicode, starts with a
+digit, or contains a colon.
+
+A **record id** must be one of `str`, `int`, `uuid.UUID`, `list`, `tuple`,
+`dict`, or a `Range` (see below). The union is exported as `RecordIdValue` if
+you want to annotate against it. Notably rejected: `None`, `bool` (Python's
+`bool` is an `int`, but SurrealDB has no boolean id), `float`, and `bytes` —
+the server refuses all of them.
+
+```python
+RecordID("person", "tobie")     # ok
+RecordID("person", ["a", 1])    # ok — composite ids are arrays or objects
+RecordID(1, "tobie")            # TypeError: the arguments look swapped
+Table(None)                     # TypeError: name must be a str
+```
+
+The check applies to values *you* construct. Records decoded from a response
+bypass it, so that a future server sending an id type this SDK does not know
+about still reads back — `RecordID.id` is therefore typed more widely than
+`RecordIdValue`, and is not guaranteed to be one of the types above.
+
+> Before 3.0.0, `Table(None)` was not rejected anywhere and
+> `db.insert(Table(None), rows)` **succeeded**, writing to a table literally
+> named `None`. If you have code that builds a table name dynamically, that is
+> the case to check.
+
 #### Record ranges
 
 A `RecordID` whose id is a `Range` targets every record in that range, and every
