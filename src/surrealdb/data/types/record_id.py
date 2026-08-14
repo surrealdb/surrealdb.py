@@ -85,15 +85,38 @@ def _id_type_error(identifier: Any) -> TypeError:
     )
 
 
+# The characters SurrealQL's parser accepts in a *bare* identifier. ASCII only,
+# and deliberately not `str.isalnum()`: Python calls a letter or digit of *any*
+# script alphanumeric - `é`, `α`, `表`, `таблица`, and the superscript `²` - while
+# SurrealDB's parser rejects every one of them unquoted (verified on 2.0.5,
+# 2.3.10 and 3.2.3). Judging them safe left them unwrapped, so a table with a
+# non-ASCII name could not be inserted into at all: `INSERT INTO héllo` came
+# back ``Parse error: Invalid token `é```, while the same name in ⟨...⟩ works on
+# every version.
+#
+# Emoji and punctuation were never affected - they are symbols, so `isalnum()`
+# already returned False for them and they were already being wrapped.
+_UNQUOTED_IDENTIFIER_CHARS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+)
+_UNQUOTED_IDENTIFIER_ALPHA = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+)
+
+
 def escape_identifier(identifier: str) -> str:
     """Escape a string identifier for use inside SurrealQL.
 
     Wraps the identifier in ``⟨...⟩`` (with any ``⟩`` inside replaced by
-    ``\\⟩``) when it contains characters outside the safe-identifier
-    subset - i.e. anything other than alphanumerics or underscore, OR
-    a name that is all-digit / all-symbol (no alphabetic char) and would
-    otherwise be ambiguous with a numeric id. Plain identifiers are
-    returned unchanged.
+    ``\\⟩``) unless every character is an ASCII letter, digit or underscore
+    *and* at least one is an ASCII letter - a name that is all-digit or
+    all-underscore is wrapped too, to disambiguate it from a numeric id in
+    SurrealQL's record-id literal syntax.
+
+    Wrapping is always safe: SurrealDB accepts any string inside ``⟨...⟩``,
+    including spaces, unicode and emoji, on every supported version. So the
+    bare form is an optimisation for the common case, and anything the parser
+    might not take unquoted is wrapped rather than guessed at.
 
     Used by :meth:`RecordID.__str__` for record-id rendering and by the
     v3 CRUD builders for ``INSERT`` target inlining (SurrealDB rejects
@@ -103,12 +126,18 @@ def escape_identifier(identifier: str) -> str:
     if not identifier:
         return f"⟨{identifier}⟩"
 
-    has_special_chars = any(not c.isalnum() and c != "_" for c in identifier)
+    unsafe = not _UNQUOTED_IDENTIFIER_CHARS.issuperset(identifier)
+    # A leading digit is not a bare identifier either: the parser has already
+    # committed to reading a number by the time it reaches the letters, so
+    # `1tbl` came back ``Invalid token`` on CREATE and ``Unexpected token `a
+    # number``` on INSERT. It used to pass this function unwrapped, because it
+    # contains letters and every character is alphanumeric.
+    starts_with_digit = identifier[0].isascii() and identifier[0].isdigit()
     # All-digit or all-symbol names need escaping to disambiguate from
     # numeric IDs in SurrealQL's record-id literal syntax.
-    has_no_alpha = not any(c.isalpha() for c in identifier)
+    has_no_alpha = _UNQUOTED_IDENTIFIER_ALPHA.isdisjoint(identifier)
 
-    if has_special_chars or has_no_alpha:
+    if unsafe or starts_with_digit or has_no_alpha:
         escaped = identifier.replace("⟩", "\\⟩")
         return f"⟨{escaped}⟩"
     return identifier
@@ -210,17 +239,25 @@ class RecordID:
         return record
 
     def __str__(self) -> str:
+        # The table half is escaped too. Only the id used to be, so a record in
+        # a table whose name needs quoting rendered as unparseable SurrealQL -
+        # `str(RecordID("héllo", "x"))` gave `héllo:x`, and `RecordID("has
+        # space", "x")` gave `has space:x`. This method's own docstring points
+        # at `str(record_id)` as the way to build query text when binding is not
+        # possible, so it has to hold for every name the server accepts, not
+        # just the ones that need no quoting.
+        table = escape_identifier(self.table_name)
         # Only escape if the identifier is a string
         if isinstance(self.id, str):
-            return f"{self.table_name}:{escape_identifier(self.id)}"
+            return f"{table}:{escape_identifier(self.id)}"
         if isinstance(self.id, bytes):
             # Rendered, not decoded. `_unchecked` means a wire value can still
             # be bytes, so this branch is live - and decoding it was wrong
             # twice over: it raised `UnicodeDecodeError` on anything that was
             # not UTF-8, and it rendered b"xy" as `t:xy`, which is a *different*
             # record from the one it names.
-            return f"{self.table_name}:{self.id!r}"
-        return f"{self.table_name}:{self.id}"
+            return f"{table}:{self.id!r}"
+        return f"{table}:{self.id}"
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(table_name={self.table_name}, record_id={self.id!r})"
