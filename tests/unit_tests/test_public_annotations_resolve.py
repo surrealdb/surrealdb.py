@@ -74,6 +74,72 @@ def test_no_alias_member_is_an_unresolved_forward_reference() -> None:
             assert isinstance(member, type), f"{member!r} is not a class"
 
 
+def test_no_exported_union_holds_an_unresolved_forward_reference() -> None:
+    """The same rule, applied to every exported union rather than two named ones.
+
+    The sweep below cannot see this: ``get_type_hints`` takes a module, class or
+    function, and a ``typing.Union`` object is none of those, so
+    ``_annotation_carriers`` returns nothing for one and the union is never
+    looked at. ``RecordIdValue`` was exported carrying three ``ForwardRef``s
+    that no caller's namespace can resolve, the whole test module here existed
+    to prevent exactly that, and every test in it still passed.
+
+    Recursive, because a union can nest one.
+    """
+
+    def unresolved(annotation: object, seen: set[int]) -> list[object]:
+        if id(annotation) in seen:
+            return []
+        seen.add(id(annotation))
+        found: list[object] = []
+        for member in typing.get_args(annotation):
+            if isinstance(member, typing.ForwardRef):
+                found.append(member)
+            else:
+                found.extend(unresolved(member, seen))
+        return found
+
+    offenders: list[str] = []
+    for name in surrealdb.__all__:
+        obj = getattr(surrealdb, name, None)
+        if obj is None or isinstance(obj, type) or inspect.isfunction(obj):
+            continue
+        for member in unresolved(obj, set()):
+            offenders.append(f"{name}: {member!r}")
+
+    assert not offenders, (
+        "exported type aliases holding unresolved forward references "
+        "(build them from the real types, not from strings): " + "; ".join(offenders)
+    )
+
+
+def test_every_exported_alias_can_actually_annotate() -> None:
+    """The property a caller cares about, exercised the way they would hit it.
+
+    ``get_type_hints`` on a function annotated with the alias is what pydantic,
+    FastAPI and ``inspect.signature(..., eval_str=True)`` all end up doing.
+    """
+    failures: list[str] = []
+
+    for name in surrealdb.__all__:
+        obj = getattr(surrealdb, name, None)
+        if obj is None or isinstance(obj, type) or inspect.isfunction(obj):
+            continue
+        if typing.get_args(obj) == ():
+            continue  # not a generic alias, nothing to resolve
+
+        namespace: dict[str, object] = {"_alias": obj}
+        exec("def _handler(value: _alias) -> None: ...", namespace)  # noqa: S102
+        try:
+            typing.get_type_hints(namespace["_handler"])
+        except Exception as error:  # noqa: BLE001 - reporting, not handling
+            failures.append(f"{name}: {type(error).__name__}: {error}")
+
+    assert not failures, "aliases that cannot be used to annotate: " + "; ".join(
+        failures
+    )
+
+
 def test_the_aliases_describe_what_this_install_can_return() -> None:
     """The union members match the engines actually available here."""
     embedded_available = surrealdb._EMBEDDED_AVAILABLE  # pyright: ignore[reportPrivateUsage]

@@ -25,9 +25,18 @@ RecordIdType = Union[str, "RecordID", Table]
 #: What SurrealDB accepts as a record id. Exported so callers have a name to
 #: annotate or cast against - ``RecordID.id`` is deliberately wider (see the
 #: attribute's docs), so this is the type to use for a value you construct.
-RecordIdValue = Union[
-    str, int, uuid_module.UUID, "list[Any]", "tuple[Any, ...]", "dict[str, Any]", Range
-]
+#:
+#: Built from real generics, never from strings. A ``"list[Any]"`` member stays
+#: a ``ForwardRef`` that is only resolved when something reads the annotation at
+#: runtime - and it is resolved in the *caller's* namespace, where ``Any`` is not
+#: defined. So annotating with this, which is exactly what exporting it is for,
+#: raised ``NameError: name 'Any' is not defined`` from ``get_type_hints``, and
+#: from pydantic's ``validate_call`` at decoration time, i.e. while the caller's
+#: module was still importing. The connection aliases in ``surrealdb/__init__``
+#: shipped that same defect once already.
+RecordIdValue = (
+    str | int | uuid_module.UUID | list[Any] | tuple[Any, ...] | dict[str, Any] | Range
+)
 
 # The runtime half of `RecordIdValue`. Derived by probing every candidate value
 # against live 2.0.5 and 3.2.3 servers rather than from the documentation: these

@@ -24,8 +24,18 @@ from surrealdb.data.types.table import Table
 def test_a_non_string_table_name_never_reaches_the_server(
     blocking_ws_connection: BlockingWsSurrealConnection, name: Any
 ) -> None:
-    with pytest.raises(TypeError):
+    """The message is asserted, not just the exception type.
+
+    ``pytest.raises(TypeError)`` alone was satisfied by the wrong error: with
+    the constructor guard removed, ``Table(123)`` sailed through and
+    ``escape_identifier`` raised its own ``TypeError`` further downstream, so
+    this case passed while guarding nothing. Naming the constructor's own
+    message is what ties it to the check it exists for.
+    """
+    with pytest.raises(TypeError) as caught:
         blocking_ws_connection.insert(Table(name), [{"marker": "x"}])
+
+    assert "Table() name must be a str" in str(caught.value)
 
 
 def test_nothing_is_written_to_a_table_named_none(
