@@ -54,7 +54,14 @@ def _within_budget(call: Any) -> tuple[str, Any]:
 @pytest.mark.parametrize(
     ("label", "make_call"),
     [
-        ("record id with a null table", lambda db: db.select(RecordID(None, 1))),
+        # `_unchecked`, not the constructor: `RecordID(None, 1)` is now a
+        # `TypeError` before anything is sent. These tests are about what
+        # the reader does when the *server* rejects a frame, so the frame
+        # still has to reach the wire.
+        (
+            "record id with a null table",
+            lambda db: db.select(RecordID._unchecked(None, 1)),  # pyright: ignore[reportPrivateUsage]
+        ),
     ],
 )
 def test_protocol_error_raises_instead_of_hanging(
@@ -75,7 +82,9 @@ def test_connection_still_usable_after_a_protocol_error(
 ) -> None:
     """The socket survives the error frame, so the connection is not poisoned."""
     with pytest.raises(SurrealError):
-        blocking_ws_connection.select(RecordID(None, 1))
+        blocking_ws_connection.select(
+            RecordID._unchecked(None, 1)  # pyright: ignore[reportPrivateUsage]
+        )
 
     assert blocking_ws_connection.query("RETURN 1").first() == 1
 

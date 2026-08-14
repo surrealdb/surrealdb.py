@@ -42,7 +42,11 @@ from surrealdb.data.types.geometry import Geometry
 from surrealdb.data.types.null import Null, NullType
 from surrealdb.data.types.range import Bound, BoundExcluded, BoundIncluded, Range
 from surrealdb.data.types.set import SurrealSet
-from surrealdb.data.types.record_id import RecordID, escape_identifier
+from surrealdb.data.types.record_id import (
+    RecordID,
+    RecordIdValue,
+    escape_identifier,
+)
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     AlreadyExistsDetailKind,
@@ -126,6 +130,10 @@ __all__ = [
     "BoundIncluded",
     "BoundExcluded",
     "RecordID",
+    # The id types SurrealDB accepts. `RecordID.id` is deliberately wider
+    # (a decoded value can be anything a server sends), so this is the name to
+    # annotate or cast a value you construct against.
+    "RecordIdValue",
     "Datetime",
     "PreciseDatetime",
     "Null",

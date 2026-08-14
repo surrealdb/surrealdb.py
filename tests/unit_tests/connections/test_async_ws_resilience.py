@@ -31,7 +31,14 @@ _BUDGET_SECONDS = 15.0
         # serve here; it no longer reaches the server, because the encoder now
         # refuses an int outside SurrealDB's signed 64-bit range rather than
         # letting it wrap silently.
-        ("record id with a null table", lambda db: db.select(RecordID(None, 1))),
+        # `_unchecked`, not the constructor: `RecordID(None, 1)` is now a
+        # `TypeError` before anything is sent. This test is about what the
+        # reader does when the *server* rejects a frame, so the frame still
+        # has to reach the wire.
+        (
+            "record id with a null table",
+            lambda db: db.select(RecordID._unchecked(None, 1)),  # pyright: ignore[reportPrivateUsage]
+        ),
     ],
 )
 async def test_connection_survives_a_protocol_error(
