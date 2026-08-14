@@ -74,6 +74,103 @@ def test_no_alias_member_is_an_unresolved_forward_reference() -> None:
             assert isinstance(member, type), f"{member!r} is not a class"
 
 
+def test_no_exported_union_holds_an_unresolved_forward_reference() -> None:
+    """The same rule, applied to every exported union rather than two named ones.
+
+    The sweep below cannot see this: ``get_type_hints`` takes a module, class or
+    function, and a ``typing.Union`` object is none of those, so
+    ``_annotation_carriers`` returns nothing for one and the union is never
+    looked at. ``RecordIdValue`` was exported carrying three ``ForwardRef``s
+    that no caller's namespace can resolve, the whole test module here existed
+    to prevent exactly that, and every test in it still passed.
+
+    Recursive, because a union can nest one.
+
+    A deferred member is only a defect when it names something the caller has
+    no way to have. ``Value`` is recursive - it is built from ``list["Value"]``
+    and ``dict[str, "Value"]`` - so it necessarily refers to itself by name, and
+    that resolves for anyone who imported it. ``RecordIdValue`` referred to
+    ``Any``, which is in ``typing``, not in ``surrealdb``, so no caller's
+    namespace could ever resolve it. The rule is therefore "every deferred name
+    is itself exported", not "no deferred names".
+
+    Both spellings count: ``typing.List["X"]`` stores a ``ForwardRef`` while the
+    builtin ``list["X"]`` keeps the bare ``str``, and only the first was checked
+    at first - which is why ``Value`` slipped past this in its original form.
+    """
+
+    def deferred(annotation: object, seen: set[int]) -> list[str]:
+        if id(annotation) in seen:
+            return []
+        seen.add(id(annotation))
+        found: list[str] = []
+        for member in typing.get_args(annotation):
+            if isinstance(member, typing.ForwardRef):
+                found.append(member.__forward_arg__)
+            elif isinstance(member, str):
+                found.append(member)
+            else:
+                found.extend(deferred(member, seen))
+        return found
+
+    exported = set(surrealdb.__all__)
+    offenders: list[str] = []
+    for name in surrealdb.__all__:
+        obj = getattr(surrealdb, name, None)
+        if obj is None or isinstance(obj, type) or inspect.isfunction(obj):
+            continue
+        for referenced in deferred(obj, set()):
+            if referenced not in exported:
+                offenders.append(f"{name} -> {referenced!r}")
+
+    assert not offenders, (
+        "exported aliases deferring to names that are not themselves exported, "
+        "so no caller can resolve them (build those members from the real "
+        "types, not from strings): " + "; ".join(offenders)
+    )
+
+
+def test_every_exported_alias_can_actually_annotate() -> None:
+    """The property a caller cares about, exercised the way they would hit it.
+
+    ``get_type_hints`` on a function annotated with the alias is what pydantic,
+    FastAPI and ``inspect.signature(..., eval_str=True)`` all end up doing.
+
+    The namespace is every public name bound under its own name - what
+    ``from surrealdb import *`` gives, and a superset of what someone importing
+    one alias has. Binding the alias under a placeholder instead made a
+    *recursive* alias look broken: ``Value`` refers to itself by name, so it
+    only resolves when it is present as ``Value``. That is a property of the
+    test harness, not of the alias, and it showed up only on Python 3.11+,
+    where ``get_type_hints`` evaluates nested deferred members that 3.10 left
+    alone.
+    """
+    namespace: dict[str, object] = {
+        name: getattr(surrealdb, name)
+        for name in surrealdb.__all__
+        if hasattr(surrealdb, name)
+    }
+    failures: list[str] = []
+
+    for name in surrealdb.__all__:
+        obj = getattr(surrealdb, name, None)
+        if obj is None or isinstance(obj, type) or inspect.isfunction(obj):
+            continue
+        if typing.get_args(obj) == ():
+            continue  # not a generic alias, nothing to resolve
+
+        scope = dict(namespace)
+        exec(f"def _handler(value: {name}) -> None: ...", scope)  # noqa: S102
+        try:
+            typing.get_type_hints(scope["_handler"], globalns=scope)
+        except Exception as error:  # noqa: BLE001 - reporting, not handling
+            failures.append(f"{name}: {type(error).__name__}: {error}")
+
+    assert not failures, "aliases that cannot be used to annotate: " + "; ".join(
+        failures
+    )
+
+
 def test_the_aliases_describe_what_this_install_can_return() -> None:
     """The union members match the engines actually available here."""
     embedded_available = surrealdb._EMBEDDED_AVAILABLE  # pyright: ignore[reportPrivateUsage]
