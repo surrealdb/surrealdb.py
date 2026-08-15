@@ -19,7 +19,11 @@ def setup_logfire() -> None:
     # Otherwise, traces will be displayed in the console
     logfire_config = {
         "service_name": "surrealdb-logfire-example",
-        "console": True,  # Always show traces in console
+        # Always show traces in console. This is `ConsoleOptions()` rather than
+        # `True`: logfire reads the attributes off whatever it is given, so a
+        # bool raises `'bool' object has no attribute 'span_style'` before any
+        # tracing starts.
+        "console": logfire.ConsoleOptions(),
     }
 
     if config.logfire_token:

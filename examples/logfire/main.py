@@ -78,9 +78,11 @@ async def demonstrate_crud_operations(db: Any) -> None:
     # QUERY: Use SurrealQL for more complex queries
     # Span: "surrealdb query"
     print("🔍 Querying users with SurrealQL...")
+    # `.first()` is the rows of the first statement. Without it `query()` hands
+    # back one entry per statement, so `len()` would report 1 for any query.
     query_result = await db.query(
         "SELECT * FROM user WHERE age > $min_age ORDER BY age", {"min_age": 30}
-    )
+    ).first()
     print(f"   Found {len(query_result)} users over 30 years old\n")
 
     # UPDATE: Update a user record
@@ -157,7 +159,7 @@ async def demonstrate_batch_operations(db: Any) -> None:
     # Query to count all users
     # Span: "surrealdb query"
     print("🔢 Counting all users...")
-    count_result = await db.query("SELECT count() FROM user GROUP ALL")
+    count_result = await db.query("SELECT count() FROM user GROUP ALL").first()
     total = count_result[0]["count"]
     print(f"   Total users in database: {total}\n")
 

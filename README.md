@@ -769,8 +769,8 @@ v3.0 is a breaking change. Highlights:
 | `db.merge(record, data)`                         | `db.update(record).merge(data)`                           |
 | `db.patch(record, data)`                         | `db.update(record).patch(data)`                           |
 | `db.insert_relation(table, data)`                | `db.insert(table, data, relation=True)`                   |
-| `db.query("SELECT 1")` -> single result          | `db.query("SELECT 1")` -> `[result]` (use `.first()` / `[0]`) |
-| `db.query("SELECT 1; SELECT 2")` -> first result | `db.query("SELECT 1; SELECT 2")` -> `list` of all results |
+| `db.query("RETURN 1")` -> single result          | `db.query("RETURN 1")` -> `[result]` (use `.first()` / `[0]`) |
+| `db.query("RETURN 1; RETURN 2")` -> first result | `db.query("RETURN 1; RETURN 2")` -> `list` of all results |
 | n/a                                              | `db.run("fn::name", [args])`                              |
 | n/a                                              | `db.query("...").into(MyDataclass)`                       |
 | Sync `db.query("DELETE foo")` runs immediately   | Sync `db.query("DELETE foo").execute()` (returns list)     |
@@ -907,7 +907,7 @@ with Surreal("file://mydb") as db:
 - Need horizontal scaling
 - Centralized data management
 
-For more examples, see the [`examples/embedded/`](examples/embedded/) directory.
+For more examples, see the [`examples/embedded/`](https://github.com/surrealdb/surrealdb.py/tree/main/examples/embedded) directory.
 
 ## Sessions in detail
 
@@ -966,7 +966,7 @@ async with AsyncSurreal("ws://localhost:8000") as db:
 
 ### Learn More
 
-For a complete example with configuration options and best practices, see [`examples/logfire/`](examples/logfire/).
+For a complete example with configuration options and best practices, see [`examples/logfire/`](https://github.com/surrealdb/surrealdb.py/tree/main/examples/logfire).
 
 ## Spectron
 
@@ -989,7 +989,7 @@ with Spectron(
 
 `Spectron` is synchronous (backed by `requests`); `AsyncSpectron` is the
 `await`-able equivalent (backed by `aiohttp`). See
-[`src/surrealdb/spectron/README.md`](src/surrealdb/spectron/README.md) for the
+[`src/surrealdb/spectron/README.md`](https://github.com/surrealdb/surrealdb.py/blob/main/src/surrealdb/spectron/README.md) for the
 full client documentation.
 
 ## Contributing
@@ -1001,4 +1001,4 @@ If you want to contribute to the Github repo please read the general contributin
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License 2.0 - see the [LICENSE](https://github.com/surrealdb/surrealdb.py/blob/main/LICENSE) file for details.

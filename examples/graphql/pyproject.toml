@@ -6,7 +6,7 @@ requires-python = ">=3.10"
 dependencies = [
     "strawberry-graphql[fastapi]>=0.219.0",
     "uvicorn[standard]>=0.32.0",
-    "surrealdb>=1.0.7",
+    "surrealdb>=3.0.0",
     "python-dotenv>=1.0.0",
 ]
 

@@ -26,7 +26,16 @@ from surrealdb.connections.builders import (
 from surrealdb.connections.url import Url, UrlScheme
 from surrealdb.data.types.datetime import Datetime, PreciseDatetime
 from surrealdb.data.types.duration import Duration
-from surrealdb.data.types.geometry import Geometry
+from surrealdb.data.types.geometry import (
+    Geometry,
+    GeometryCollection,
+    GeometryLine,
+    GeometryMultiLine,
+    GeometryMultiPoint,
+    GeometryMultiPolygon,
+    GeometryPoint,
+    GeometryPolygon,
+)
 from surrealdb.data.types.null import Null, NullType
 from surrealdb.data.types.range import Bound, BoundExcluded, BoundIncluded, Range
 from surrealdb.data.types.record_id import (
@@ -134,7 +143,17 @@ __all__ = [
     # Data types
     "Table",
     "Duration",
+    # Same shape of mistake as `Range` below, one worse: `Geometry` is the base
+    # class, so the only exported geometry name is the one that cannot be sent.
+    # It constructs, then fails at encode time with "cannot encode Geometry".
     "Geometry",
+    "GeometryPoint",
+    "GeometryLine",
+    "GeometryPolygon",
+    "GeometryMultiPoint",
+    "GeometryMultiLine",
+    "GeometryMultiPolygon",
+    "GeometryCollection",
     # `Range` was exported without its bounds, so the one exported name could
     # not actually be constructed from the public package - every range in user
     # code had to reach into `surrealdb.data.types.range` for the other half.
