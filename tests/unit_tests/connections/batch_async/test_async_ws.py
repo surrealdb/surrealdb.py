@@ -27,7 +27,7 @@ async def test_batch(async_ws_connection: AsyncWsSurrealConnection) -> None:
                 tg.create_task(
                     async_ws_connection.query(
                         f"RETURN sleep({sleep_fn}($d)) or $p**2",
-                        dict(d=10 if num % 2 else 0, p=num),
+                        {"d": 10 if num % 2 else 0, "p": num},
                     ).first()
                 )
                 for num in range(5)

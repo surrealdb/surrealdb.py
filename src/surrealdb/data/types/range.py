@@ -18,7 +18,6 @@ class Bound:
         """
         Initializes a generic bound.
         """
-        pass
 
     def __eq__(self, other: object) -> bool:
         """

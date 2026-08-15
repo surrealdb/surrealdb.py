@@ -80,7 +80,7 @@ def _next_within(subscription: Any, deadline: float = _DEADLINE) -> dict[str, An
     def pull() -> None:
         try:
             received.append(next(subscription))
-        except BaseException as error:  # noqa: BLE001 - re-raised below
+        except BaseException as error:
             failed.append(error)
 
     reader = threading.Thread(target=pull, daemon=True)

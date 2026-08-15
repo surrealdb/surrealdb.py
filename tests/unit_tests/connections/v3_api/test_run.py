@@ -15,9 +15,7 @@ async def _async_setup(
     async_ws_connection: AsyncWsSurrealConnection,
 ) -> AsyncGenerator[None, None]:
     await async_ws_connection.query(
-        "DEFINE FUNCTION OVERWRITE fn::add($a: int, $b: int) {"
-        "    RETURN $a + $b;"
-        "}"
+        "DEFINE FUNCTION OVERWRITE fn::add($a: int, $b: int) {    RETURN $a + $b;}"
     )
     yield
     await async_ws_connection.query("REMOVE FUNCTION fn::add;")

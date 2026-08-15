@@ -1,7 +1,4 @@
 import os
-from typing import Any
-
-import pytest
 
 from surrealdb.request_message.sql_adapter import SqlAdapter
 

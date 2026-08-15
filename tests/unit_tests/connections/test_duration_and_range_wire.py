@@ -79,7 +79,7 @@ def test_the_sdk_and_the_server_agree_on_invalid_durations(
     SurrealDB started accepting one of these, and the SDK would be wrong in the
     other direction.
     """
-    with pytest.raises(Exception, match="(?i)cast|convert|invalid"):
+    with pytest.raises(Exception, match=r"(?i)cast|convert|invalid"):
         blocking_ws_connection.query("RETURN <duration>$text;", {"text": text}).first()
 
     with pytest.raises(InvalidDurationError):

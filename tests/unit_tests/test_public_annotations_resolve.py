@@ -160,10 +160,10 @@ def test_every_exported_alias_can_actually_annotate() -> None:
             continue  # not a generic alias, nothing to resolve
 
         scope = dict(namespace)
-        exec(f"def _handler(value: {name}) -> None: ...", scope)  # noqa: S102
+        exec(f"def _handler(value: {name}) -> None: ...", scope)
         try:
             typing.get_type_hints(scope["_handler"], globalns=scope)
-        except Exception as error:  # noqa: BLE001 - reporting, not handling
+        except Exception as error:
             failures.append(f"{name}: {type(error).__name__}: {error}")
 
     assert not failures, "aliases that cannot be used to annotate: " + "; ".join(

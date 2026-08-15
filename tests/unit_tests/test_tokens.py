@@ -1,5 +1,3 @@
-import pytest
-
 from surrealdb.types import Tokens, parse_auth_result
 
 

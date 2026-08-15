@@ -60,7 +60,7 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         self.id: str = str(uuid.uuid4())
         self.namespace: str | None = None
         self.database: str | None = None
-        self.vars: dict[str, Any] = dict()
+        self.vars: dict[str, Any] = {}
 
         # Embedded database handle
         with mapped_engine_errors("opening the database"):

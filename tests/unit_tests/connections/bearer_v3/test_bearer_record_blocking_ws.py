@@ -11,6 +11,7 @@ Mirrors behavior documented in surrealdb.go contrib/testenv:
 import pytest
 
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+from surrealdb.errors import SurrealError
 from surrealdb.types import Tokens
 
 
@@ -105,7 +106,7 @@ def test_bearer_record_signin_token_not_usable_with_authenticate(
         conn2 = BlockingWsSurrealConnection(url)
         try:
             conn2.use(namespace=namespace, database=database_name)
-            with pytest.raises(Exception):
+            with pytest.raises(SurrealError):
                 conn2.authenticate(tokens.access)
         finally:
             if conn2.socket:

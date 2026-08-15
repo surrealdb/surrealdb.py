@@ -111,7 +111,7 @@ async def test_none(surrealdb_connection: Any) -> None:
     record_check = RecordID(table_name="person", identifier="john")
     assert record_check == outcome["id"]
     assert "John" == outcome["name"]
-    assert None == outcome.get("age")
+    assert None is outcome.get("age")
 
     outcome = await surrealdb_connection.create(
         "person:dave", {"name": "Dave", "age": 34}

@@ -337,9 +337,8 @@ def test_blocking_ws_unreachable_host_raises_connection_unavailable() -> None:
 def test_blocking_ws_context_manager_unreachable_host_raises() -> None:
     connection = BlockingWsSurrealConnection(f"ws://127.0.0.1:{_closed_port()}")
 
-    with pytest.raises(ConnectionUnavailableError):
-        with connection:
-            pass
+    with pytest.raises(ConnectionUnavailableError), connection:
+        pass
 
 
 @pytest.mark.asyncio

@@ -14,8 +14,6 @@ from outside the documented tree.
 
 from typing import Any
 
-import pytest
-
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
@@ -38,7 +36,7 @@ def test_blocking_ws_nul_byte(
 ) -> None:
     try:
         blocking_ws_connection.create("nul_probe", NUL_DATA)
-    except Exception as error:  # noqa: BLE001 - the type is what is under test
+    except Exception as error:
         _assert_typed(error)
 
 
@@ -47,7 +45,7 @@ def test_blocking_http_nul_byte(
 ) -> None:
     try:
         blocking_http_connection.create("nul_probe", NUL_DATA)
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         _assert_typed(error)
 
 
@@ -56,7 +54,7 @@ async def test_async_ws_nul_byte(
 ) -> None:
     try:
         await async_ws_connection.create("nul_probe", NUL_DATA)
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         _assert_typed(error)
 
 
@@ -65,7 +63,7 @@ async def test_async_http_nul_byte(
 ) -> None:
     try:
         await async_http_connection.create("nul_probe", NUL_DATA)
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         _assert_typed(error)
 
 

@@ -64,19 +64,21 @@ async def test_async_get_sends_bearer_header() -> None:
         _record(calls, request)
         return web.json_response({"ok": True}, status=200)
 
-    async with _serve(handler) as base:
-        async with AsyncTransport(endpoint=base, api_key=API_KEY) as t:
-            body = await t.get("/api/v1/x/health")
-            assert body == {"ok": True}
-            assert len(calls) == 1
-            assert calls[0].method == "GET"
-            assert calls[0].path == "/api/v1/x/health"
-            sent_headers = calls[0].headers
-            assert sent_headers["Authorization"] == f"Bearer {API_KEY}"
-            # Header lookups here are case-insensitive, so these two also rule
-            # out any other spelling of the legacy API-key header.
-            assert "X-API-Key" not in sent_headers
-            assert "x-api-key" not in sent_headers
+    async with (
+        _serve(handler) as base,
+        AsyncTransport(endpoint=base, api_key=API_KEY) as t,
+    ):
+        body = await t.get("/api/v1/x/health")
+        assert body == {"ok": True}
+        assert len(calls) == 1
+        assert calls[0].method == "GET"
+        assert calls[0].path == "/api/v1/x/health"
+        sent_headers = calls[0].headers
+        assert sent_headers["Authorization"] == f"Bearer {API_KEY}"
+        # Header lookups here are case-insensitive, so these two also rule
+        # out any other spelling of the legacy API-key header.
+        assert "X-API-Key" not in sent_headers
+        assert "x-api-key" not in sent_headers
 
 
 @pytest.mark.asyncio
@@ -100,12 +102,14 @@ async def test_async_get_retries_on_5xx(monkeypatch: pytest.MonkeyPatch) -> None
         status, payload = responses[len(calls) - 1]
         return web.json_response(payload, status=status)
 
-    async with _serve(handler) as base:
-        async with AsyncTransport(endpoint=base, api_key=API_KEY) as t:
-            body = await t.get("/api/v1/x/y")
-            assert body == {"ok": True}
-            assert len(calls) == 3
-            assert [c.path for c in calls] == ["/api/v1/x/y"] * 3
+    async with (
+        _serve(handler) as base,
+        AsyncTransport(endpoint=base, api_key=API_KEY) as t,
+    ):
+        body = await t.get("/api/v1/x/y")
+        assert body == {"ok": True}
+        assert len(calls) == 3
+        assert [c.path for c in calls] == ["/api/v1/x/y"] * 3
 
 
 @pytest.mark.asyncio
@@ -121,10 +125,12 @@ async def test_async_post_does_not_retry(monkeypatch: pytest.MonkeyPatch) -> Non
         _record(calls, request)
         return web.json_response({"message": "down"}, status=503)
 
-    async with _serve(handler) as base:
-        async with AsyncTransport(endpoint=base, api_key=API_KEY) as t:
-            with pytest.raises(SpectronAPIError):
-                await t.post("/api/v1/x/z", json={})
+    async with (
+        _serve(handler) as base,
+        AsyncTransport(endpoint=base, api_key=API_KEY) as t,
+    ):
+        with pytest.raises(SpectronAPIError):
+            await t.post("/api/v1/x/z", json={})
         # A plain POST is not idempotent, so a 5xx must surface immediately
         # rather than being retried.
         assert len(calls) == 1
@@ -147,18 +153,20 @@ async def test_async_idempotent_post_retries(monkeypatch: pytest.MonkeyPatch) ->
         status, payload = responses[len(calls) - 1]
         return web.json_response(payload, status=status)
 
-    async with _serve(handler) as base:
-        async with AsyncTransport(endpoint=base, api_key=API_KEY) as t:
-            body = await t.request(
-                "POST",
-                "/api/v1/x/facts",
-                json={"text": "hi"},
-                idempotent=True,
-            )
-            assert body == {"ok": True}
-            assert len(calls) == 2
-            assert [c.method for c in calls] == ["POST", "POST"]
-            assert [c.path for c in calls] == ["/api/v1/x/facts"] * 2
+    async with (
+        _serve(handler) as base,
+        AsyncTransport(endpoint=base, api_key=API_KEY) as t,
+    ):
+        body = await t.request(
+            "POST",
+            "/api/v1/x/facts",
+            json={"text": "hi"},
+            idempotent=True,
+        )
+        assert body == {"ok": True}
+        assert len(calls) == 2
+        assert [c.method for c in calls] == ["POST", "POST"]
+        assert [c.path for c in calls] == ["/api/v1/x/facts"] * 2
 
 
 @pytest.mark.asyncio
@@ -169,10 +177,12 @@ async def test_async_404_maps_to_not_found() -> None:
         _record(calls, request)
         return web.json_response({"message": "gone"}, status=404)
 
-    async with _serve(handler) as base:
-        async with AsyncTransport(endpoint=base, api_key=API_KEY) as t:
-            with pytest.raises(SpectronNotFoundError):
-                await t.get("/api/v1/x/missing")
+    async with (
+        _serve(handler) as base,
+        AsyncTransport(endpoint=base, api_key=API_KEY) as t,
+    ):
+        with pytest.raises(SpectronNotFoundError):
+            await t.get("/api/v1/x/missing")
         assert len(calls) == 1
         assert calls[0].method == "GET"
         assert calls[0].path == "/api/v1/x/missing"

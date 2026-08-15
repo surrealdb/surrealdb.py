@@ -1,7 +1,3 @@
-from typing import Any
-
-import pytest
-
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 

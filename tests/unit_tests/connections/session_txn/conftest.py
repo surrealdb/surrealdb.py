@@ -7,6 +7,8 @@ docker-compose profile v3). They are skipped when the server version is not 3.x
 or when session-scoped create/query return empty.
 """
 
+import contextlib
+
 import pytest
 
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
@@ -18,11 +20,9 @@ def _is_surrealdb_v3(version_str: str) -> bool:
     version_str = (version_str or "").strip().lower()
     if not version_str:
         return False
-    if version_str.startswith("3.") or version_str.startswith("v3."):
+    if version_str.startswith(("3.", "v3.")):
         return True
-    if "surrealdb-3." in version_str:
-        return True
-    return False
+    return "surrealdb-3." in version_str
 
 
 @pytest.fixture(autouse=True)
@@ -64,13 +64,11 @@ def session_txn_requires_v3(
             # per-statement list, so the row check below would never see a dict.
             session.create("session_txn_probe:check", {"probe": True})
             result = session.query("SELECT * FROM session_txn_probe;").first()
-        except Exception as exc:  # noqa: BLE001 - capture for skip decision
+        except Exception as exc:
             probe_error = exc
     finally:
-        try:
+        with contextlib.suppress(Exception):
             session.close_session()
-        except Exception:
-            pass
         blocking_ws_connection.query(
             "REMOVE TABLE IF EXISTS session_txn_probe;"
         ).execute()

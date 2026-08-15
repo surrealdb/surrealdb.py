@@ -22,6 +22,7 @@ from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+from surrealdb.errors import SurrealError
 
 # Rejected by the request schema, before any socket is touched.
 MALFORMED_TOKEN = "not-a-real-token"
@@ -100,7 +101,7 @@ def test_blocking_http_survives_a_rejected_token(
     )
     good_token = connection.token
 
-    with pytest.raises(Exception):
+    with pytest.raises((ValueError, SurrealError)):
         connection.authenticate(bad_token)
 
     assert connection.token == good_token, "the rejected token was adopted anyway"
@@ -123,7 +124,7 @@ async def test_async_http_survives_a_rejected_token(
     )
     good_token = connection.token
 
-    with pytest.raises(Exception):
+    with pytest.raises((ValueError, SurrealError)):
         await connection.authenticate(bad_token)
 
     assert connection.token == good_token, "the rejected token was adopted anyway"
@@ -138,7 +139,7 @@ def test_blocking_http_recovers_from_an_unauthenticated_start(
     """A brand-new connection whose first act fails is still usable."""
     connection = BlockingHttpSurrealConnection(connection_params["url"])
 
-    with pytest.raises(Exception):
+    with pytest.raises((ValueError, SurrealError)):
         connection.authenticate(FORGED_TOKEN)
 
     assert connection.token is None
@@ -166,7 +167,7 @@ def test_blocking_ws_survives_a_rejected_token(
         )
         good_token = connection.token
 
-        with pytest.raises(Exception):
+        with pytest.raises((ValueError, SurrealError)):
             connection.authenticate(bad_token)
 
         assert connection.token == good_token
@@ -188,7 +189,7 @@ async def test_async_ws_survives_a_rejected_token(
         )
         good_token = connection.token
 
-        with pytest.raises(Exception):
+        with pytest.raises((ValueError, SurrealError)):
             await connection.authenticate(bad_token)
 
         assert connection.token == good_token

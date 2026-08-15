@@ -1,18 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Union
-
-_EMBEDDED_AVAILABLE = False
-try:
-    from surrealdb.connections.async_embedded import AsyncEmbeddedSurrealConnection
-    from surrealdb.connections.blocking_embedded import BlockingEmbeddedSurrealConnection
-    _EMBEDDED_AVAILABLE = True  # pyright: ignore[reportConstantRedefinition]
-except ImportError:
-    pass
-
-if TYPE_CHECKING:
-    from surrealdb.connections.async_embedded import AsyncEmbeddedSurrealConnection as AsyncEmbeddedSurrealConnection
-    from surrealdb.connections.blocking_embedded import BlockingEmbeddedSurrealConnection as BlockingEmbeddedSurrealConnection
+from typing import TYPE_CHECKING, Any
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import (
@@ -41,12 +29,12 @@ from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.geometry import Geometry
 from surrealdb.data.types.null import Null, NullType
 from surrealdb.data.types.range import Bound, BoundExcluded, BoundIncluded, Range
-from surrealdb.data.types.set import SurrealSet
 from surrealdb.data.types.record_id import (
     RecordID,
     RecordIdValue,
     escape_identifier,
 )
+from surrealdb.data.types.set import SurrealSet
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     AlreadyExistsDetailKind,
@@ -85,6 +73,31 @@ from surrealdb.errors import (
     ValidationError,
 )
 from surrealdb.types import Tokens, Value
+
+# The optional native engine. Probed here, *below* the imports above, rather
+# than at the top of the module: a `try`/`except ImportError` is a statement, so
+# everything following it counts as an import after code (`E402`) - which is
+# what kept this file exempt from the linter entirely. Nothing above depends on
+# the probe, and the probe's own modules import what they need themselves, so
+# the order is free.
+_EMBEDDED_AVAILABLE = False
+try:
+    from surrealdb.connections.async_embedded import AsyncEmbeddedSurrealConnection
+    from surrealdb.connections.blocking_embedded import (
+        BlockingEmbeddedSurrealConnection,
+    )
+
+    _EMBEDDED_AVAILABLE = True  # pyright: ignore[reportConstantRedefinition]
+except ImportError:
+    pass
+
+if TYPE_CHECKING:
+    from surrealdb.connections.async_embedded import (
+        AsyncEmbeddedSurrealConnection as AsyncEmbeddedSurrealConnection,
+    )
+    from surrealdb.connections.blocking_embedded import (
+        BlockingEmbeddedSurrealConnection as BlockingEmbeddedSurrealConnection,
+    )
 
 # Names that only exist when the optional native engine is installed
 # (``pip install surrealdb[embedded]``). They are pruned from ``__all__`` below
@@ -184,7 +197,13 @@ __all__ = [
     "SurrealDBMethodError",
 ]
 
-_EMBEDDED_SCHEMES = (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.SURREALKV, UrlScheme.SURREALKV_VERSIONED)
+_EMBEDDED_SCHEMES = (
+    UrlScheme.MEM,
+    UrlScheme.MEMORY,
+    UrlScheme.FILE,
+    UrlScheme.SURREALKV,
+    UrlScheme.SURREALKV_VERSIONED,
+)
 
 # Type aliases for the connection objects the factory functions return. The
 # ``Surreal``/``AsyncSurreal`` names are factory *functions*, so they cannot be
@@ -205,37 +224,22 @@ _EMBEDDED_SCHEMES = (UrlScheme.MEM, UrlScheme.MEMORY, UrlScheme.FILE, UrlScheme.
 # Without the extra the embedded classes do not exist, and neither can an
 # embedded connection: ``Surreal("mem://")`` raises ``UnsupportedEngineError``.
 # The union says so rather than naming a class that is not there.
-if TYPE_CHECKING:
-    AsyncSurrealConnection = Union[
-        AsyncWsSurrealConnection,
-        AsyncHttpSurrealConnection,
-        AsyncEmbeddedSurrealConnection,
-    ]
-    BlockingSurrealConnection = Union[
-        BlockingWsSurrealConnection,
-        BlockingHttpSurrealConnection,
-        BlockingEmbeddedSurrealConnection,
-    ]
-elif _EMBEDDED_AVAILABLE:
-    AsyncSurrealConnection = Union[
-        AsyncWsSurrealConnection,
-        AsyncHttpSurrealConnection,
-        AsyncEmbeddedSurrealConnection,
-    ]
-    BlockingSurrealConnection = Union[
-        BlockingWsSurrealConnection,
-        BlockingHttpSurrealConnection,
-        BlockingEmbeddedSurrealConnection,
-    ]
+if TYPE_CHECKING or _EMBEDDED_AVAILABLE:
+    AsyncSurrealConnection = (
+        AsyncWsSurrealConnection
+        | AsyncHttpSurrealConnection
+        | AsyncEmbeddedSurrealConnection
+    )
+    BlockingSurrealConnection = (
+        BlockingWsSurrealConnection
+        | BlockingHttpSurrealConnection
+        | BlockingEmbeddedSurrealConnection
+    )
 else:
-    AsyncSurrealConnection = Union[
-        AsyncWsSurrealConnection,
-        AsyncHttpSurrealConnection,
-    ]
-    BlockingSurrealConnection = Union[
-        BlockingWsSurrealConnection,
-        BlockingHttpSurrealConnection,
-    ]
+    AsyncSurrealConnection = AsyncWsSurrealConnection | AsyncHttpSurrealConnection
+    BlockingSurrealConnection = (
+        BlockingWsSurrealConnection | BlockingHttpSurrealConnection
+    )
 
 
 def Surreal(

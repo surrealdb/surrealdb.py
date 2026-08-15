@@ -18,6 +18,7 @@ over a shared connection - not of a stress test.
 """
 
 import asyncio
+import contextlib
 import threading
 from typing import Any
 
@@ -75,10 +76,8 @@ def test_blocking_connect_opens_one_socket_for_concurrent_callers(
     finally:
         connection.close()
         for socket in opened:
-            try:
+            with contextlib.suppress(Exception):
                 socket.close_socket()
-            except Exception:
-                pass
 
 
 async def test_async_connect_opens_one_socket_for_concurrent_callers(

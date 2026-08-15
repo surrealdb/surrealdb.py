@@ -214,7 +214,7 @@ def test_null_is_rejected_by_an_option_field(
         f"DEFINE FIELD age ON {OPTION_TABLE} TYPE option<int>;"
     ).execute()
 
-    with pytest.raises(Exception, match="(?i)coerce|expected"):
+    with pytest.raises(Exception, match=r"(?i)coerce|expected"):
         blocking_ws_connection.create(OPTION_TABLE, {"age": Null})
 
 

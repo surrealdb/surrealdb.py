@@ -1,5 +1,3 @@
-from typing import Any
-
 import pytest
 
 from surrealdb import AsyncSurreal, Surreal
@@ -7,7 +5,6 @@ from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
-from surrealdb.connections.url import UrlScheme
 from surrealdb.errors import SurrealError, UnsupportedEngineError
 
 
@@ -115,7 +112,7 @@ def test_all_names_are_importable() -> None:
 def test_star_import_succeeds() -> None:
     """``from surrealdb import *`` works whatever is installed."""
     namespace: dict[str, object] = {}
-    exec("from surrealdb import *", namespace)  # noqa: S102
+    exec("from surrealdb import *", namespace)
 
     assert "Surreal" in namespace
     assert "AsyncSurreal" in namespace

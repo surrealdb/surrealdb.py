@@ -1,5 +1,3 @@
-import pytest
-
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 

@@ -18,6 +18,7 @@ from surrealdb.connections import blocking_http
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.data.cbor import encode
+from surrealdb.errors import SurrealError
 
 HTTP_URL = "http://localhost:8000"
 GOOD_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhIn0.Zm9vYmFyYmF6"
@@ -93,7 +94,7 @@ def test_a_failed_send_leaves_the_held_token_alone(
     connection = BlockingHttpSurrealConnection(HTTP_URL)
     connection.token = OTHER_TOKEN
 
-    with pytest.raises(Exception):
+    with pytest.raises(SurrealError):
         connection.authenticate(GOOD_TOKEN)
 
     assert connection.token == OTHER_TOKEN
