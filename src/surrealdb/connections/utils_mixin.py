@@ -8,7 +8,11 @@ from surrealdb.connections.builders import (
     _resource_to_variable,  # pyright: ignore[reportPrivateUsage]
 )
 from surrealdb.data.cbor import decode
-from surrealdb.data.types.record_id import RecordID, RecordIdType
+from surrealdb.data.types.record_id import (
+    RecordID,
+    RecordIdType,
+    escape_identifier,
+)
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     ConnectionUnavailableError,
@@ -97,6 +101,67 @@ _UNQUOTABLE = ("`", "\n", "\r")
 # Prefix for the generated argument parameters. Distinctive so it cannot
 # collide with a name someone bound with `let()`.
 _RUN_ARG_PREFIX = "__surreal_run_arg"
+
+
+def render_projection(fields: Sequence[str] | None) -> str:
+    """Render ``select(fields=[...])`` as the projection of a ``SELECT``.
+
+    ``None`` means every field, so the projection is ``*`` and the emitted query
+    is byte-for-byte what it was before this argument existed.
+
+    A field list cannot be parameter-bound - SurrealQL has no ``SELECT $f`` -
+    so it is the one part that has to be inlined, and therefore the one part
+    that has to be escaped. Each name goes through
+    :func:`~surrealdb.data.types.record_id.escape_identifier`, so a field
+    containing a space, unicode, or SurrealQL punctuation is quoted rather than
+    concatenated into the statement.
+
+    **Dots separate path segments and are escaped individually.** Escaping a
+    whole ``"address.city"`` produces ``⟨address.city⟩``, which the server reads
+    as one field of that literal name and answers ``{"address.city": None}`` -
+    a silent null rather than an error, which is the worst way to be wrong.
+    ``⟨address⟩.⟨city⟩`` selects the nested value, so that is what this emits.
+    The cost is that a field whose name genuinely contains a dot cannot be
+    expressed here; use :meth:`query` for that.
+
+    :raises TypeError: if *fields* is a bare string. ``", ".join("name")``
+        yields ``n, a, m, e`` - one projection per character - so a plain
+        string is refused rather than spread, the same way ``run()`` refuses
+        one for its arguments.
+    :raises ValueError: if the list is empty, or a name is empty or has an
+        empty path segment. ``SELECT  FROM t`` and ``SELECT ⟨⟩ FROM t`` are not
+        what any caller meant.
+    """
+    if fields is None:
+        return "*"
+    if isinstance(fields, str):
+        raise TypeError(
+            "select() fields must be a sequence of field names, not a single "
+            f"string - got {fields!r}. Pass [{fields!r}] for one field."
+        )
+    names = list(fields)
+    if not names:
+        raise ValueError(
+            "select() fields must name at least one field; pass fields=None "
+            "(the default) to select them all"
+        )
+
+    rendered: list[str] = []
+    for field in names:
+        if not isinstance(field, str):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise TypeError(
+                "select() fields must be strings, got "
+                f"{type(field).__name__}: {field!r}"
+            )
+        if not field:
+            raise ValueError("select() fields cannot contain an empty name")
+        segments = field.split(".")
+        if any(not segment for segment in segments):
+            raise ValueError(
+                f"{field!r} is not a valid field path: it has an empty segment"
+            )
+        rendered.append(".".join(escape_identifier(segment) for segment in segments))
+    return ", ".join(rendered)
 
 
 def build_run_query(

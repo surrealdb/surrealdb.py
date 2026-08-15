@@ -1,5 +1,5 @@
 import uuid
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from types import TracebackType
 from typing import Any, overload
 from uuid import UUID
@@ -21,6 +21,7 @@ from surrealdb.connections.utils_mixin import (
     UtilsMixin,
     build_run_query,
     merge_query_vars,
+    render_projection,
 )
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
@@ -469,27 +470,59 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.vars.pop(key, None)
 
     @overload
-    def select(self, record: RecordID, *, into: type[M]) -> M | None: ...
+    def select(
+        self, record: RecordID, *, fields: Sequence[str] | None = None, into: type[M]
+    ) -> M | None: ...
     @overload
-    def select(self, record: Table, *, into: type[M]) -> list[M]: ...
+    def select(
+        self, record: Table, *, fields: Sequence[str] | None = None, into: type[M]
+    ) -> list[M]: ...
     @overload
-    def select(self, record: str, *, into: type[M]) -> M | list[M] | None: ...
+    def select(
+        self, record: str, *, fields: Sequence[str] | None = None, into: type[M]
+    ) -> M | list[M] | None: ...
     @overload
-    def select(self, record: RecordID) -> dict[str, Value] | None: ...
+    def select(
+        self, record: RecordID, *, fields: Sequence[str] | None = None
+    ) -> dict[str, Value] | None: ...
     @overload
-    def select(self, record: Table) -> list[Value]: ...
+    def select(
+        self, record: Table, *, fields: Sequence[str] | None = None
+    ) -> list[Value]: ...
     @overload
-    def select(self, record: str) -> Value: ...
-    def select(self, record: RecordIdType, *, into: type[M] | None = None) -> Any:
+    def select(self, record: str, *, fields: Sequence[str] | None = None) -> Value: ...
+    def select(
+        self,
+        record: RecordIdType,
+        *,
+        fields: Sequence[str] | None = None,
+        into: type[M] | None = None,
+    ) -> Any:
         """Select records eagerly.
 
         A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
         when it is absent. A ``Table`` (or bare table-name string) returns the
         list of records. Pass ``into=Model`` to map each record onto ``Model``.
+
+        ``fields`` narrows the projection, so the server sends only what is
+        asked for rather than the whole record::
+
+            db.select(RecordID("person", "tobie"), fields=["name", "email"])
+            db.select(Table("person"), fields=["address.city"])
+
+        A dot walks into a nested object; each segment is escaped separately, so
+        a name with a space or unicode in it is quoted correctly. A field whose
+        name genuinely contains a dot cannot be spelled this way - use
+        :meth:`query` for that.
+
+        Note that ``id`` is not included unless you ask for it, exactly as in
+        SurrealQL. A model passed to ``into=`` that declares an ``id`` field
+        therefore needs ``fields=["id", ...]``.
         """
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
-        query = f"SELECT * FROM {resource_ref}"
+        projection = render_projection(fields)
+        query = f"SELECT {projection} FROM {resource_ref}"
 
         response = self.query_raw(query, variables)
         self.check_response_for_error(response, "select")
