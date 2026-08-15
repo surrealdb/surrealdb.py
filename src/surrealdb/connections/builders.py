@@ -243,9 +243,7 @@ def _is_single_record_operation(resource: RecordIdType) -> bool:
         # Rejected by `_resource_to_variable` before it can be executed; the
         # answer here only has to be defined, not meaningful.
         return False
-    if ":" in resource and ".." not in resource:
-        return True
-    return False
+    return bool(":" in resource and ".." not in resource)
 
 
 def _check_response(response: dict[str, Any], op_name: str) -> list[dict[str, Any]]:
@@ -543,7 +541,7 @@ def _map_to_class(cls: type[T], values: list[Any] | Mapping[str, Any]) -> T:
             f"query().into({cls.__name__}) expects {len(param_names)} statement "
             f"results to match constructor parameters, got {len(values)}"
         )
-    kwargs = {name: value for name, value in zip(param_names, values, strict=True)}
+    kwargs = dict(zip(param_names, values, strict=True))
     return cls(**kwargs)
 
 

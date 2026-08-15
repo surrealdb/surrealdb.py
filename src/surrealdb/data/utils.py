@@ -7,9 +7,7 @@ from surrealdb.data.types.table import Table
 
 
 def process_record(record: RecordIdType) -> RecordID | Table:
-    if isinstance(record, RecordID):
-        return record
-    elif isinstance(record, Table):
+    if isinstance(record, (RecordID, Table)):
         return record
     else:
         if ":" in record:

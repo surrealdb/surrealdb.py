@@ -341,9 +341,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
         try:
             if response_id := response.get("id"):
-                if fut := self.qry.get(response_id):
-                    if not fut.done():
-                        fut.set_result(response)
+                if (fut := self.qry.get(response_id)) and not fut.done():
+                    fut.set_result(response)
             elif response_result := response.get("result"):
                 live_id = str(response_result["id"])
                 for queue in self.live_queues.get(live_id, []):
@@ -1402,8 +1401,15 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         recv_task = getattr(self, "recv_task", None)
         if socket is None and recv_task is None:
             return
-        try:
-            warnings.warn(
+        # `try`/`except`, not `contextlib.suppress`: this runs in a destructor,
+        # and at interpreter shutdown a module-global lookup can already have
+        # been torn down - which is the same reason the body below is defensive
+        # at all. `BlockingWsSurrealConnection.__del__` is written the same way.
+        # No `stacklevel` either: the "caller" of a destructor is whatever
+        # happened to drop the last reference, so pointing at it misattributes
+        # the warning. `source=self` is what identifies the leaked connection.
+        try:  # noqa: SIM105
+            warnings.warn(  # noqa: B028 - see the comment above
                 f"unclosed connection to {getattr(self, 'raw_url', '?')} - "
                 "await close(), or use `async with`",
                 ResourceWarning,

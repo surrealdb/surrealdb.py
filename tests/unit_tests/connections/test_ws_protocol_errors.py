@@ -31,7 +31,7 @@ def _within_budget(call: Any) -> tuple[str, Any]:
             outcome["r"] = ("returned", call())
         except SurrealError as error:
             outcome["r"] = ("surreal-error", error)
-        except Exception as error:  # noqa: BLE001 - reporting, not handling
+        except Exception as error:
             outcome["r"] = ("leaked", error)
 
     worker = threading.Thread(target=run, daemon=True)

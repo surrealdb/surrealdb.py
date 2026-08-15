@@ -16,14 +16,14 @@ def test_use_pass() -> None:
 def test_use_fail() -> None:
     message = RequestMessage(RequestMethod.USE, namespace="ns", database=1)
     with pytest.raises(ValueError) as context:
-        message.WS_CBOR_DESCRIPTOR
+        _ = message.WS_CBOR_DESCRIPTOR
     assert (
         "Invalid schema for Cbor WS encoding for use: params.1: Input should be a valid string"
         == str(context.value)
     )
     message = RequestMessage(RequestMethod.USE, namespace="ns")
     with pytest.raises(ValueError) as context:
-        message.WS_CBOR_DESCRIPTOR
+        _ = message.WS_CBOR_DESCRIPTOR
     assert (
         "Invalid schema for Cbor WS encoding for use: params.1: Input should be a valid string"
         == str(context.value)

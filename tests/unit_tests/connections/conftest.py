@@ -1,3 +1,4 @@
+import contextlib
 import socket
 from collections.abc import AsyncGenerator, Generator
 from typing import Any
@@ -94,12 +95,9 @@ async def async_ws_connection(
         await connection.query(_DEFINE_TABLES)
         yield connection
     finally:
-        # Ensure connection is always closed
-        try:
+        # Ensure connection is always closed; ignore cleanup failures
+        with contextlib.suppress(Exception):
             await connection.close()
-        except Exception:
-            # Ignore any exceptions during cleanup
-            pass
 
 
 @pytest.fixture
@@ -117,10 +115,8 @@ async def async_ws_connection_secondary(
         await connection.query(_DEFINE_TABLES)
         yield connection
     finally:
-        try:
+        with contextlib.suppress(Exception):
             await connection.close()
-        except Exception:
-            pass
 
 
 @pytest.fixture

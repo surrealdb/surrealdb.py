@@ -1,4 +1,3 @@
-import os
 from collections.abc import AsyncIterator
 from typing import cast
 

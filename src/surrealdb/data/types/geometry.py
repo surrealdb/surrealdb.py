@@ -53,14 +53,12 @@ class Geometry:
         """
         Returns the coordinates of the geometry. Should be implemented by subclasses.
         """
-        pass
 
     @staticmethod
     def parse_coordinates(coordinates: Any) -> Any:
         """
         Parses a list of coordinates into a specific geometry type. Should be implemented by subclasses.
         """
-        pass
 
     def __hash__(self) -> int:
         """
@@ -143,7 +141,7 @@ class GeometryLine(Geometry):
         """
         The constructor for the GeometryLine class.
         """
-        self.geometry_points = [point1, point2] + list(other_points)
+        self.geometry_points = [point1, point2, *list(other_points)]
 
     def get_coordinates(self) -> list[tuple[float, float]]:
         """
@@ -240,7 +238,7 @@ class GeometryPolygon(Geometry):
         Raises:
             ValueError: If any ring is not properly closed (first point != last point) or has fewer than 4 points.
         """
-        all_rings = [exterior_ring] + list(interior_rings)
+        all_rings = [exterior_ring, *list(interior_rings)]
 
         # Validate all rings
         for i, ring in enumerate(all_rings):

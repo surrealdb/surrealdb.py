@@ -52,7 +52,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.id: str = str(uuid.uuid4())
         self.namespace: str | None = None
         self.database: str | None = None
-        self.vars: dict[str, Value] = dict()
+        self.vars: dict[str, Value] = {}
         self.session: requests.Session | None = None
 
     def _send(

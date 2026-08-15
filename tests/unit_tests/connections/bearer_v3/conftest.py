@@ -11,20 +11,18 @@ from typing import Any
 
 import pytest
 
-pytestmark = pytest.mark.surrealdb_v3
-
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+
+pytestmark = pytest.mark.surrealdb_v3
 
 
 def _is_surrealdb_v3(version_str: str) -> bool:
     version_str = (version_str or "").strip().lower()
     if not version_str:
         return False
-    if version_str.startswith("3.") or version_str.startswith("v3."):
+    if version_str.startswith(("3.", "v3.")):
         return True
-    if "surrealdb-3." in version_str:
-        return True
-    return False
+    return "surrealdb-3." in version_str
 
 
 @pytest.fixture(scope="module")

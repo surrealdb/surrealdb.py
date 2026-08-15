@@ -1,5 +1,3 @@
-from typing import Any
-
 import pytest
 
 from surrealdb import (
@@ -31,13 +29,13 @@ def test_data() -> dict[str, list[str]]:
 
 def test_blocking___init__(test_data: dict[str, list[str]]) -> None:
     outcome = Surreal("ws://localhost:5000")
-    assert type(outcome) == BlockingWsSurrealConnection
+    assert type(outcome) is BlockingWsSurrealConnection
     outcome = Surreal("http://localhost:5000")
-    assert type(outcome) == BlockingHttpSurrealConnection
+    assert type(outcome) is BlockingHttpSurrealConnection
 
 
 def test_async___init__(test_data: dict[str, list[str]]) -> None:
     outcome = AsyncSurreal("ws://localhost:5000")
-    assert type(outcome) == AsyncWsSurrealConnection
+    assert type(outcome) is AsyncWsSurrealConnection
     outcome = AsyncSurreal("http://localhost:5000")
-    assert type(outcome) == AsyncHttpSurrealConnection
+    assert type(outcome) is AsyncHttpSurrealConnection

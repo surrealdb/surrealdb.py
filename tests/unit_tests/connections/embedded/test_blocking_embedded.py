@@ -1,7 +1,5 @@
 """Tests for BlockingEmbeddedSurrealConnection."""
 
-import pytest
-
 from surrealdb import Surreal
 
 

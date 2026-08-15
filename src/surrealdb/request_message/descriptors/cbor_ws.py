@@ -372,7 +372,7 @@ class WsCborDescriptor:
         data = {
             "id": obj.id,
             "method": obj.method.value,
-            "params": [obj.kwargs.get("query"), obj.kwargs.get("params", dict())],
+            "params": [obj.kwargs.get("query"), obj.kwargs.get("params", {})],
         }
         _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
@@ -438,7 +438,7 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [
                 process_record(cast(RecordIdType, obj.kwargs.get("record_id"))),
-                obj.kwargs.get("data", dict()),
+                obj.kwargs.get("data", {}),
             ],
         }
         _inject_session_txn(data, obj)
@@ -451,7 +451,7 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [
                 process_record(cast(RecordIdType, obj.kwargs.get("record_id"))),
-                obj.kwargs.get("data", dict()),
+                obj.kwargs.get("data", {}),
             ],
         }
         _inject_session_txn(data, obj)
@@ -488,7 +488,7 @@ class WsCborDescriptor:
             "method": obj.method.value,
             "params": [
                 process_record(cast(RecordIdType, obj.kwargs.get("record_id"))),
-                obj.kwargs.get("data", dict()),
+                obj.kwargs.get("data", {}),
             ],
         }
         _inject_session_txn(data, obj)

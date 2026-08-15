@@ -34,7 +34,7 @@ def _resolve_endpoint(endpoint: str | None) -> str:
 
 
 def _build_url(endpoint: str, path: str) -> str:
-    if path.startswith("http://") or path.startswith("https://"):
+    if path.startswith(("http://", "https://")):
         return path
     return endpoint.rstrip("/") + "/" + path.lstrip("/")
 
@@ -364,7 +364,7 @@ class AsyncTransport(_BaseTransport):
 
             if status >= 400:
                 body_bytes = await response.read()
-                headers_dict = {k: v for k, v in response.headers.items()}
+                headers_dict = dict(response.headers.items())
                 response.release()
                 body = _decode_json(body_bytes)
                 raise error_from_response(status, body, headers_dict)

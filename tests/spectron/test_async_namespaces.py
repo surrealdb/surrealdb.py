@@ -79,17 +79,19 @@ async def test_async_consolidate_and_audit() -> None:
             return web.json_response({"rows": []}, status=200)
         return _unexpected(request)
 
-    async with _serve(handler) as server:
-        async with AsyncSpectron(
+    async with (
+        _serve(handler) as server,
+        AsyncSpectron(
             context=CONTEXT,
             endpoint=str(server.make_url("/")),
             api_key=API_KEY,
-        ) as c:
-            res = await c.consolidate(dry_run=True)
-            assert isinstance(res, ConsolidateResponse)
-            assert res.dry_run is True
-            audit = await c.audit(kind="decision")
-            assert isinstance(audit, AuditResponse)
+        ) as c,
+    ):
+        res = await c.consolidate(dry_run=True)
+        assert isinstance(res, ConsolidateResponse)
+        assert res.dry_run is True
+        audit = await c.audit(kind="decision")
+        assert isinstance(audit, AuditResponse)
 
     assert seen == [
         ("POST", f"{ROOT}/consolidate", {}),
@@ -123,21 +125,23 @@ async def test_async_namespaces_and_bare_array() -> None:
             )
         return _unexpected(request)
 
-    async with _serve(handler) as server:
-        async with AsyncSpectron(
+    async with (
+        _serve(handler) as server,
+        AsyncSpectron(
             context=CONTEXT,
             endpoint=str(server.make_url("/")),
             api_key=API_KEY,
-        ) as c:
-            sess = await c.sessions.create()
-            assert isinstance(sess, Session)
-            traces = await c.traces.list()
-            assert isinstance(traces, TraceListResponse)
-            doc = await c.documents.get("doc:1")
-            assert isinstance(doc, Document)
-            keys = await c.keys.list()
-            assert isinstance(keys, list)
-            assert isinstance(keys[0], KeyDetail)
+        ) as c,
+    ):
+        sess = await c.sessions.create()
+        assert isinstance(sess, Session)
+        traces = await c.traces.list()
+        assert isinstance(traces, TraceListResponse)
+        doc = await c.documents.get("doc:1")
+        assert isinstance(doc, Document)
+        keys = await c.keys.list()
+        assert isinstance(keys, list)
+        assert isinstance(keys[0], KeyDetail)
 
     assert seen == [
         ("POST", f"{ROOT}/sessions"),
@@ -159,11 +163,13 @@ async def test_async_fetch_raw_bytes() -> None:
             )
         return _unexpected(request)
 
-    async with _serve(handler) as server:
-        async with AsyncSpectron(
+    async with (
+        _serve(handler) as server,
+        AsyncSpectron(
             context=CONTEXT,
             endpoint=str(server.make_url("/")),
             api_key=API_KEY,
-        ) as c:
-            data = await c.documents.fetch_raw("doc:1")
-            assert data == b"%PDF data"
+        ) as c,
+    ):
+        data = await c.documents.fetch_raw("doc:1")
+        assert data == b"%PDF data"

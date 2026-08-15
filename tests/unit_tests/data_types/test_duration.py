@@ -328,7 +328,9 @@ def test_zero_duration_decodes_from_an_empty_array() -> None:
     a zero duration raised ``IndexError`` and destroyed the whole response -
     not just that field. Ordinary expressions produce one.
     """
-    assert cbor.decode(dumps(CBORTag(constants.TAG_DURATION_COMPACT, []))) == Duration(0)
+    assert cbor.decode(dumps(CBORTag(constants.TAG_DURATION_COMPACT, []))) == Duration(
+        0
+    )
 
     # And it still round-trips through the SDK's own encoder.
     assert cbor.decode(cbor.encode(Duration(0))) == Duration(0)

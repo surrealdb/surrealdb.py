@@ -119,7 +119,7 @@ def test_upsert_table(
 ) -> None:
     table = Table("user")
     record_id = RecordID("user", "tobie")
-    first_outcome = blocking_ws_connection.upsert(table, existing_data)
+    blocking_ws_connection.upsert(table, existing_data)
     result = blocking_ws_connection.query("SELECT * FROM user;").first()
     # SurrealDB may create a new record or not, depending on version
     assert any(r["id"] == record_id for r in result)
@@ -132,7 +132,7 @@ def test_upsert_table_with_data(
     setup_user: None,
 ) -> None:
     table = Table("user")
-    record_id = RecordID("user", "tobie")
+    RecordID("user", "tobie")
     outcome = blocking_ws_connection.upsert(table, upsert_data)
     # At least one record should match the upserted data
     assert any(

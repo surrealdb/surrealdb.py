@@ -1339,7 +1339,10 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         connection = getattr(self, "socket", None)
         if connection is None:
             return
-        try:
+        # `try`/`except`, not `contextlib.suppress`: a module-global lookup in a
+        # destructor can fail at interpreter shutdown, which is the very case
+        # this is defending against.
+        try:  # noqa: SIM105
             connection.close_socket()
         except Exception:
             # Interpreter shutdown can pull what this needs out from under us,

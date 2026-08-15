@@ -1,5 +1,3 @@
-from typing import Any
-
 import pytest
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection

@@ -516,7 +516,7 @@ async def test_geometry_point_class_methods() -> None:
     assert p2.latitude == -20.0
     p3 = GeometryPoint(10.0, -20.0)
     assert p2 == p3
-    assert not p2 == GeometryPoint(0.0, 0.0)
+    assert p2 != GeometryPoint(0.0, 0.0)
 
 
 @pytest.mark.asyncio
@@ -591,7 +591,7 @@ async def test_geometry_line_class_methods() -> None:
     line2 = GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(1.0, 1.0))
     assert line == line2
     line3 = GeometryLine(GeometryPoint(0.0, 0.0), GeometryPoint(2.0, 2.0))
-    assert not line == line3
+    assert line != line3
 
 
 @pytest.mark.asyncio
@@ -757,7 +757,7 @@ async def test_geometry_polygon_validation() -> None:
     """Test that polygon validation catches invalid rings."""
     # Test 1: Ring not closed (first != last point)
     with pytest.raises(
-        InvalidGeometryError, match="first point.*must equal last point"
+        InvalidGeometryError, match=r"first point.*must equal last point"
     ):
         unclosed_ring = GeometryLine(
             GeometryPoint(0.0, 0.0),
@@ -785,7 +785,7 @@ async def test_geometry_polygon_validation() -> None:
         GeometryPoint(0.0, 0.0),
     )
 
-    with pytest.raises(InvalidGeometryError, match="Invalid interior.*ring"):
+    with pytest.raises(InvalidGeometryError, match=r"Invalid interior.*ring"):
         invalid_hole = GeometryLine(
             GeometryPoint(2.0, 2.0),
             GeometryPoint(4.0, 2.0),

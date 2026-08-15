@@ -1,5 +1,3 @@
-import pytest
-
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 
 

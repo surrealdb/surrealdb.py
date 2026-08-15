@@ -4,8 +4,6 @@ from typing import Any
 import pytest
 
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
-from surrealdb.request_message.message import RequestMessage
-from surrealdb.request_message.methods import RequestMethod
 from surrealdb.types import Value
 
 

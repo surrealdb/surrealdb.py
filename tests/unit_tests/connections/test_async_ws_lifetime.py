@@ -148,7 +148,7 @@ async def test_a_dropped_connection_is_collected(
 async def test_dropping_a_connection_releases_its_tasks_and_socket(
     connection_params: dict[str, Any],
 ) -> None:
-    before = {task for task in asyncio.all_tasks()}
+    before = set(asyncio.all_tasks())
     connection = await _signed_in(connection_params)
     socket = connection.socket
 

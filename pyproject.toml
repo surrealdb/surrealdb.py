@@ -126,13 +126,53 @@ include = [
 # `.md` files, which reflows the hand-aligned examples in our docs (notably
 # `src/surrealdb/spectron/README.md`, which sits under the `./src` path CI
 # checks). Docs prose is not formatter-owned.
-exclude = ["src/surrealdb/__init__.py", "*.md"]
+#
+# `src/surrealdb/__init__.py` used to be excluded here as well. That was
+# collateral from the markdown fix rather than a decision about the file, and it
+# exempted the package's own entry point - the most-read module in the project -
+# from both the linter and the formatter.
+exclude = ["*.md"]
 
 [tool.ruff.lint]
+# Setting `select` *replaces* ruff's default of `["E4", "E7", "E9", "F"]`, so
+# the previous `["I", "UP"]` silently turned pyflakes off: unused imports,
+# unused variables and undefined names were not being checked anywhere. The
+# defaults are named explicitly below so that cannot happen again by omission.
 select = [
-    "I",  # isort
-    "UP", # pyupgrade
+    "E4",  # pycodestyle: imports
+    "E7",  # pycodestyle: statements
+    "E9",  # pycodestyle: runtime errors
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "PIE", # flake8-pie
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific
 ]
+ignore = [
+    # `⟨...⟩` is SurrealQL's identifier-escape syntax and `α`, `é`, `表格` are
+    # test data for it, so "did you mean the ASCII lookalike?" is exactly
+    # backwards here - the point of those characters is that they are not ASCII.
+    "RUF002", # ambiguous unicode in a docstring
+    "RUF003", # ambiguous unicode in a comment
+    # `__all__` is grouped by category with section comments (connections, data
+    # types, the error tree). Alphabetical order would scatter those groups for
+    # no reader's benefit.
+    "RUF022", # `__all__` is not sorted
+    # `assert 0 == len(x)` reads fine and there are ~90 of them in the tests.
+    # Rewriting every one is churn with no defect behind it.
+    "SIM300", # yoda condition
+]
+
+[tool.ruff.lint.per-file-ignores]
+# `src/surrealdb/cbor/` is a vendored copy of cbor2, carrying local changes for
+# SurrealDB's tags. Restyling it to this project's taste would make every future
+# diff against upstream unreadable for no behavioural gain, so the opinionated
+# families are off there. The ones that catch actual defects - pyflakes,
+# pycodestyle, import order, pyupgrade - still apply, and it passes them.
+"src/surrealdb/cbor/**/*.py" = ["B", "C4", "PIE", "SIM", "RUF"]
 
 # --------------------------------------------------
 # mypy
