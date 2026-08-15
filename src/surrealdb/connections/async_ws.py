@@ -8,7 +8,7 @@ import uuid
 import warnings
 import weakref
 from asyncio import AbstractEventLoop, Future, Queue, Task
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from types import TracebackType
 from typing import Any, overload
 from uuid import UUID
@@ -26,7 +26,11 @@ from surrealdb.connections.builders import (
     _map_result,
 )
 from surrealdb.connections.url import Url
-from surrealdb.connections.utils_mixin import AUTH_FALLBACK_QUERY, UtilsMixin
+from surrealdb.connections.utils_mixin import (
+    AUTH_FALLBACK_QUERY,
+    UtilsMixin,
+    render_projection,
+)
 from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
@@ -691,6 +695,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self,
         record: RecordID,
         *,
+        fields: Sequence[str] | None = None,
         into: type[M],
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
@@ -700,6 +705,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self,
         record: Table,
         *,
+        fields: Sequence[str] | None = None,
         into: type[M],
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
@@ -709,6 +715,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self,
         record: str,
         *,
+        fields: Sequence[str] | None = None,
         into: type[M],
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
@@ -718,6 +725,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self,
         record: RecordID,
         *,
+        fields: Sequence[str] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> dict[str, Value] | None: ...
@@ -726,6 +734,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self,
         record: Table,
         *,
+        fields: Sequence[str] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> list[Value]: ...
@@ -734,6 +743,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self,
         record: str,
         *,
+        fields: Sequence[str] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> Value: ...
@@ -741,6 +751,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self,
         record: RecordIdType,
         *,
+        fields: Sequence[str] | None = None,
         into: type[M] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
@@ -750,10 +761,26 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
         when it is absent. A ``Table`` (or bare table-name string) returns the
         list of records. Pass ``into=Model`` to map each record onto ``Model``.
+
+        ``fields`` narrows the projection, so the server sends only what is
+        asked for rather than the whole record::
+
+            db.select(RecordID("person", "tobie"), fields=["name", "email"])
+            db.select(Table("person"), fields=["address.city"])
+
+        A dot walks into a nested object; each segment is escaped separately, so
+        a name with a space or unicode in it is quoted correctly. A field whose
+        name genuinely contains a dot cannot be spelled this way - use
+        :meth:`query` for that.
+
+        Note that ``id`` is not included unless you ask for it, exactly as in
+        SurrealQL. A model passed to ``into=`` that declares an ``id`` field
+        therefore needs ``fields=["id", ...]``.
         """
         variables: dict[str, Any] = {}
         resource_ref = self._resource_to_variable(record, variables, "_resource")
-        query = f"SELECT * FROM {resource_ref}"
+        projection = render_projection(fields)
+        query = f"SELECT {projection} FROM {resource_ref}"
 
         response = await self.query_raw(
             query, variables, session_id=session_id, txn_id=txn_id

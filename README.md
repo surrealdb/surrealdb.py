@@ -223,6 +223,27 @@ about still reads back — `RecordID.id` is therefore typed more widely than
 > named `None`. If you have code that builds a table name dynamically, that is
 > the case to check.
 
+#### Selecting only some fields
+
+Pass `fields=` to narrow the projection, so the server sends only what you ask
+for rather than the whole record:
+
+```python
+await db.select(RecordID("person", "tobie"), fields=["name", "email"])
+await db.select(Table("person"), fields=["address.city"])
+```
+
+A dot walks into a nested object. Each segment is escaped separately, so a field
+name containing a space or unicode is quoted correctly and a field list can
+never smuggle SurrealQL into the statement. A field whose name genuinely
+*contains* a dot cannot be spelled this way — use `query()` for that.
+
+`id` is not included unless you ask for it, exactly as in SurrealQL, so a model
+passed to `into=` that declares an `id` field needs `fields=["id", ...]`.
+
+Anything beyond a list of field names — aliases, functions, `WHERE`, `ORDER BY`
+— is a `query()`, not a `select()`.
+
 #### Record ranges
 
 A `RecordID` whose id is a `Range` targets every record in that range, and every
