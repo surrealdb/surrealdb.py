@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0-beta.6] - 2026-08-15
+
+One user-visible addition, and a linter that had been switched off without
+anyone noticing.
+
+### Added
+
+- `select(fields=[...])` narrows the projection, so the server sends only the
+  fields asked for rather than the whole record - on all six connection classes.
+  The capability was always reachable through `query("SELECT a, b FROM $r")`;
+  this is the spelling on the method that already binds the resource for you and
+  composes with `into=`. A dot walks into a nested object, and each segment is
+  escaped separately: escaping a whole `"address.city"` would ask for a field of
+  that literal name, which the server answers with a null rather than an error.
+  A field list cannot be parameter-bound - SurrealQL has no `SELECT $f` - so it
+  is the one part that must be inlined, and every name is escaped on the way in.
+  `id` is not included unless you ask for it, exactly as in SurrealQL, so a model
+  passed to `into=` that declares one needs `fields=["id", ...]`. `fields=None`
+  is the default and emits the same statement as before.
+
+### Fixed
+
+- The linter had been checking almost nothing. `select` in the ruff config
+  *replaces* ruff's defaults rather than adding to them, so setting it to
+  `["I", "UP"]` turned pyflakes off across the whole project - nothing had been
+  checking for unused imports, unused variables or undefined names. Turning the
+  defaults back on and adding bugbear, comprehensions, pie, simplify and the
+  ruff-specific rules found 42 unused imports and 12 unused variables. Two other
+  blind spots went with it: `src/surrealdb/__init__.py` was excluded from ruff
+  entirely, and CI pointed it at `./src` alone, so the test suite was linted and
+  formatted by nothing. No behaviour changes, but eight `pytest.raises(Exception)`
+  are now narrowed to what the code actually raises, so they no longer pass on an
+  unrelated `AttributeError`.
+
+
 ## [3.0.0-beta.5] - 2026-08-15
 
 The second review pass over the 3.0.0 surface, and the first that verified its
@@ -302,7 +337,8 @@ Follow-up to `3.0.0-alpha.1` that finalises the v3 API surface and fixes a batch
 ### Added
 - Initial stable release of the SurrealDB Python client.
 
-[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.5...HEAD
+[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.6...HEAD
+[3.0.0-beta.6]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.5...v3.0.0-beta.6
 [3.0.0-beta.5]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.4...v3.0.0-beta.5
 [3.0.0-beta.4]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.3...v3.0.0-beta.4
 [3.0.0-beta.3]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.2...v3.0.0-beta.3
