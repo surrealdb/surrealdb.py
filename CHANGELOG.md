@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0-beta.7] - 2026-08-15
+
+The surfaces a new user meets before they call a method: the PyPI page, the
+migration table, the export list, and the examples. A pre-stable audit across
+API parity, packaging, error contracts and documentation found nothing that a
+later release could not fix, so this is the cheap half - the things that are
+simply wrong today.
+
+### Added
+
+- The seven usable geometry classes are now exported from `surrealdb`:
+  `GeometryPoint`, `GeometryLine`, `GeometryPolygon`, `GeometryMultiPoint`,
+  `GeometryMultiLine`, `GeometryMultiPolygon` and `GeometryCollection`. The
+  package used to export exactly one geometry name - `Geometry`, the base class -
+  and that is the single one you cannot send: it constructs, then fails at encode
+  time with `cannot encode Geometry`. `Geometry` is still exported, for
+  `isinstance` checks and annotations.
+- Python 3.14 is supported, tested and declared. The pure-Python package needed
+  no change, and the embedded extension is built `abi3-py39`, so the existing
+  wheel already runs on it. Both are now in the CI matrix rather than only in the
+  classifier list.
+
+### Fixed
+
+- The README's migration table illustrated the `query()` return-shape change
+  with `SELECT 1`, which is a parse error on every SurrealDB version. It is now
+  `RETURN 1`, which runs.
+- Four README links were relative. The README is the PyPI long description, and
+  PyPI renders it with no repository around it, so those four 404'd on the
+  project page.
+- Every example declared `surrealdb>=1.0.7`, which resolves to 2.0.0 and cannot
+  import the 3.x code sitting in the same directory. All 21 declarations across
+  the 12 example projects now ask for `>=3.0.0`.
+- The fastapi example could not be imported by following its own README: it
+  annotates `EmailStr` without depending on `pydantic[email]`.
+- The logfire example crashed twice. `logfire.configure(console=True)` raises
+  `'bool' object has no attribute 'span_style'` before any tracing starts, and
+  the example read `query()` in the 2.x shape - one `TypeError`, and a user count
+  that reported `1` for any query because it measured statements rather than rows.
+- Four `xfail` markers described an SDK that no longer exists. Three were waiting
+  on a `Table` round trip that SurrealDB has since fixed, and one asserted that
+  `live()` over HTTP returns a `UUID` when it has raised `UnsupportedFeatureError`
+  since the transports were made consistent. An `xfail` records only *that*
+  something failed, so the last one would have stayed green if `live()` had begun
+  raising `AttributeError` from a typo.
+
 ## [3.0.0-beta.6] - 2026-08-15
 
 One user-visible addition, and a linter that had been switched off without
@@ -337,7 +383,8 @@ Follow-up to `3.0.0-alpha.1` that finalises the v3 API surface and fixes a batch
 ### Added
 - Initial stable release of the SurrealDB Python client.
 
-[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.6...HEAD
+[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.7...HEAD
+[3.0.0-beta.7]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.6...v3.0.0-beta.7
 [3.0.0-beta.6]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.5...v3.0.0-beta.6
 [3.0.0-beta.5]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.4...v3.0.0-beta.5
 [3.0.0-beta.4]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.3...v3.0.0-beta.4
