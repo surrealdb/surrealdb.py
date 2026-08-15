@@ -143,8 +143,13 @@ async def surrealdb_connection() -> AsyncGenerator[AsyncWsSurrealConnection, Non
 
 
 # Database send+receive tests
+#
+# These were marked `xfail(reason="Waiting for a fix in SurrealDB")`. The fix
+# arrived: all three pass on 2.0.5, 2.3.10 and 3.2.3. An `xfail` that always
+# passes reports `xpassed`, which is not a failure, so the marker was hiding
+# the one thing it should have surfaced - that the round trip now works, and
+# would go unnoticed if it broke again.
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="Waiting for a fix in SurrealDB")
 async def test_table_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending Table to SurrealDB and receiving it back."""
     table = Table("users")
@@ -157,7 +162,6 @@ async def test_table_db_roundtrip(surrealdb_connection: Any) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="Waiting for a fix in SurrealDB")
 async def test_multiple_tables_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending multiple Table objects to SurrealDB."""
     tables = {
@@ -176,7 +180,6 @@ async def test_multiple_tables_db_roundtrip(surrealdb_connection: Any) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="Waiting for a fix in SurrealDB")
 async def test_table_in_array_db_roundtrip(surrealdb_connection: Any) -> None:
     """Test sending array of Table objects to SurrealDB."""
     tables_array = [
