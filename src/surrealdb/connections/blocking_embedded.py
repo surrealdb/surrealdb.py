@@ -8,8 +8,6 @@ from collections.abc import Generator
 from typing import Any
 from uuid import UUID
 
-from surrealdb_embedded import SyncEmbeddedDB
-
 from surrealdb.connections.blocking_ws import (
     BlockingSurrealSession,
     BlockingWsSurrealConnection,
@@ -21,6 +19,7 @@ from surrealdb.data.types.table import Table
 from surrealdb.errors import UnsupportedFeatureError
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.types import Value
+from surrealdb_embedded import SyncEmbeddedDB
 
 # The embedded engine builds no live-query notification channel (the Rust
 # extension reports ``LQ_SUPPORT = false``), so there is nowhere for

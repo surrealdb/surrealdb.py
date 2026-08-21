@@ -71,11 +71,19 @@ embedded = [
 pydantic = [
     "pydantic>=2.12.0",
 ]
+memory = [
+    # `>=`, deliberately, unlike `embedded`'s exact pin above. The memory client
+    # shares no code with this SDK - it speaks HTTP to a separate service - so it
+    # is free to move across its own majors while the SDK stays where it is. An
+    # `==` pin here would re-weld the release cadences that splitting it apart
+    # was meant to separate.
+    "surrealdb-memory>=1.0",
+]
 
 [dependency-groups]
 dev = [
     { include-group = "test" },
-    "surrealdb[pydantic]",
+    "surrealdb[memory,pydantic]",
     "maturin>=1.0",
     "mypy>=1.18.2",
     "pyright>=1.1.407",
@@ -97,6 +105,7 @@ test = [
 
 [tool.uv.sources]
 surrealdb-embedded = { path = "embedded", editable = true }
+surrealdb-memory = { path = "memory", editable = true }
 
 # --------------------------------------------------
 # hatch
@@ -125,8 +134,7 @@ include = [
 [tool.ruff]
 # Markdown is excluded because ruff >= 0.16 formats Python code blocks inside
 # `.md` files, which reflows the hand-aligned examples in our docs (notably
-# `src/surrealdb/spectron/README.md`, which sits under the `./src` path CI
-# checks). Docs prose is not formatter-owned.
+# `memory/README.md`). Docs prose is not formatter-owned.
 #
 # `src/surrealdb/__init__.py` used to be excluded here as well. That was
 # collateral from the markdown fix rather than a decision about the file, and it
@@ -166,6 +174,13 @@ ignore = [
     # Rewriting every one is churn with no defect behind it.
     "SIM300", # yoda condition
 ]
+
+# `surrealdb_memory` is a separate distribution, so ruff would otherwise sort it
+# in with third-party imports - including inside `memory/`, where it is the
+# package under test. Declaring it keeps its own imports in the first-party
+# group, the way `surrealdb.spectron` was grouped before the split.
+[tool.ruff.lint.isort]
+known-first-party = ["surrealdb", "surrealdb_memory", "surrealdb_embedded"]
 
 [tool.ruff.lint.per-file-ignores]
 # `src/surrealdb/cbor/` is a vendored copy of cbor2, carrying local changes for
@@ -259,7 +274,7 @@ typeCheckingMode = "strict"
 
 # Source configuration
 include = ["src"]
-extraPaths = ["embedded/src"]
+extraPaths = ["embedded/src", "memory/src"]
 exclude = [
     "**/__pycache__",
     "**/.pytest_cache",

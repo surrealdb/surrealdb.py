@@ -968,16 +968,23 @@ async with AsyncSurreal("ws://localhost:8000") as db:
 
 For a complete example with configuration options and best practices, see [`examples/logfire/`](https://github.com/surrealdb/surrealdb.py/tree/main/examples/logfire).
 
-## Spectron
+## Agent memory
 
-[Spectron](https://github.com/surrealdb/spectron) is a memory service, and its
-client is bundled with `surrealdb`. It is **no longer re-exported at the top
-level** - import it from its own submodule:
+Agent memory is an optional client for [Spectron](https://github.com/surrealdb/spectron),
+a memory service. It ships as its own distribution so it can move at its own
+pace, and is installed through an extra:
+
+```sh
+pip install 'surrealdb[memory]'
+
+# Using uv
+uv add 'surrealdb[memory]'
+```
 
 ```python
-from surrealdb.spectron import Spectron, AsyncSpectron
+from surrealdb.memory import AsyncMemory, Memory
 
-with Spectron(
+with Memory(
     context="acme-prod",
     endpoint="https://api.spectron.example",
     api_key="sk-spec-...",
@@ -987,10 +994,23 @@ with Spectron(
     print(hits.hits)
 ```
 
-`Spectron` is synchronous (backed by `requests`); `AsyncSpectron` is the
-`await`-able equivalent (backed by `aiohttp`). See
-[`src/surrealdb/spectron/README.md`](https://github.com/surrealdb/surrealdb.py/blob/main/src/surrealdb/spectron/README.md) for the
-full client documentation.
+`Memory` is synchronous (backed by `requests`); `AsyncMemory` is the
+`await`-able equivalent (backed by `aiohttp`). Errors derive from
+`MemoryServiceError` — not `MemoryError`, which is a Python builtin. See
+[`memory/README.md`](https://github.com/surrealdb/surrealdb.py/blob/main/memory/README.md)
+for the full client documentation.
+
+Without the extra, `surrealdb.memory` still imports, and any attribute names the
+missing package:
+
+```
+ImportError: 'Memory' needs the agent memory client, which ships separately.
+    pip install 'surrealdb[memory]'    # or: uv add 'surrealdb[memory]'
+```
+
+Because it is a separate distribution, its version moves independently of the
+SDK's — you can hold `surrealdb` at 3.x and upgrade `surrealdb-memory` across
+its own majors.
 
 ## Contributing
 

@@ -10,8 +10,6 @@ from types import TracebackType
 from typing import Any
 from uuid import UUID
 
-from surrealdb_embedded import AsyncEmbeddedDB
-
 from surrealdb.connections.async_ws import AsyncSurrealSession, AsyncWsSurrealConnection
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import mapped_engine_errors
@@ -20,6 +18,7 @@ from surrealdb.data.types.table import Table
 from surrealdb.errors import UnsupportedFeatureError
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.types import Value
+from surrealdb_embedded import AsyncEmbeddedDB
 
 # The embedded engine builds no live-query notification channel (the Rust
 # extension reports ``LQ_SUPPORT = false``), so there is nowhere for

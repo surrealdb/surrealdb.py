@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** the memory client has moved out of this package. It was
+  `surrealdb.spectron`, bundled into every install; it is now the separate
+  `surrealdb-memory` distribution, installed with `pip install 'surrealdb[memory]'`
+  and imported as `from surrealdb.memory import Memory`.
+
+  The point is release cadence, not size. Bundled, its version *was* the SDK's,
+  so a change to the memory service's API forced a full SDK release - the whole
+  wheel matrix plus the Rust embedded build across six platforms - and every SDK
+  patch republished the memory client unchanged. The `[memory]` extra depends on
+  `>=`, deliberately unlike `[embedded]`'s exact pin, so you can hold `surrealdb`
+  at 3.x and move `surrealdb-memory` across its own majors. (`embedded` pins
+  exactly because that extension is compiled against the SDK and has to match;
+  a client that speaks HTTP to a separate service does not.)
+
+  Product names are gone from the API along with it. `Spectron` and
+  `AsyncSpectron` are now `Memory` and `AsyncMemory`; `SpectronError` and its
+  four subclasses are `MemoryServiceError`, `MemoryAPIError`, `MemoryAuthError`,
+  `MemoryNotFoundError` and `MemoryScopeError`. The base is
+  `MemoryServiceError` rather than `MemoryError` on purpose - `MemoryError` is a
+  Python builtin, and shadowing it means a caller's `except MemoryError:` stops
+  catching an interpreter out-of-memory while a real service failure goes
+  uncaught by code expecting the builtin. The two classes are unrelated, so both
+  directions fail silently.
+
+  `surrealdb.memory` remains the supported import path: it is a small forwarding
+  module in the SDK, so nothing about the short spelling changes. It is a
+  *module* and not a package because two distributions writing into one
+  `surrealdb/memory/` directory installs without complaint and then breaks on
+  uninstall - the survivor imports as an empty namespace package, so
+  `import surrealdb.memory` still succeeds while exporting nothing.
+
+  Migrating is two substitutions:
+
+  ```python
+  # before
+  from surrealdb.spectron import Spectron, AsyncSpectron, SpectronError
+  # after — pip install 'surrealdb[memory]'
+  from surrealdb.memory import Memory, AsyncMemory, MemoryServiceError
+  ```
+
+  Without the extra installed, `surrealdb.memory` still imports and any
+  attribute names what is missing and how to get it, rather than failing with a
+  bare `ModuleNotFoundError`.
+
 ## [3.0.0-beta.7] - 2026-08-15
 
 The surfaces a new user meets before they call a method: the PyPI page, the
