@@ -92,6 +92,39 @@ def _check_file(value: object, argument: str = "file") -> None:
         )
 
 
+def _check_content(value: object) -> bytes:
+    """Normalise file contents to ``bytes``, refusing anything that would not round-trip.
+
+    ``str`` is refused rather than encoded. The server stores bytes and ``get()``
+    returns bytes, so accepting a string would make ``put(f, s)`` succeed and
+    ``get(f) == s`` be False - a write that looks fine and a read that quietly
+    hands back a different type. Making the caller encode keeps the pair
+    symmetric, and names the encoding they actually want instead of assuming
+    UTF-8 on their behalf.
+
+    ``bytearray`` and ``memoryview`` are accepted and copied: both are real byte
+    buffers, and refusing them would be pedantry. ``memoryview`` in particular
+    reaches the CBOR encoder as an unsupported type otherwise.
+    """
+    if isinstance(value, bytes):
+        return value
+    if isinstance(value, str):
+        raise TypeError(
+            "content must be bytes, not str - `get()` returns bytes, so a str "
+            "here would not round-trip. Encode it first, e.g. "
+            'content.encode("utf-8")'
+        )
+    if isinstance(value, (bytearray, memoryview)):
+        return bytes(value)
+    # Only suggest `.read()` when the value plausibly has one - offering it for
+    # an int is noise, and noise in an error message is what makes people stop
+    # reading them.
+    hint = " - read it first, e.g. handle.read()" if hasattr(value, "read") else ""
+    raise TypeError(
+        f"content must be bytes, not {type(value).__name__}: {value!r}{hint}"
+    )
+
+
 def _check_key(value: object) -> None:
     """``file::rename``'s second argument is a key, not a file.
 
@@ -119,18 +152,22 @@ class BlockingFiles:
     def _first(self, query: str, vars: dict[str, Any]) -> Any:
         return self._runner.query(query, vars).first()
 
-    def put(self, file: File, content: bytes) -> None:
+    def put(self, file: File, content: bytes | bytearray | memoryview) -> None:
         """Write ``content``, replacing anything already at that key."""
         _check_file(file)
-        self._first("RETURN file::put($f, $c)", {"f": file, "c": content})
+        payload = _check_content(content)
+        self._first("RETURN file::put($f, $c)", {"f": file, "c": payload})
 
-    def put_if_not_exists(self, file: File, content: bytes) -> None:
+    def put_if_not_exists(
+        self, file: File, content: bytes | bytearray | memoryview
+    ) -> None:
         """Write ``content`` only if the key is free; otherwise do nothing.
 
         The server neither writes nor complains when the file already exists.
         """
         _check_file(file)
-        self._first("RETURN file::put_if_not_exists($f, $c)", {"f": file, "c": content})
+        payload = _check_content(content)
+        self._first("RETURN file::put_if_not_exists($f, $c)", {"f": file, "c": payload})
 
     def get(self, file: File) -> bytes | None:
         """The file's bytes, or ``None`` if it does not exist."""
@@ -211,16 +248,20 @@ class AsyncFiles:
     async def _first(self, query: str, vars: dict[str, Any]) -> Any:
         return await self._runner.query(query, vars).first()
 
-    async def put(self, file: File, content: bytes) -> None:
+    async def put(self, file: File, content: bytes | bytearray | memoryview) -> None:
         """Write ``content``, replacing anything already at that key."""
         _check_file(file)
-        await self._first("RETURN file::put($f, $c)", {"f": file, "c": content})
+        payload = _check_content(content)
+        await self._first("RETURN file::put($f, $c)", {"f": file, "c": payload})
 
-    async def put_if_not_exists(self, file: File, content: bytes) -> None:
+    async def put_if_not_exists(
+        self, file: File, content: bytes | bytearray | memoryview
+    ) -> None:
         """Write ``content`` only if the key is free; otherwise do nothing."""
         _check_file(file)
+        payload = _check_content(content)
         await self._first(
-            "RETURN file::put_if_not_exists($f, $c)", {"f": file, "c": content}
+            "RETURN file::put_if_not_exists($f, $c)", {"f": file, "c": payload}
         )
 
     async def get(self, file: File) -> bytes | None:

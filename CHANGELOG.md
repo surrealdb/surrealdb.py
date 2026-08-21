@@ -51,6 +51,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recognise - a passthrough dict would turn `limti=2` into "every file in the
   bucket" with nothing to indicate why. `start` is exclusive.
 
+  The reference and the contents are kept as different types: `File` is the
+  bucket-plus-key reference, and contents are plain `bytes` - `put` takes
+  `bytes`, `bytearray` or `memoryview`, and `get` returns `bytes`. A `str` is
+  refused rather than encoded on your behalf, because the server stores bytes and
+  `get` returns them, so accepting one would let `put(f, s)` succeed while
+  `get(f) == s` was False. A file handle is refused too, with a message naming
+  `handle.read()`.
+
   Buckets are an experimental server feature: the server must be started with
   `SURREAL_CAPS_ALLOW_EXPERIMENTAL=files`, and the tests detect that capability
   rather than a version number, since the same build has it or not depending on

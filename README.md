@@ -1019,6 +1019,17 @@ classes take the same calls with `await`.
 A key is normalised to start with `/`, so `File("b", "a.txt")` and
 `File("b", "/a.txt")` are the same file.
 
+The two halves are different types: a `File` is the *reference* (bucket plus
+key), and the contents are plain `bytes`. `put` accepts `bytes`, `bytearray` or
+`memoryview` and `get` returns `bytes`. A `str` is refused rather than encoded
+for you — the server stores bytes, so accepting one would make `put(f, s)`
+succeed and `get(f) == s` be False. Encode it yourself, and pick the encoding:
+
+```python
+db.files.put(readme, "hello".encode("utf-8"))
+db.files.put(photo, handle.read())            # not the handle itself
+```
+
 #### Why files are bound, not written into queries
 
 SurrealQL's file literal - `f"bucket:/key"` - accepts only

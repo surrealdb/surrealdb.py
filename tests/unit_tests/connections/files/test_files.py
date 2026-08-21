@@ -232,6 +232,81 @@ def test_put_if_not_exists_writes_when_the_key_is_free(
     assert blocking_ws_connection.files.get(f) == b"fresh"
 
 
+# --------------------------------------------------------------- the contents side
+
+
+def test_a_string_is_refused_rather_than_silently_encoded(
+    blocking_ws_connection: BlockingWsSurrealConnection, bucket: str
+) -> None:
+    """The asymmetry this prevents: ``put(f, s)`` then ``get(f) != s``.
+
+    The server stores bytes and ``get`` returns bytes, so a ``str`` accepted here
+    would make the write look fine and the read hand back a different type -
+    silently, with nothing to indicate the round trip was lossy. Refusing it also
+    means the caller names the encoding rather than the SDK assuming UTF-8.
+    """
+    f = File(bucket, _key())
+
+    with pytest.raises(TypeError) as caught:
+        blocking_ws_connection.files.put(f, "text")  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+
+    message = str(caught.value)
+    assert "not str" in message
+    assert "encode" in message, "the message must say how to fix it"
+    assert blocking_ws_connection.files.exists(f) is False, "nothing was written"
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        pytest.param(b"buffer", id="bytes"),
+        pytest.param(bytearray(b"buffer"), id="bytearray"),
+        pytest.param(memoryview(b"buffer"), id="memoryview"),
+    ],
+)
+def test_every_accepted_buffer_type_round_trips_as_bytes(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    bucket: str,
+    content: Any,
+) -> None:
+    """``memoryview`` reaches the CBOR encoder as an unsupported type otherwise."""
+    f = File(bucket, _key())
+
+    blocking_ws_connection.files.put(f, content)
+
+    assert blocking_ws_connection.files.get(f) == b"buffer"
+
+
+def test_a_file_handle_is_refused_and_told_to_read_itself(
+    blocking_ws_connection: BlockingWsSurrealConnection, bucket: str
+) -> None:
+    """``put`` takes bytes, so the obvious wrong guess gets a useful answer."""
+    import io
+
+    with pytest.raises(TypeError) as caught:
+        blocking_ws_connection.files.put(File(bucket, _key()), io.BytesIO(b"x"))  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+
+    assert "handle.read()" in str(caught.value)
+
+
+def test_the_read_hint_is_not_offered_for_values_that_cannot_be_read(
+    blocking_ws_connection: BlockingWsSurrealConnection, bucket: str
+) -> None:
+    """Noise in an error message is what makes people stop reading them."""
+    with pytest.raises(TypeError) as caught:
+        blocking_ws_connection.files.put(File(bucket, _key()), 123)  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+
+    assert "read it first" not in str(caught.value)
+
+
+def test_put_if_not_exists_validates_content_too(
+    blocking_ws_connection: BlockingWsSurrealConnection, bucket: str
+) -> None:
+    """Both writers, not just ``put`` - the check is easy to add to one and forget."""
+    with pytest.raises(TypeError, match="not str"):
+        blocking_ws_connection.files.put_if_not_exists(File(bucket, _key()), "text")  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+
+
 # --------------------------------------------------------------- caller mistakes
 
 
