@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0-beta.8] - 2026-08-21
+
+The release that makes the memory split usable. `surrealdb-memory 1.0.0-beta.1`
+is already on PyPI, but every install path the docs describe - the `[memory]`
+extra and the `surrealdb.memory` import - lives in this package, so until now
+they pointed at nothing.
+
 ### Changed
 
 - **Breaking:** the memory client has moved out of this package. It was
@@ -444,7 +451,8 @@ Follow-up to `3.0.0-alpha.1` that finalises the v3 API surface and fixes a batch
 ### Added
 - Initial stable release of the SurrealDB Python client.
 
-[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.7...HEAD
+[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.8...HEAD
+[3.0.0-beta.8]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.7...v3.0.0-beta.8
 [3.0.0-beta.7]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.6...v3.0.0-beta.7
 [3.0.0-beta.6]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.5...v3.0.0-beta.6
 [3.0.0-beta.5]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.4...v3.0.0-beta.5
