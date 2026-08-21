@@ -9,7 +9,7 @@ name = "surrealdb-memory"
 # `==`, so this can move across majors while the SDK stays put. (The `embedded`
 # extra pins exactly, because that extension is compiled against the SDK and
 # has to match; a client that speaks HTTP to a remote service does not.)
-version = "1.0.0"
+version = "1.0.0-beta.1"
 description = "Agent memory client for the surrealdb Python SDK"
 readme = "README.md"
 authors = [{ name = "SurrealDB" }]
@@ -46,4 +46,4 @@ documentation = "https://surrealdb.com/docs/sdk/python"
 packages = ["src/surrealdb_memory"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/surrealdb_memory", "tests", "README.md", "pyproject.toml"]
+include = ["src/surrealdb_memory", "tests", "README.md", "CHANGELOG.md", "pyproject.toml"]

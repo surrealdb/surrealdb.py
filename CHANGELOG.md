@@ -53,6 +53,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   attribute names what is missing and how to get it, rather than failing with a
   bare `ModuleNotFoundError`.
 
+  The first release of it is `surrealdb-memory` **1.0.0-beta.1**, and the extra
+  depends on `>=1.0.0b1` rather than `>=1.0`. That is load-bearing: a specifier
+  that does not itself name a pre-release excludes them, so a `>=1.0` floor would
+  leave `surrealdb[memory]` resolving to nothing at all while the client is on
+  its beta line. Two tests read both pyproject files and fail if the floor stops
+  admitting the version the addon declares, or stops being a `>=` floor.
+
+  Releases are now selected by tag, because a memory release must not require an
+  SDK bump. `v<version>` releases `surrealdb` and `surrealdb-embedded`;
+  `memory-v<version>` releases `surrealdb-memory`. Previously every release ran
+  the whole Rust wheel matrix regardless - harmless in that `skip-existing`
+  turns a re-publish of an unchanged version into a no-op, but nine wheel builds
+  ran to produce artifacts that were discarded, and a transient failure in any of
+  them turned a release that only shipped the memory client red.
+
 ## [3.0.0-beta.7] - 2026-08-15
 
 The surfaces a new user meets before they call a method: the PyPI page, the

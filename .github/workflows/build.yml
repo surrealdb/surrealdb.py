@@ -7,8 +7,66 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      packages:
+        description: Which packages to build and publish
+        type: choice
+        default: all
+        options:
+          - all
+          - sdk
+          - memory
 
 jobs:
+  # -----------------------------------------------
+  # Which packages does this release ship?
+  #
+  # `surrealdb-memory` is versioned independently of the SDK, so a release of
+  # one must not require a bump of the other. The tag decides:
+  #
+  #   v3.0.1              -> surrealdb + surrealdb-embedded
+  #   memory-v1.0.0-beta.2 -> surrealdb-memory
+  #
+  # Without this every release ran the whole Rust wheel matrix regardless. The
+  # publishes were harmless - `skip-existing: true` turns a re-publish of an
+  # unchanged version into a no-op rather than an error - but nine wheel builds
+  # ran to produce artifacts that were then discarded, and a transient failure
+  # in any of them turned a release that only shipped the memory client red.
+  # -----------------------------------------------
+
+  plan:
+    name: Plan the release
+    runs-on: ubuntu-latest
+    outputs:
+      sdk: ${{ steps.pick.outputs.sdk }}
+      memory: ${{ steps.pick.outputs.memory }}
+    steps:
+      - name: Pick packages
+        id: pick
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          CHOICE: ${{ inputs.packages }}
+        run: |
+          set -euo pipefail
+          case "${CHOICE:-}" in
+            sdk)    sdk=true;  memory=false ;;
+            memory) sdk=false; memory=true  ;;
+            all)    sdk=true;  memory=true  ;;
+            *)
+              # A release event: the tag decides. Anything not prefixed
+              # `memory-` is an SDK release, which keeps every existing tag
+              # behaving exactly as it did.
+              if [ "${TAG#memory-}" != "$TAG" ]; then
+                sdk=false; memory=true
+              else
+                sdk=true;  memory=false
+              fi
+              ;;
+          esac
+          echo "sdk=$sdk" >> "$GITHUB_OUTPUT"
+          echo "memory=$memory" >> "$GITHUB_OUTPUT"
+          echo "tag='${TAG:-}' choice='${CHOICE:-}' -> sdk=$sdk memory=$memory"
+
   # -----------------------------------------------
   # Pure Python package (surrealdb)
   # -----------------------------------------------
@@ -16,6 +74,8 @@ jobs:
   build-python:
     name: Build pure Python package
     runs-on: ubuntu-latest
+    needs: [plan]
+    if: needs.plan.outputs.sdk == 'true'
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -44,6 +104,8 @@ jobs:
   build-memory:
     name: Build agent memory package
     runs-on: ubuntu-latest
+    needs: [plan]
+    if: needs.plan.outputs.memory == 'true'
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -73,6 +135,8 @@ jobs:
   linux:
     name: Build Linux wheels (${{ matrix.target }})
     runs-on: ubuntu-latest
+    needs: [plan]
+    if: needs.plan.outputs.sdk == 'true'
     strategy:
       matrix:
         include:
@@ -108,6 +172,8 @@ jobs:
   linux-aarch64:
     name: Build Linux wheels (${{ matrix.target }})
     runs-on: ubuntu-24.04-arm
+    needs: [plan]
+    if: needs.plan.outputs.sdk == 'true'
     strategy:
       matrix:
         include:
@@ -143,6 +209,8 @@ jobs:
   macos:
     name: Build macOS wheels (${{ matrix.target }})
     runs-on: macos-latest
+    needs: [plan]
+    if: needs.plan.outputs.sdk == 'true'
     strategy:
       matrix:
         target: [x86_64, aarch64]
@@ -170,6 +238,8 @@ jobs:
   windows:
     name: Build Windows wheels
     runs-on: windows-latest
+    needs: [plan]
+    if: needs.plan.outputs.sdk == 'true'
     strategy:
       matrix:
         target: [x64]
@@ -197,6 +267,8 @@ jobs:
   sdist:
     name: Build embedded source distribution
     runs-on: ubuntu-latest
+    needs: [plan]
+    if: needs.plan.outputs.sdk == 'true'
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -225,9 +297,10 @@ jobs:
     name: Release surrealdb to PyPI
     runs-on: ubuntu-latest
     if: >-
-      (github.event_name == 'release' && github.event.action == 'published') ||
-      github.event_name == 'workflow_dispatch'
-    needs: [build-python]
+      needs.plan.outputs.sdk == 'true' &&
+      ((github.event_name == 'release' && github.event.action == 'published') ||
+       github.event_name == 'workflow_dispatch')
+    needs: [plan, build-python]
     environment:
       name: pypi
       url: https://pypi.org/p/surrealdb
@@ -249,9 +322,10 @@ jobs:
     name: Release surrealdb-memory to PyPI
     runs-on: ubuntu-latest
     if: >-
-      (github.event_name == 'release' && github.event.action == 'published') ||
-      github.event_name == 'workflow_dispatch'
-    needs: [build-memory]
+      needs.plan.outputs.memory == 'true' &&
+      ((github.event_name == 'release' && github.event.action == 'published') ||
+       github.event_name == 'workflow_dispatch')
+    needs: [plan, build-memory]
     environment:
       name: pypi-memory
       url: https://pypi.org/p/surrealdb-memory
@@ -273,9 +347,10 @@ jobs:
     name: Release surrealdb-embedded to PyPI
     runs-on: ubuntu-latest
     if: >-
-      (github.event_name == 'release' && github.event.action == 'published') ||
-      github.event_name == 'workflow_dispatch'
-    needs: [linux, linux-aarch64, macos, windows, sdist]
+      needs.plan.outputs.sdk == 'true' &&
+      ((github.event_name == 'release' && github.event.action == 'published') ||
+       github.event_name == 'workflow_dispatch')
+    needs: [plan, linux, linux-aarch64, macos, windows, sdist]
     environment:
       name: pypi-embedded
       url: https://pypi.org/p/surrealdb-embedded

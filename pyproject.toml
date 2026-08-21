@@ -77,7 +77,12 @@ memory = [
     # is free to move across its own majors while the SDK stays where it is. An
     # `==` pin here would re-weld the release cadences that splitting it apart
     # was meant to separate.
-    "surrealdb-memory>=1.0",
+    # `>=1.0.0b1`, not `>=1.0`. A specifier that does not itself name a
+    # pre-release excludes them, so `>=1.0` would find no candidate at all while
+    # the memory client is on its beta line - `surrealdb[memory]` would fail to
+    # resolve rather than degrade. The floor keeps matching every later stable,
+    # so it does not need revisiting when 1.0.0 final lands.
+    "surrealdb-memory>=1.0.0b1",
 ]
 
 [dependency-groups]

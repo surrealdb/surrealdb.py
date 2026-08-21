@@ -1671,7 +1671,7 @@ source = { editable = "embedded" }
 
 [[package]]
 name = "surrealdb-memory"
-version = "1.0.0"
+version = "1.0.0b1"
 source = { editable = "memory" }
 dependencies = [
     { name = "aiohttp" },

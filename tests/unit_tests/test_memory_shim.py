@@ -13,9 +13,13 @@ boundary belongs to the side that owns the shim.
 import builtins
 import importlib
 import importlib.util
+import pathlib
+import re
 import sys
 
 import pytest
+from packaging.requirements import Requirement
+from packaging.version import Version
 
 import surrealdb.memory
 
@@ -158,6 +162,111 @@ def test_hasattr_propagates_when_the_addon_is_absent(
 
     # Dunders are still ordinary attribute lookups, so this one stays False.
     assert not hasattr(shim, "__path__")
+
+
+# --------------------------------------------------------- the extra's pin
+
+_REPO = pathlib.Path(__file__).resolve().parents[2]
+
+
+def _declared_addon_version() -> str:
+    text = (_REPO / "memory" / "pyproject.toml").read_text()
+    found = re.findall(r'^version\s*=\s*"([^"]+)"', text, re.M)
+    assert len(found) == 1, (
+        f"expected one version in memory/pyproject.toml, got {found}"
+    )
+    return found[0]
+
+
+def _declared_pin() -> str:
+    text = (_REPO / "pyproject.toml").read_text()
+    found = re.findall(r'"(surrealdb-memory[^"]*)"', text)
+    assert len(found) == 1, f"expected one memory pin in pyproject.toml, got {found}"
+    return found[0]
+
+
+def test_the_declared_pin_admits_the_declared_version() -> None:
+    """Source-level twin of the metadata check below, and the sharper of the two.
+
+    The metadata version only bites once the environment has been re-synced: an
+    editable install caches ``Requires-Dist`` at install time, so editing the pin
+    and running the suite passes against stale metadata. This reads both
+    pyproject files, so it fails the moment the two disagree.
+
+    The failure it exists for is silent. ``>=1.0`` does not admit ``1.0.0b1`` - a
+    specifier that does not itself name a pre-release excludes them - so relaxing
+    the floor while the client is on its beta line leaves ``surrealdb[memory]``
+    resolving to nothing. The dev environment never notices, because it installs
+    the addon from a path dependency and never consults the floor at all.
+    """
+    if not (_REPO / "memory" / "pyproject.toml").is_file():  # pragma: no cover
+        pytest.skip("memory/pyproject.toml is only present in a checkout")
+
+    shipped = Version(_declared_addon_version())
+    pin = Requirement(_declared_pin())
+
+    assert pin.specifier.contains(shipped), (
+        f"the [memory] extra declares {pin.specifier}, which does not admit the "
+        f"version memory/pyproject.toml declares ({shipped}) - "
+        f"`surrealdb[memory]` would resolve to nothing"
+    )
+
+
+@needs_addon
+def test_the_extra_admits_the_version_the_addon_ships() -> None:
+    """The ``[memory]`` floor has to admit the version actually published.
+
+    ``>=1.0`` does *not* admit ``1.0.0b1``: a specifier that does not itself name
+    a pre-release excludes them. So tidying the floor to ``>=1.0`` while the
+    client is on its beta line would leave ``surrealdb[memory]`` resolving to
+    nothing - an install-time failure for users that nothing in this repo would
+    otherwise catch, because the dev environment uses a path dependency and never
+    consults the floor at all.
+
+    Asserted against installed metadata rather than the source, so it is checking
+    what a wheel would actually carry. ``contains`` is called without
+    ``prereleases=True`` deliberately - passing it would mask exactly this bug.
+    """
+    import importlib.metadata as md
+
+    shipped = Version(md.version("surrealdb-memory"))
+    pins = [
+        Requirement(r)
+        for r in (md.requires("surrealdb") or [])
+        if Requirement(r).name == "surrealdb-memory"
+    ]
+
+    assert len(pins) == 1, f"expected one memory pin, found {[str(p) for p in pins]}"
+    pin = pins[0]
+
+    assert pin.specifier.contains(shipped), (
+        f"the [memory] extra pins {pin.specifier} which does not admit the "
+        f"version the addon ships ({shipped}); `surrealdb[memory]` would not resolve"
+    )
+
+
+def test_the_declared_pin_is_a_floor_not_an_exact_match() -> None:
+    """An ``==`` pin would re-weld the release cadences the split separated.
+
+    ``embedded`` pins exactly on purpose - that extension is compiled against the
+    SDK and has to match it. This client speaks HTTP to a separate service, so an
+    exact pin would mean a memory release could not ship without an SDK release,
+    which is the one thing shipping it separately was meant to avoid.
+
+    Read from the source rather than installed metadata for the same reason as
+    the test above: metadata is captured at install time, so an `==` introduced
+    since the last sync would pass unnoticed.
+    """
+    if not (_REPO / "memory" / "pyproject.toml").is_file():  # pragma: no cover
+        pytest.skip("only meaningful in a checkout")
+
+    pin = Requirement(_declared_pin())
+    operators = {spec.operator for spec in pin.specifier}
+
+    assert operators == {">="}, (
+        f"the [memory] extra declares {pin.specifier}; it has to be a `>=` floor "
+        f"so the addon can move without an SDK release"
+    )
 
 
 # --------------------------------------------------------- the core boundary
