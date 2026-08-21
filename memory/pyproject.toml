@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "surrealdb-memory"
+# Versioned independently of the `surrealdb` SDK - that is the whole point of
+# shipping this separately. The SDK's `[memory]` extra depends on `>=`, never
+# `==`, so this can move across majors while the SDK stays put. (The `embedded`
+# extra pins exactly, because that extension is compiled against the SDK and
+# has to match; a client that speaks HTTP to a remote service does not.)
+version = "1.0.0-beta.1"
+description = "Agent memory client for the surrealdb Python SDK"
+readme = "README.md"
+authors = [{ name = "SurrealDB" }]
+license = "Apache-2.0"
+keywords = ["SurrealDB", "Memory", "Agent", "Spectron"]
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Database",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+# Deliberately no dependency on `surrealdb`. This package shares no code with
+# the SDK - it speaks HTTP to a separate service - so requiring it would
+# manufacture the coupling that splitting the package removed.
+dependencies = [
+    "aiohttp>=3.14.0",
+    "requests>=2.25.0",
+]
+
+[project.urls]
+homepage = "https://github.com/surrealdb/surrealdb.py"
+repository = "https://github.com/surrealdb/surrealdb.py"
+documentation = "https://surrealdb.com/docs/sdk/python"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/surrealdb_memory"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/surrealdb_memory", "tests", "README.md", "CHANGELOG.md", "pyproject.toml"]

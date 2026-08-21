@@ -45,13 +45,13 @@ jobs:
       - name: Run ruff checks
         uses: astral-sh/ruff-action@278981a28ce3188b1e39527901f38254bf3aac89 # v4
         with:
-          src: "./src ./tests"
+          src: "./src ./tests ./memory"
           version-file: "uv.lock"
 
       - name: Run ruff format checks
         uses: astral-sh/ruff-action@278981a28ce3188b1e39527901f38254bf3aac89 # v4
         with:
-          src: "./src ./tests"
+          src: "./src ./tests ./memory"
           version-file: "uv.lock"
           args: "format --check --diff"
 
@@ -82,6 +82,9 @@ jobs:
       - name: Run mypy checks
         run: uv run mypy --explicit-package-bases tests/
 
+      - name: Run mypy checks (agent memory)
+        run: uv run mypy --explicit-package-bases -p surrealdb_memory
+
   pyright:
     name: Check pyright
     runs-on: ubuntu-latest
@@ -105,6 +108,9 @@ jobs:
 
       - name: Run pyright checks
         run: uv run pyright src/
+
+      - name: Run pyright checks (agent memory)
+        run: uv run pyright memory/src
 
   package:
     name: Check packaging (py.typed)
@@ -285,6 +291,65 @@ jobs:
           SURREALDB_URL: ws://localhost:8000
           SURREALDB_VERSION: ${{ matrix.surrealdb-version }}
           PYTHONWARNINGS: ignore::ResourceWarning
+
+  test-memory:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    name: Memory Tests - Python ${{ matrix.python-version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      # The addon's own suite. It needs no server and no SurrealDB: the client
+      # speaks HTTP to a separate service, and the tests mock it.
+      - name: Run memory tests
+        run: uv run pytest memory/tests
+
+      # The other half of the split lives in the SDK's suite - that
+      # `surrealdb.memory` forwards to this package, and degrades with an
+      # actionable error when it is absent.
+      - name: Run the shim tests
+        run: uv run pytest tests/unit_tests/test_memory_shim.py
+
+      # `surrealdb[memory]` must be installable from the built artifacts, not
+      # just from the editable path dependency used above.
+      - name: Assert the built wheel carries the extra
+        run: |
+          pip install build
+          python -m build --wheel --outdir /tmp/wheel-core .
+          python -m build --wheel --outdir /tmp/wheel-memory memory
+          python - <<'EOF'
+          import glob, zipfile, sys
+          whl = glob.glob("/tmp/wheel-core/*.whl")[0]
+          meta = zipfile.ZipFile(whl).read(
+              [n for n in zipfile.ZipFile(whl).namelist() if n.endswith("METADATA")][0]
+          ).decode()
+          assert "Provides-Extra: memory" in meta, "the wheel lost the memory extra"
+          line = next(
+              l for l in meta.splitlines()
+              if l.startswith("Requires-Dist: surrealdb-memory")
+          )
+          assert 'extra == "memory"' in line or "extra == 'memory'" in line, line
+          assert "==" not in line.split(";")[0], f"must not pin exactly: {line}"
+          print("OK:", line)
+          EOF
 
   test-embedded:
     runs-on: ubuntu-latest

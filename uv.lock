@@ -1596,6 +1596,9 @@ dependencies = [
 embedded = [
     { name = "surrealdb-embedded" },
 ]
+memory = [
+    { name = "surrealdb-memory" },
+]
 pydantic = [
     { name = "pydantic" },
 ]
@@ -1612,7 +1615,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "responses" },
     { name = "ruff" },
-    { name = "surrealdb", extra = ["pydantic"] },
+    { name = "surrealdb", extra = ["memory", "pydantic"] },
     { name = "types-requests" },
 ]
 test = [
@@ -1631,10 +1634,11 @@ requires-dist = [
     { name = "pydantic-core", specifier = ">=2.10.0" },
     { name = "requests", specifier = ">=2.25.0" },
     { name = "surrealdb-embedded", marker = "extra == 'embedded'", editable = "embedded" },
+    { name = "surrealdb-memory", marker = "extra == 'memory'", editable = "memory" },
     { name = "typing-extensions", marker = "python_full_version < '3.12'", specifier = ">=4.6.0" },
     { name = "websockets", specifier = ">=14.1" },
 ]
-provides-extras = ["embedded", "pydantic"]
+provides-extras = ["embedded", "pydantic", "memory"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1648,7 +1652,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=4.0.0" },
     { name = "responses", specifier = ">=0.25.0" },
     { name = "ruff", specifier = ">=0.14.6" },
-    { name = "surrealdb", extras = ["pydantic"] },
+    { name = "surrealdb", extras = ["memory", "pydantic"] },
     { name = "types-requests", specifier = ">=2.32.4" },
 ]
 test = [
@@ -1664,6 +1668,21 @@ test = [
 name = "surrealdb-embedded"
 version = "3.0.0b7"
 source = { editable = "embedded" }
+
+[[package]]
+name = "surrealdb-memory"
+version = "1.0.0b1"
+source = { editable = "memory" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "requests" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiohttp", specifier = ">=3.14.0" },
+    { name = "requests", specifier = ">=2.25.0" },
+]
 
 [[package]]
 name = "tomli"
