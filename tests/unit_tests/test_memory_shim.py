@@ -12,13 +12,41 @@ boundary belongs to the side that owns the shim.
 
 import builtins
 import importlib
+import importlib.util
 import sys
 
 import pytest
 
 import surrealdb.memory
 
+# The addon is an extra, so the SDK's own suite has to pass without it - the
+# `floors` job resolves `[project.dependencies]` only, and that is exactly the
+# environment a user who never asked for `[memory]` is in. Tests that need the
+# real client say so; the ones that cover its *absence* patch the import and run
+# everywhere.
+HAS_ADDON = importlib.util.find_spec("surrealdb_memory") is not None
 
+needs_addon = pytest.mark.skipif(
+    not HAS_ADDON, reason="surrealdb[memory] is not installed in this environment"
+)
+
+
+def _without_the_addon(monkeypatch: pytest.MonkeyPatch) -> object:
+    """Reimport the shim with `surrealdb_memory` unimportable."""
+    monkeypatch.delitem(sys.modules, "surrealdb_memory", raising=False)
+    monkeypatch.delitem(sys.modules, "surrealdb.memory", raising=False)
+    real_import = builtins.__import__
+
+    def refuse(name: str, *args: object, **kwargs: object) -> object:
+        if name == "surrealdb_memory":
+            raise ModuleNotFoundError("No module named 'surrealdb_memory'")
+        return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "__import__", refuse)
+    return importlib.import_module("surrealdb.memory")
+
+
+@needs_addon
 def test_it_forwards_to_the_addon() -> None:
     import surrealdb_memory
 
@@ -26,6 +54,7 @@ def test_it_forwards_to_the_addon() -> None:
     assert surrealdb.memory.AsyncMemory is surrealdb_memory.AsyncMemory
 
 
+@needs_addon
 def test_from_import_works() -> None:
     from surrealdb.memory import AsyncMemory, Memory
 
@@ -33,6 +62,7 @@ def test_from_import_works() -> None:
     assert AsyncMemory.__name__ == "AsyncMemory"
 
 
+@needs_addon
 def test_star_import_sees_the_addons_all() -> None:
     """``__all__`` is the one dunder the shim forwards.
 
@@ -61,11 +91,13 @@ def test_it_is_a_module_not_a_package() -> None:
     assert surrealdb.memory.__file__.endswith("memory.py")
 
 
+@needs_addon
 def test_dir_lists_the_addons_surface() -> None:
     assert "Memory" in dir(surrealdb.memory)
     assert "AsyncMemory" in dir(surrealdb.memory)
 
 
+@needs_addon
 def test_a_missing_name_still_raises_attribute_error() -> None:
     with pytest.raises(AttributeError):
         surrealdb.memory.NoSuchThing  # noqa: B018
@@ -80,18 +112,7 @@ def test_the_error_names_the_symbol_and_the_install(
     forwards every dunder reports ``'__path__' needs ...`` instead of naming
     what the caller actually asked for.
     """
-    monkeypatch.delitem(sys.modules, "surrealdb_memory", raising=False)
-    monkeypatch.delitem(sys.modules, "surrealdb.memory", raising=False)
-
-    real_import = builtins.__import__
-
-    def refuse(name: str, *args: object, **kwargs: object) -> object:
-        if name == "surrealdb_memory":
-            raise ModuleNotFoundError("No module named 'surrealdb_memory'")
-        return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
-
-    monkeypatch.setattr(builtins, "__import__", refuse)
-    importlib.import_module("surrealdb.memory")
+    _without_the_addon(monkeypatch)
 
     # `from x import y` is the spelling that exposed this: it probes `__path__`
     # before the symbol, so a shim forwarding every dunder answers with
@@ -110,20 +131,33 @@ def test_importing_the_shim_does_not_need_the_addon(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The module itself must import cleanly; only attribute access can fail."""
-    monkeypatch.delitem(sys.modules, "surrealdb_memory", raising=False)
-    monkeypatch.delitem(sys.modules, "surrealdb.memory", raising=False)
+    shim = _without_the_addon(monkeypatch)
 
-    real_import = builtins.__import__
+    assert shim is not None
+    assert dir(shim) == []
 
-    def refuse(name: str, *args: object, **kwargs: object) -> object:
-        if name == "surrealdb_memory":
-            raise ModuleNotFoundError("No module named 'surrealdb_memory'")
-        return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(builtins, "__import__", refuse)
+def test_hasattr_propagates_when_the_addon_is_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A documented consequence of raising ``ImportError`` over ``AttributeError``.
 
-    assert importlib.import_module("surrealdb.memory") is not None
-    assert dir(importlib.import_module("surrealdb.memory")) == []
+    ``hasattr`` and the three-argument ``getattr`` swallow ``AttributeError``
+    only, so with the addon missing they raise rather than reporting ``False`` or
+    falling back to a default. That is the accepted cost of an error that names
+    the install instead of saying the attribute does not exist - recorded here so
+    it stays a decision rather than becoming a surprise.
+    """
+    shim = _without_the_addon(monkeypatch)
+
+    with pytest.raises(ImportError):
+        hasattr(shim, "Memory")
+
+    with pytest.raises(ImportError):
+        getattr(shim, "Memory", "fallback")
+
+    # Dunders are still ordinary attribute lookups, so this one stays False.
+    assert not hasattr(shim, "__path__")
 
 
 # --------------------------------------------------------- the core boundary
@@ -144,6 +178,7 @@ def test_the_client_is_not_re_exported_at_the_top_level() -> None:
         assert name not in surrealdb.__all__
 
 
+@needs_addon
 def test_the_base_error_does_not_shadow_the_builtin() -> None:
     """Why the base error is ``MemoryServiceError`` and not ``MemoryError``."""
     assert not hasattr(surrealdb.memory, "MemoryError")

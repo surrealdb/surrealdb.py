@@ -29,6 +29,14 @@ if TYPE_CHECKING:
     # pollution, which is the one thing a forwarding module is *for*.
     from surrealdb_memory import *  # noqa: F403 # pyright: ignore[reportWildcardImportFromLibrary]
 
+# Attribute access raises `ImportError`, not `AttributeError`, when the addon is
+# absent. That is deliberate: `AttributeError` here reads as "module
+# 'surrealdb.memory' has no attribute 'Memory'", which says nothing about the
+# install that would fix it. The cost is that `hasattr()` propagates instead of
+# returning False, and `getattr(mod, name, default)` raises instead of falling
+# back to its default - both of those swallow `AttributeError` only. With the
+# addon installed, a genuinely missing name raises `AttributeError` as usual,
+# because the lookup reaches the real module.
 _INSTALL_HINT = (
     "the agent memory client, which ships separately.\n"
     "    pip install 'surrealdb[memory]'    # or: uv add 'surrealdb[memory]'"
