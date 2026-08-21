@@ -23,9 +23,11 @@ from surrealdb.connections.builders import (
     SyncInsertBuilder,
     SyncQueryBuilder,
 )
+from surrealdb.connections.files import AsyncFiles, BlockingFiles, FileMetadata
 from surrealdb.connections.url import Url, UrlScheme
 from surrealdb.data.types.datetime import Datetime, PreciseDatetime
 from surrealdb.data.types.duration import Duration
+from surrealdb.data.types.file import File
 from surrealdb.data.types.geometry import (
     Geometry,
     GeometryCollection,
@@ -143,6 +145,13 @@ __all__ = [
     # Data types
     "Table",
     "Duration",
+    # A reference to a file in a storage bucket - bucket plus key, no contents.
+    # `FileMetadata` is what `files.head()` and `files.list()` return; the two
+    # `*Files` helpers are what `db.files` is, exported so they can be annotated.
+    "File",
+    "FileMetadata",
+    "BlockingFiles",
+    "AsyncFiles",
     # Same shape of mistake as `Range` below, one worse: `Geometry` is the base
     # class, so the only exported geometry name is the one that cannot be sent.
     # It constructs, then fails at encode time with "cannot encode Geometry".

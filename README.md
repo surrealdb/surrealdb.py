@@ -968,6 +968,74 @@ async with AsyncSurreal("ws://localhost:8000") as db:
 
 For a complete example with configuration options and best practices, see [`examples/logfire/`](https://github.com/surrealdb/surrealdb.py/tree/main/examples/logfire).
 
+## Files
+
+SurrealDB can store files in a bucket - in memory, on disk, or on object storage
+such as S3. A `File` is a *reference* to one: a bucket plus a key. It holds no
+bytes and is not a Python file object.
+
+Buckets are currently an experimental server feature, so the server has to be
+started with `SURREAL_CAPS_ALLOW_EXPERIMENTAL=files`, and a bucket has to exist:
+
+```surql
+DEFINE BUCKET images BACKEND "memory";
+```
+
+```python
+from surrealdb import File, Surreal
+
+with Surreal("ws://localhost:8000/rpc") as db:
+    db.signin({"username": "root", "password": "root"})
+    db.use("ns", "db")
+
+    avatar = File("images", "/photos/avatar.png")
+
+    db.files.put(avatar, png_bytes)          # upload, replacing anything there
+    png_bytes = db.files.get(avatar)         # -> bytes, or None if absent
+
+    meta = db.files.head(avatar)             # -> FileMetadata | None
+    print(meta.size, meta.updated)
+
+    for entry in db.files.list("images", prefix="/photos", limit=50):
+        print(entry.file.key, entry.size)
+```
+
+`db.files` is available on all six connection classes, and on sessions and
+transactions too - `txn.files.put(...)` runs inside that transaction. The async
+classes take the same calls with `await`.
+
+| Method | Returns |
+| --- | --- |
+| `put(file, content)` | `None`, replacing anything at that key |
+| `put_if_not_exists(file, content)` | `None`; writes only if the key is free |
+| `get(file)` | `bytes`, or `None` if the file does not exist |
+| `exists(file)` | `bool` |
+| `delete(file)` | `None`; deleting an absent file is not an error |
+| `head(file)` | `FileMetadata`, or `None` if absent |
+| `list(bucket, *, limit=, prefix=, start=)` | `list[FileMetadata]`; `start` is exclusive |
+| `copy(source, target)` / `copy_if_not_exists` | `None` |
+| `rename(file, key)` / `rename_if_not_exists` | `None`; `key` is a `str`, within the same bucket |
+
+A key is normalised to start with `/`, so `File("b", "a.txt")` and
+`File("b", "/a.txt")` are the same file.
+
+#### Why files are bound, not written into queries
+
+SurrealQL's file literal - `f"bucket:/key"` - accepts only
+`[A-Za-z0-9_-./]`, and there is **no escape mechanism**. A key containing a
+space, an accent or an emoji cannot be written as a literal at all:
+
+```
+Parse error: Unexpected character ` `, file strings key's only allow alpha
+numeric characters and `_`, `-`, `.`, and `/`
+```
+
+Every `db.files` method binds the `File` as a query parameter instead, which
+carries any key. `str(File(...))` renders the literal form for logging, but is
+display-only - use `File.is_literal_safe()` if you need to know whether a
+given file could be written into a query, and bind it rather than interpolating
+it either way.
+
 ## Agent memory
 
 Agent memory is an optional client for [Spectron](https://github.com/surrealdb/spectron),
