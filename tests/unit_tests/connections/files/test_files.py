@@ -415,6 +415,76 @@ async def test_the_async_http_transport_agrees(
     assert await async_http_connection.files.exists(f) is True
 
 
+# --------------------------------------------------- the whole async surface
+
+
+async def test_every_async_method_is_exercised(
+    async_ws_connection: AsyncWsSurrealConnection, bucket: str
+) -> None:
+    """All eleven, not just the four the transport tests happen to touch.
+
+    Before this, seven of ``AsyncFiles``' methods - put_if_not_exists, delete,
+    head, copy, copy_if_not_exists, rename, rename_if_not_exists - could all be
+    gutted to ``return None`` and the suite still passed. The blocking surface was
+    covered method by method and the async one rode on three smoke tests, so a
+    divergence between the two would not have shown up.
+    """
+    files = async_ws_connection.files
+    source = File(bucket, _key("async-src-"))
+    target = File(bucket, _key("async-dst-"))
+
+    await files.put(source, b"one")
+    assert await files.get(source) == b"one"
+    assert await files.exists(source) is True
+
+    # put_if_not_exists must not overwrite
+    await files.put_if_not_exists(source, b"two")
+    assert await files.get(source) == b"one"
+
+    meta = await files.head(source)
+    assert meta is not None
+    assert meta.size == 3
+    assert meta.file == source
+
+    await files.copy(source, target)
+    assert await files.get(target) == b"one"
+
+    # copy_if_not_exists must not overwrite the now-occupied target
+    await files.put(target, b"occupied")
+    await files.copy_if_not_exists(source, target)
+    assert await files.get(target) == b"occupied"
+
+    renamed_key = _key("async-moved-")
+    await files.rename(target, renamed_key)
+    assert await files.exists(target) is False
+    assert await files.get(File(bucket, renamed_key)) == b"occupied"
+
+    # rename_if_not_exists must not clobber an occupied key
+    await files.rename_if_not_exists(source, renamed_key)
+    assert await files.get(File(bucket, renamed_key)) == b"occupied"
+    assert await files.get(source) == b"one"
+
+    listed = await files.list(bucket, prefix="/async-")
+    assert {entry.file.key for entry in listed} >= {source.key, renamed_key}
+
+    await files.delete(source)
+    assert await files.exists(source) is False
+    assert await files.get(source) is None
+    assert await files.head(source) is None
+
+
+async def test_the_async_surface_matches_the_blocking_one(
+    async_ws_connection: AsyncWsSurrealConnection,
+) -> None:
+    """A method on one and not the other is a divergence users would hit."""
+    from surrealdb.connections.files import AsyncFiles, BlockingFiles
+
+    def public(cls: type) -> set[str]:
+        return {n for n in dir(cls) if not n.startswith("_")}
+
+    assert public(AsyncFiles) == public(BlockingFiles)
+
+
 # --------------------------------------------------------------- sessions and txns
 
 
@@ -440,7 +510,7 @@ def test_a_session_carries_its_own_context(
         session.close_session()
 
 
-def test_writes_inside_a_transaction_are_visible_after_commit(
+def test_writes_routed_through_a_transaction_reach_the_bucket(
     blocking_ws_connection: BlockingWsSurrealConnection,
     bucket: str,
     connection_params: dict[str, Any],
@@ -458,3 +528,98 @@ def test_writes_inside_a_transaction_are_visible_after_commit(
         assert blocking_ws_connection.files.get(f) == b"in a transaction"
     finally:
         session.close_session()
+
+
+def test_file_writes_are_not_transactional_and_survive_cancel(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+    bucket: str,
+    connection_params: dict[str, Any],
+) -> None:
+    """Routed through a transaction is not the same as being *in* one.
+
+    ``file::*`` writes to the bucket backend rather than to the transaction, so a
+    file written inside one survives ``cancel()`` while a record written beside it
+    rolls back. This is the server's behaviour, not the SDK's - a raw
+    ``BEGIN; file::put(...); CANCEL;`` string with no SDK transaction object
+    anywhere behaves identically.
+
+    Pinned because the obvious test - "visible after commit", directly above -
+    passes whether or not the write is transactional, so it cannot tell the two
+    apart. The docs previously implied isolation on the strength of exactly that.
+    """
+    namespace = connection_params["namespace"]
+    database = connection_params["database_name"]
+    table = f"txnctl_{uuid.uuid4().hex[:8]}"
+    blocking_ws_connection.query(f"CREATE {table}:seed SET a = 0").execute()
+
+    session = blocking_ws_connection.new_session()
+    try:
+        session.use(namespace, database)
+        f = File(bucket, _key("cancelled-"))
+
+        transaction = session.begin_transaction()
+        transaction.files.put(f, b"survives")
+        transaction.query(f"CREATE {table}:rolled SET a = 1").execute()
+        transaction.cancel()
+    finally:
+        session.close_session()
+
+    rows = blocking_ws_connection.query(f"SELECT * FROM {table}").first()
+    assert [row["id"].id for row in rows] == ["seed"], "the record write must roll back"
+    assert blocking_ws_connection.files.get(f) == b"survives", (
+        "the file write is not transactional and must survive the cancel"
+    )
+
+
+# --------------------------------------------------------- the guarded variants
+
+
+def test_copy_if_not_exists_refuses_to_overwrite(
+    blocking_ws_connection: BlockingWsSurrealConnection, bucket: str
+) -> None:
+    """Swapping this for plain ``copy`` was invisible to the suite before."""
+    source, target = File(bucket, _key("src-")), File(bucket, _key("dst-"))
+    blocking_ws_connection.files.put(source, b"new")
+    blocking_ws_connection.files.put(target, b"existing")
+
+    blocking_ws_connection.files.copy_if_not_exists(source, target)
+
+    assert blocking_ws_connection.files.get(target) == b"existing"
+
+
+def test_copy_if_not_exists_writes_when_the_target_is_free(
+    blocking_ws_connection: BlockingWsSurrealConnection, bucket: str
+) -> None:
+    source, target = File(bucket, _key("src-")), File(bucket, _key("dst-"))
+    blocking_ws_connection.files.put(source, b"content")
+
+    blocking_ws_connection.files.copy_if_not_exists(source, target)
+
+    assert blocking_ws_connection.files.get(target) == b"content"
+
+
+def test_rename_if_not_exists_refuses_to_overwrite(
+    blocking_ws_connection: BlockingWsSurrealConnection, bucket: str
+) -> None:
+    source = File(bucket, _key("from-"))
+    taken_key = _key("taken-")
+    blocking_ws_connection.files.put(source, b"moving")
+    blocking_ws_connection.files.put(File(bucket, taken_key), b"already here")
+
+    blocking_ws_connection.files.rename_if_not_exists(source, taken_key)
+
+    assert blocking_ws_connection.files.get(File(bucket, taken_key)) == b"already here"
+    assert blocking_ws_connection.files.get(source) == b"moving", "source is untouched"
+
+
+def test_rename_if_not_exists_moves_when_the_key_is_free(
+    blocking_ws_connection: BlockingWsSurrealConnection, bucket: str
+) -> None:
+    source = File(bucket, _key("from-"))
+    free_key = _key("to-")
+    blocking_ws_connection.files.put(source, b"moving")
+
+    blocking_ws_connection.files.rename_if_not_exists(source, free_key)
+
+    assert blocking_ws_connection.files.get(File(bucket, free_key)) == b"moving"
+    assert blocking_ws_connection.files.exists(source) is False

@@ -18,6 +18,7 @@ literal at all, and any rendering of one is display-only. The JavaScript SDK's
 server rejects; that is why this type does not copy it.
 """
 
+import re
 from typing import Any
 
 import pytest
@@ -199,6 +200,52 @@ def test_the_decoder_normalises_too() -> None:
 
 
 # --------------------------------------------------------------- exports
+
+
+def test_it_is_a_member_of_the_public_value_union() -> None:
+    """``Value`` annotates every payload and every ``query().first()`` result.
+
+    Leaving ``File`` out made ``db.create(t, {"a": File(...)})`` fail a type check
+    on code that works at runtime, and made a returned one narrow to unreachable.
+    The same omission already shipped once for ``set`` - the union carries a
+    comment about it - so this checks the general rule instead of the one name:
+    everything the encoder accepts has to be in the union.
+    """
+    import typing
+
+    from surrealdb.types import Value
+
+    members = set()
+    for member in typing.get_args(Value):
+        members.add(getattr(member, "__origin__", member))
+
+    assert File in members, "File encodes and decodes, so Value must admit it"
+
+
+def test_every_encodable_type_is_in_the_value_union() -> None:
+    """The general form of the check above, so the next type cannot slip either."""
+    import inspect
+    import typing
+
+    from surrealdb.data import cbor
+    from surrealdb.types import Value
+
+    source = inspect.getsource(cbor.default_encoder)
+    encodable = set(re.findall(r"isinstance\(obj, ([A-Z]\w+)\)", source))
+    members = {
+        getattr(m, "__origin__", m).__name__
+        for m in typing.get_args(Value)
+        if hasattr(getattr(m, "__origin__", m), "__name__")
+    }
+    # `BoundIncluded`/`BoundExcluded` are encodable but are not values in their
+    # own right - they only exist inside a `Range`, and the server rejects a bare
+    # one with a parse error, so `Value` is right to leave them out. Checked
+    # against a live server rather than assumed, because adding them to the union
+    # would have advertised something you cannot actually store.
+    components_only = {"BoundIncluded", "BoundExcluded"}
+    missing = {name for name in encodable if name not in members} - components_only
+
+    assert missing == set(), f"encodable but absent from Value: {sorted(missing)}"
 
 
 def test_it_is_exported_from_the_package() -> None:

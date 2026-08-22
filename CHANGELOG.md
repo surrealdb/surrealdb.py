@@ -9,13 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `File` is a member of the public `Value` union. It was omitted when file
+  support landed, so `db.create(table, {"attachment": File(...)})` - the main
+  reason the type exists - failed a type check on code that worked at runtime,
+  and a returned `File` narrowed to unreachable. The same omission had already
+  shipped once for `set`, so there is now a test asserting the general rule:
+  everything the encoder dispatches on has to be in the union. (`BoundIncluded`
+  and `BoundExcluded` are excluded deliberately - they exist only inside a
+  `Range`, and the server rejects a bare one.)
+
 - File support. SurrealDB stores files in buckets - in memory, on disk, or on
   object storage such as S3 - and `File` is a reference to one: a bucket plus a
   key. It carries no bytes and is not a Python file object.
 
-  `db.files` provides typed helpers over the `file::*` functions on all six
-  connection classes, and on sessions and transactions too, so
-  `txn.files.put(...)` runs inside that transaction:
+  `db.files` provides typed helpers over the `file::*` functions on the four
+  remote connection classes, and on sessions and transactions opened from them.
+  The embedded classes inherit it, but the embedded engine does not enable the
+  experimental files capability. Note that file writes are **not** transactional:
+  `file::*` writes to the bucket backend rather than the transaction, so a write
+  inside one is visible immediately and survives `cancel()`. That is the server's
+  behaviour, not the SDK's, and there is a test pinning it.
 
   ```python
   from surrealdb import File

@@ -1,10 +1,17 @@
 """Typed helpers over SurrealDB's ``file::*`` functions.
 
-Reached as ``db.files`` on any connection, and on a session or transaction too -
-``txn.files.put(...)`` runs inside that transaction. That works because these
-helpers hold a *query runner* rather than a connection: a session and a
-transaction each expose ``query()`` with their own id already bound, so nothing
-here has to thread ``session_id`` or ``txn_id`` through eleven methods.
+Reached as ``db.files`` on any connection, and on a session or transaction too.
+That works because these helpers hold a *query runner* rather than a connection:
+a session and a transaction each expose ``query()`` with their own id already
+bound, so nothing here has to thread ``session_id`` or ``txn_id`` through eleven
+methods.
+
+Being routed through a transaction is not the same as being *in* one. ``file::*``
+writes to the bucket backend rather than to the transaction, so a write made
+through ``txn.files`` is visible to other connections immediately and survives
+``txn.cancel()``, while a ``CREATE`` in the same transaction rolls back. That is
+the server's behaviour, not something the SDK chooses, and there is a test
+pinning it so it cannot change silently.
 
 Every method binds the ``File`` as a parameter rather than writing it into the
 query. That is not a style preference: SurrealQL's ``f"bucket:/key"`` literal
@@ -197,12 +204,13 @@ class BlockingFiles:
         prefix: str | None = None,
         start: str | None = None,
     ) -> list[FileMetadata]:
-        """Every file in ``bucket``, newest options applied server-side.
+        """Every file in ``bucket``, with any filtering applied server-side.
 
-        ``start`` is exclusive - listing from ``"/b.txt"`` returns what follows
-        it, not itself. Raises if the bucket does not exist, which is the
-        server's behaviour and worth surfacing rather than flattening to ``[]``:
-        an empty bucket and a missing one are different mistakes.
+        Ordered by key, not by time - there is no recency ordering to ask for.
+        ``start`` is exclusive: listing from ``"/b.txt"`` returns what follows it,
+        not itself. Raises if the bucket does not exist, which is the server's
+        behaviour and worth surfacing rather than flattening to ``[]`` - an empty
+        bucket and a misspelled one are different mistakes.
         """
         if not isinstance(bucket, str):  # pyright: ignore[reportUnnecessaryIsInstance]
             raise TypeError(f"bucket must be a str, not {type(bucket).__name__}")
@@ -292,7 +300,7 @@ class AsyncFiles:
         prefix: str | None = None,
         start: str | None = None,
     ) -> list[FileMetadata]:
-        """Every file in ``bucket``. ``start`` is exclusive."""
+        """Every file in ``bucket``, ordered by key. ``start`` is exclusive."""
         if not isinstance(bucket, str):  # pyright: ignore[reportUnnecessaryIsInstance]
             raise TypeError(f"bucket must be a str, not {type(bucket).__name__}")
         options = _list_options(limit, prefix, start)
