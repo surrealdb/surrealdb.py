@@ -199,6 +199,13 @@ jobs:
 
       - name: Start surrealdb
         run: surreal start --allow-all -u root -p root --log trace &
+        # Buckets are gated behind an experimental capability, so without this
+        # the file tests skip rather than run - and a skipped test is not a
+        # passing one. Servers too old to know the flag ignore it, and the tests
+        # detect the capability rather than the version, so they still skip
+        # cleanly on 2.x.
+        env:
+          SURREAL_CAPS_ALLOW_EXPERIMENTAL: files
 
       - name: Wait for startup
         run: sleep 5
@@ -269,6 +276,13 @@ jobs:
 
       - name: Start surrealdb
         run: surreal start --allow-all -u root -p root --log trace &
+        # Buckets are gated behind an experimental capability, so without this
+        # the file tests skip rather than run - and a skipped test is not a
+        # passing one. Servers too old to know the flag ignore it, and the tests
+        # detect the capability rather than the version, so they still skip
+        # cleanly on 2.x.
+        env:
+          SURREAL_CAPS_ALLOW_EXPERIMENTAL: files
 
       - name: Wait for startup
         run: sleep 5

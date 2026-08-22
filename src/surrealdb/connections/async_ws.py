@@ -25,6 +25,7 @@ from surrealdb.connections.builders import (
     M,
     _map_result,
 )
+from surrealdb.connections.files import AsyncFiles
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import (
     AUTH_FALLBACK_QUERY,
@@ -1466,6 +1467,11 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         """
         await self.close()
 
+    @property
+    def files(self) -> AsyncFiles:
+        """Typed helpers over the ``file::*`` functions - see `surrealdb.connections.files`."""
+        return AsyncFiles(self)
+
 
 class AsyncSurrealSession:
     def __init__(
@@ -1736,6 +1742,11 @@ class AsyncSurrealSession:
     async def close_session(self) -> None:
         await self._connection.detach(self._session_id)
 
+    @property
+    def files(self) -> AsyncFiles:
+        """Typed helpers over the ``file::*`` functions - see `surrealdb.connections.files`."""
+        return AsyncFiles(self)
+
 
 class AsyncSurrealTransaction:
     def __init__(
@@ -1998,3 +2009,8 @@ class AsyncSurrealTransaction:
 
     async def cancel(self) -> None:
         await self._connection.cancel(self._txn_id, session_id=self._session_id)
+
+    @property
+    def files(self) -> AsyncFiles:
+        """Typed helpers over the ``file::*`` functions - see `surrealdb.connections.files`."""
+        return AsyncFiles(self)

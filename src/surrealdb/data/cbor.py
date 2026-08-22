@@ -13,6 +13,7 @@ from surrealdb.cbor import (
 from surrealdb.data.types import constants
 from surrealdb.data.types.datetime import Datetime, PreciseDatetime
 from surrealdb.data.types.duration import Duration
+from surrealdb.data.types.file import File
 from surrealdb.data.types.geometry import (
     GeometryCollection,
     GeometryLine,
@@ -61,6 +62,9 @@ def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
 
     elif isinstance(obj, Table):
         tagged = CBORTag(constants.TAG_TABLE_NAME, obj.table_name)
+
+    elif isinstance(obj, File):
+        tagged = CBORTag(constants.TAG_FILE, [obj.bucket, obj.key])
 
     elif isinstance(obj, BoundIncluded):
         tagged = CBORTag(constants.TAG_BOUND_INCLUDED, obj.value)
@@ -145,6 +149,19 @@ def tag_decoder(
         # whole frame.
         return RecordID._unchecked(  # pyright: ignore[reportPrivateUsage]
             tag.value[0], tag.value[1]
+        )
+
+    elif tag.tag == constants.TAG_FILE:
+        # `[bucket, key]`. Built unchecked: the server is the authority on what
+        # a file reference is, and refusing to decode one the SDK dislikes would
+        # lose the whole response rather than the one value.
+        if not isinstance(tag.value, (list, tuple)) or len(tag.value) != 2:
+            raise UnexpectedResponseError(
+                f"expected a [bucket, key] pair for a file, got {tag.value!r}"
+            )
+        return File._unchecked(  # pyright: ignore[reportPrivateUsage]
+            tag.value[0],
+            tag.value[1],
         )
 
     elif tag.tag == constants.TAG_TABLE_NAME:

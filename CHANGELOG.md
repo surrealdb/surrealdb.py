@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- File support. SurrealDB stores files in buckets - in memory, on disk, or on
+  object storage such as S3 - and `File` is a reference to one: a bucket plus a
+  key. It carries no bytes and is not a Python file object.
+
+  `db.files` provides typed helpers over the `file::*` functions on all six
+  connection classes, and on sessions and transactions too, so
+  `txn.files.put(...)` runs inside that transaction:
+
+  ```python
+  from surrealdb import File
+
+  avatar = File("images", "/photos/avatar.png")
+  db.files.put(avatar, png_bytes)
+  png_bytes = db.files.get(avatar)          # None if absent
+  meta = db.files.head(avatar)              # FileMetadata | None
+  for entry in db.files.list("images", prefix="/photos", limit=50):
+      print(entry.file.key, entry.size)
+  ```
+
+  `put`, `put_if_not_exists`, `get`, `exists`, `delete`, `head`, `list`, `copy`,
+  `copy_if_not_exists`, `rename` and `rename_if_not_exists`. `get` and `head`
+  return `None` for a file that does not exist rather than raising; `delete` is
+  idempotent; `list` raises when the *bucket* is missing, because an empty bucket
+  and a misspelled one are different mistakes.
+
+  The wire format is CBOR tag 55 carrying `[bucket, key]`, matching the
+  JavaScript SDK's `TAG_FILE_POINTER`. A key is normalised to start with `/`, as
+  it is there, so `File("b", "a.txt")` and `File("b", "/a.txt")` are one file.
+
+  Every helper binds the `File` as a parameter rather than writing it into the
+  query, which is not a style choice: SurrealQL's `f"bucket:/key"` literal
+  accepts only `[A-Za-z0-9_-./]` and has **no escape mechanism**, so a key with a
+  space, an accent or an emoji cannot be expressed as a literal at all. Bound,
+  every key works. `str(File(...))` renders the literal form for logging and is
+  display-only; `File.is_literal_safe()` reports whether a given file could be
+  written into a query.
+
+  `list()` takes `limit`, `prefix` and `start` as keyword arguments rather than
+  an options dict because the server *silently ignores* option keys it does not
+  recognise - a passthrough dict would turn `limti=2` into "every file in the
+  bucket" with nothing to indicate why. `start` is exclusive.
+
+  The reference and the contents are kept as different types: `File` is the
+  bucket-plus-key reference, and contents are plain `bytes` - `put` takes
+  `bytes`, `bytearray` or `memoryview`, and `get` returns `bytes`. A `str` is
+  refused rather than encoded on your behalf, because the server stores bytes and
+  `get` returns them, so accepting one would let `put(f, s)` succeed while
+  `get(f) == s` was False. A file handle is refused too, with a message naming
+  `handle.read()`.
+
+  Buckets are an experimental server feature: the server must be started with
+  `SURREAL_CAPS_ALLOW_EXPERIMENTAL=files`, and the tests detect that capability
+  rather than a version number, since the same build has it or not depending on
+  how it was started. The embedded engine does not enable it, so `db.files` on a
+  `mem://` connection reports the server's own "experimental files feature"
+  error.
+
+
 ## [3.0.0-beta.8] - 2026-08-21
 
 The release that makes the memory split usable. `surrealdb-memory 1.0.0-beta.1`

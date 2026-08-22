@@ -27,6 +27,7 @@ from surrealdb.connections.builders import (
     SyncQueryBuilder,
     _map_result,
 )
+from surrealdb.connections.files import BlockingFiles
 from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import (
@@ -1404,6 +1405,11 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         """
         self.close()
 
+    @property
+    def files(self) -> BlockingFiles:
+        """Typed helpers over the ``file::*`` functions - see `surrealdb.connections.files`."""
+        return BlockingFiles(self)
+
 
 class BlockingSurrealSession:
     def __init__(
@@ -1653,6 +1659,11 @@ class BlockingSurrealSession:
 
     def close_session(self) -> None:
         self._connection.detach(self._session_id)
+
+    @property
+    def files(self) -> BlockingFiles:
+        """Typed helpers over the ``file::*`` functions - see `surrealdb.connections.files`."""
+        return BlockingFiles(self)
 
 
 class BlockingSurrealTransaction:
@@ -1907,3 +1918,8 @@ class BlockingSurrealTransaction:
 
     def cancel(self) -> None:
         self._connection.cancel(self._txn_id, session_id=self._session_id)
+
+    @property
+    def files(self) -> BlockingFiles:
+        """Typed helpers over the ``file::*`` functions - see `surrealdb.connections.files`."""
+        return BlockingFiles(self)

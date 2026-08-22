@@ -16,6 +16,7 @@ from surrealdb.connections.builders import (
     M,
     _map_result,
 )
+from surrealdb.connections.files import AsyncFiles
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import (
     AUTH_FALLBACK_QUERY,
@@ -699,3 +700,8 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
+
+    @property
+    def files(self) -> AsyncFiles:
+        """Typed helpers over the ``file::*`` functions - see `surrealdb.connections.files`."""
+        return AsyncFiles(self)

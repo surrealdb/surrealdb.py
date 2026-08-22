@@ -8,6 +8,9 @@ TAG_DECIMAL_STRING = 10
 TAG_RANGE = 49
 TAG_BOUND_INCLUDED = 50
 TAG_BOUND_EXCLUDED = 51
+# A file pointer: `[bucket, key]`. Named TAG_FILE_POINTER in the JavaScript
+# SDK's codec, which is the other implementation of this wire format.
+TAG_FILE = 55
 TAG_SET = 56
 
 TAG_DATETIME_COMPACT = 12

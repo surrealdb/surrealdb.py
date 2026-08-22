@@ -14,6 +14,7 @@ from surrealdb.connections.builders import (
     SyncQueryBuilder,
     _map_result,
 )
+from surrealdb.connections.files import BlockingFiles
 from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import (
@@ -652,3 +653,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
+
+    @property
+    def files(self) -> BlockingFiles:
+        """Typed helpers over the ``file::*`` functions - see `surrealdb.connections.files`."""
+        return BlockingFiles(self)
