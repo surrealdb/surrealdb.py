@@ -24,6 +24,7 @@ from typing import Any
 import pytest
 
 from surrealdb import AsyncSurreal, Surreal
+from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 from surrealdb.errors import NotFoundError
@@ -161,3 +162,72 @@ async def test_the_async_usage_block_runs(connection_params: dict[str, Any]) -> 
         await db.signin({"username": "root", "password": "root"})
         await db.use(connection_params["namespace"], connection_params["database_name"])
         assert await db.query("RETURN 1").first() == 1
+
+
+def test_the_files_block_runs(
+    blocking_ws_connection: BlockingWsSurrealConnection, tmp_path: Any
+) -> None:
+    """The README's Files block, statement by statement, in its order.
+
+    It was not covered when file support landed - this harness reproduces blocks
+    by hand rather than exec-ing the markdown, so a new block is only covered
+    once someone adds it. The block shipped using ``png_bytes`` on the line
+    *before* it was assigned, which is a ``NameError`` for anyone who pastes it.
+    """
+    from surrealdb import File
+
+    bucket = f"readme_{uuid.uuid4().hex[:8]}"
+    try:
+        blocking_ws_connection.query(
+            f'DEFINE BUCKET IF NOT EXISTS {bucket} BACKEND "memory"'
+        ).execute()
+    except Exception:
+        pytest.skip("server has no bucket support")
+
+    source = tmp_path / "avatar.png"
+    source.write_bytes(b"\x89PNG\r\n\x1a\n" + b"pixels")
+
+    # from surrealdb import File, Surreal  -- the connection is the fixture
+    avatar = File(bucket, "/photos/avatar.png")
+
+    with source.open("rb") as handle:
+        blocking_ws_connection.files.put(avatar, handle.read())
+
+    png_bytes = blocking_ws_connection.files.get(avatar)
+    assert png_bytes == source.read_bytes()
+
+    meta = blocking_ws_connection.files.head(avatar)
+    assert meta is not None
+    assert meta.size == len(png_bytes)
+    assert meta.updated is not None
+
+    listed = list(blocking_ws_connection.files.list(bucket, prefix="/photos", limit=50))
+    assert [(entry.file.key, entry.size) for entry in listed] == [
+        ("/photos/avatar.png", len(png_bytes))
+    ]
+
+
+def test_the_files_encoding_block_runs(
+    blocking_ws_connection: BlockingWsSurrealConnection, tmp_path: Any
+) -> None:
+    """The two-line block under "Why files are bound, not written into queries"."""
+    from surrealdb import File
+
+    bucket = f"readme_{uuid.uuid4().hex[:8]}"
+    try:
+        blocking_ws_connection.query(
+            f'DEFINE BUCKET IF NOT EXISTS {bucket} BACKEND "memory"'
+        ).execute()
+    except Exception:
+        pytest.skip("server has no bucket support")
+
+    readme, photo = File(bucket, "/readme.txt"), File(bucket, "/photo.bin")
+    source = tmp_path / "photo.bin"
+    source.write_bytes(b"binary")
+
+    blocking_ws_connection.files.put(readme, b"hello")
+    with source.open("rb") as handle:
+        blocking_ws_connection.files.put(photo, handle.read())
+
+    assert blocking_ws_connection.files.get(readme) == b"hello"
+    assert blocking_ws_connection.files.get(photo) == b"binary"

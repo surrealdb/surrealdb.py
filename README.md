@@ -990,7 +990,9 @@ with Surreal("ws://localhost:8000/rpc") as db:
 
     avatar = File("images", "/photos/avatar.png")
 
-    db.files.put(avatar, png_bytes)          # upload, replacing anything there
+    with open("avatar.png", "rb") as handle:
+        db.files.put(avatar, handle.read())  # bytes, not the handle itself
+
     png_bytes = db.files.get(avatar)         # -> bytes, or None if absent
 
     meta = db.files.head(avatar)             # -> FileMetadata | None
@@ -1000,9 +1002,18 @@ with Surreal("ws://localhost:8000/rpc") as db:
         print(entry.file.key, entry.size)
 ```
 
-`db.files` is available on all six connection classes, and on sessions and
-transactions too - `txn.files.put(...)` runs inside that transaction. The async
-classes take the same calls with `await`.
+`db.files` is available on the four remote connection classes — websocket and
+HTTP, blocking and async — and on sessions and transactions opened from them. The
+async classes take the same calls with `await`. The two embedded classes inherit
+`db.files`, but the embedded engine does not enable the experimental files
+capability, so every call reports that.
+
+**File writes are not transactional.** `txn.files.put(...)` is routed through the
+transaction's session, but `file::*` writes to the bucket backend rather than the
+transaction, so the write is visible to other connections immediately and
+survives `txn.cancel()` — while a `CREATE` in the same transaction rolls back as
+you would expect. That is SurrealDB's behaviour rather than the SDK's, and it is
+worth knowing before you pair a file write with a record write.
 
 | Method | Returns |
 | --- | --- |

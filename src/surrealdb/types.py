@@ -14,6 +14,7 @@ from uuid import UUID
 
 from surrealdb.data.types.datetime import Datetime
 from surrealdb.data.types.duration import Duration
+from surrealdb.data.types.file import File
 from surrealdb.data.types.geometry import (
     GeometryCollection,
     GeometryLine,
@@ -45,6 +46,12 @@ Value = (
     | Table
     | Range
     | RecordID
+    # A reference to a file in a storage bucket. Encodable since file support
+    # landed, and returned by the decoder, so leaving it out made storing one
+    # in a record - the main thing it is for - fail a type check on code that
+    # works. Exactly the omission the `set` note below records having already
+    # shipped once.
+    | File
     | Duration
     | Datetime
     | GeometryPoint
