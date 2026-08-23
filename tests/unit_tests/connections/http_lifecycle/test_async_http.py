@@ -17,6 +17,10 @@ from aiohttp.test_utils import TestServer
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.data.cbor import encode
 
+# Not the server the rest of the suite talks to, and deliberately not taken from
+# `connection_params`: every request below is mocked, so this is the address the
+# mock is registered against rather than somewhere to connect. `SURREALDB_PORT`
+# has nothing to point at here.
 URL = "http://localhost:8000"
 
 

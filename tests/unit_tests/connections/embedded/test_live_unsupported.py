@@ -98,6 +98,8 @@ def test_blocking_embedded_has_every_attribute_its_parent_sets() -> None:
     parent constructor - it opens nothing, it only sets attributes - and this
     catches any future divergence.
     """
+    # Constructed, never connected - the constructor "opens nothing, it only
+    # sets attributes", which is exactly what this compares.
     parent = BlockingWsSurrealConnection("ws://localhost:8000")
     embedded = BlockingEmbeddedSurrealConnection("memory")
 

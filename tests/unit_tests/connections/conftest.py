@@ -24,17 +24,12 @@ from surrealdb.errors import QueryError
 # rewriting exactly that substring, while the reachability probe dials
 # `127.0.0.1` so it does not depend on name resolution.
 #
-# KNOWN LIMITATION. This reaches the tests that take a connection *fixture*,
-# which is nearly all of them. Eighteen files under this directory build their
-# own connection from a hardcoded `localhost:8000` instead - `signin/`,
-# `signup/`, `invalidate/`, `http_lifecycle/`, `transport_errors/` and
-# `session_unsupported/` among them. Pointed at another port, those keep
-# talking to 8000 while their fixtures define schema on the port you asked
-# for, and they fail in ways that look like server bugs: `signup` returns a
-# record whose `info()` is None, because the access method was defined
-# somewhere else. Eleven tests behave that way today. They are not evidence of
-# anything about the server under test - re-run them without SURREALDB_PORT to
-# confirm - and making them honour this is tracked separately.
+# Every test that reaches a server now takes its URL from here, whether through
+# a connection fixture or through `connection_params` directly. The remaining
+# hardcoded `localhost:8000` strings under this directory belong to tests that
+# never connect - `responses`-mocked HTTP, a local aiohttp stub, methods that
+# raise before any request, and constructors compared attribute by attribute -
+# and each is commented as such where it appears.
 SERVER_HOST = os.environ.get("SURREALDB_HOST", "localhost")
 PROBE_HOST = os.environ.get("SURREALDB_HOST", "127.0.0.1")
 SERVER_PORT = int(os.environ.get("SURREALDB_PORT", "8000"))

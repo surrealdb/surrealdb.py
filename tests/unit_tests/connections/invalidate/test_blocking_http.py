@@ -1,5 +1,5 @@
 from collections.abc import Iterator
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -8,9 +8,11 @@ from surrealdb.types import Value
 
 
 @pytest.fixture
-def main_connection() -> Iterator[BlockingHttpSurrealConnection]:
+def main_connection(
+    connection_params: dict[str, Any],
+) -> Iterator[BlockingHttpSurrealConnection]:
     """Create a separate connection for the main connection that creates the test data"""
-    url = "http://localhost:8000"
+    url = connection_params["url"]
     password = "root"
     username = "root"
     vars_params: dict[str, Value] = {

@@ -1,5 +1,5 @@
 from collections.abc import AsyncIterator
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -21,10 +21,12 @@ async def main_connection(
 
 
 @pytest.fixture
-async def secondary_connection() -> AsyncIterator[AsyncHttpSurrealConnection]:
+async def secondary_connection(
+    connection_params: dict[str, Any],
+) -> AsyncIterator[AsyncHttpSurrealConnection]:
     from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 
-    url = "http://localhost:8000"
+    url = connection_params["url"]
     password = "root"
     username = "root"
     vars_params: dict[str, Value] = {
