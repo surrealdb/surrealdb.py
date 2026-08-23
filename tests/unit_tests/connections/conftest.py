@@ -1,4 +1,5 @@
 import contextlib
+import os
 import socket
 from collections.abc import AsyncGenerator, Generator
 from typing import Any
@@ -10,8 +11,33 @@ from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
+# Where the integration server is. Defaults to the port `docker-compose up`
+# publishes, and honours the same `SURREALDB_PORT` the compose file reads, so a
+# second server on another port - a newer build, a version being compared
+# against - can be targeted without editing this file.
+#
+# The two host defaults differ deliberately, and both are the original
+# literals: the URLs say `localhost` because a test re-points a connection by
+# rewriting exactly that substring, while the reachability probe dials
+# `127.0.0.1` so it does not depend on name resolution.
+#
+# KNOWN LIMITATION. This reaches the tests that take a connection *fixture*,
+# which is nearly all of them. Eighteen files under this directory build their
+# own connection from a hardcoded `localhost:8000` instead - `signin/`,
+# `signup/`, `invalidate/`, `http_lifecycle/`, `transport_errors/` and
+# `session_unsupported/` among them. Pointed at another port, those keep
+# talking to 8000 while their fixtures define schema on the port you asked
+# for, and they fail in ways that look like server bugs: `signup` returns a
+# record whose `info()` is None, because the access method was defined
+# somewhere else. Eleven tests behave that way today. They are not evidence of
+# anything about the server under test - re-run them without SURREALDB_PORT to
+# confirm - and making them honour this is tracked separately.
+SERVER_HOST = os.environ.get("SURREALDB_HOST", "localhost")
+PROBE_HOST = os.environ.get("SURREALDB_HOST", "127.0.0.1")
+SERVER_PORT = int(os.environ.get("SURREALDB_PORT", "8000"))
 
-def _server_reachable(host: str = "127.0.0.1", port: int = 8000) -> bool:
+
+def _server_reachable(host: str = PROBE_HOST, port: int = SERVER_PORT) -> bool:
     """Best-effort TCP probe so we can skip cleanly when no server is up."""
     try:
         with socket.create_connection((host, port), timeout=0.5):
@@ -32,9 +58,10 @@ def _require_surrealdb_server() -> None:
     """
     if not _server_reachable():
         pytest.skip(
-            "No SurrealDB server reachable on 127.0.0.1:8000. Start one with "
-            "`surreal start -u root -p root memory --bind 127.0.0.1:8000` "
-            "(or via docker-compose) to run these integration tests.",
+            f"No SurrealDB server reachable on {PROBE_HOST}:{SERVER_PORT}. Start "
+            "one with `surreal start -u root -p root memory --bind "
+            f"{PROBE_HOST}:{SERVER_PORT}` (or via docker-compose) to run these "
+            "integration tests.",
             allow_module_level=True,
         )
 
@@ -43,8 +70,8 @@ def _require_surrealdb_server() -> None:
 def connection_params() -> dict[str, Any]:
     """Shared connection parameters for all tests"""
     return {
-        "url": "http://localhost:8000",
-        "ws_url": "ws://localhost:8000",
+        "url": f"http://{SERVER_HOST}:{SERVER_PORT}",
+        "ws_url": f"ws://{SERVER_HOST}:{SERVER_PORT}",
         "password": "root",
         "username": "root",
         "vars_params": {

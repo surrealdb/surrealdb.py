@@ -35,6 +35,12 @@ from surrealdb.errors import (
 )
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
+from surrealdb.streaming import (
+    UNSUPPORTED_BY_HTTP,
+    AsyncQueryStream,
+    AsyncStreamOps,
+    buffered_statements,
+)
 from surrealdb.types import Tokens, Value, parse_auth_result
 
 # Live queries need a persistent connection to push notifications down, which
@@ -236,6 +242,44 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
             query=query,
             variables=vars,
         )
+
+    def query_stream(
+        self,
+        query: str,
+        vars: dict[str, Value] | None = None,
+        *,
+        require_streaming: bool = False,
+    ) -> AsyncQueryStream:
+        """Run SurrealQL and read the answer row by row.
+
+        HTTP carries one response per request, so this transport cannot
+        stream: the query is run the buffered way and its rows are handed back
+        one at a time. Present so code can move between transports unchanged -
+        connect over ``ws://`` or ``wss://`` for rows that actually arrive as
+        the server produces them.
+
+        Iterate for rows, or use ``.statements()`` for one completed result per
+        statement. ``require_streaming=True`` raises
+        :class:`~surrealdb.errors.UnsupportedFeatureError` here rather than
+        serving the buffered answer.
+        """
+        return AsyncQueryStream(
+            AsyncStreamOps.never_streams(self._stream_buffered, UNSUPPORTED_BY_HTTP),
+            query,
+            vars,
+            require_streaming=require_streaming,
+        )
+
+    async def _stream_buffered(
+        self,
+        query: str,
+        variables: dict[str, Value],
+        session_id: UUID | None,
+        txn_id: UUID | None,
+    ) -> list[dict[str, Any]]:
+        """Run *query* the buffered way, which is all this transport can do."""
+        response = await self.query_raw(query, variables)
+        return buffered_statements(response)
 
     async def query_raw(
         self, query: str, vars: dict[str, Value] | None = None

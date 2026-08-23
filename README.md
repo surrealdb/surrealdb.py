@@ -572,6 +572,162 @@ with Surreal("ws://localhost:8000/rpc") as db:
   separate connection per live subscription (or the async client, which
   fans notifications out to per-subscriber queues).
 
+## Streaming queries
+
+`query()` waits for the whole answer and hands it back at once. `query_stream()`
+reads it as the server produces it, so the first rows arrive while the rest of
+the query is still running and a large result never has to sit in memory in one
+piece.
+
+It needs **SurrealDB v3.3.0 or later** and a WebSocket connection. Against an
+older server, or over HTTP, the query runs the buffered way and its rows are
+handed back one at a time, so the call works everywhere - see
+[Where it streams](#where-it-streams) below.
+
+Nothing is sent until you start iterating.
+
+### Two views over one answer
+
+Iterate the stream for **rows**, as they arrive:
+
+```python
+async for person in db.query_stream("SELECT * FROM person"):
+    print(person["name"])
+```
+
+or call `.statements()` for one completed result per statement, which is the
+shape `query()` returns:
+
+```python
+async for statement in db.query_stream(
+    "SELECT * FROM person; SELECT count() FROM person GROUP ALL"
+).statements():
+    print(statement.index, statement.value)
+```
+
+Each `StatementResult` carries `index`, `value`, `time` (the server's own
+timing, verbatim), `query_type` (`"live"` for a `LIVE SELECT`, otherwise
+`None`), and `single` - true when `value` is one bare value rather than a list
+of rows, as for `RETURN 1 + 2` or `SELECT ... FROM ONLY`.
+
+A stream is read **once**, and both views draw from the same frames, so pick
+one per call.
+
+### Rows are provisional until iteration ends
+
+A row is delivered before the statement that produced it has finished - that is
+the point - so a statement that fails *after* emitting rows raises, and the rows
+it already yielded are void:
+
+```python
+try:
+    async for row in db.query_stream("SELECT * FROM person; THROW 'nope'"):
+        rows.append(row)          # these arrive, then the THROW raises
+except SurrealError:
+    rows.clear()                  # what arrived was never final
+```
+
+`.statements()` narrows this rather than removing it: it hands over a
+statement's value only once the server has called that statement final, so a
+statement you have received is settled - but a *later* statement can still
+fail, and earlier ones have already been yielded. For all-or-nothing across the
+whole query, use `query()`, or wrap the statements in `BEGIN`/`COMMIT` so the
+server rolls them back together.
+
+### Stopping early
+
+Use `async with` (or `with`, or call `aclose()` / `close()`) so that stopping
+early tells the server to abandon the query instead of running it to
+completion:
+
+```python
+async with db.query_stream("SELECT * FROM huge_table") as stream:
+    async for row in stream:
+        if found(row):
+            break                 # the server stops here
+```
+
+Closing is not merely tidiness: an abandoned stream is still executing on the
+server, holding one of the connection's stream slots. Abandoning one without
+closing does still clean up - the blocking client cancels as soon as you let go
+of the iterator, and the async client on the event loop's next pass over
+finalisable generators - but only closing stops the query at a moment you
+choose.
+
+### Blocking client
+
+Identical, minus the `a`s:
+
+```python
+with db.query_stream("SELECT * FROM person") as stream:
+    for person in stream:
+        print(person["name"])
+```
+
+Frames only arrive while somebody reads the socket, so a blocking stream is
+advanced by the thread iterating it. It takes the connection lock in short
+slices rather than holding it, so other callers on the same connection keep
+working while a stream is open.
+
+### Where it streams
+
+| | Behaviour |
+| --- | --- |
+| WebSocket, server v3.3.0+ | Streams. Rows arrive as they are produced. |
+| WebSocket, older server | Runs `query()` and replays its rows. Learned once per connection. |
+| WebSocket, `query_stream` denied | Same, with its own reason - the operator denied streaming, not querying. |
+| HTTP | Runs `query()` and replays its rows - HTTP carries one response per request. |
+| Embedded | Runs `query()` and replays its rows. |
+
+The fallback exists so the same code runs everywhere, but it gives up the two
+things streaming is for: rows do not arrive early, and the whole result is held
+in memory. When that matters, pass `require_streaming=True` and get an
+`UnsupportedFeatureError` instead of a quiet buffered answer:
+
+```python
+async for row in db.query_stream(sql, require_streaming=True):
+    ...
+```
+
+Feature detection is the protocol's own, and no version string is parsed: a
+server without `query_stream` answers `Method not found`, and one whose
+capabilities deny it answers `Method not allowed`. Both mean this connection
+will not stream, both are remembered after one request, and
+`require_streaming=True` reports which of the two it was - upgrading fixes the
+first, not the second.
+
+### Caveats
+
+- **Client-side buffering.** The protocol has no per-stream flow control, so a
+  consumer slower than the server accumulates rows in memory until it catches
+  up. If the work per row is slow, use `.statements()`, or stop the stream and
+  page instead.
+- **One task, or one thread, per stream.** A stream is driven by whoever
+  iterates it, and Python will not let two do so at once: closing an async
+  generator while another task is awaiting a row from it raises
+  `RuntimeError: aclose(): asynchronous generator is already running`, and
+  CPython refuses to run one generator from two threads. To stop a stream
+  another task is waiting on, cancel that task and await it before closing.
+- **Concurrent streams are capped.** A connection allows 32 in flight by
+  default (`SURREAL_WEBSOCKET_MAX_CONCURRENT_STREAMS` on the server); the
+  33rd is refused with a `ValidationError` saying so.
+- **`LIVE SELECT` in a stream.** The statement's value is the live-query id, with
+  `query_type == "live"`. Notifications begin after the stream ends, and - as
+  with `live()` - anything that happens before you call `subscribe_live()` is not
+  delivered, so subscribe promptly.
+- **A failed statement stops the rest of the query.** When a statement fails,
+  iteration raises and the server is asked to abandon what is left - so
+  statements after the failure may never run, where `query()` executes the whole
+  query before raising. The difference only shows when the remainder is slow
+  enough for the cancel to land, and it applies to side effects, not just
+  results: `CREATE a; THROW 'x'; SLEEP 3s; CREATE b` leaves both records via
+  `query()` and only `a` via `query_stream()`. Wrap the statements in
+  `BEGIN`/`COMMIT` if you need all-or-nothing.
+- **Inside a transaction.** A stream on a transaction runs on that transaction,
+  and requests on one connection are served concurrently, so finish the stream
+  before committing. A `commit` that lands mid-stream commits a prefix of the
+  query and the stream then fails with the transaction already finished.
+
 ## `None`, `Null`, and empty values
 
 SurrealDB has two ways for a field to hold nothing, and they are different

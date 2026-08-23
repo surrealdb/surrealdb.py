@@ -45,6 +45,12 @@ from surrealdb.errors import (
 )
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
+from surrealdb.streaming import (
+    QueryStream,
+    SyncStreamOps,
+    buffered_statements,
+    stream_broken,
+)
 from surrealdb.types import Tokens, Value, parse_auth_result
 
 logger = logging.getLogger(__name__)
@@ -123,6 +129,20 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         # it has to be recognised and dropped rather than mistaken for the
         # later request's reply.
         self._abandoned: set[str] = set()
+        # Streaming queries, keyed by the request id whose frames they carry.
+        # A ``query_stream`` request is answered by a sequence of responses all
+        # sharing one id, which the single-reply correlation in ``_send`` cannot
+        # represent: it stops at the first match and treats anything else as a
+        # protocol desync. Queues hold decoded frames plus a ``_ChannelBroken``
+        # sentinel, so the value type is ``Any``.
+        self._streams: dict[str, queue.Queue[Any]] = {}
+        # Whether this server knows ``query_stream``: ``None`` until one
+        # request settles it. Cached per connection because the answer is a
+        # property of the server build.
+        self._streaming_supported: bool | None = None
+        # Why it refused, when it did - a server older than v3.3.0 and one whose
+        # capabilities deny `query_stream` need different advice.
+        self._streaming_refusal: str | None = None
 
     def _connect_socket(self) -> ClientConnection:
         """Open the websocket, mapping transport failures to SDK errors."""
@@ -231,29 +251,20 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                         data if isinstance(data, bytes) else data.encode(), process
                     )
                     response_id = response.get("id")
-                    if response_id is None:
+                    if response_id == message.id:
+                        break
+                    if response_id is None and response.get("error") is not None:
                         # A frame with no `id` is normally a live-query
                         # notification. A protocol-level error - a request the
                         # server could not parse or correlate - also arrives
                         # without one, and routing that to the notification
                         # path discarded the only reply this call would ever
                         # get, leaving the loop blocked on recv() forever.
-                        if response.get("error") is not None:
-                            self.check_response_for_error(response, process)
-                        self._route_live_notification(response)
-                        continue
-                    if response_id in self._abandoned:
-                        # The late reply to a timed-out request. Drop it and
-                        # keep reading for this request's own reply.
-                        self._abandoned.discard(response_id)
-                        continue
-                    if response_id != message.id:
-                        raise UnexpectedResponseError(
-                            f"Response ID mismatch: expected {message.id}, got "
-                            f"{response_id}. This should not happen with proper "
-                            "locking."
-                        )
-                    break
+                        self.check_response_for_error(response, process)
+                    # Anything else belongs to a live subscription, to a
+                    # streaming query, or to a request that timed out and was
+                    # abandoned. Hand it over and keep reading for our own.
+                    self._route_foreign(response)
             except TimeoutError as exc:
                 # `recv(timeout=...)` expiring is the path that actually fires;
                 # the deadline check above only catches the next iteration.
@@ -271,6 +282,47 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             if bypass is False:
                 self.check_response_for_error(response, process)
             return response
+
+    def _route_foreign(self, response: dict[str, Any]) -> None:
+        """Hand a response this reader was not waiting for to whoever wants it.
+
+        Every socket read on this transport happens inside one of three loops -
+        an RPC correlating its reply, a live subscription, or a streaming query
+        - and each of them sees traffic belonging to the other two. Routing in
+        one place is what stops one loop from discarding another's frames:
+        before this existed, ``_send`` raised on any unrecognised id and
+        ``_iter_live`` dropped every response that had one, so a stream sharing
+        a connection with either lost frames outright.
+
+        An id that matches nothing is dropped rather than raised on. It used to
+        be a protocol desync worth failing over, but a stream that has been
+        released - a cancel whose drain gave up, say - leaves frames in flight
+        that belong to nobody, and failing an unrelated caller for them would
+        turn a tidy-up into an error.
+        """
+        response_id = response.get("id")
+        if response_id is None:
+            self._route_live_notification(response)
+            return
+        key = str(response_id)
+        frames = self._streams.get(key)
+        if frames is not None:
+            frames.put(response)
+            return
+        if key in self._abandoned:
+            self._abandoned.discard(key)
+            return
+        logger.debug("dropping a response for unknown request id %s", key)
+
+    def _break_streams(self, error: BaseException) -> None:
+        """Tell every open stream that no more frames are coming.
+
+        Streams wait on a queue rather than being handed an exception, so
+        nothing else on the teardown paths reaches them. Snapshotted because a
+        stream may be registered by another thread while this runs.
+        """
+        for frames in list(self._streams.values()):
+            frames.put(stream_broken(error))
 
     def _route_live_notification(self, response: dict[str, Any]) -> None:
         """Hand a live-query notification off to its subscriber queue.
@@ -408,6 +460,169 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.id = message.id
         response = self._send(message, "query", bypass=True)
         return response
+
+    def query_stream(
+        self,
+        query: str,
+        vars: dict[str, Value] | None = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+        *,
+        require_streaming: bool = False,
+    ) -> QueryStream:
+        """Run SurrealQL and read the answer as it is produced.
+
+        Needs SurrealDB v3.3.0 or later. Against an older server this falls
+        back to a buffered :meth:`query` and replays it, so the call works
+        everywhere - pass ``require_streaming=True`` to be told rather than
+        served the fallback, which is what you want if the reason for
+        streaming is to avoid holding a large result in memory.
+
+        Iterate for rows, or use ``.statements()`` for one completed result per
+        statement - see :class:`surrealdb.QueryStream`, which also covers
+        stopping early and the sense in which a row is provisional::
+
+            for person in db.query_stream("SELECT * FROM person"):
+                ...
+
+        Nothing is sent until iteration starts.
+        """
+        return QueryStream(
+            self._stream_ops(),
+            query,
+            vars,
+            session_id=session_id,
+            txn_id=txn_id,
+            require_streaming=require_streaming,
+        )
+
+    def _stream_ops(self) -> SyncStreamOps:
+        """Bind the operations a streaming query drives.
+
+        Bound methods rather than the connection itself, so a stream reaches
+        only what it needs and cannot connect, close, or correlate an RPC.
+        """
+        return SyncStreamOps(
+            registry=self._streams,
+            open_timeout=_RPC_RECV_TIMEOUT,
+            open=self._stream_open,
+            release=self._stream_release,
+            send=self._stream_send,
+            pump=self._stream_pump,
+            cancel=self._stream_cancel,
+            buffered=self._stream_buffered,
+            supported=self._stream_supported,
+            set_supported=self._stream_set_supported,
+            refusal=self._stream_refusal,
+        )
+
+    def _stream_open(self, request_id: str) -> "queue.Queue[Any]":
+        """Register *request_id* and return the queue its frames arrive on.
+
+        Registered before the request is sent, so a frame - or the immediate
+        rejection of an unknown method - cannot arrive before there is
+        anywhere to put it. Unbounded: nothing reads this socket except the
+        loops that route into these queues, so a bounded queue could only be
+        made to wait by stopping the reads that drain it.
+        """
+        self.connect()
+        frames: queue.Queue[Any] = queue.Queue()
+        self._streams[request_id] = frames
+        return frames
+
+    def _stream_release(self, request_id: str) -> None:
+        """Deregister a stream. Safe to call twice."""
+        self._streams.pop(request_id, None)
+
+    def _stream_send(self, message: RequestMessage) -> None:
+        """Send *message* without correlating a reply.
+
+        Not :meth:`_send`: that reads until it sees one response for this id
+        and would consume the stream's first frame as the whole answer.
+        """
+        with self._lock:
+            if self.socket is None:
+                self._connect_locked()
+            assert self.socket is not None
+            try:
+                self.socket.send(message.WS_CBOR_DESCRIPTOR)
+            except (WebSocketException, OSError) as exc:
+                raise ConnectionUnavailableError(
+                    f"the connection to {self.raw_url} failed while starting a "
+                    f"streaming query: {exc}"
+                ) from exc
+
+    def _stream_pump(self, timeout: float) -> None:
+        """Read one message, if one arrives within *timeout*, and route it.
+
+        Called by the thread iterating a stream, because nothing else on this
+        transport reads the socket. The lock is held only for the read and the
+        timeout is a slice rather than the caller's whole deadline, so a stream
+        waiting minutes for its next frame does not lock out other callers -
+        the same discipline :meth:`_iter_live` uses.
+        """
+        with self._lock:
+            if self.socket is None:
+                raise ConnectionUnavailableError(
+                    "WebSocket connection is not established."
+                )
+            try:
+                data = self.socket.recv(timeout=timeout)
+            except TimeoutError:
+                return
+            except (ConnectionClosed, WebSocketException, OSError) as exc:
+                error = ConnectionUnavailableError(
+                    "WebSocket connection closed while a streaming query was "
+                    f"open: {exc}"
+                )
+                self._break_streams(error)
+                raise error from exc
+            # Decoded and routed while still holding the lock, which the read
+            # order depends on. Two threads pumping - one per stream, or a
+            # stream beside a live subscription - each read one message and
+            # then raced to route it, so a stream could be handed frame two
+            # before frame one: rows out of order, or a terminal frame ahead of
+            # the rows it terminates. Routing only puts to an unbounded queue,
+            # so nothing here can block while the lock is held.
+            self._route_foreign(
+                self.decode_response(
+                    data if isinstance(data, bytes) else data.encode(),
+                    "reading a streaming query frame",
+                )
+            )
+
+    def _stream_cancel(self, request_id: str) -> None:
+        """Ask the server to stop the stream *request_id* opened.
+
+        A no-op once the socket has gone: there is nothing left to tell, and
+        :meth:`_send` would reconnect the connection a caller had just closed,
+        onto a new session where the stream does not exist.
+        """
+        if self.socket is None:
+            return
+        message = RequestMessage(RequestMethod.QUERY_CANCEL, stream=request_id)
+        self._send(message, "cancelling a streaming query")
+
+    def _stream_buffered(
+        self,
+        query: str,
+        variables: dict[str, Value],
+        session_id: UUID | None,
+        txn_id: UUID | None,
+    ) -> list[dict[str, Any]]:
+        """Run *query* the buffered way, for a server without streaming."""
+        response = self.query_raw(query, variables, session_id, txn_id)
+        return buffered_statements(response)
+
+    def _stream_supported(self) -> bool | None:
+        return self._streaming_supported
+
+    def _stream_refusal(self) -> str | None:
+        return self._streaming_refusal
+
+    def _stream_set_supported(self, supported: bool, reason: str | None) -> None:
+        self._streaming_supported = supported
+        self._streaming_refusal = reason
 
     def version(self, session_id: UUID | None = None) -> str:
         kwargs: dict[str, Any] = {}
@@ -1209,6 +1424,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 # Otherwise read from the socket ourselves, under the lock so
                 # we never race ``_send``. The short timeout releases the lock
                 # between reads to keep concurrent RPCs responsive.
+                response: dict[str, Any] | None = None
                 with self._lock:
                     if self.socket is None:
                         raise ConnectionUnavailableError(
@@ -1224,18 +1440,26 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                             "WebSocket connection closed while subscribed to a "
                             "live query."
                         ) from exc
+                    if data is not None:
+                        response = self.decode_response(
+                            data if isinstance(data, bytes) else data.encode(),
+                            "reading a live notification",
+                        )
+                        if response.get("id") is not None:
+                            # Not a notification: an RPC reply with no waiter,
+                            # or a frame belonging to a streaming query on this
+                            # connection. Dropping it here lost the stream's
+                            # frames, so hand it on - and do it inside the same
+                            # lock hold as the read, because a stream's frames
+                            # have to reach it in the order they came off the
+                            # socket. Decoding and routing after releasing let
+                            # two readers deliver out of order.
+                            self._route_foreign(response)
+                            response = None
 
-                if data is None:
+                if response is None:
                     continue
 
-                response = self.decode_response(
-                    data if isinstance(data, bytes) else data.encode(),
-                    "reading a live notification",
-                )
-                if response.get("id") is not None:
-                    # Stray RPC reply with no waiter (should not happen while
-                    # the lock serialises RPCs); ignore rather than yield it.
-                    continue
                 result = response.get("result")
                 if not isinstance(result, dict):
                     continue
@@ -1338,6 +1562,16 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         unauthenticated and with no namespace or database selected; sign in and
         ``use()`` again after reconnecting.
         """
+        # Streams get an error rather than a clean end: a caller iterating rows
+        # asked for all of them, and a socket taken away mid-stream means it
+        # will not get them. `_connect_locked` calls `close()` itself when it
+        # finds a dead socket, so this is reachable without the caller closing
+        # anything.
+        self._break_streams(
+            ConnectionUnavailableError(
+                "the connection was closed while a streaming query was open."
+            )
+        )
         if self.socket is not None:
             try:
                 self.socket.close()
@@ -1429,6 +1663,20 @@ class BlockingSurrealSession:
         vars: dict[str, Value] | None = None,
     ) -> SyncQueryBuilder:
         return self._connection.query(query, vars, session_id=self._session_id)
+
+    def query_stream(
+        self,
+        query: str,
+        vars: dict[str, Value] | None = None,
+        *,
+        require_streaming: bool = False,
+    ) -> QueryStream:
+        return self._connection.query_stream(
+            query,
+            vars,
+            session_id=self._session_id,
+            require_streaming=require_streaming,
+        )
 
     def query_raw(
         self,
@@ -1687,6 +1935,29 @@ class BlockingSurrealTransaction:
             vars,
             session_id=self._session_id,
             txn_id=self._txn_id,
+        )
+
+    def query_stream(
+        self,
+        query: str,
+        vars: dict[str, Value] | None = None,
+        *,
+        require_streaming: bool = False,
+    ) -> QueryStream:
+        """Stream a query on this transaction.
+
+        Finish the stream before committing: the stream runs on the transaction
+        this object holds, requests on one connection are served concurrently,
+        and a ``commit`` that lands mid-stream commits a prefix of the query
+        rather than the whole of it - the stream's next operation then fails
+        with the transaction already finished.
+        """
+        return self._connection.query_stream(
+            query,
+            vars,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+            require_streaming=require_streaming,
         )
 
     def query_raw(

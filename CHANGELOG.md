@@ -9,6 +9,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Streaming queries. `query_stream()` reads a query's answer as the server
+  produces it, instead of waiting for all of it: the first rows arrive while
+  the rest of the query is still running, and a large result never has to sit
+  in memory in one piece. Needs SurrealDB **v3.3.0** or later, which added the
+  `query_stream` RPC method to the WebSocket protocol.
+
+  Iterate it for rows, or call `.statements()` for one `StatementResult` per
+  statement - the shape `query()` returns. A stream is read once, and both
+  views draw from the same frames.
+
+  ```python
+  async with db.query_stream("SELECT * FROM person") as stream:
+      async for person in stream:
+          if found(person):
+              break            # tells the server to abandon the query
+  ```
+
+  Rows are **provisional** until iteration finishes: a statement that fails
+  after emitting rows raises, and the rows it already yielded are void. That is
+  inherent to streaming rather than a wart - `.statements()` and `query()` are
+  the all-or-nothing views.
+
+  Against a server without the method, one whose capabilities deny it, over
+  HTTP, or on the embedded engine, the query runs the buffered way and its rows
+  are replayed one at a time, so the same code works everywhere; the answer is
+  identical, but rows do not arrive early and the whole result is held.
+  `require_streaming=True` raises `UnsupportedFeatureError` instead when that
+  trade matters, and reports which of those it was - upgrading fixes a server
+  that lacks the method, not one that denies it. Detection is the protocol's
+  own, remembered per connection, so no version string is parsed.
+
+  A statement that fails mid-stream stops the rest of the query, unlike
+  `query()`, which runs the whole query before raising. Use `BEGIN`/`COMMIT`
+  when the statements after a failure must still run - or must all roll back.
+
+  Available on all four connection classes and on sessions and transactions
+  opened from them. Streaming inside a transaction works, but finish the stream
+  before committing: a `commit` that lands mid-stream commits a prefix of the
+  query.
+
 - `File` is a member of the public `Value` union. It was omitted when file
   support landed, so `db.create(table, {"attachment": File(...)})` - the main
   reason the type exists - failed a type check on code that worked at runtime,

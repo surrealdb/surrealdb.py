@@ -44,6 +44,12 @@ from surrealdb.errors import (
 )
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
+from surrealdb.streaming import (
+    AsyncQueryStream,
+    AsyncStreamOps,
+    buffered_statements,
+    stream_broken,
+)
 from surrealdb.types import Tokens, Value, parse_auth_result
 
 logger = logging.getLogger(__name__)
@@ -234,6 +240,22 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         # of those and to nothing else.
         self._uncorrelated_error: SurrealError | None = None
         self._uncorrelated_for: set[str] = set()
+        # Streaming queries, keyed by the request id whose frames they carry.
+        # Separate from ``self.qry`` because a ``query_stream`` request is
+        # answered by a *sequence* of responses sharing one id, and a future
+        # can only be resolved once: routed through ``self.qry`` the first
+        # frame would resolve the call and every frame after it would be
+        # dropped. Queues hold decoded frames plus a ``_ChannelBroken``
+        # sentinel, so the value type is ``Any``.
+        self._streams: dict[str, Queue[Any]] = {}
+        # Whether this server knows ``query_stream``: ``None`` until one
+        # request settles it. Cached per connection because the answer is a
+        # property of the server build, and re-learning it would cost a
+        # rejected request on every call.
+        self._streaming_supported: bool | None = None
+        # Why it refused, when it did - a server older than v3.3.0 and one whose
+        # capabilities deny `query_stream` need different advice.
+        self._streaming_refusal: str | None = None
 
     def _connect_guard(self) -> asyncio.Lock:
         """The lock serialising ``connect()``, bound to the running loop.
@@ -261,6 +283,20 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             if not fut.done():
                 fut.set_exception(error)
         self.qry.clear()
+        self._break_streams(error)
+
+    def _break_streams(self, error: BaseException) -> None:
+        """Tell every open stream that no more frames are coming.
+
+        Streams wait on a queue rather than on ``self.qry``, so failing the
+        pending futures leaves them untouched - the same trap live subscribers
+        fell into, where nothing was ever put in the queue again and the
+        consumer waited forever with no timeout on the path. A stream's frames
+        are unbounded by design once it has opened, which makes this the only
+        thing that ends one when the socket goes away.
+        """
+        for frames in self._streams.values():
+            frames.put_nowait(stream_broken(error))
 
     def _deliver_uncorrelated(self, error: SurrealError) -> None:
         """Deliver an error the server could not tie to any request.
@@ -287,10 +323,22 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         pending = [
             (query_id, fut) for query_id, fut in self.qry.items() if not fut.done()
         ]
-        if len(pending) == 1:
+        if len(pending) == 1 and not self._streams:
             query_id, fut = pending[0]
             fut.set_exception(error)
             self.qry.pop(query_id, None)
+            return
+        # A streaming query in flight is a candidate too, and when it is the
+        # only one the error belongs to it. Without this the frame the server
+        # rejected went unreported: the error was held for a `self.qry` entry
+        # that did not exist, and the stream waited out its opening deadline
+        # and blamed a timeout for what was really a parse error. It is handed
+        # over as the end-of-frames sentinel, which carries the parsed error
+        # itself - re-encoding it as a response would flatten a typed error
+        # back into its message.
+        if not pending and len(self._streams) == 1:
+            for frames in self._streams.values():
+                frames.put_nowait(stream_broken(error))
             return
         self._uncorrelated_error = error
         self._uncorrelated_for = {query_id for query_id, _ in pending}
@@ -346,7 +394,12 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
         try:
             if response_id := response.get("id"):
-                if (fut := self.qry.get(response_id)) and not fut.done():
+                # Streams first: a streaming query's id stays registered for
+                # the whole sequence of frames, while ``self.qry`` holds ids
+                # that are answered once.
+                if (frames := self._streams.get(response_id)) is not None:
+                    frames.put_nowait(response)
+                elif (fut := self.qry.get(response_id)) and not fut.done():
                     fut.set_result(response)
             elif response_result := response.get("result"):
                 live_id = str(response_result["id"])
@@ -652,6 +705,137 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         message = RequestMessage(RequestMethod.QUERY, **kwargs)
         response = await self._send(message, "query", bypass=True)
         return response
+
+    def query_stream(
+        self,
+        query: str,
+        vars: dict[str, Value] | None = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+        *,
+        require_streaming: bool = False,
+    ) -> AsyncQueryStream:
+        """Run SurrealQL and read the answer as it is produced.
+
+        Needs SurrealDB v3.3.0 or later. Against an older server this falls
+        back to a buffered :meth:`query` and replays it, so the call works
+        everywhere - pass ``require_streaming=True`` to be told rather than
+        served the fallback, which is what you want if the reason for
+        streaming is to avoid holding a large result in memory.
+
+        Iterate for rows, or use ``.statements()`` for one completed result per
+        statement - see :class:`surrealdb.AsyncQueryStream`, which also covers
+        stopping early and the sense in which a row is provisional::
+
+            async for person in db.query_stream("SELECT * FROM person"):
+                ...
+
+        Nothing is sent until iteration starts.
+        """
+        return AsyncQueryStream(
+            self._stream_ops(),
+            query,
+            vars,
+            session_id=session_id,
+            txn_id=txn_id,
+            require_streaming=require_streaming,
+        )
+
+    def _stream_ops(self) -> AsyncStreamOps:
+        """Bind the operations a streaming query drives.
+
+        Bound methods rather than the connection itself, so a stream reaches
+        only what it needs: it cannot connect, close, or touch the pending
+        request map.
+        """
+        return AsyncStreamOps(
+            registry=self._streams,
+            open_timeout=_RPC_RECV_TIMEOUT,
+            open=self._stream_open,
+            release=self._stream_release,
+            send=self._stream_send,
+            cancel=self._stream_cancel,
+            buffered=self._stream_buffered,
+            supported=self._stream_supported,
+            set_supported=self._stream_set_supported,
+            refusal=self._stream_refusal,
+        )
+
+    async def _stream_open(self, request_id: str) -> Queue[Any]:
+        """Register *request_id* and return the queue its frames arrive on.
+
+        Registered before the request is sent, so the reader cannot deliver a
+        frame - or the immediate rejection of an unknown method - before there
+        is anywhere to put it.
+
+        The queue is unbounded, and deliberately so. A bounded one would have
+        to stall the shared reader task when it filled, which deadlocks the
+        common pattern of running another query for each row: the reader would
+        be waiting for the consumer, and the consumer waiting for a reply the
+        stalled reader is holding. The protocol offers no per-stream flow
+        control, so a consumer slower than the server buffers rows in memory
+        until it catches up; ``.statements()``, or stopping the stream early,
+        are the ways out.
+        """
+        await self.connect()
+        frames: Queue[Any] = Queue()
+        self._streams[request_id] = frames
+        return frames
+
+    def _stream_release(self, request_id: str) -> None:
+        """Deregister a stream. Safe to call twice."""
+        self._streams.pop(request_id, None)
+
+    async def _stream_send(self, message: RequestMessage) -> None:
+        """Send *message* without registering a reply future.
+
+        Not :meth:`_send`: that awaits exactly one response and pops the id
+        when it arrives, which would resolve the call on the first frame and
+        then route every frame after it nowhere.
+        """
+        await self.connect()
+        assert self.socket is not None
+        try:
+            await self.socket.send(message.WS_CBOR_DESCRIPTOR)
+        except (WebSocketException, OSError) as exc:
+            raise ConnectionUnavailableError(
+                f"the connection to {self.raw_url} failed while starting a "
+                f"streaming query: {exc}"
+            ) from exc
+
+    async def _stream_cancel(self, request_id: str) -> None:
+        """Ask the server to stop the stream *request_id* opened.
+
+        A no-op once the socket has gone: there is nothing left to tell, and
+        going through :meth:`_send` would call ``connect()`` and reopen the
+        connection a caller had just closed - on a new session, where the
+        stream does not exist.
+        """
+        if self.socket is None:
+            return
+        message = RequestMessage(RequestMethod.QUERY_CANCEL, stream=request_id)
+        await self._send(message, "cancelling a streaming query")
+
+    async def _stream_buffered(
+        self,
+        query: str,
+        variables: dict[str, Value],
+        session_id: UUID | None,
+        txn_id: UUID | None,
+    ) -> list[dict[str, Any]]:
+        """Run *query* the buffered way, for a server without streaming."""
+        response = await self.query_raw(query, variables, session_id, txn_id)
+        return buffered_statements(response)
+
+    def _stream_supported(self) -> bool | None:
+        return self._streaming_supported
+
+    def _stream_refusal(self) -> str | None:
+        return self._streaming_refusal
+
+    def _stream_set_supported(self, supported: bool, reason: str | None) -> None:
+        self._streaming_supported = supported
+        self._streaming_refusal = reason
 
     async def version(self, session_id: UUID | None = None) -> str:
         kwargs: dict[str, Any] = {}
@@ -1377,6 +1561,19 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             for queue in queues:
                 queue.put_nowait(_LIVE_QUEUE_CLOSED)
 
+        # Streams get an error rather than a clean-end sentinel: a caller
+        # iterating rows asked for all of them, and a socket taken away
+        # mid-stream means it will not get them. `close()` does not go through
+        # `_fail_pending`, so without this a stream would wait on a queue that
+        # nothing will ever fill again - and `_connect_locked` calls `close()`
+        # itself when it finds a dead reader on a live socket, so this is
+        # reachable without the caller closing anything.
+        self._break_streams(
+            ConnectionUnavailableError(
+                "the connection was closed while a streaming query was open."
+            )
+        )
+
         if self.loop is not None and self.loop is not asyncio.get_running_loop():
             _abandon_connection(self.socket, self.recv_task, self.loop)
             self.socket = None
@@ -1491,6 +1688,20 @@ class AsyncSurrealSession:
         vars: dict[str, Value] | None = None,
     ) -> AsyncQueryBuilder:
         return self._connection.query(query, vars, session_id=self._session_id)
+
+    def query_stream(
+        self,
+        query: str,
+        vars: dict[str, Value] | None = None,
+        *,
+        require_streaming: bool = False,
+    ) -> AsyncQueryStream:
+        return self._connection.query_stream(
+            query,
+            vars,
+            session_id=self._session_id,
+            require_streaming=require_streaming,
+        )
 
     async def query_raw(
         self,
@@ -1769,6 +1980,29 @@ class AsyncSurrealTransaction:
             vars,
             session_id=self._session_id,
             txn_id=self._txn_id,
+        )
+
+    def query_stream(
+        self,
+        query: str,
+        vars: dict[str, Value] | None = None,
+        *,
+        require_streaming: bool = False,
+    ) -> AsyncQueryStream:
+        """Stream a query on this transaction.
+
+        Wait for the stream to finish before committing: the stream runs on the
+        transaction this object holds, requests on one connection are served
+        concurrently, and a ``commit`` that lands mid-stream commits a prefix
+        of the query rather than the whole of it - the stream's next operation
+        then fails with the transaction already finished.
+        """
+        return self._connection.query_stream(
+            query,
+            vars,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+            require_streaming=require_streaming,
         )
 
     async def query_raw(

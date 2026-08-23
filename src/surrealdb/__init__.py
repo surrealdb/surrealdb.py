@@ -83,6 +83,11 @@ from surrealdb.errors import (
     ValidationDetailKind,
     ValidationError,
 )
+from surrealdb.streaming import (
+    AsyncQueryStream,
+    QueryStream,
+    StatementResult,
+)
 from surrealdb.types import Tokens, Value
 
 # The optional native engine. Probed here, *below* the imports above, rather
@@ -142,6 +147,10 @@ __all__ = [
     "SyncCrudBuilder",
     "SyncInsertBuilder",
     "SyncQueryBuilder",
+    # Streaming queries (returned by query_stream, and what it yields)
+    "AsyncQueryStream",
+    "QueryStream",
+    "StatementResult",
     # Data types
     "Table",
     "Duration",

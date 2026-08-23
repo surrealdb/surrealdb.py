@@ -18,6 +18,7 @@ from surrealdb.data.cbor import decode
 from surrealdb.data.types.table import Table
 from surrealdb.errors import UnsupportedFeatureError
 from surrealdb.request_message.message import RequestMessage
+from surrealdb.streaming import UNSUPPORTED_BY_EMBEDDED, SyncStreamOps
 from surrealdb.types import Value
 from surrealdb_embedded import SyncEmbeddedDB
 
@@ -203,6 +204,19 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
     # engine and came back as "Unable to perform the realtime query", which
     # says nothing about why; ``subscribe_live`` would have read notifications
     # off a websocket this connection does not have.
+
+    def _stream_ops(self) -> SyncStreamOps:
+        """The embedded engine answers one response per request.
+
+        Its RPC entry point returns a single response, so there is no sequence
+        of frames to read and no request id to route them by: the inherited
+        websocket machinery has no socket to work with here. Streaming
+        therefore reports itself unavailable, and ``query_stream`` runs the
+        query the buffered way.
+        """
+        return SyncStreamOps.never_streams(
+            self._stream_buffered, UNSUPPORTED_BY_EMBEDDED
+        )
 
     def live(
         self,

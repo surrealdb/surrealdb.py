@@ -11,6 +11,7 @@ from surrealdb.connections.builders import (
 )
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
+from surrealdb.streaming import QueryStream
 from surrealdb.types import Tokens, Value
 
 
@@ -76,6 +77,22 @@ class SyncTemplate:
           result onto ``Model``, returning ``list[Model]``.
         """
         raise NotImplementedError(f"query not implemented for: {self}")
+
+    def query_stream(
+        self, query: str, vars: dict[str, Value] | None = None
+    ) -> QueryStream:
+        """Run SurrealQL and read the answer as the server produces it.
+
+        Every transport implements this. Only the websocket transports, against
+        SurrealDB v3.3.0 or later, actually stream; the rest run the query the
+        buffered way and hand its rows back one at a time, so calling code can
+        move between transports unchanged.
+
+        Args:
+            query: SurrealQL statement(s).
+            vars: Variables referenced in the query.
+        """
+        raise NotImplementedError(f"query_stream not implemented for: {self}")
 
     @overload
     def select(self, record: RecordID, *, into: type[M]) -> M | None: ...
