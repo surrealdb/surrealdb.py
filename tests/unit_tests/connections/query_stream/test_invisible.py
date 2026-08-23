@@ -111,7 +111,13 @@ async def test_a_query_in_a_transaction_is_never_streamed(
     txn = await async_ws_connection.begin()
     try:
         assert async_ws_connection._may_stream(txn) is False
-        assert async_ws_connection._may_stream(None) is True
+        # And it is the transaction doing the excluding, not the server - but
+        # only a server that can stream can show that. Asserting it
+        # unconditionally made this a test of the server's version: against
+        # v2.x and v3.0.5 the connection had already learned it cannot stream,
+        # so the "without a transaction it would" half was simply false.
+        if async_ws_connection._streaming_supported is not False:
+            assert async_ws_connection._may_stream(None) is True
         # And the query still works, on the buffered path.
         rows = await async_ws_connection.query("SELECT * FROM inv LIMIT 2", txn_id=txn)
         first = rows[0]
