@@ -59,6 +59,23 @@ async def _require_streaming(connection: AsyncWsSurrealConnection) -> None:
         pytest.skip(f"this server will not stream: {exc}")
 
 
+async def _buffered(connection: AsyncWsSurrealConnection, sql: str) -> list[Any]:
+    """`query()` with streaming forced off, so the reference really is buffered.
+
+    Every connection streams by default now, so reading the reference straight
+    off the fixture compared a streamed answer against a streamed answer - two
+    different implementations, so not quite circular, but no longer the
+    independent reference this file says it is. Forcing the buffered path back
+    on gives the server's own unstreamed answer to compare against.
+    """
+    was_enabled = connection._streaming_enabled
+    connection._streaming_enabled = False
+    try:
+        return await connection.query(sql)
+    finally:
+        connection._streaming_enabled = was_enabled
+
+
 async def test_streamed_statements_match_the_buffered_answer(
     async_ws_connection: AsyncWsSurrealConnection,
 ) -> None:
@@ -66,7 +83,7 @@ async def test_streamed_statements_match_the_buffered_answer(
     await _require_streaming(async_ws_connection)
     await _seed(async_ws_connection)
 
-    buffered = await async_ws_connection.query(MIXED_SQL)
+    buffered = await _buffered(async_ws_connection, MIXED_SQL)
     streamed = [
         statement
         async for statement in async_ws_connection.query_stream(MIXED_SQL).statements()
@@ -91,7 +108,7 @@ async def test_rows_flatten_the_buffered_answer(
     await _require_streaming(async_ws_connection)
     await _seed(async_ws_connection)
 
-    buffered = await async_ws_connection.query(MIXED_SQL)
+    buffered = await _buffered(async_ws_connection, MIXED_SQL)
     expected: list[Any] = []
     for result in buffered:
         expected.extend(result if isinstance(result, list) else [result])
@@ -309,7 +326,7 @@ async def test_query_stream_agrees_with_query_on_any_server(
     """
     await _seed(async_ws_connection, count=10)
 
-    buffered = await async_ws_connection.query(MIXED_SQL)
+    buffered = await _buffered(async_ws_connection, MIXED_SQL)
     statements = [
         statement
         async for statement in async_ws_connection.query_stream(MIXED_SQL).statements()

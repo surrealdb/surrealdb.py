@@ -1104,9 +1104,14 @@ class AsyncQueryStream(_StreamBase):
                 if isinstance(payload, _ChannelBroken):
                     self._cancellable = False
                     if not self._open:
-                        # The socket went before anything was framed, so the
-                        # query never ran. Asking again reconnects.
-                        return None
+                        # Not a refusal, and not safe to retry. The server
+                        # frames `begin` before it executes, so a first frame
+                        # that never arrived does not mean none was sent: the
+                        # query may be running right now. Asking again the
+                        # buffered way would run it twice, which on a `CREATE`
+                        # means two records. Only a refusal the server actually
+                        # sent us proves the query never ran.
+                        raise payload.error
                 try:
                     events = self._decode(payload, accumulator)
                 except ServerError as exc:
@@ -1409,7 +1414,8 @@ class QueryStream(_StreamBase):
                 if isinstance(payload, _ChannelBroken):
                     self._cancellable = False
                     if not self._open:
-                        return None
+                        # Not safe to retry - see the async copy.
+                        raise payload.error
                 try:
                     events = self._decode(payload, accumulator)
                 except ServerError as exc:

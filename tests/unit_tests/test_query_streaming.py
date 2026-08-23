@@ -1352,11 +1352,18 @@ async def test_collect_remembers_a_server_property_but_not_a_transient_one() -> 
         )
 
 
-async def test_collect_falls_back_when_the_socket_dies_before_any_frame() -> None:
-    """Nothing was framed, so nothing ran, so asking again is safe."""
+async def test_collect_does_not_retry_when_the_socket_dies_before_any_frame() -> None:
+    """A missing first frame is not proof that the query never ran.
+
+    Every other pre-open failure is a refusal the server sent, which proves it
+    did not execute. A dead socket proves nothing: the server frames `begin`
+    before executing, so the frame may have been sent and lost with the
+    connection while the query ran. Retrying that buffered runs it twice -
+    measured against a live server, one `query("CREATE ...")` left two records.
+    """
     broken = stream_broken(ConnectionUnavailableError("gone"))
-    response, _ = await _collect([broken])
-    assert response is None
+    with pytest.raises(ConnectionUnavailableError):
+        await _collect([broken])
 
 
 async def test_collect_raises_when_the_socket_dies_mid_stream() -> None:
@@ -1412,6 +1419,13 @@ def test_sync_collect_hands_back_none_on_a_refusal() -> None:
     channel = _SyncChannel([METHOD_NOT_FOUND])
     assert QueryStream(channel.ops(), "SELECT 1").collect() is None
     assert channel.supported_flag is False
+
+
+def test_sync_collect_does_not_retry_when_the_socket_dies_before_any_frame() -> None:
+    """The same rule on the blocking transport - see the async copy."""
+    channel = _SyncChannel([stream_broken(ConnectionUnavailableError("gone"))])
+    with pytest.raises(ConnectionUnavailableError):
+        QueryStream(channel.ops(), "SELECT 1").collect()
 
 
 def test_sync_collect_does_not_remember_a_transient_refusal() -> None:

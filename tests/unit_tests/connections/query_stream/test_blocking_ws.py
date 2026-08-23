@@ -41,13 +41,23 @@ def _require_streaming(connection: BlockingWsSurrealConnection) -> None:
         pytest.skip(f"this server will not stream: {exc}")
 
 
+def _buffered(connection: BlockingWsSurrealConnection, sql: str) -> list[Any]:
+    """`query()` with streaming forced off - see the async suite's note."""
+    was_enabled = connection._streaming_enabled
+    connection._streaming_enabled = False
+    try:
+        return connection.query(sql).execute()
+    finally:
+        connection._streaming_enabled = was_enabled
+
+
 def test_streamed_statements_match_the_buffered_answer(
     blocking_ws_connection: BlockingWsSurrealConnection,
 ) -> None:
     _require_streaming(blocking_ws_connection)
     _seed(blocking_ws_connection)
 
-    buffered = blocking_ws_connection.query(MIXED_SQL).execute()
+    buffered = _buffered(blocking_ws_connection, MIXED_SQL)
     streamed = list(blocking_ws_connection.query_stream(MIXED_SQL).statements())
 
     assert [statement.value for statement in streamed] == buffered
@@ -254,6 +264,6 @@ def test_query_stream_agrees_with_query_on_any_server(
     """
     _seed(blocking_ws_connection, count=10)
 
-    buffered = blocking_ws_connection.query(MIXED_SQL).execute()
+    buffered = _buffered(blocking_ws_connection, MIXED_SQL)
     statements = list(blocking_ws_connection.query_stream(MIXED_SQL).statements())
     assert [statement.value for statement in statements] == buffered

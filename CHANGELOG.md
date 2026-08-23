@@ -17,16 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reaches the client, and there is no single enormous response to decode. No
   code changes, and nothing to switch on.
 
-  Every case that cannot stream is a *retry* rather than an error - an older
-  server, a denied capability, a connection at its concurrency cap, a socket
-  that died before anything was framed. That is safe because the server frames
-  `begin` before it begins executing, so an answer with no frame behind it means
-  the query never ran. Absent and denied are remembered per connection; the
-  concurrency cap deliberately is not, since remembering a transient refusal
-  would strand the connection on the buffered path. Queries inside a client
-  transaction are never streamed: a `commit` arriving mid-stream would commit a
-  prefix of the query. `streaming=False` on a connection or on
-  `Surreal`/`AsyncSurreal` puts everything back on the buffered path.
+  Every *refusal* is a retry rather than an error - an older server, a denied
+  capability, a connection at its concurrency cap. That is safe because the
+  server frames `begin` before it begins executing, so a refusal with no frame
+  behind it means the query never ran. A socket that dies before the first frame
+  is not a refusal and is not retried: the server may have framed `begin` and
+  begun executing as the connection went, so re-asking could run a write twice.
+  Absent and denied are remembered per connection; the concurrency cap
+  deliberately is not, since remembering a transient refusal would strand the
+  connection on the buffered path. `query()` inside a client transaction is
+  never streamed, because a `commit` arriving mid-stream would commit a prefix
+  of the query. `streaming=False` on a connection or on `Surreal`/`AsyncSurreal`
+  puts `query()` back on the buffered path; an explicit `query_stream()` still
+  streams, since asking for a stream outright is taken as meaning it.
 
 - `query_stream()` is the visible half: the rows as they arrive, rather than the
   whole answer at the end.

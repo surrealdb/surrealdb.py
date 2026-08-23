@@ -298,6 +298,10 @@ jobs:
         env:
           PYTHONPATH: ./src
           SURREALDB_URL: http://localhost:8000
+          # The suite builds its URLs from these two - `SURREALDB_URL` is read
+          # only by the examples, so setting it alone pointed nothing anywhere.
+          SURREALDB_HOST: localhost
+          SURREALDB_PORT: "8000"
           SURREALDB_VERSION: ${{ matrix.surrealdb-version }}
           PYTHONWARNINGS: ignore::ResourceWarning
 
@@ -306,6 +310,10 @@ jobs:
         env:
           PYTHONPATH: ./src
           SURREALDB_URL: ws://localhost:8000
+          # The suite builds its URLs from these two - `SURREALDB_URL` is read
+          # only by the examples, so setting it alone pointed nothing anywhere.
+          SURREALDB_HOST: localhost
+          SURREALDB_PORT: "8000"
           SURREALDB_VERSION: ${{ matrix.surrealdb-version }}
           PYTHONWARNINGS: ignore::ResourceWarning
 

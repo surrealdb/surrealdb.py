@@ -693,19 +693,30 @@ working while a stream is open.
 | WebSocket, older server | Runs the query the buffered way. Learned once per connection. |
 | WebSocket, `query_stream` denied | Same, with its own reason - the operator denied streaming, not querying. |
 | WebSocket, at the concurrency cap | Buffered for this query only. Not remembered: the cap is transient. |
-| Inside a client transaction | Never streamed - see the caveats below. |
+| Inside a client transaction | `query()` is never streamed - see the caveats below. |
 | HTTP | Buffered - HTTP carries one response per request. |
 | Embedded | Buffered. |
 
-Every one of those is a *retry*, not an error: the server frames `begin` before
-it starts executing, so an answer that arrives without a frame behind it means
-the query never ran and asking again cannot run it twice.
+Every one of those is a *retry*, not an error, and it is a refusal from the
+server that makes it safe: `begin` is framed before execution starts, so a
+refusal with no frame behind it means the query never ran, and asking again
+cannot run it twice.
 
-To put a whole connection back on the buffered path:
+A socket that dies before the first frame is **not** such a refusal, and is not
+retried. The server may have framed `begin` and started executing while the
+connection was going, so the query may have run; re-asking it could run a write
+twice. It raises instead, exactly as a buffered query on a dying socket always
+has.
+
+To take the invisible path off a whole connection:
 
 ```python
 db = AsyncSurreal("ws://localhost:8000/rpc", streaming=False)
 ```
+
+That switches off the streaming `query()` does on your behalf. It does not
+override an explicit `query_stream()` call, which streams whenever the server
+can - asking for a stream outright is taken as meaning it.
 
 For `query()` the fallback costs nothing - the answer is buffered either way.
 For `query_stream()` it gives up the two things streaming is for: rows do not
@@ -752,15 +763,16 @@ first, not the second.
   results: `CREATE a; THROW 'x'; SLEEP 3s; CREATE b` leaves both records via
   `query()` and only `a` via `query_stream()`. Wrap the statements in
   `BEGIN`/`COMMIT` if you need all-or-nothing.
-- **Queries inside a client transaction are never streamed.** Requests on one
+- **`query()` inside a client transaction is never streamed.** Requests on one
   connection are served concurrently, so a `commit` could arrive while a
-  streamed query was still executing and commit a prefix of it. Anything from
-  `begin()` therefore takes the buffered path, `query()` and `query_stream()`
-  alike.
-- **Inside a transaction.** A stream on a transaction runs on that transaction,
-  and requests on one connection are served concurrently, so finish the stream
-  before committing. A `commit` that lands mid-stream commits a prefix of the
-  query and the stream then fails with the transaction already finished.
+  streamed query was still executing and commit a prefix of it. Since nobody
+  asked for a stream, the hazard is simply removed: anything from `begin()`
+  takes the buffered path.
+- **`query_stream()` inside a transaction still streams**, because asking for a
+  stream outright is taken as meaning it - but the hazard above is now yours to
+  avoid. The stream runs on that transaction, so finish it before committing: a
+  `commit` that lands mid-stream commits a prefix of the query, and the stream's
+  next operation then fails with the transaction already finished.
 
 ## `None`, `Null`, and empty values
 
