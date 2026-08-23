@@ -15,6 +15,7 @@ everything that proof cannot reach.
 import asyncio
 import gc
 import queue
+import threading
 import time
 import uuid
 from dataclasses import replace
@@ -1133,6 +1134,31 @@ def test_query_cancel_refuses_to_encode_without_a_stream_id() -> None:
 # --------------------------------------------------------------------------- #
 
 
+def _register_async_stream(
+    conn: AsyncWsSurrealConnection, request_id: str
+) -> "asyncio.Queue[Any]":
+    """Register a stream on *conn* without connecting.
+
+    Deliberately not `_stream_open`, which calls `connect()` and opens a real
+    socket. These tests assert routing against a fake one, and calling the real
+    thing made them pass only because a server happened to be listening on the
+    default port - in CI, where the file's own docstring promises they need no
+    server, they failed with `Connection refused`.
+    """
+    frames: asyncio.Queue[Any] = asyncio.Queue()
+    conn._streams[request_id] = frames
+    return frames
+
+
+def _register_sync_stream(
+    conn: BlockingWsSurrealConnection, request_id: str
+) -> "queue.Queue[Any]":
+    """The blocking counterpart of :func:`_register_async_stream`."""
+    frames: queue.Queue[Any] = queue.Queue()
+    conn._streams[request_id] = frames
+    return frames
+
+
 class _RecordingAsyncSocket:
     """Accepts sends and records them; delivers nothing on its own."""
 
@@ -1152,7 +1178,7 @@ async def test_async_routing_sends_frames_to_the_stream_not_the_query_map() -> N
     conn.loop = asyncio.get_running_loop()
     conn.socket = _RecordingAsyncSocket()
 
-    frames = await conn._stream_open("stream-1")
+    frames = _register_async_stream(conn, "stream-1")
     conn.qry["stream-1"] = conn.loop.create_future()
 
     for payload in (begin(1), rows(0, [1]), finished(0), end(1)):
@@ -1168,7 +1194,7 @@ async def test_async_a_buffered_reply_still_reaches_its_caller_mid_stream() -> N
     conn.loop = asyncio.get_running_loop()
     conn.socket = _RecordingAsyncSocket()
 
-    frames = await conn._stream_open("stream-1")
+    frames = _register_async_stream(conn, "stream-1")
     reply: asyncio.Future[dict[str, Any]] = conn.loop.create_future()
     conn.qry["query-1"] = reply
 
@@ -1186,7 +1212,7 @@ async def test_async_closing_the_connection_breaks_an_open_stream() -> None:
     conn.loop = asyncio.get_running_loop()
     conn.socket = _RecordingAsyncSocket()
 
-    frames = await conn._stream_open("stream-1")
+    frames = _register_async_stream(conn, "stream-1")
     await conn.close()
 
     payload = frames.get_nowait()
@@ -1206,7 +1232,7 @@ async def test_async_an_idless_error_reaches_a_lone_stream() -> None:
     conn = AsyncWsSurrealConnection(WS_URL)
     conn.loop = asyncio.get_running_loop()
     conn.socket = _RecordingAsyncSocket()
-    frames = await conn._stream_open("stream-1")
+    frames = _register_async_stream(conn, "stream-1")
 
     conn._route_frame(
         encode(
@@ -1232,8 +1258,8 @@ async def test_async_a_dead_reader_breaks_every_open_stream() -> None:
     conn.loop = asyncio.get_running_loop()
     conn.socket = _RecordingAsyncSocket()
 
-    first = await conn._stream_open("stream-1")
-    second = await conn._stream_open("stream-2")
+    first = _register_async_stream(conn, "stream-1")
+    second = _register_async_stream(conn, "stream-2")
     conn._reader_stopped()
 
     for frames in (first, second):
@@ -1269,7 +1295,7 @@ def test_blocking_send_routes_a_streams_frames_instead_of_failing() -> None:
     """This used to raise ``Response ID mismatch`` and break both callers."""
     conn = BlockingWsSurrealConnection(WS_URL)
     message = RequestMessage(RequestMethod.QUERY, query="SELECT 1", params={})
-    frames = conn._stream_open("stream-1")
+    frames = _register_sync_stream(conn, "stream-1")
     conn.socket = _FakeSyncSocket(  # type: ignore[assignment]
         [encode({**rows(0, [1]), "id": "stream-1"}), _reply(message.id)]
     )
@@ -1285,7 +1311,7 @@ def test_blocking_a_live_iterator_routes_a_streams_frames() -> None:
     """The live loop dropped every response carrying an id, frames included."""
     conn = BlockingWsSurrealConnection(WS_URL)
     live_id = str(uuid.uuid4())
-    frames = conn._stream_open("stream-1")
+    frames = _register_sync_stream(conn, "stream-1")
     conn.socket = _FakeSyncSocket(  # type: ignore[assignment]
         [
             encode({**rows(0, [1]), "id": "stream-1"}),
@@ -1313,7 +1339,7 @@ def test_blocking_the_pump_routes_while_holding_the_lock() -> None:
     that the pump does too.
     """
     conn = BlockingWsSurrealConnection(WS_URL)
-    frames = conn._stream_open("stream-1")
+    frames = _register_sync_stream(conn, "stream-1")
     conn.socket = _FakeSyncSocket(  # type: ignore[assignment]
         [encode({**rows(0, [1]), "id": "stream-1"})]
     )
@@ -1333,11 +1359,79 @@ def test_blocking_the_pump_routes_while_holding_the_lock() -> None:
     conn._stream_release("stream-1")
 
 
+class _SignallingSocket:
+    """A socket with nothing to deliver, which blocks for its whole timeout.
+
+    The blocking is the point: a fake that returned immediately released the
+    lock immediately too, whatever the code under test intended, so the test it
+    served could not fail. A real socket with no data waits out the timeout it
+    was given, and that is what decides whether the lock is held meanwhile.
+    """
+
+    def __init__(self, entered: threading.Event) -> None:
+        self._entered = entered
+        self.state = State.OPEN
+
+    def send(self, data: Any) -> None:
+        pass
+
+    def recv(self, timeout: float | None = None, decode: bool | None = None) -> bytes:
+        self._entered.set()
+        time.sleep(timeout if timeout is not None else 0)
+        raise TimeoutError
+
+    def close(self) -> None:
+        pass
+
+
+def test_blocking_the_pump_does_not_hold_the_lock_while_waiting() -> None:
+    """Waiting for a frame must happen with the connection lock released.
+
+    Held for the whole slice, the lock was free for microseconds out of every
+    hundred milliseconds, and another thread wanting to run a query could be
+    starved for as long as the stream stayed quiet - which is what a stream does
+    while a slow statement runs. CI measured 2.4s.
+
+    Deterministic on purpose. The wall-clock version of this only failed on a
+    slow machine: on a fast one the starved query still got through in ~50ms,
+    so it passed while the defect was present. Here the fake socket controls the
+    timing, so the assertion turns on the lock discipline rather than on how
+    many cores the runner has.
+    """
+    conn = BlockingWsSurrealConnection(WS_URL)
+    entered = threading.Event()
+    conn.socket = _SignallingSocket(entered)  # type: ignore[assignment]
+
+    acquired: list[bool] = []
+
+    def waiter() -> None:
+        # The pump is inside `recv`, so it holds the lock if it is going to.
+        entered.wait(5)
+        got = conn._lock.acquire(timeout=0.5)
+        acquired.append(got)
+        if got:
+            conn._lock.release()
+
+    thread = threading.Thread(target=waiter)
+    thread.start()
+    try:
+        # A slice far longer than the waiter's patience: the pump must spend
+        # almost all of it asleep with the lock released.
+        conn._stream_pump(1.5)
+    finally:
+        thread.join(timeout=10)
+
+    assert acquired == [True], (
+        "another thread could not take the connection lock while the pump was "
+        "waiting for a frame"
+    )
+
+
 def test_blocking_the_live_iterator_routes_while_holding_the_lock() -> None:
     """The live loop reads the same socket, so it owes streams the same order."""
     conn = BlockingWsSurrealConnection(WS_URL)
     live_id = str(uuid.uuid4())
-    conn._stream_open("stream-1")
+    _register_sync_stream(conn, "stream-1")
     conn.socket = _FakeSyncSocket(  # type: ignore[assignment]
         [
             encode({**rows(0, [1]), "id": "stream-1"}),
@@ -1379,7 +1473,7 @@ def test_blocking_an_unknown_id_is_dropped_rather_than_raised_on() -> None:
 def test_blocking_closing_the_connection_breaks_an_open_stream() -> None:
     conn = BlockingWsSurrealConnection(WS_URL)
     conn.socket = _FakeSyncSocket([])  # type: ignore[assignment]
-    frames = conn._stream_open("stream-1")
+    frames = _register_sync_stream(conn, "stream-1")
 
     conn.close()
 

@@ -141,9 +141,17 @@ def test_another_thread_keeps_working_while_a_stream_is_open(
     # The stream really was mid-flight: it took the sleep's full three seconds.
     assert streamed["elapsed"] >= 3.0, streamed
     assert streamed["rows"] > 1
-    assert elapsed < 1.5, (
-        f"the query waited {elapsed:.1f}s while a stream was open, so the stream "
-        "was holding the connection lock rather than slicing it"
+    # Relative to the stream's own duration, not an absolute wall clock. An
+    # absolute bound made this a machine-speed test: the starved query still got
+    # through in ~50ms on a fast laptop and 2.4s on CI's two cores, so the same
+    # defect passed locally and failed there. The deterministic proof of the
+    # lock discipline is
+    # `test_blocking_the_pump_does_not_hold_the_lock_while_waiting`; this is the
+    # end-to-end smoke test that the two threads really do share a connection.
+    assert elapsed < streamed["elapsed"] / 3, (
+        f"the query waited {elapsed:.2f}s of the stream's "
+        f"{streamed['elapsed']:.1f}s, so it was contending with the stream for "
+        "the connection lock rather than interleaving with it"
     )
 
 
