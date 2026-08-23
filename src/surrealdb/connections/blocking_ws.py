@@ -41,6 +41,7 @@ from surrealdb.errors import (
     ConnectionUnavailableError,
     TransportTimeoutError,
     UnexpectedResponseError,
+    parse_query_error,
     parse_rpc_error,
 )
 from surrealdb.request_message.message import RequestMessage
@@ -111,11 +112,15 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         id: The ID of the connection.
     """
 
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, *, streaming: bool = True) -> None:
         """
         The constructor for the BlockingWsSurrealConnection class.
 
         :param url: (str) the URL of the database to process queries for.
+        :param streaming: Whether queries may be answered as a stream of frames
+            rather than one response. On by default and invisible: the answer is
+            the same either way, so this only decides how it arrives. Pass
+            ``False`` to put every query back on the buffered path.
         """
         self.url: Url = Url(url)
         self.raw_url: str = f"{self.url.raw_url}/rpc"
@@ -149,6 +154,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         # Why it refused, when it did - a server older than v3.3.0 and one whose
         # capabilities deny `query_stream` need different advice.
         self._streaming_refusal: str | None = None
+        # The driver-level switch, distinct from what the server turned out to
+        # support.
+        self._streaming_enabled: bool = streaming
 
     def _connect_socket(self) -> ClientConnection:
         """Open the websocket, mapping transport failures to SDK errors."""
@@ -308,6 +316,22 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         """
         response_id = response.get("id")
         if response_id is None:
+            if response.get("error") is not None and len(self._streams) == 1:
+                # A request the server could not parse far enough to correlate
+                # is answered with no id at all, and with `query()` streaming
+                # that request is usually a stream. Routed to notifications it
+                # was dropped, and the stream then waited out its deadline for
+                # a frame that was never coming - on `select()` of a malformed
+                # record id, an outright hang before the deadline existed.
+                #
+                # Only when it can be attributed: this transport serialises its
+                # traffic, so a single open stream is the only thing that could
+                # have sent the rejected frame. With two, nothing on the wire
+                # says which.
+                rejection = parse_rpc_error(response["error"])
+                for stream in list(self._streams.values()):
+                    stream.put(stream_broken(rejection))
+                return
             self._route_live_notification(response)
             return
         key = str(response_id)
@@ -403,7 +427,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             # authenticated record via `$auth`.
             if self._info_needs_auth_fallback(response):
                 record = self._extract_auth_record(
-                    self.query(AUTH_FALLBACK_QUERY, session_id=session_id).first()
+                    self._buffered_first(AUTH_FALLBACK_QUERY, session_id)
                 )
                 if record is not None:
                     return record
@@ -457,6 +481,17 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     ) -> dict[str, Any]:
         if vars is None:
             vars = {}
+        if self._may_stream(txn_id):
+            # Streamed, and the answer rebuilt in the shape a buffered query
+            # returns - so `query()`, `select()`, `create()` and every builder
+            # above this get their rows as the server produces them without
+            # knowing anything about frames. `None` means the query was not run:
+            # the server declined to stream it, so ask the buffered way.
+            streamed = QueryStream(
+                self._stream_ops(), query, vars, session_id=session_id
+            ).collect()
+            if streamed is not None:
+                return streamed
         kwargs: dict[str, Any] = {"query": query, "params": vars}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -466,6 +501,38 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.id = message.id
         response = self._send(message, "query", bypass=True)
         return response
+
+    def _buffered_first(self, query: str, session_id: UUID | None) -> Value | None:
+        """Run *query* buffered and return its first statement's result.
+
+        See :meth:`AsyncWsSurrealConnection._buffered_first`: the queries the
+        SDK issues for itself stay off the frame path.
+        """
+        kwargs: dict[str, Any] = {"query": query, "params": {}}
+        if session_id is not None:
+            kwargs["session"] = session_id
+        message = RequestMessage(RequestMethod.QUERY, **kwargs)
+        response = self._send(message, "getting auth information", bypass=True)
+        statements = buffered_statements(response)
+        if not statements:
+            return None
+        first = statements[0]
+        if first.get("status") == "ERR":
+            raise parse_query_error(first)
+        result: Value = first.get("result")
+        return result
+
+    def _may_stream(self, txn_id: UUID | None) -> bool:
+        """Whether this query may be asked for as a stream.
+
+        A query on a client transaction never is: it would run on the
+        transaction `begin` handed out, and a `commit` arriving mid-stream would
+        commit a prefix of the query rather than the whole of it. Excluding them
+        removes the hazard instead of documenting it.
+        """
+        if not self._streaming_enabled or txn_id is not None:
+            return False
+        return self._streaming_supported is not False
 
     def query_stream(
         self,
@@ -531,7 +598,15 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         loops that route into these queues, so a bounded queue could only be
         made to wait by stopping the reads that drain it.
         """
-        self.connect()
+        with self._lock:
+            if self.socket is None:
+                # Lazily, exactly as `_send` connects. Going through
+                # `connect()` instead pulled in `_connect_locked`, which closes
+                # and reopens a socket whose state is not OPEN - a new
+                # server-side session, unauthenticated - so a query on a stale
+                # connection would have failed differently than it used to for
+                # no reason the caller asked for.
+                self.socket = self._connect_socket()
         frames: queue.Queue[Any] = queue.Queue()
         self._streams[request_id] = frames
         return frames
@@ -548,7 +623,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         """
         with self._lock:
             if self.socket is None:
-                self._connect_locked()
+                self.socket = self._connect_socket()
             assert self.socket is not None
             try:
                 self.socket.send(message.WS_CBOR_DESCRIPTOR)

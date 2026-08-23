@@ -160,10 +160,17 @@ class _Completed:
 
 @dataclass(frozen=True)
 class _Failed:
-    """A statement failed; every row already delivered for it is retracted."""
+    """A statement failed; every row already delivered for it is retracted.
+
+    Carries the statement's ``time`` and ``query_type`` as well as the error,
+    because reconstructing the buffered answer needs the whole ERR statement
+    and not just what went wrong.
+    """
 
     index: int
     error: ServerError
+    time: str
+    query_type: str | None
 
 
 @dataclass(frozen=True)
@@ -383,7 +390,15 @@ class _Accumulator:
             # must not reach the statements view as a result.
             self._rows.pop(index, None)
             self._singles.pop(index, None)
-            return [_Failed(index, error)]
+            raw_type = frame.get("type")
+            return [
+                _Failed(
+                    index=index,
+                    error=error,
+                    time=_time_of(frame),
+                    query_type=raw_type if isinstance(raw_type, str) else None,
+                )
+            ]
         if not self._retain_rows:
             return []
         single = frame.get("single") is True
@@ -458,6 +473,44 @@ def buffered_statements(response: dict[str, Any]) -> list[dict[str, Any]]:
     return statements
 
 
+def _ok_statement(result: StatementResult) -> dict[str, Any]:
+    """One successful statement, in the shape a buffered query returns."""
+    return {
+        "status": "OK",
+        "time": result.time,
+        "result": result.value,
+        "type": result.query_type,
+    }
+
+
+def _err_statement(event: _Failed) -> dict[str, Any]:
+    """One failed statement, in the shape a buffered query returns.
+
+    A buffered result puts the message in ``result`` and carries ``kind`` with
+    optional ``details`` and no code at all - which is what
+    :func:`~surrealdb.errors.parse_query_error` reads, so the builders above
+    cannot tell this apart from a statement the server buffered itself.
+    """
+    statement: dict[str, Any] = {
+        "status": "ERR",
+        "time": event.time,
+        "result": str(event.error),
+        "kind": event.error.kind,
+        "type": event.query_type,
+    }
+    if event.error.details is not None:
+        statement["details"] = event.error.details
+    return statement
+
+
+def _error_response(error: ServerError) -> dict[str, Any]:
+    """A whole-query failure, in the shape a buffered response carries one."""
+    payload: dict[str, Any] = {"message": str(error), "kind": error.kind}
+    if error.details is not None:
+        payload["details"] = error.details
+    return payload
+
+
 def _buffered_events(
     statements: list[dict[str, Any]], *, retain_rows: bool
 ) -> Iterator[_Event]:
@@ -470,7 +523,13 @@ def _buffered_events(
     """
     for index, statement in enumerate(statements):
         if statement.get("status") == "ERR":
-            yield _Failed(index, parse_query_error(statement))
+            raw_type = statement.get("type")
+            yield _Failed(
+                index=index,
+                error=parse_query_error(statement),
+                time=str(statement.get("time", "")),
+                query_type=raw_type if isinstance(raw_type, str) else None,
+            )
             return
         result: Value = statement.get("result")
         rows: list[Value] = result if isinstance(result, list) else [result]
@@ -496,6 +555,15 @@ def _buffered_events(
 # The transports hand over bound callables rather than themselves, so a stream
 # reaches only what it needs: it cannot connect, close, or touch the pending
 # request map, and the transport keeps its internals private.
+
+
+def _no_held_error(_request_id: str) -> BaseException | None:
+    """No protocol error is being held for this request.
+
+    The default, for transports with no such machinery: only the async
+    websocket holds an id-less rejection back for the request it belongs to.
+    """
+    return None
 
 
 @dataclass(frozen=True)
@@ -530,6 +598,7 @@ class AsyncStreamOps:
     supported: Callable[[], bool | None]
     set_supported: Callable[[bool, str | None], None]
     refusal: Callable[[], str | None]
+    take_uncorrelated: Callable[[str], BaseException | None] = _no_held_error
     reason: str = UNSUPPORTED_BY_SERVER
 
     @classmethod
@@ -590,6 +659,7 @@ class SyncStreamOps:
     supported: Callable[[], bool | None]
     set_supported: Callable[[bool, str | None], None]
     refusal: Callable[[], str | None]
+    take_uncorrelated: Callable[[str], BaseException | None] = _no_held_error
     reason: str = UNSUPPORTED_BY_SERVER
 
     @classmethod
@@ -661,6 +731,7 @@ class _StreamBase:
         self._reason = reason
         self._claimed = False
         self._open = False
+        self._request_id: str | None = None
         # Whether a stream may be executing on the server that we are
         # responsible for stopping. Set once the request is on the wire, and
         # cleared the moment we learn there is nothing to stop. Gating the
@@ -692,7 +763,11 @@ class _StreamBase:
             kwargs["session"] = self._session_id
         if self._txn_id is not None:
             kwargs["txn"] = self._txn_id
-        return RequestMessage(RequestMethod.QUERY_STREAM, **kwargs)
+        message = RequestMessage(RequestMethod.QUERY_STREAM, **kwargs)
+        # Kept so that a request which times out before its first frame can ask
+        # whether the protocol error the transport is holding is its own.
+        self._request_id = message.id
+        return message
 
     def _unsupported(self, reason: str | None = None) -> UnsupportedFeatureError:
         return UnsupportedFeatureError(
@@ -728,6 +803,20 @@ class _StreamBase:
             raise event.error
         if isinstance(event, _Ended) and event.error is not None:
             raise event.error
+
+    def _held_error(
+        self, take: Callable[[str], BaseException | None]
+    ) -> BaseException | None:
+        """A protocol error the transport is holding for this request, if any."""
+        if self._request_id is None:
+            return None
+        return take(self._request_id)
+
+    def _timed_out(self, budget: float) -> TransportTimeoutError:
+        """The deadline a streamed query inherits from the buffered path."""
+        return TransportTimeoutError(
+            f"timed out while query: no answer within {budget}s"
+        )
 
     def _terminal(self, payload: Any) -> bool:
         """Whether *payload* is the last thing a cancelled stream will send."""
@@ -976,24 +1065,130 @@ class AsyncQueryStream(_StreamBase):
             finalizer.detach()
             await self._teardown(request_id, frames, ended=accumulator.ended)
 
-    async def _next_payload(self, frames: asyncio.Queue[Any]) -> Any:
+    async def collect(self) -> dict[str, Any] | None:
+        """Run the query as a stream and rebuild the answer a buffered one gives.
+
+        This is how streaming reaches callers who never asked for it: ``query``
+        and every builder above it get their rows as frames and their answer in
+        the shape they already parse, so nothing above the transport changes.
+
+        Returns ``None`` when the query should be asked the buffered way
+        instead, and that is always safe: the server frames ``begin`` before it
+        begins executing, so an error arriving with no frame behind it means the
+        query never ran and re-asking cannot run it twice.
+
+        Deliberately parallel to :meth:`_drive` rather than folded into it. The
+        two differ in the two places that matter: a statement failure is
+        *recorded* here rather than raised, because the buffered answer carries
+        every statement including the ones after a failure; and a refusal hands
+        the decision back to the caller instead of running the query itself.
+        """
+        ops = self._ops
+        if ops.supported() is False:
+            return None
+
+        accumulator = _Accumulator(retain_rows=True)
+        statements: list[dict[str, Any]] = []
+        message = self._message()
+        request_id = message.id
+        frames = await ops.open(request_id)
+        finalizer = weakref.finalize(self, _release_stream, ops.registry, request_id)
+        # The whole exchange is bounded by the deadline a buffered call had, not
+        # just its opening frame - see `_next_payload`.
+        deadline = asyncio.get_running_loop().time() + ops.open_timeout
+        try:
+            await ops.send(message)
+            self._cancellable = True
+            while True:
+                payload = await self._next_payload(frames, deadline)
+                if isinstance(payload, _ChannelBroken):
+                    self._cancellable = False
+                    if not self._open:
+                        # The socket went before anything was framed, so the
+                        # query never ran. Asking again reconnects.
+                        return None
+                try:
+                    events = self._decode(payload, accumulator)
+                except ServerError as exc:
+                    if self._open:
+                        raise
+                    # Any error with no frame behind it: an unknown method, a
+                    # denied capability, the concurrency cap, a duplicate id,
+                    # even a parse error. None of them ran the query, so all of
+                    # them are safe to ask again the buffered way.
+                    self._cancellable = False
+                    refused = streaming_refused(exc)
+                    if refused is not None:
+                        # A property of the server, so worth remembering. The
+                        # concurrency cap deliberately is not: it is transient,
+                        # and remembering it would put every later query on
+                        # this connection back on the buffered path for good.
+                        ops.set_supported(False, refused)
+                    return None
+                if not self._open:
+                    self._open = True
+                    ops.set_supported(True, None)
+                for event in events:
+                    if isinstance(event, _Completed):
+                        statements.append(_ok_statement(event.result))
+                    elif isinstance(event, _Failed):
+                        statements.append(_err_statement(event))
+                    elif isinstance(event, _Ended):
+                        if event.error is not None:
+                            # A stream stopped rather than answered, so a
+                            # truncated answer is never mistaken for a whole
+                            # one - the same rule the row views apply, reported
+                            # the way a buffered whole-query failure is.
+                            return {"error": _error_response(event.error)}
+                        return {"result": statements}
+        finally:
+            finalizer.detach()
+            await self._teardown(request_id, frames, ended=accumulator.ended)
+
+    async def _next_payload(
+        self, frames: asyncio.Queue[Any], deadline: float | None = None
+    ) -> Any:
         """Take the next item off *frames*.
 
-        Only the opening answer is given a deadline. After that a stream may
-        legitimately go quiet for as long as a statement takes to produce its
-        next row, and a deadline there would kill working queries; a connection
-        that actually dies breaks the channel instead, which the reader does
-        for every stream at once.
+        With no *deadline*, only the opening answer is bounded: after that a
+        stream may legitimately go quiet for as long as a statement takes to
+        produce its next row, and a deadline there would kill working queries.
+        A connection that actually dies breaks the channel instead.
+
+        `collect()` passes one, because the query it is answering came in
+        through `query()` - which has always been bounded by the transport's
+        RPC deadline, and must stay bounded now that it streams. Without it a
+        `RETURN sleep(5s)` stopped timing out at all: `begin` arrives before
+        execution starts, so the opening deadline was satisfied instantly and
+        nothing bounded the rest.
         """
+        if deadline is not None:
+            budget = self._ops.open_timeout
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                raise self._timed_out(budget)
+            try:
+                return await asyncio.wait_for(frames.get(), remaining)
+            except asyncio.TimeoutError as exc:
+                held = self._held_error(self._ops.take_uncorrelated)
+                if held is not None:
+                    raise held from exc
+                raise self._timed_out(budget) from exc
         if self._open:
             return await frames.get()
         timeout = self._ops.open_timeout
         try:
             return await asyncio.wait_for(frames.get(), timeout)
         except asyncio.TimeoutError as exc:
-            # Reported the way every other bounded wait on the transports is,
-            # rather than as a bare asyncio error a caller cannot catch with
-            # `except SurrealError`.
+            # The server may have rejected this request's frame outright, in
+            # which case it answered with an error carrying no id and no frame
+            # is ever coming. That error is held rather than failing every
+            # request in flight; this is the one it belongs to, so report it
+            # instead of a bare deadline - exactly what `_send` does for a
+            # buffered call.
+            held = self._held_error(self._ops.take_uncorrelated)
+            if held is not None:
+                raise held from exc
             raise TransportTimeoutError(
                 "timed out waiting for a streaming query to start: no frame "
                 f"within {timeout}s"
@@ -1188,14 +1383,71 @@ class QueryStream(_StreamBase):
             self._apply(event)
             yield event
 
-    def _next_payload(self, frames: queue.Queue[Any]) -> Any:
+    def collect(self) -> dict[str, Any] | None:
+        """Run the query as a stream and rebuild the buffered answer.
+
+        The blocking twin of :meth:`AsyncQueryStream.collect`; see that method
+        for why ``None`` means "ask the buffered way" and why it is always safe.
+        """
+        ops = self._ops
+        if ops.supported() is False:
+            return None
+
+        accumulator = _Accumulator(retain_rows=True)
+        statements: list[dict[str, Any]] = []
+        message = self._message()
+        request_id = message.id
+        frames = ops.open(request_id)
+        finalizer = weakref.finalize(self, _release_stream, ops.registry, request_id)
+        # Bounded by the deadline a buffered call had - see `_next_payload`.
+        deadline = time.monotonic() + ops.open_timeout
+        try:
+            ops.send(message)
+            self._cancellable = True
+            while True:
+                payload = self._next_payload(frames, deadline)
+                if isinstance(payload, _ChannelBroken):
+                    self._cancellable = False
+                    if not self._open:
+                        return None
+                try:
+                    events = self._decode(payload, accumulator)
+                except ServerError as exc:
+                    if self._open:
+                        raise
+                    self._cancellable = False
+                    refused = streaming_refused(exc)
+                    if refused is not None:
+                        ops.set_supported(False, refused)
+                    return None
+                if not self._open:
+                    self._open = True
+                    ops.set_supported(True, None)
+                for event in events:
+                    if isinstance(event, _Completed):
+                        statements.append(_ok_statement(event.result))
+                    elif isinstance(event, _Failed):
+                        statements.append(_err_statement(event))
+                    elif isinstance(event, _Ended):
+                        if event.error is not None:
+                            return {"error": _error_response(event.error)}
+                        return {"result": statements}
+        finally:
+            finalizer.detach()
+            self._teardown(request_id, frames, ended=accumulator.ended)
+
+    def _next_payload(
+        self, frames: queue.Queue[Any], deadline: float | None = None
+    ) -> Any:
         """Take the next item off *frames*, reading the socket to fill it.
 
-        Only the opening answer is given a deadline, for the reason given on
+        With no *deadline* only the opening answer is bounded; `collect()`
+        passes one, for the reason given on
         :meth:`AsyncQueryStream._next_payload`.
         """
         open_timeout = self._ops.open_timeout
-        deadline = None if self._open else time.monotonic() + open_timeout
+        if deadline is None and not self._open:
+            deadline = time.monotonic() + open_timeout
         while True:
             try:
                 return frames.get_nowait()
@@ -1206,6 +1458,11 @@ class QueryStream(_StreamBase):
                 continue
             remaining = deadline - time.monotonic()
             if remaining <= 0:
+                held = self._held_error(self._ops.take_uncorrelated)
+                if held is not None:
+                    raise held
+                if self._open:
+                    raise self._timed_out(open_timeout)
                 raise TransportTimeoutError(
                     "timed out waiting for a streaming query to start: no "
                     f"frame within {open_timeout}s"

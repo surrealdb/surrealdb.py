@@ -122,8 +122,13 @@ STOPPED = {
 }
 
 
-def thrown(message: str = "boom") -> dict[str, Any]:
-    """A statement failure exactly as a v3.3.0 server renders it on a frame."""
+def thrown(message: str = "An error occurred: boom") -> dict[str, Any]:
+    """A statement failure exactly as a v3.3.0 server renders it on a frame.
+
+    The default is the server's own wording for `THROW 'boom'`, not a bare
+    "boom" - a helper that claims to mirror the wire should mirror it, or a test
+    asserting on the message is really asserting on the helper.
+    """
     return {"cause": None, "code": -32006, "kind": "Thrown", "message": message}
 
 
@@ -994,6 +999,36 @@ DENIED = {
     },
 }
 
+TOO_MANY = {
+    "id": "req",
+    "error": {
+        "code": -32603,
+        "details": {"kind": "InvalidParams"},
+        "kind": "Validation",
+        "message": "Too many concurrent streaming queries",
+    },
+}
+
+DUPLICATE = {
+    "id": "req",
+    "error": {
+        "code": -32603,
+        "details": {"kind": "InvalidParams"},
+        "kind": "Validation",
+        "message": "A streaming query with this request id is already in progress",
+    },
+}
+
+PARSE_ERROR = {
+    "id": "req",
+    "error": {
+        "code": -32700,
+        "details": {"kind": "Parse"},
+        "kind": "Validation",
+        "message": "Parse error: unexpected token",
+    },
+}
+
 BUFFERED: list[dict[str, Any]] = [
     {"status": "OK", "time": "1ms", "type": None, "result": [{"n": 1}, {"n": 2}]},
     {"status": "OK", "time": "2ms", "type": None, "result": 42},
@@ -1203,6 +1238,193 @@ def test_sync_a_failed_statement_raises() -> None:
     )
     with pytest.raises(ThrownError, match="boom"):
         list(QueryStream(channel.ops(), "SELECT 1"))
+
+
+# --------------------------------------------------------------------------- #
+#  Invisible adoption: query() streams and rebuilds the buffered answer        #
+# --------------------------------------------------------------------------- #
+
+
+async def _collect(frames: list[Any], **kwargs: Any) -> Any:
+    channel = _AsyncChannel(frames, **kwargs)
+    return await AsyncQueryStream(channel.ops(), "SELECT 1").collect(), channel
+
+
+async def test_collect_rebuilds_the_shape_a_buffered_query_returns() -> None:
+    """Everything above the transport parses this, so it has to be exact.
+
+    Not just the values: the keys too, because `parse_query_error` reads a
+    failure's message from `result` and its kind from alongside, and the
+    builders read `status`. A shape that merely carried the right data would
+    pass a value comparison and break `query()`.
+    """
+    response, _ = await _collect(
+        [
+            begin(2),
+            rows(0, [{"n": 1}, {"n": 2}]),
+            finished(0),
+            value(1, 42),
+            finished(1, single=True),
+            end(2),
+        ]
+    )
+    assert response == {
+        "result": [
+            {
+                "status": "OK",
+                "time": "1.5ms",
+                "result": [{"n": 1}, {"n": 2}],
+                "type": None,
+            },
+            {"status": "OK", "time": "1.5ms", "result": 42, "type": None},
+        ]
+    }
+
+
+async def test_collect_keeps_the_statements_after_a_failure() -> None:
+    """A buffered answer carries every statement, including ones after an error.
+
+    The row views raise at the first failure, which is right for iteration and
+    wrong here: `query()` has always returned all of them and let the caller's
+    own check raise. Recording rather than raising is the whole difference
+    between `collect()` and `_drive()`.
+    """
+    response, _ = await _collect(
+        [
+            begin(3),
+            value(0, 1),
+            finished(0, single=True),
+            finished(1, error=thrown()),
+            value(2, "after"),
+            finished(2, single=True),
+            end(3),
+        ]
+    )
+    statements = response["result"]
+    assert [st["status"] for st in statements] == ["OK", "ERR", "OK"]
+    assert statements[1]["result"] == "An error occurred: boom"
+    assert statements[1]["kind"] == "Thrown"
+    assert "code" not in statements[1], "a buffered result carries no code"
+    # And the statement after the failure is still there.
+    assert statements[2]["result"] == "after"
+
+
+async def test_collect_reports_an_errored_end_as_a_failed_query() -> None:
+    """A stream stopped rather than answered must not read as a whole answer."""
+    stopped = {"code": -32000, "kind": "Internal", "message": "stopped"}
+    response, _ = await _collect([begin(2), rows(0, [1]), end(0, error=stopped)])
+    assert "result" not in response
+    assert response["error"]["message"] == "stopped"
+
+
+async def test_collect_hands_back_none_when_the_server_will_not_stream() -> None:
+    """`None` means "ask the buffered way", and the query has not run.
+
+    Every one of these arrives before a single frame, and the server frames
+    `begin` before it begins executing - so re-asking cannot run the query
+    twice, which is what makes the retry safe rather than merely convenient.
+    """
+    for label, rejection in [
+        ("unknown method", METHOD_NOT_FOUND),
+        ("denied capability", DENIED),
+        ("concurrency cap", TOO_MANY),
+        ("duplicate request id", DUPLICATE),
+        ("a parse error", PARSE_ERROR),
+    ]:
+        response, channel = await _collect([rejection])
+        assert response is None, label
+        assert channel.sent, f"{label}: the request was never sent"
+
+
+async def test_collect_remembers_a_server_property_but_not_a_transient_one() -> None:
+    """Otherwise a busy moment would strand the connection on the buffered path."""
+    _, absent = await _collect([METHOD_NOT_FOUND])
+    assert absent.supported_flag is False
+
+    _, denied = await _collect([DENIED])
+    assert denied.supported_flag is False
+
+    for label, transient in [("cap", TOO_MANY), ("duplicate", DUPLICATE)]:
+        _, channel = await _collect([transient])
+        assert channel.supported_flag is None, (
+            f"{label}: a transient refusal was remembered, so every later query "
+            "on this connection would stay buffered for good"
+        )
+
+
+async def test_collect_falls_back_when_the_socket_dies_before_any_frame() -> None:
+    """Nothing was framed, so nothing ran, so asking again is safe."""
+    broken = stream_broken(ConnectionUnavailableError("gone"))
+    response, _ = await _collect([broken])
+    assert response is None
+
+
+async def test_collect_raises_when_the_socket_dies_mid_stream() -> None:
+    """Once frames have flowed the query is running, so this is a real failure."""
+    broken = stream_broken(ConnectionUnavailableError("gone"))
+    with pytest.raises(ConnectionUnavailableError):
+        await _collect([begin(1), rows(0, [1]), broken])
+
+
+async def test_collect_is_bounded_by_the_deadline_a_buffered_call_had() -> None:
+    """`query()` has always been bounded, and streaming must not change that.
+
+    `begin` is framed before execution starts, so the opening deadline is
+    satisfied instantly and cannot bound the rest: a `RETURN sleep(5s)` stopped
+    timing out at all until the whole exchange got the buffered call's budget.
+    """
+    channel = _AsyncChannel([begin(1)], open_timeout=0.25)  # then silence
+    # Bounded by `wait_for` as well, so a missing deadline fails here rather
+    # than hanging: without one this waits on the queue forever, and a hanging
+    # test spends the job's whole timeout to say less than a failing one.
+    with pytest.raises(TransportTimeoutError, match="no answer within"):
+        await asyncio.wait_for(
+            AsyncQueryStream(channel.ops(), "RETURN sleep(5s)").collect(), 3.0
+        )
+
+
+async def test_collect_forwards_the_session_it_was_given() -> None:
+    """A session-scoped query must stay on its session when it is streamed.
+
+    `query_raw` hands the session to the stream rather than putting it in a
+    `RequestMessage` itself, so this is the plumbing that would silently drop
+    it - and a query that ran on the wrong session would still return rows,
+    which is what makes it worth pinning rather than noticing.
+    """
+    session = uuid.uuid4()
+    channel = _AsyncChannel([begin(1), value(0, 1), finished(0, single=True), end(1)])
+    await AsyncQueryStream(channel.ops(), "RETURN 1", session_id=session).collect()
+    assert channel.sent[0].kwargs["session"] == session
+    assert "txn" not in channel.sent[0].kwargs
+
+
+def test_sync_collect_rebuilds_the_same_shape() -> None:
+    channel = _SyncChannel([begin(1), rows(0, [{"n": 1}]), finished(0), end(1)])
+    response = QueryStream(channel.ops(), "SELECT 1").collect()
+    assert response == {
+        "result": [
+            {"status": "OK", "time": "1.5ms", "result": [{"n": 1}], "type": None}
+        ]
+    }
+
+
+def test_sync_collect_hands_back_none_on_a_refusal() -> None:
+    channel = _SyncChannel([METHOD_NOT_FOUND])
+    assert QueryStream(channel.ops(), "SELECT 1").collect() is None
+    assert channel.supported_flag is False
+
+
+def test_sync_collect_does_not_remember_a_transient_refusal() -> None:
+    """The blocking copy of the rule, and it needs its own test.
+
+    The two `collect()` methods are separate code, and an async test cannot
+    speak for the sync one - a mutation aimed at the shared-looking text landed
+    on the sync copy while the async test passed, which said nothing about
+    either.
+    """
+    channel = _SyncChannel([TOO_MANY])
+    assert QueryStream(channel.ops(), "SELECT 1").collect() is None
+    assert channel.supported_flag is None
 
 
 # --------------------------------------------------------------------------- #

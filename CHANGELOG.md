@@ -9,11 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Streaming queries. `query_stream()` reads a query's answer as the server
-  produces it, instead of waiting for all of it: the first rows arrive while
-  the rest of the query is still running, and a large result never has to sit
-  in memory in one piece. Needs SurrealDB **v3.3.0** or later, which added the
-  `query_stream` RPC method to the WebSocket protocol.
+- Streaming queries, adopted invisibly. Against SurrealDB **v3.3.0** or later
+  over a websocket, `query()` now asks for its answer as a sequence of frames
+  and rebuilds it as they arrive - and so do `select()`, `create()`, `upsert()`
+  and every builder, because they all reach the wire through the same call. The
+  answer is identical; the server no longer has to finish before any of it
+  reaches the client, and there is no single enormous response to decode. No
+  code changes, and nothing to switch on.
+
+  Every case that cannot stream is a *retry* rather than an error - an older
+  server, a denied capability, a connection at its concurrency cap, a socket
+  that died before anything was framed. That is safe because the server frames
+  `begin` before it begins executing, so an answer with no frame behind it means
+  the query never ran. Absent and denied are remembered per connection; the
+  concurrency cap deliberately is not, since remembering a transient refusal
+  would strand the connection on the buffered path. Queries inside a client
+  transaction are never streamed: a `commit` arriving mid-stream would commit a
+  prefix of the query. `streaming=False` on a connection or on
+  `Surreal`/`AsyncSurreal` puts everything back on the buffered path.
+
+- `query_stream()` is the visible half: the rows as they arrive, rather than the
+  whole answer at the end.
 
   Iterate it for rows, or call `.statements()` for one `StatementResult` per
   statement - the shape `query()` returns. A stream is read once, and both

@@ -574,12 +574,28 @@ with Surreal("ws://localhost:8000/rpc") as db:
 
 ## Streaming queries
 
-`query()` waits for the whole answer and hands it back at once. `query_stream()`
-reads it as the server produces it, so the first rows arrive while the rest of
-the query is still running and a large result never has to sit in memory in one
-piece.
+**You get this for free.** Against **SurrealDB v3.3.0 or later** over a
+WebSocket, `query()` already asks for its answer as a stream of frames and
+rebuilds it as it arrives - and so do `select()`, `create()`, `upsert()` and
+every builder, because they all go through the same call. The answer is
+identical; what changes is that the server no longer has to finish before any of
+it reaches you, and there is no single enormous response to decode.
 
-It needs **SurrealDB v3.3.0 or later** and a WebSocket connection. Against an
+Nothing to switch on, and nothing to change in your code:
+
+```python
+people = await db.query("SELECT * FROM person")   # streamed, if the server can
+```
+
+`query_stream()` is the visible half, for when you want the rows *as* they
+arrive rather than the whole answer at the end:
+
+```python
+async for person in db.query_stream("SELECT * FROM person"):
+    ...
+```
+
+It needs the same v3.3.0 server and a WebSocket connection. Against an
 older server, or over HTTP, the query runs the buffered way and its rows are
 handed back one at a time, so the call works everywhere - see
 [Where it streams](#where-it-streams) below.
@@ -674,15 +690,28 @@ working while a stream is open.
 | | Behaviour |
 | --- | --- |
 | WebSocket, server v3.3.0+ | Streams. Rows arrive as they are produced. |
-| WebSocket, older server | Runs `query()` and replays its rows. Learned once per connection. |
+| WebSocket, older server | Runs the query the buffered way. Learned once per connection. |
 | WebSocket, `query_stream` denied | Same, with its own reason - the operator denied streaming, not querying. |
-| HTTP | Runs `query()` and replays its rows - HTTP carries one response per request. |
-| Embedded | Runs `query()` and replays its rows. |
+| WebSocket, at the concurrency cap | Buffered for this query only. Not remembered: the cap is transient. |
+| Inside a client transaction | Never streamed - see the caveats below. |
+| HTTP | Buffered - HTTP carries one response per request. |
+| Embedded | Buffered. |
 
-The fallback exists so the same code runs everywhere, but it gives up the two
-things streaming is for: rows do not arrive early, and the whole result is held
-in memory. When that matters, pass `require_streaming=True` and get an
-`UnsupportedFeatureError` instead of a quiet buffered answer:
+Every one of those is a *retry*, not an error: the server frames `begin` before
+it starts executing, so an answer that arrives without a frame behind it means
+the query never ran and asking again cannot run it twice.
+
+To put a whole connection back on the buffered path:
+
+```python
+db = AsyncSurreal("ws://localhost:8000/rpc", streaming=False)
+```
+
+For `query()` the fallback costs nothing - the answer is buffered either way.
+For `query_stream()` it gives up the two things streaming is for: rows do not
+arrive early, and the whole result is held in memory. When that matters, pass
+`require_streaming=True` and get an `UnsupportedFeatureError` instead of a quiet
+buffered answer:
 
 ```python
 async for row in db.query_stream(sql, require_streaming=True):
@@ -723,6 +752,11 @@ first, not the second.
   results: `CREATE a; THROW 'x'; SLEEP 3s; CREATE b` leaves both records via
   `query()` and only `a` via `query_stream()`. Wrap the statements in
   `BEGIN`/`COMMIT` if you need all-or-nothing.
+- **Queries inside a client transaction are never streamed.** Requests on one
+  connection are served concurrently, so a `commit` could arrive while a
+  streamed query was still executing and commit a prefix of it. Anything from
+  `begin()` therefore takes the buffered path, `query()` and `query_stream()`
+  alike.
 - **Inside a transaction.** A stream on a transaction runs on that transaction,
   and requests on one connection are served concurrently, so finish the stream
   before committing. A `commit` that lands mid-stream commits a prefix of the

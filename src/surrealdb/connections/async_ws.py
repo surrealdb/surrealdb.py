@@ -40,6 +40,7 @@ from surrealdb.errors import (
     SurrealError,
     TransportTimeoutError,
     UnexpectedResponseError,
+    parse_query_error,
     parse_rpc_error,
 )
 from surrealdb.request_message.message import RequestMessage
@@ -209,11 +210,19 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     def __init__(
         self,
         url: str,
+        *,
+        streaming: bool = True,
     ) -> None:
         """
         The constructor for the AsyncSurrealConnection class.
 
         :param url: The URL of the database to process queries for.
+        :param streaming: Whether queries may be answered as a stream of frames
+            rather than one response. On by default and invisible: the answer is
+            the same either way, so this only decides how it arrives. Pass
+            ``False`` to put every query back on the buffered path - worth doing
+            if a slow consumer of a very large result would rather the server
+            waited than the client buffered.
         """
         self.url: Url = Url(url)
         self.raw_url: str = f"{self.url.raw_url}/rpc"
@@ -256,6 +265,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         # Why it refused, when it did - a server older than v3.3.0 and one whose
         # capabilities deny `query_stream` need different advice.
         self._streaming_refusal: str | None = None
+        # Whether this connection may stream at all - the driver-level switch,
+        # distinct from what the server turned out to support.
+        self._streaming_enabled: bool = streaming
 
     def _connect_guard(self) -> asyncio.Lock:
         """The lock serialising ``connect()``, bound to the running loop.
@@ -323,7 +335,14 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         pending = [
             (query_id, fut) for query_id, fut in self.qry.items() if not fut.done()
         ]
-        if len(pending) == 1 and not self._streams:
+        # A streaming query in flight is a candidate exactly as a pending call
+        # is: it too sent a frame the server may have rejected, and now that
+        # `query()` streams, most requests are of that kind. Leaving streams out
+        # meant the error was held for `self.qry` ids alone, so a streamed
+        # request that was the doomed one waited out its opening deadline and
+        # reported a bare timeout instead of the parse error the server sent.
+        candidates = {query_id for query_id, _ in pending} | set(self._streams)
+        if len(candidates) == 1 and pending:
             query_id, fut = pending[0]
             fut.set_exception(error)
             self.qry.pop(query_id, None)
@@ -336,12 +355,12 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         # over as the end-of-frames sentinel, which carries the parsed error
         # itself - re-encoding it as a response would flatten a typed error
         # back into its message.
-        if not pending and len(self._streams) == 1:
+        if len(candidates) == 1:
             for frames in self._streams.values():
                 frames.put_nowait(stream_broken(error))
             return
         self._uncorrelated_error = error
-        self._uncorrelated_for = {query_id for query_id, _ in pending}
+        self._uncorrelated_for = candidates
 
     def _take_uncorrelated(self, query_id: str) -> SurrealError | None:
         """Consume a held protocol error if it can belong to *query_id*.
@@ -373,7 +392,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         """
         if self._uncorrelated_error is None:
             return
-        self._uncorrelated_for &= self.qry.keys()
+        self._uncorrelated_for &= self.qry.keys() | self._streams.keys()
         if not self._uncorrelated_for:
             self._forget_uncorrelated()
 
@@ -644,7 +663,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             # authenticated record via `$auth`.
             if self._info_needs_auth_fallback(response):
                 record = self._extract_auth_record(
-                    await self.query(AUTH_FALLBACK_QUERY, session_id=session_id).first()
+                    await self._buffered_first(AUTH_FALLBACK_QUERY, session_id)
                 )
                 if record is not None:
                     return record
@@ -697,6 +716,17 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     ) -> dict[str, Any]:
         if vars is None:
             vars = {}
+        if self._may_stream(txn_id):
+            # Streamed, and the answer rebuilt in the shape a buffered query
+            # returns - so `query()`, `select()`, `create()` and every builder
+            # above this get their rows as the server produces them without
+            # knowing anything about frames. `None` means the query was not run:
+            # the server declined to stream it, so ask the buffered way.
+            streamed = await AsyncQueryStream(
+                self._stream_ops(), query, vars, session_id=session_id
+            ).collect()
+            if streamed is not None:
+                return streamed
         kwargs: dict[str, Any] = {"query": query, "params": vars}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -705,6 +735,44 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         message = RequestMessage(RequestMethod.QUERY, **kwargs)
         response = await self._send(message, "query", bypass=True)
         return response
+
+    async def _buffered_first(
+        self, query: str, session_id: UUID | None
+    ) -> Value | None:
+        """Run *query* buffered and return its first statement's result.
+
+        For the queries the SDK issues on its own behalf. Streaming exists to
+        get a caller's data moving sooner; a one-row internal lookup gains
+        nothing from frames, and putting `query_stream` on the wire for
+        something nobody asked for makes the SDK's own traffic harder to reason
+        about - and harder to assert on, which is how this was noticed.
+        """
+        kwargs: dict[str, Any] = {"query": query, "params": {}}
+        if session_id is not None:
+            kwargs["session"] = session_id
+        message = RequestMessage(RequestMethod.QUERY, **kwargs)
+        response = await self._send(message, "getting auth information", bypass=True)
+        statements = buffered_statements(response)
+        if not statements:
+            return None
+        first = statements[0]
+        if first.get("status") == "ERR":
+            raise parse_query_error(first)
+        result: Value = first.get("result")
+        return result
+
+    def _may_stream(self, txn_id: UUID | None) -> bool:
+        """Whether this query may be asked for as a stream.
+
+        A query on a client transaction never is. It would run on the
+        transaction `begin` handed out, and requests on one connection are
+        served concurrently, so a `commit` arriving mid-stream would commit a
+        prefix of the query rather than the whole of it. Excluding them removes
+        the hazard instead of documenting it.
+        """
+        if not self._streaming_enabled or txn_id is not None:
+            return False
+        return self._streaming_supported is not False
 
     def query_stream(
         self,
@@ -745,8 +813,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         """Bind the operations a streaming query drives.
 
         Bound methods rather than the connection itself, so a stream reaches
-        only what it needs: it cannot connect, close, or touch the pending
-        request map.
+        only what it needs: it cannot connect or close, and it can only ask the
+        pending-request machinery whether a held protocol error is its own.
         """
         return AsyncStreamOps(
             registry=self._streams,
@@ -759,6 +827,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             supported=self._stream_supported,
             set_supported=self._stream_set_supported,
             refusal=self._stream_refusal,
+            take_uncorrelated=self._take_uncorrelated,
         )
 
     async def _stream_open(self, request_id: str) -> Queue[Any]:
@@ -785,6 +854,10 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     def _stream_release(self, request_id: str) -> None:
         """Deregister a stream. Safe to call twice."""
         self._streams.pop(request_id, None)
+        # A held protocol error may have been waiting for this stream to collect
+        # it; with the stream gone it cannot belong to it, and keeping it would
+        # let it ambush an unrelated request much later.
+        self._prune_uncorrelated()
 
     async def _stream_send(self, message: RequestMessage) -> None:
         """Send *message* without registering a reply future.
