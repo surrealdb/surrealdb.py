@@ -39,6 +39,7 @@ from surrealdb.errors import (
     UnexpectedResponseError,
     UnsupportedFeatureError,
     ValidationError,
+    parse_query_error,
 )
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
@@ -421,6 +422,36 @@ async def test_a_failed_statement_raises_out_of_row_iteration() -> None:
         async for row in stream:
             seen.append(row)
     assert seen == [{"n": 1}]
+
+
+async def test_a_streamed_statement_error_reports_what_a_buffered_one_does() -> None:
+    """Which path served a query is not something a caller chose.
+
+    A frame carries the full wire error object, code included; a buffered query
+    result carries no code at all, so `ServerError.code` is 0 there. Keeping the
+    frame's meant `THROW 'boom'` came back as -32006 streamed and 0 buffered -
+    the same failing statement reporting differently depending on how its answer
+    happened to arrive.
+    """
+    thrown_frame = {
+        "cause": None,
+        "code": -32006,
+        "kind": "Thrown",
+        "message": "An error occurred: boom",
+    }
+    with pytest.raises(ThrownError) as streamed:
+        await collect_rows([begin(1), finished(0, error=thrown_frame), end(1)])
+
+    # What the buffered path makes of the same failure, through the shape a
+    # query result actually carries: `result` as the message, and no code.
+    buffered = parse_query_error(
+        {"result": "An error occurred: boom", "kind": "Thrown", "status": "ERR"}
+    )
+
+    assert type(streamed.value) is type(buffered)
+    assert streamed.value.code == buffered.code == 0
+    assert streamed.value.kind == buffered.kind
+    assert str(streamed.value) == str(buffered)
 
 
 async def test_a_statement_error_keeps_its_server_error_type() -> None:

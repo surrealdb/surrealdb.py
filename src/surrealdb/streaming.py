@@ -253,10 +253,20 @@ def _error_of(frame: dict[str, Any]) -> ServerError | None:
     and optional ``details`` - which is what the RPC-level parser already
     understands, so a statement that fails mid-stream surfaces as the same
     typed error as anything else the server rejects.
+
+    The wire ``code`` is dropped deliberately. A buffered query result carries
+    none, so ``ServerError.code`` is 0 on that path; keeping the frame's would
+    mean the same failing statement reported a different code depending on
+    whether its answer happened to be streamed - `THROW 'boom'` came back as
+    ``code=0`` buffered and ``code=-32006`` streamed. Which path served a query
+    is not something a caller chose, so it must not be something they can
+    observe.
     """
     raw = frame.get("error")
     if raw is None:
         return None
+    if isinstance(raw, dict):
+        raw = {key: value for key, value in raw.items() if key != "code"}
     return parse_rpc_error(raw)
 
 
