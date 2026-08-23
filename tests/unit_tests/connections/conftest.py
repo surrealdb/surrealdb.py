@@ -64,6 +64,21 @@ def _require_surrealdb_server() -> None:
         )
 
 
+@pytest.fixture(scope="session")
+def server_urls() -> dict[str, str]:
+    """The same URLs :func:`connection_params` carries, at session scope.
+
+    `connection_params` is function-scoped, so a module-scoped fixture cannot
+    request it - pytest raises `ScopeMismatch`. That is how three nested
+    conftests came to hardcode `ws://localhost:8000` instead, and so kept
+    talking to 8000 while everything around them honoured SURREALDB_PORT.
+    """
+    return {
+        "url": f"http://{SERVER_HOST}:{SERVER_PORT}",
+        "ws_url": f"ws://{SERVER_HOST}:{SERVER_PORT}",
+    }
+
+
 @pytest.fixture
 def connection_params() -> dict[str, Any]:
     """Shared connection parameters for all tests"""
