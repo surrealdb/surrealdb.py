@@ -1,6 +1,8 @@
+import asyncio
 import contextlib
 import os
 import socket
+import time
 from collections.abc import AsyncGenerator, Generator
 from typing import Any
 
@@ -10,6 +12,7 @@ from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+from surrealdb.errors import QueryError
 
 # Where the integration server is. Defaults to the port `docker-compose up`
 # publishes, and honours the same `SURREALDB_PORT` the compose file reads, so a
@@ -91,6 +94,63 @@ _DEFINE_TABLES = """
     DEFINE TABLE IF NOT EXISTS document SCHEMALESS;
 """
 
+# The DDL above is retried on a write conflict, which the server explicitly
+# invites: "Transaction conflict: Write conflict, retry the transaction. This
+# transaction can be retried."
+#
+# Why it conflicts at all, measured rather than assumed. `DEFINE TABLE IF NOT
+# EXISTS` against a table that already exists is effectively read-only and never
+# collides - zero conflicts in 200 concurrent attempts. What collides is the
+# case where the table is genuinely missing and has to be written back, and that
+# case is common here: seventeen tests do `REMOVE TABLE user` and two
+# `REMOVE TABLE person`, both of which this DDL defines. Two of those rewrites
+# overlapping produced roughly one `ERROR at setup of <test>` per full-suite
+# run, on whichever test happened to be next.
+#
+# Defining the tables once per session would be cheaper, and is wrong for the
+# same reason: those removals mean the tables are *not* stable for the length of
+# a session, so every connection really does have to ensure them. What is safe
+# to remove is the failure, not the work.
+_DDL_ATTEMPTS = 5
+_DDL_RETRY_DELAY = 0.05
+
+
+def _is_write_conflict(error: BaseException) -> bool:
+    """Whether *error* is the conflict the server says may be retried.
+
+    Matched on the structured detail the SDK already exposes rather than on the
+    message text, so a reworded server error cannot silently turn the retry off.
+    """
+    return isinstance(error, QueryError) and error.is_transaction_conflict
+
+
+def _define_tables(
+    connection: BlockingHttpSurrealConnection | BlockingWsSurrealConnection,
+) -> None:
+    """Ensure the shared tables exist, retrying a write conflict."""
+    for attempt in range(_DDL_ATTEMPTS):
+        try:
+            connection.query(_DEFINE_TABLES).execute()
+            return
+        except QueryError as error:
+            if not _is_write_conflict(error) or attempt == _DDL_ATTEMPTS - 1:
+                raise
+            time.sleep(_DDL_RETRY_DELAY * (attempt + 1))
+
+
+async def _adefine_tables(
+    connection: AsyncHttpSurrealConnection | AsyncWsSurrealConnection,
+) -> None:
+    """The async counterpart of :func:`_define_tables`."""
+    for attempt in range(_DDL_ATTEMPTS):
+        try:
+            await connection.query(_DEFINE_TABLES)
+            return
+        except QueryError as error:
+            if not _is_write_conflict(error) or attempt == _DDL_ATTEMPTS - 1:
+                raise
+            await asyncio.sleep(_DDL_RETRY_DELAY * (attempt + 1))
+
 
 @pytest.fixture
 async def async_http_connection(
@@ -103,7 +163,7 @@ async def async_http_connection(
         namespace=connection_params["namespace"],
         database=connection_params["database_name"],
     )
-    await connection.query(_DEFINE_TABLES)
+    await _adefine_tables(connection)
     yield connection
 
 
@@ -119,7 +179,7 @@ async def async_ws_connection(
             namespace=connection_params["namespace"],
             database=connection_params["database_name"],
         )
-        await connection.query(_DEFINE_TABLES)
+        await _adefine_tables(connection)
         yield connection
     finally:
         # Ensure connection is always closed; ignore cleanup failures
@@ -139,7 +199,7 @@ async def async_ws_connection_secondary(
             namespace=connection_params["namespace"],
             database=connection_params["database_name"],
         )
-        await connection.query(_DEFINE_TABLES)
+        await _adefine_tables(connection)
         yield connection
     finally:
         with contextlib.suppress(Exception):
@@ -157,7 +217,7 @@ def blocking_http_connection(
         namespace=connection_params["namespace"],
         database=connection_params["database_name"],
     )
-    connection.query(_DEFINE_TABLES).execute()
+    _define_tables(connection)
     yield connection
 
 
@@ -172,7 +232,7 @@ def blocking_ws_connection(
         namespace=connection_params["namespace"],
         database=connection_params["database_name"],
     )
-    connection.query(_DEFINE_TABLES).execute()
+    _define_tables(connection)
     yield connection
     if connection.socket:
         connection.socket.close()
@@ -189,7 +249,7 @@ def blocking_ws_connection_secondary(
         namespace=connection_params["namespace"],
         database=connection_params["database_name"],
     )
-    connection.query(_DEFINE_TABLES).execute()
+    _define_tables(connection)
     yield connection
     if connection.socket:
         connection.socket.close()
