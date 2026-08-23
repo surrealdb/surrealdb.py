@@ -92,7 +92,9 @@ def test_stopping_early_cancels_the_query_server_side(
     elapsed = time.monotonic() - started
 
     assert seen == 3
-    assert elapsed < 5.0, f"stopping the stream took {elapsed:.1f}s"
+    # See the async twin: clear of `_CANCEL_DRAIN_TIMEOUT`, which is what a
+    # cancel that never reaches the server costs.
+    assert elapsed < 2.5, f"stopping the stream took {elapsed:.1f}s"
     assert blocking_ws_connection._streams == {}
     assert blocking_ws_connection.query("RETURN 'alive'").execute() == ["alive"]
 
@@ -173,18 +175,59 @@ def test_a_failed_statement_raises_and_leaves_the_connection_usable(
     assert blocking_ws_connection.query("RETURN 'alive'").execute() == ["alive"]
 
 
-def test_a_stream_and_a_live_subscription_coexist(
+def test_a_stream_hands_a_notification_it_read_to_the_live_subscriber(
     blocking_ws_connection: BlockingWsSurrealConnection,
+    blocking_ws_connection_secondary: BlockingWsSurrealConnection,
 ) -> None:
-    """Each reads the socket, so each must route the other's traffic onward."""
+    """The stream's pump reads the socket, so it owes the subscriber what it finds.
+
+    Deliberately no live iterator running: ``_iter_live`` reads the socket
+    itself and yields its own notifications directly, so a version of this test
+    that drained concurrently passed with ``_route_live_notification`` gutted -
+    the live iterator simply won the race to read. With the stream as the only
+    reader, a notification arriving mid-stream can *only* reach the subscriber
+    by being routed, which is the invariant the blocking transport's shared
+    router exists for.
+
+    ``subscribe_live`` registers its queue eagerly, so the queue is there to
+    receive without anything iterating it yet.
+    """
     _require_streaming(blocking_ws_connection)
     _seed(blocking_ws_connection)
 
     live_id = blocking_ws_connection.live("stream_wide")
+    notifications = blocking_ws_connection.subscribe_live(live_id)
+
+    def write() -> None:
+        time.sleep(0.5)
+        blocking_ws_connection_secondary.query(
+            "CREATE stream_wide:mid SET n = 2"
+        ).execute()
+
+    writer = threading.Thread(target=write)
     try:
-        rows = list(blocking_ws_connection.query_stream("SELECT * FROM stream_wide"))
-        assert len(rows) == 120
+        writer.start()
+        # The trailing SLEEP keeps the stream pumping past the write, so the
+        # notification lands while this is the only thing reading the socket.
+        rows = list(
+            blocking_ws_connection.query_stream("SELECT * FROM stream_wide; SLEEP 2s;")
+        )
+        writer.join(timeout=30)
+        assert 121 <= len(rows) <= 122, len(rows)
+
+        # Read off the subscriber's own queue with a deadline, not by iterating
+        # the generator. `next()` would fall through to reading the socket when
+        # the queue is empty and block there forever, so a routing regression
+        # made this test *hang* rather than fail - which is worse than not
+        # having it. The queue is what the pump routes into, so it is also the
+        # most direct statement of the invariant.
+        queues = blocking_ws_connection.live_queues[str(live_id)]
+        assert len(queues) == 1
+        change = queues[0].get(timeout=10)
+        assert change["action"] == "CREATE"
+        assert str(change["result"]["id"]) == "stream_wide:mid"
     finally:
+        notifications.close()
         blocking_ws_connection.kill(live_id)
 
 

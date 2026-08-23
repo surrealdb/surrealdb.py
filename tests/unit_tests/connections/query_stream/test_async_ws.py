@@ -150,7 +150,11 @@ async def test_stopping_early_cancels_the_query_server_side(
     elapsed = time.monotonic() - started
 
     assert seen == 3
-    assert elapsed < 5.0, f"stopping the stream took {elapsed:.1f}s"
+    # Clear of `_CANCEL_DRAIN_TIMEOUT` (5s), which is what a cancel that never
+    # reaches the server actually costs - the teardown drains and gives up on
+    # that deadline rather than waiting out the SLEEP. A bound *at* 5.0 left a
+    # ~50ms margin against a measured 0.11s, which is no margin at all.
+    assert elapsed < 2.5, f"stopping the stream took {elapsed:.1f}s"
     assert async_ws_connection._streams == {}
     # The connection is untouched by the cancel.
     assert await async_ws_connection.query("RETURN 'alive'") == ["alive"]
@@ -162,6 +166,7 @@ async def test_a_buffered_query_answers_while_a_stream_is_open(
     await _require_streaming(async_ws_connection)
     await _seed(async_ws_connection)
 
+    started = time.monotonic()
     async with async_ws_connection.query_stream(
         "SLEEP 2s; SELECT * FROM stream_wide LIMIT 2;"
     ) as stream:
@@ -175,7 +180,22 @@ async def test_a_buffered_query_answers_while_a_stream_is_open(
         assert await async_ws_connection.query("RETURN 'interleaved'") == [
             "interleaved"
         ]
+        answered_at = time.monotonic() - started
+        assert not pending.done(), "the stream had already produced its first item"
         await pending
+        finished_at = time.monotonic() - started
+
+    # The timing is the whole assertion. Without it a reply starved until the
+    # stream's SLEEP completed satisfied the test just as well, only slower -
+    # which is precisely the regression the test is named for.
+    assert answered_at < 1.0, (
+        f"the buffered query was answered {answered_at:.2f}s in, so it waited on "
+        "the stream rather than interleaving with it"
+    )
+    assert finished_at >= 2.0, (
+        f"the stream finished after {finished_at:.2f}s, so its SLEEP never ran "
+        "and the query was not answered mid-stream"
+    )
 
 
 async def _collect(stream: AsyncQueryStream) -> list[Any]:
@@ -205,8 +225,9 @@ async def test_two_streams_run_concurrently_on_one_connection(
             "the slow stream had already finished, so the two never overlapped"
         )
         slow_rows = await slow_task
-        # SLEEP's own None, then every row of the table.
-        assert len(slow_rows) > 1
+        # SLEEP's own None, then every row `_seed` created. Exact, because a
+        # `> 1` bound would accept any amount of frame loss or truncation.
+        assert len(slow_rows) == 121, len(slow_rows)
     finally:
         await slow.aclose()
         await quick.aclose()
@@ -321,13 +342,18 @@ async def test_a_failed_statement_stops_the_rest_of_the_query(
             "DEFINE TABLE IF NOT EXISTS se_div; DELETE se_div"
         )
 
+    # Matched precisely: "stop" alone also matches the SDK's own teardown error,
+    # "The streaming query was stopped before it completed", so a stream that
+    # failed for an unrelated reason would have satisfied it.
+    thrown = r"An error occurred: stop"
+
     await reset()
-    with pytest.raises(SurrealError, match="stop"):
+    with pytest.raises(SurrealError, match=thrown):
         await async_ws_connection.query(sql)
     assert await present() == ["se_div:a", "se_div:b"]
 
     await reset()
-    with pytest.raises(SurrealError, match="stop"):
+    with pytest.raises(SurrealError, match=thrown):
         async for _ in async_ws_connection.query_stream(sql):
             pass
     # Long enough that the trailing CREATE would have landed had the cancel not

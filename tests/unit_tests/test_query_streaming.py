@@ -50,6 +50,7 @@ from surrealdb.streaming import (
     QueryStream,
     StatementResult,
     SyncStreamOps,
+    _Accumulator,
     buffered_statements,
     stream_broken,
     streaming_refused,
@@ -243,17 +244,26 @@ class _SyncChannel(_AsyncChannel):
     def _sync_cancel(self, request_id: str) -> None:
         self.cancelled.append(request_id)
         frames = self.sync_registry.get(request_id)
-        if frames is not None:
+        # Honours `answer_cancel`, which it used to ignore - so the blocking
+        # half could not express a server that never answers, and its teardown
+        # had strictly less coverage than the async one despite the suite
+        # claiming the two behave identically.
+        if frames is not None and self.answer_cancel:
             frames.put(end(0, error=STOPPED))
 
     def _sync_buffered(self, *_args: Any) -> list[dict[str, Any]]:
         self.buffered_calls += 1
         return self._buffered
 
-    def _pump(self, _timeout: float) -> None:
+    def _pump(self, timeout: float) -> None:
+        # Sleeps, like the real pump does when nothing is waiting. Returning
+        # immediately turned the driver's poll loop into a spin - thousands of
+        # iterations per second - which both hid how the loop behaves and made
+        # the safety cap below fire on any test that legitimately waits.
         self.pumps += 1
-        if self.pumps > 50:
+        if self.pumps > 5000:
             raise AssertionError("the stream asked for frames that never came")
+        time.sleep(timeout)
 
     def _release(self, request_id: str) -> None:
         self.released.append(request_id)
@@ -356,6 +366,33 @@ async def test_rows_arrive_before_their_statement_finishes() -> None:
     # row that the accumulator was willing to hand over early.
     assert await iterator.__anext__() == {"n": 1}
     await stream.aclose()
+
+
+def test_the_row_view_does_not_accumulate_what_it_has_yielded() -> None:
+    """The point of `retain_rows`, and nothing asserted it.
+
+    The row view exists so a large result never sits in memory in one piece. The
+    accumulator's own docstring says so - "holding every row would defeat the
+    reason to stream at all" - but every test read values back through a view,
+    which cannot tell a retained row from a released one. Reaching into the
+    accumulator is the only way to see the difference.
+    """
+    retaining = _Accumulator(retain_rows=True)
+    streaming_only = _Accumulator(retain_rows=False)
+    payload = rows(0, [1, 2, 3])["result"]
+
+    assert len(retaining.feed(payload)) == 3
+    assert len(streaming_only.feed(payload)) == 3
+
+    assert retaining._rows == {0: [1, 2, 3]}
+    assert streaming_only._rows == {}, "the row view retained rows it had yielded"
+
+    # A single value is held either way - one per statement, not one per row -
+    # because the terminal frame needs it to report the statement's value.
+    assert _Accumulator(retain_rows=True).feed(value(0, 9)["result"])
+    keeps = _Accumulator(retain_rows=False)
+    keeps.feed(value(0, 9)["result"])
+    assert keeps._singles == {}
 
 
 async def test_a_failed_statement_raises_and_retracts_its_rows() -> None:
@@ -675,7 +712,7 @@ async def test_a_cancel_that_is_never_answered_gives_up_on_its_deadline() -> Non
     """
     channel = _AsyncChannel([begin(1), rows(0, [1, 2])], answer_cancel=False)
     stream = AsyncQueryStream(channel.ops(), "SELECT 1")
-    with mock.patch.object(streaming, "_CANCEL_DRAIN_TIMEOUT", 0.15):
+    with mock.patch.object(streaming, "_CANCEL_DRAIN_TIMEOUT", 0.4):
         started = time.monotonic()
         async with stream:
             async for _ in stream:
@@ -684,26 +721,31 @@ async def test_a_cancel_that_is_never_answered_gives_up_on_its_deadline() -> Non
 
     assert channel.cancelled == [channel.sent[0].id]
     assert channel.registry == {}, "the stream was released despite no terminal frame"
-    assert elapsed < 2.0, f"the drain took {elapsed:.2f}s, so its deadline did not fire"
+    # Both bounds are load-bearing. The upper one says the deadline fired at
+    # all; the lower one says the drain actually waited for it - without it,
+    # deleting the drain outright also passed, because `cancelled` is filled
+    # before the drain runs and so proves nothing about it.
+    assert 0.4 <= elapsed < 3.0, (
+        f"the drain took {elapsed:.2f}s, expected to wait out its 0.4s deadline"
+    )
 
 
 async def test_a_value_frame_after_its_statement_finished_is_ignored() -> None:
     """The converse of the rows guard, and it needs its own test.
 
     Without it a late `value` frame would revive a statement the caller has
-    already been told was final - and, because `single` is read from the
-    terminal frame, hand back a value the server never attributed to it.
+    already been told was final. Read through the *row* view deliberately: the
+    guard's observable effect is that no row is yielded for the late frame, and
+    `.statements()` discards every row event, so asserting there could not see
+    the difference at all.
     """
-    statements = await collect_statements(
-        [
-            begin(1),
-            value(0, 1),
-            finished(0, single=True),
-            value(0, 999),
-            end(1),
-        ]
-    )
-    assert [s.value for s in statements] == [1]
+    frames = [begin(1), value(0, 1), finished(0, single=True), value(0, 999), end(1)]
+    assert await collect_rows(frames) == [1]
+
+    # And the statements view still reports the statement once, with the value
+    # the server attributed to it.
+    statements = await collect_statements(frames)
+    assert [(s.index, s.value) for s in statements] == [(0, 1)]
 
 
 async def test_the_fallback_surfaces_a_top_level_error() -> None:
@@ -753,6 +795,68 @@ async def test_a_timeout_before_the_first_frame_still_cancels() -> None:
     assert channel.registry == {}
 
 
+def test_sync_a_timeout_before_the_first_frame_still_cancels() -> None:
+    """The blocking open deadline, which had no test of its own.
+
+    Its async twin exercises `asyncio.wait_for`; this path is hand-rolled -
+    `deadline = time.monotonic() + open_timeout` with the slice clamped by
+    `min(_SYNC_PUMP_SLICE, remaining)` - so it is the one that could get the
+    arithmetic wrong, expire early, or never expire at all.
+    """
+    channel = _SyncChannel([], open_timeout=0.3)  # nothing will ever arrive
+    stream = QueryStream(channel.ops(), "SELECT 1")
+
+    # Driven on a daemon thread with a join deadline, because the failure mode
+    # under test is "never stops". Asserted inline, a broken deadline made this
+    # hang instead of failing - and a hanging test spends the whole CI job's
+    # timeout to tell you less than a failing one does.
+    outcome: dict[str, BaseException] = {}
+
+    def drive() -> None:
+        try:
+            list(stream)
+        except BaseException as exc:
+            outcome["error"] = exc
+
+    started = time.monotonic()
+    thread = threading.Thread(target=drive, daemon=True)
+    thread.start()
+    thread.join(timeout=5)
+    elapsed = time.monotonic() - started
+
+    assert not thread.is_alive(), "the open deadline never fired"
+    assert isinstance(outcome.get("error"), TransportTimeoutError), outcome
+    # It must wait for the deadline as well as honour it.
+    assert 0.3 <= elapsed < 3.0, elapsed
+    assert channel.cancelled == [channel.sent[0].id]
+    assert channel.sync_registry == {}
+
+
+async def test_cancelling_a_stream_on_a_closed_connection_does_not_reconnect() -> None:
+    """`_stream_cancel` returns early when the socket has gone, and must.
+
+    Going through `_send` would call `connect()` and reopen a connection the
+    caller had just closed - on a new server-side session, unauthenticated,
+    where the stream being cancelled does not exist. Nothing tested that guard,
+    so the reconnect would only have shown up as a puzzling extra socket.
+    """
+    conn = AsyncWsSurrealConnection(WS_URL)
+    conn.loop = asyncio.get_running_loop()
+    conn.socket = None
+
+    # Would raise ConnectionUnavailableError if it tried to reach the network,
+    # because nothing is listening on this URL.
+    await conn._stream_cancel("stream-1")
+    assert conn.socket is None, "cancelling reopened the connection"
+
+
+def test_sync_cancelling_a_stream_on_a_closed_connection_does_not_reconnect() -> None:
+    conn = BlockingWsSurrealConnection(WS_URL)
+    conn.socket = None
+    conn._stream_cancel("stream-1")
+    assert conn.socket is None, "cancelling reopened the connection"
+
+
 async def test_a_rejected_request_is_not_cancelled() -> None:
     """Nothing of ours is running, so there is nothing to stop.
 
@@ -799,10 +903,18 @@ async def test_an_end_that_undercounts_its_results_is_rejected() -> None:
 
 
 async def test_an_errored_end_is_not_held_to_the_count() -> None:
-    """Statements without a terminal frame are retracted, so the count differs."""
+    """Statements without a terminal frame are retracted, so the count differs.
+
+    The numbers matter: one statement finished and `end` reports two, which the
+    integrity check would reject were it not skipped for an errored `end`. An
+    earlier version used `results=0` with nothing finished - agreeing by
+    accident, so the guard it names was never reached and deleting the
+    `error is None` condition left the test passing.
+    """
     stopped = {"code": -32000, "kind": "Internal", "message": "stopped"}
+    frames = [begin(2), rows(0, [1]), finished(0), rows(1, [2]), end(2, error=stopped)]
     with pytest.raises(SurrealError, match="stopped"):
-        await collect_rows([begin(2), rows(0, [1]), end(0, error=stopped)])
+        await collect_rows(frames)
 
 
 async def test_a_value_frame_contradicting_single_is_rejected() -> None:
