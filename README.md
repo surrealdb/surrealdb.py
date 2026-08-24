@@ -100,7 +100,7 @@ with Surreal("ws://localhost:8000/rpc") as db:
     )
 
     # Read all the records in the table
-    print(db.select("person"))
+    print(db.select("person").execute())
 
     # Update all records in the table
     print(db.update("person", {
@@ -180,7 +180,9 @@ The builder is **typed** via `@overload`:
 - `str` target     -> `Value` (a record-id string returns a dict; a table-name
   string returns a list - the type checker can't tell them apart, so falls back to `Value`)
 
-`select()` (async and sync) always runs eagerly and unwraps single records:
+`select()` returns a builder, like every other CRUD method - `await` it on the
+async client, `.execute()` it on the blocking one - and it unwraps single
+records:
 
 - `select(RecordID(...))` (or a `"table:id"` string) -> `dict[str, Value] | None`
   (`None` when the record does not exist)
@@ -263,7 +265,8 @@ Use `BoundExcluded` for `..` rather than `..=`, and `None` for an open end
 (`Range(BoundIncluded(1), None)` is `person:1..`).
 
 Two caveats. A range needs a table, so a bare `Range` is not a resource target —
-`db.select(Range(...))` raises `SurrealError`; wrap it in a `RecordID`. And the
+`db.select(Range(...))` raises `SurrealError` when the builder runs; wrap it in
+a `RecordID`. And the
 `@overload`s above resolve on the *static* type `RecordID`, which says nothing
 about the id, so a type checker still reads `select(first_three)` as
 `dict | None` while it returns a list at runtime. Cast, or use the string form,
@@ -306,7 +309,7 @@ rows = await db.query("SELECT * FROM person").into(Person, rows=True)  # list[Pe
 Sync connections take the same `into=` argument and run eagerly:
 
 ```python
-person = db.select(RecordID("person", "tobie"), into=Person)  # Person | None
+person = db.select(RecordID("person", "tobie"), into=Person).execute()  # Person | None
 created = db.create(RecordID("person", "tobie"), {"name": "Tobie"}, into=Person)
 rows = db.query("SELECT * FROM person").into(Person, rows=True)  # list[Person]
 ```
@@ -352,8 +355,8 @@ with Surreal("ws://localhost:8000/rpc") as db:
     # Clause-less run: call .execute() explicitly.
     empty = db.create(RecordID("person", "bob")).execute()
 
-    # select() and delete() always run eagerly and return the result.
-    row = db.select(RecordID("person", "tobie"))  # dict | None
+    # select() returns a builder; delete() still runs eagerly.
+    row = db.select(RecordID("person", "tobie")).execute()  # dict | None
     db.delete(RecordID("person", "bob"))
 
     # query() returns a builder; call .execute()/.first()/.into().
@@ -828,7 +831,7 @@ as `Null`, and sending `Null` back writes NULL again, so the round trip keeps
 the field:
 
 ```python
-row = db.select(rec)             # {"nickname": Null}
+row = db.select(rec).execute()   # {"nickname": Null}
 row["name"] = "new name"
 db.update(rec, row)              # nickname is still NULL
 ```
@@ -852,11 +855,11 @@ it is, and it encodes back under the set tag, so writing a record back keeps the
 field a set:
 
 ```python
-row = db.select(rec)                   # {"tags": SurrealSet(['a', 'b'])}
+row = db.select(rec).execute()         # {"tags": SurrealSet(['a', 'b'])}
 row["name"] = "new name"
 db.update(rec, row)                    # tags is still a set
 
-db.select(rec)["tags"] == ["a", "b"]   # True — it is a list
+db.select(rec).execute()["tags"] == ["a", "b"]   # True — it is a list
 ```
 
 Writing a plain Python `set` still works and is still sent as a set. The order
@@ -1005,7 +1008,7 @@ v3.0 is a breaking change. Highlights:
 | n/a                                              | `db.query("...").into(MyDataclass)`                       |
 | Sync `db.query("DELETE foo")` runs immediately   | Sync `db.query("DELETE foo").execute()` (returns list)     |
 | Sync `db.create(rec)[...]` (magic auto-exec)     | Sync `db.create(rec, data)` eager, or `db.create(rec).execute()` |
-| `db.select(RecordID(...))` -> `[record]`         | `db.select(RecordID(...))` -> `record` dict or `None`     |
+| `db.select(RecordID(...))` -> `[record]`         | `db.select(RecordID(...))` -> a builder; `await`/`.execute()` for the `record` dict or `None` |
 | `db.delete("my-table")` (silently inlined)       | `db.delete(Table("my-table"))` (raw string rejected)      |
 | A NULL field read as `None`                      | A NULL field reads as `Null` (`None` still means NONE)    |
 | `set<T>` read as a Python `set`                  | `set<T>` reads as a `SurrealSet` (writing a `set` is unchanged) |

@@ -56,9 +56,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.stream()` on any builder is the visible half: the rows as they arrive,
   rather than the whole answer at the end. Every builder has two terminators
   now - `await` (or `.execute()`) for the whole answer, `.stream()` for the rows
-  - so streaming is reached the same way you already build a query, and works
-  on `query()`, `select()`, `create()`, `update()`, `upsert()`, `delete()` and
-  `insert()` alike.
+  - so streaming is reached the same way you already build a query. On the async
+  client that is every CRUD method: `query()`, `select()`, `create()`,
+  `update()`, `upsert()`, `delete()` and `insert()`. On the blocking client it is
+  the ones that hand back a builder - `query()`, `select()`, `create()`,
+  `update()` and `upsert()` - because `delete()` and a data-carrying `insert()`
+  still run on the spot and return their result. Making those two builders too
+  is the follow-up noted below.
 
   Iterate it for rows, or call `.statements()` for one `StatementResult` per
   statement - the shape `query()` returns. A stream is read once, and both

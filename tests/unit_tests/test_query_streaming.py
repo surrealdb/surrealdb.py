@@ -15,6 +15,7 @@ everything that proof cannot reach.
 import asyncio
 import gc
 import queue
+import re
 import threading
 import time
 import uuid
@@ -29,6 +30,7 @@ from surrealdb import streaming
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+from surrealdb.connections.builders import SyncQueryBuilder, _Executor
 from surrealdb.data.cbor import decode, encode
 from surrealdb.errors import (
     ConnectionUnavailableError,
@@ -1900,3 +1902,52 @@ def test_http_streams_by_buffering_and_says_so_when_asked() -> None:
 
     with pytest.raises(UnsupportedFeatureError, match="HTTP transport cannot stream"):
         list(conn.query("SELECT 1").stream(require_streaming=True))
+
+
+# --------------------------------------------------------- one builder, one run
+#
+# `.stream()` arrived outside the builders' run-once bookkeeping, so a builder
+# could be terminated twice and the operation would run twice: measured on a
+# live server, `create(...).stream()` followed by `await` on the same builder
+# left two records, and `await q` followed by `q.stream()` ran the statements
+# again. The buffered terminator has always been idempotent through its runner,
+# which is exactly why nothing caught this - the second run came in through the
+# other door.
+
+
+def test_a_streamed_builder_refuses_the_buffered_terminator() -> None:
+    """`.stream()` then `.execute()` is an error, not a second run."""
+    calls: list[str] = []
+
+    def executor(query: str, params: dict[str, Any]) -> dict[str, Any]:
+        calls.append(query)
+        return {"result": [{"status": "OK", "time": "0ns", "result": []}]}
+
+    channel = _SyncChannel([begin(1), rows(0, [{"n": 1}]), finished(0), end(1)])
+    ex = _Executor(executor, lambda q, p, **kw: QueryStream(channel.ops(), q, p))
+
+    builder = SyncQueryBuilder(executor=ex, query="CREATE thing SET n = 1")
+    assert list(builder.stream()) == [{"n": 1}]
+    with pytest.raises(SurrealError, match=re.escape("after .stream()")):
+        builder.execute()
+    assert calls == [], "the buffered path must not have been reached at all"
+
+
+def test_a_buffered_builder_refuses_the_streaming_terminator() -> None:
+    """And the other way round: `.execute()` then `.stream()`."""
+    channel = _SyncChannel([begin(1), rows(0, [{"n": 1}]), finished(0), end(1)])
+    opened: list[str] = []
+
+    def opener(q: str, p: Any, **kw: Any) -> QueryStream:
+        opened.append(q)
+        return QueryStream(channel.ops(), q, p)
+
+    ex = _Executor(
+        lambda q, p: {"result": [{"status": "OK", "time": "0ns", "result": []}]},
+        opener,
+    )
+    builder = SyncQueryBuilder(executor=ex, query="CREATE thing SET n = 1")
+    builder.execute()
+    with pytest.raises(SurrealError, match="after it has executed"):
+        builder.stream()
+    assert opened == [], "no stream should have been opened"

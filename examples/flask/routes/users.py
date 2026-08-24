@@ -53,7 +53,7 @@ def list_users():
     """Get all users."""
     try:
         db = get_db()
-        result = db.select("users")
+        result = db.select("users").execute()
 
         if not result:
             return jsonify([]), 200
@@ -81,7 +81,7 @@ def get_user(user_id):
     """Get a user by ID."""
     try:
         db = get_db()
-        result = db.select(user_id)
+        result = db.select(user_id).execute()
 
         if not result:
             return jsonify({"error": f"User {user_id} not found"}), 404
