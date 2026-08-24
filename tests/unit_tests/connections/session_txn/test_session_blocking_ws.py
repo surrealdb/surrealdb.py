@@ -43,7 +43,7 @@ def test_new_session_use_query_create_select(
         {"name": "session-created", "value": 1},
     )
 
-    selected = session.select("session_txn_test:one")
+    selected = session.select("session_txn_test:one").execute()
     assert selected is not None
     if isinstance(selected, list) and len(selected) >= 1:
         rec = selected[0] if isinstance(selected[0], dict) else selected

@@ -13,7 +13,6 @@ from surrealdb.connections.builders import (
     SyncInsertBuilder,
     SyncQueryBuilder,
     _Executor,
-    _map_result,
 )
 from surrealdb.connections.files import BlockingFiles
 from surrealdb.connections.sync_template import SyncTemplate
@@ -23,7 +22,6 @@ from surrealdb.connections.utils_mixin import (
     UtilsMixin,
     build_run_query,
     merge_query_vars,
-    render_projection,
 )
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
@@ -538,32 +536,34 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def select(
         self, record: RecordID, *, fields: Sequence[str] | None = None, into: type[M]
-    ) -> M | None: ...
+    ) -> SyncCrudBuilder[M | None]: ...
     @overload
     def select(
         self, record: Table, *, fields: Sequence[str] | None = None, into: type[M]
-    ) -> list[M]: ...
+    ) -> SyncCrudBuilder[list[M]]: ...
     @overload
     def select(
         self, record: str, *, fields: Sequence[str] | None = None, into: type[M]
-    ) -> M | list[M] | None: ...
+    ) -> SyncCrudBuilder[M | list[M] | None]: ...
     @overload
     def select(
         self, record: RecordID, *, fields: Sequence[str] | None = None
-    ) -> dict[str, Value] | None: ...
+    ) -> SyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def select(
         self, record: Table, *, fields: Sequence[str] | None = None
-    ) -> list[Value]: ...
+    ) -> SyncCrudBuilder[list[Value]]: ...
     @overload
-    def select(self, record: str, *, fields: Sequence[str] | None = None) -> Value: ...
+    def select(
+        self, record: str, *, fields: Sequence[str] | None = None
+    ) -> SyncCrudBuilder[Value]: ...
     def select(
         self,
         record: RecordIdType,
         *,
         fields: Sequence[str] | None = None,
         into: type[M] | None = None,
-    ) -> Any:
+    ) -> SyncCrudBuilder[Any]:
         """Select records eagerly.
 
         A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
@@ -585,27 +585,14 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         SurrealQL. A model passed to ``into=`` that declares an ``id`` field
         therefore needs ``fields=["id", ...]``.
         """
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-        projection = render_projection(fields)
-        query = f"SELECT {projection} FROM {resource_ref}"
-
-        response = self.query_raw(query, variables)
-        self.check_response_for_error(response, "select")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # Single-record targets (RecordID / "table:id") unwrap the one-element
-        # result list to the record dict, or None when the record is absent.
-        if self._is_single_record_operation(record):
-            if isinstance(result, list):
-                value: Any = result[0] if result else None
-            else:
-                value = result
-        else:
-            value = result
-        if into is not None:
-            return _map_result(into, value)
-        return value
+        return SyncCrudBuilder(
+            executor=self._make_executor(),
+            operation="SELECT",
+            record=record,
+            op_name="select",
+            into=into,
+            fields=fields,
+        )
 
     def version(self) -> str:
         message = RequestMessage(RequestMethod.VERSION)

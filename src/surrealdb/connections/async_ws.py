@@ -24,14 +24,12 @@ from surrealdb.connections.builders import (
     AsyncQueryBuilder,
     M,
     _Executor,
-    _map_result,
 )
 from surrealdb.connections.files import AsyncFiles
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import (
     AUTH_FALLBACK_QUERY,
     UtilsMixin,
-    render_projection,
 )
 from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import RecordID, RecordIdType
@@ -950,7 +948,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         await self._send(message, "unsetting")
 
     @overload
-    async def select(
+    def select(
         self,
         record: RecordID,
         *,
@@ -958,9 +956,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         into: type[M],
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> M | None: ...
+    ) -> AsyncCrudBuilder[M | None]: ...
     @overload
-    async def select(
+    def select(
         self,
         record: Table,
         *,
@@ -968,9 +966,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         into: type[M],
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> list[M]: ...
+    ) -> AsyncCrudBuilder[list[M]]: ...
     @overload
-    async def select(
+    def select(
         self,
         record: str,
         *,
@@ -978,35 +976,35 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         into: type[M],
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> M | list[M] | None: ...
+    ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    async def select(
+    def select(
         self,
         record: RecordID,
         *,
         fields: Sequence[str] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> dict[str, Value] | None: ...
+    ) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
-    async def select(
+    def select(
         self,
         record: Table,
         *,
         fields: Sequence[str] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> list[Value]: ...
+    ) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
-    async def select(
+    def select(
         self,
         record: str,
         *,
         fields: Sequence[str] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> Value: ...
-    async def select(
+    ) -> AsyncCrudBuilder[Value]: ...
+    def select(
         self,
         record: RecordIdType,
         *,
@@ -1014,7 +1012,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         into: type[M] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> Any:
+    ) -> AsyncCrudBuilder[Any]:
         """Select records.
 
         A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
@@ -1036,29 +1034,14 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         SurrealQL. A model passed to ``into=`` that declares an ``id`` field
         therefore needs ``fields=["id", ...]``.
         """
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-        projection = render_projection(fields)
-        query = f"SELECT {projection} FROM {resource_ref}"
-
-        response = await self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+        return AsyncCrudBuilder(
+            executor=self._make_executor(session_id, txn_id),
+            operation="SELECT",
+            record=record,
+            op_name="select",
+            into=into,
+            fields=fields,
         )
-        self.check_response_for_error(response, "select")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # Single-record targets (RecordID / "table:id") unwrap the one-element
-        # result list to the record dict, or None when the record is absent.
-        if self._is_single_record_operation(record):
-            if isinstance(result, list):
-                value: Any = result[0] if result else None
-            else:
-                value = result
-        else:
-            value = result
-        if into is not None:
-            return _map_result(into, value)
-        return value
 
     def _make_executor(
         self,
@@ -1831,22 +1814,36 @@ class AsyncSurrealSession:
         await self._connection.unset(key, session_id=self._session_id)
 
     @overload
-    async def select(self, record: RecordID, *, into: type[M]) -> M | None: ...
+    def select(
+        self, record: RecordID, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | None]: ...
     @overload
-    async def select(self, record: Table, *, into: type[M]) -> list[M]: ...
+    def select(self, record: Table, *, into: type[M]) -> AsyncCrudBuilder[list[M]]: ...
     @overload
-    async def select(self, record: str, *, into: type[M]) -> M | list[M] | None: ...
+    def select(
+        self, record: str, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    async def select(self, record: RecordID) -> dict[str, Value] | None: ...
+    def select(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
-    async def select(self, record: Table) -> list[Value]: ...
+    def select(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
-    async def select(self, record: str) -> Value: ...
-    async def select(self, record: RecordIdType, *, into: type[M] | None = None) -> Any:
+    def select(self, record: str) -> AsyncCrudBuilder[Value]: ...
+    def select(
+        self,
+        record: RecordIdType,
+        *,
+        fields: Sequence[str] | None = None,
+        into: type[M] | None = None,
+    ) -> AsyncCrudBuilder[Any]:
+        # Branched because the overloads take `into: type[M]` or nothing, not
+        # `type[M] | None` - the same reason the old delegation branched.
         if into is None:
-            return await self._connection.select(record, session_id=self._session_id)
-        return await self._connection.select(
-            record, into=into, session_id=self._session_id
+            return self._connection.select(
+                record, fields=fields, session_id=self._session_id
+            )
+        return self._connection.select(
+            record, fields=fields, into=into, session_id=self._session_id
         )
 
     @overload
@@ -2118,24 +2115,41 @@ class AsyncSurrealTransaction:
         return await self._connection.version(session_id=self._session_id)
 
     @overload
-    async def select(self, record: RecordID, *, into: type[M]) -> M | None: ...
+    def select(
+        self, record: RecordID, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | None]: ...
     @overload
-    async def select(self, record: Table, *, into: type[M]) -> list[M]: ...
+    def select(self, record: Table, *, into: type[M]) -> AsyncCrudBuilder[list[M]]: ...
     @overload
-    async def select(self, record: str, *, into: type[M]) -> M | list[M] | None: ...
+    def select(
+        self, record: str, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    async def select(self, record: RecordID) -> dict[str, Value] | None: ...
+    def select(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
-    async def select(self, record: Table) -> list[Value]: ...
+    def select(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
-    async def select(self, record: str) -> Value: ...
-    async def select(self, record: RecordIdType, *, into: type[M] | None = None) -> Any:
+    def select(self, record: str) -> AsyncCrudBuilder[Value]: ...
+    def select(
+        self,
+        record: RecordIdType,
+        *,
+        fields: Sequence[str] | None = None,
+        into: type[M] | None = None,
+    ) -> AsyncCrudBuilder[Any]:
         if into is None:
-            return await self._connection.select(
-                record, session_id=self._session_id, txn_id=self._txn_id
+            return self._connection.select(
+                record,
+                fields=fields,
+                session_id=self._session_id,
+                txn_id=self._txn_id,
             )
-        return await self._connection.select(
-            record, into=into, session_id=self._session_id, txn_id=self._txn_id
+        return self._connection.select(
+            record,
+            fields=fields,
+            into=into,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
         )
 
     @overload

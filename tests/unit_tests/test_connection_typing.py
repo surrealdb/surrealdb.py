@@ -281,8 +281,10 @@ def test_blocking_connection_into_overload_precision() -> None:
 
     for conn in (ws, http):
         # select is eager: single -> M | None, table -> list[M].
-        assert_type(conn.select(RecordID("person", 1), into=_Person), _Person | None)
-        assert_type(conn.select(Table("person"), into=_Person), list[_Person])
+        assert_type(
+            conn.select(RecordID("person", 1), into=_Person).execute(), _Person | None
+        )
+        assert_type(conn.select(Table("person"), into=_Person).execute(), list[_Person])
 
         # no-data create -> builder carrying M; eager data form -> M.
         assert_type(
@@ -328,8 +330,13 @@ def test_blocking_wrapper_into_overload_precision() -> None:
     txn = BlockingSurrealTransaction(conn, uuid4(), uuid4())
 
     for wrapper in (session, txn):
-        assert_type(wrapper.select(RecordID("person", 1), into=_Person), _Person | None)
-        assert_type(wrapper.select(Table("person"), into=_Person), list[_Person])
+        assert_type(
+            wrapper.select(RecordID("person", 1), into=_Person).execute(),
+            _Person | None,
+        )
+        assert_type(
+            wrapper.select(Table("person"), into=_Person).execute(), list[_Person]
+        )
         assert_type(
             wrapper.create(RecordID("person", 1), into=_Person),
             SyncCrudBuilder[_Person],

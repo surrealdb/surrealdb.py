@@ -83,7 +83,7 @@ def test_the_sync_into_block_runs(
 ) -> None:
     db = blocking_ws_connection
 
-    assert db.select(RecordID("person", "tobie"), into=Person) is None
+    assert db.select(RecordID("person", "tobie"), into=Person).execute() is None
     created = db.create(RecordID("person", "tobie"), {"name": "Tobie"}, into=Person)
     assert isinstance(created, Person)
     rows = db.query("SELECT * FROM person").into(Person, rows=True)
@@ -125,7 +125,7 @@ def test_the_sync_usage_block_runs(connection_params: dict[str, Any]) -> None:
         empty = db.create(RecordID("person", "bob")).execute()
         assert empty["id"] == RecordID("person", "bob")
 
-        row = db.select(RecordID("person", "tobie"))
+        row = db.select(RecordID("person", "tobie")).execute()
         assert row is not None
         db.delete(RecordID("person", "bob"))
 

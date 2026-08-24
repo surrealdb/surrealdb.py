@@ -15,7 +15,6 @@ from surrealdb.connections.builders import (
     AsyncQueryBuilder,
     M,
     _Executor,
-    _map_result,
 )
 from surrealdb.connections.files import AsyncFiles
 from surrealdb.connections.url import Url
@@ -24,7 +23,6 @@ from surrealdb.connections.utils_mixin import (
     UtilsMixin,
     build_run_query,
     merge_query_vars,
-    render_projection,
 )
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
@@ -587,36 +585,36 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.vars.pop(key, None)
 
     @overload
-    async def select(
+    def select(
         self, record: RecordID, *, fields: Sequence[str] | None = None, into: type[M]
-    ) -> M | None: ...
+    ) -> AsyncCrudBuilder[M | None]: ...
     @overload
-    async def select(
+    def select(
         self, record: Table, *, fields: Sequence[str] | None = None, into: type[M]
-    ) -> list[M]: ...
+    ) -> AsyncCrudBuilder[list[M]]: ...
     @overload
-    async def select(
+    def select(
         self, record: str, *, fields: Sequence[str] | None = None, into: type[M]
-    ) -> M | list[M] | None: ...
+    ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    async def select(
+    def select(
         self, record: RecordID, *, fields: Sequence[str] | None = None
-    ) -> dict[str, Value] | None: ...
+    ) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
-    async def select(
+    def select(
         self, record: Table, *, fields: Sequence[str] | None = None
-    ) -> list[Value]: ...
+    ) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
-    async def select(
+    def select(
         self, record: str, *, fields: Sequence[str] | None = None
-    ) -> Value: ...
-    async def select(
+    ) -> AsyncCrudBuilder[Value]: ...
+    def select(
         self,
         record: RecordIdType,
         *,
         fields: Sequence[str] | None = None,
         into: type[M] | None = None,
-    ) -> Any:
+    ) -> AsyncCrudBuilder[Any]:
         """Select records.
 
         A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
@@ -638,27 +636,14 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         SurrealQL. A model passed to ``into=`` that declares an ``id`` field
         therefore needs ``fields=["id", ...]``.
         """
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-        projection = render_projection(fields)
-        query = f"SELECT {projection} FROM {resource_ref}"
-
-        response = await self.query_raw(query, variables)
-        self.check_response_for_error(response, "select")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # Single-record targets (RecordID / "table:id") unwrap the one-element
-        # result list to the record dict, or None when the record is absent.
-        if self._is_single_record_operation(record):
-            if isinstance(result, list):
-                value: Any = result[0] if result else None
-            else:
-                value = result
-        else:
-            value = result
-        if into is not None:
-            return _map_result(into, value)
-        return value
+        return AsyncCrudBuilder(
+            executor=self._make_executor(),
+            operation="SELECT",
+            record=record,
+            op_name="select",
+            into=into,
+            fields=fields,
+        )
 
     async def version(self) -> str:
         message = RequestMessage(RequestMethod.VERSION)

@@ -193,7 +193,7 @@ def test_blocking_query_returns_the_same_answer_either_way(
         assert (
             streamed.query(MIXED_SQL).execute() == buffered.query(MIXED_SQL).execute()
         )
-        assert streamed.select("inv") == buffered.select("inv")
+        assert streamed.select("inv").execute() == buffered.select("inv").execute()
 
         streamed_raw = streamed.query_raw(MIXED_SQL)
         buffered_raw = buffered.query_raw(MIXED_SQL)
