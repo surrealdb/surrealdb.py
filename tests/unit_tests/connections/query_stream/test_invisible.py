@@ -58,6 +58,10 @@ async def test_query_returns_the_same_answer_either_way(
         assert [sorted(st) for st in streamed_raw["result"]] == [
             sorted(st) for st in buffered_raw["result"]
         ], "the rebuilt statements do not carry the same keys"
+        # The whole envelope, not only the statements inside it: `query_raw`
+        # hands back the RPC response, and the rebuild dropped its top-level
+        # `id` for as long as nothing compared it.
+        assert sorted(streamed_raw) == sorted(buffered_raw)
         assert [st["result"] for st in streamed_raw["result"]] == [
             st["result"] for st in buffered_raw["result"]
         ]
@@ -196,6 +200,10 @@ def test_blocking_query_returns_the_same_answer_either_way(
         assert [sorted(st) for st in streamed_raw["result"]] == [
             sorted(st) for st in buffered_raw["result"]
         ], "the rebuilt statements do not carry the same keys"
+        # The whole envelope, not only the statements inside it: `query_raw`
+        # hands back the RPC response, and the rebuild dropped its top-level
+        # `id` for as long as nothing compared it.
+        assert sorted(streamed_raw) == sorted(buffered_raw)
         assert [st["result"] for st in streamed_raw["result"]] == [
             st["result"] for st in buffered_raw["result"]
         ]

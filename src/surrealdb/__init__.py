@@ -292,8 +292,10 @@ def Surreal(
         streaming: Whether queries on a websocket connection may be answered as
             a stream of frames rather than one response. On by default and
             invisible - the answer is the same either way - so this only decides
-            how it arrives. ``False`` puts every query on the buffered path.
-            Ignored by the transports that cannot stream.
+            how it arrives. ``False`` puts ordinary queries back on the buffered
+            path; an explicit ``query_stream()`` still streams, since asking for
+            a stream outright is taken as meaning it. Ignored by the transports
+            that cannot stream.
     """
     constructed_url = Url(url)
     if constructed_url.scheme in _EMBEDDED_SCHEMES:
@@ -327,8 +329,10 @@ def AsyncSurreal(
         streaming: Whether queries on a websocket connection may be answered as
             a stream of frames rather than one response. On by default and
             invisible - the answer is the same either way - so this only decides
-            how it arrives. ``False`` puts every query on the buffered path.
-            Ignored by the transports that cannot stream.
+            how it arrives. ``False`` puts ordinary queries back on the buffered
+            path; an explicit ``query_stream()`` still streams, since asking for
+            a stream outright is taken as meaning it. Ignored by the transports
+            that cannot stream.
     """
     constructed_url = Url(url)
     if constructed_url.scheme in _EMBEDDED_SCHEMES:

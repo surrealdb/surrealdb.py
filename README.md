@@ -665,10 +665,13 @@ async with db.query_stream("SELECT * FROM huge_table") as stream:
 
 Closing is not merely tidiness: an abandoned stream is still executing on the
 server, holding one of the connection's stream slots. Abandoning one without
-closing does still clean up - the blocking client cancels as soon as you let go
-of the iterator, and the async client on the event loop's next pass over
-finalisable generators - but only closing stops the query at a moment you
-choose.
+closing does still clean up once you let go of the iterator - the blocking
+client cancels at that moment, the async client on the event loop's next pass
+over finalisable generators. But *letting go* is the part that is easy to miss:
+a `break` inside a function that keeps running leaves the generator referenced
+by that frame, so the cancel waits for the frame to go, and the query it was
+meant to stop runs to completion in the meantime. Only closing stops the query
+at a moment you choose.
 
 ### Blocking client
 
@@ -692,21 +695,25 @@ working while a stream is open.
 | WebSocket, server v3.3.0+ | Streams. Rows arrive as they are produced. |
 | WebSocket, older server | Runs the query the buffered way. Learned once per connection. |
 | WebSocket, `query_stream` denied | Same, with its own reason - the operator denied streaming, not querying. |
-| WebSocket, at the concurrency cap | Buffered for this query only. Not remembered: the cap is transient. |
+| WebSocket, at the concurrency cap | `query()` is buffered for this query only, and it is not remembered: the cap is transient. An explicit `query_stream()` raises instead. |
 | Inside a client transaction | `query()` is never streamed - see the caveats below. |
 | HTTP | Buffered - HTTP carries one response per request. |
 | Embedded | Buffered. |
 
-Every one of those is a *retry*, not an error, and it is a refusal from the
-server that makes it safe: `begin` is framed before execution starts, so a
-refusal with no frame behind it means the query never ran, and asking again
-cannot run it twice.
+For the streaming `query()` does on your behalf, every one of those is a
+*retry* rather than an error, and it is a refusal from the server that makes it
+safe: `begin` is framed before execution starts, so a refusal with no frame
+behind it means the query never ran, and asking again cannot run it twice. An
+explicit `query_stream()` retries the first three rows the same way, but raises
+at the concurrency cap rather than quietly going buffered.
 
 A socket that dies before the first frame is **not** such a refusal, and is not
-retried. The server may have framed `begin` and started executing while the
-connection was going, so the query may have run; re-asking it could run a write
-twice. It raises instead, exactly as a buffered query on a dying socket always
-has.
+retried. `begin` may have been framed and the query may have been executing as
+the connection went, so nothing about it is proven - and retrying gains nothing
+anyway, because the server-side session dies with the socket. It raises the
+connection error instead, exactly as a buffered query on a dying socket always
+has. Retrying it used to report `Specify a namespace to use`, which blamed the
+query for a dead connection.
 
 To take the invisible path off a whole connection:
 
@@ -770,9 +777,13 @@ first, not the second.
   takes the buffered path.
 - **`query_stream()` inside a transaction still streams**, because asking for a
   stream outright is taken as meaning it - but the hazard above is now yours to
-  avoid. The stream runs on that transaction, so finish it before committing: a
-  `commit` that lands mid-stream commits a prefix of the query, and the stream's
-  next operation then fails with the transaction already finished.
+  avoid. The stream runs on that transaction, so finish it before committing.
+  The `commit` has to land while the server is still executing for this to
+  bite, which a fast query usually finishes before; when it does bite it takes
+  a prefix. Measured on `UPDATE ... RETURN AFTER; SLEEP 3s; UPDATE ...` with
+  the `commit` sent during the sleep: the first `UPDATE` was committed, the
+  second never ran, and the stream raised `Couldn't update a finished
+  transaction`.
 
 ## `None`, `Null`, and empty values
 

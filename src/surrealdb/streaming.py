@@ -1104,13 +1104,17 @@ class AsyncQueryStream(_StreamBase):
                 if isinstance(payload, _ChannelBroken):
                     self._cancellable = False
                     if not self._open:
-                        # Not a refusal, and not safe to retry. The server
-                        # frames `begin` before it executes, so a first frame
-                        # that never arrived does not mean none was sent: the
-                        # query may be running right now. Asking again the
-                        # buffered way would run it twice, which on a `CREATE`
-                        # means two records. Only a refusal the server actually
-                        # sent us proves the query never ran.
+                        # Not a refusal, so not to be treated as one. The
+                        # server frames `begin` before it executes, so a
+                        # refusal with no frame behind it proves the query
+                        # never ran; a dead socket proves nothing, and the
+                        # query may have been running as it went. Retrying it
+                        # also gains nothing, because the server-side session
+                        # dies with the socket: measured on the code this
+                        # replaces, a `CREATE` whose socket was aborted
+                        # mid-flight came back as `Specify a namespace to use`
+                        # - a query error standing in for a dead connection,
+                        # with the write already done once.
                         raise payload.error
                 try:
                     events = self._decode(payload, accumulator)
@@ -1144,8 +1148,11 @@ class AsyncQueryStream(_StreamBase):
                             # truncated answer is never mistaken for a whole
                             # one - the same rule the row views apply, reported
                             # the way a buffered whole-query failure is.
-                            return {"error": _error_response(event.error)}
-                        return {"result": statements}
+                            return {
+                                "id": str(request_id),
+                                "error": _error_response(event.error),
+                            }
+                        return {"id": str(request_id), "result": statements}
         finally:
             finalizer.detach()
             await self._teardown(request_id, frames, ended=accumulator.ended)
@@ -1436,8 +1443,11 @@ class QueryStream(_StreamBase):
                         statements.append(_err_statement(event))
                     elif isinstance(event, _Ended):
                         if event.error is not None:
-                            return {"error": _error_response(event.error)}
-                        return {"result": statements}
+                            return {
+                                "id": str(request_id),
+                                "error": _error_response(event.error),
+                            }
+                        return {"id": str(request_id), "result": statements}
         finally:
             finalizer.detach()
             self._teardown(request_id, frames, ended=accumulator.ended)

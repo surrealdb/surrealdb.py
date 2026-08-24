@@ -1258,7 +1258,7 @@ async def test_collect_rebuilds_the_shape_a_buffered_query_returns() -> None:
     builders read `status`. A shape that merely carried the right data would
     pass a value comparison and break `query()`.
     """
-    response, _ = await _collect(
+    response, channel = await _collect(
         [
             begin(2),
             rows(0, [{"n": 1}, {"n": 2}]),
@@ -1269,6 +1269,7 @@ async def test_collect_rebuilds_the_shape_a_buffered_query_returns() -> None:
         ]
     )
     assert response == {
+        "id": str(channel.sent[0].id),
         "result": [
             {
                 "status": "OK",
@@ -1277,8 +1278,23 @@ async def test_collect_rebuilds_the_shape_a_buffered_query_returns() -> None:
                 "type": None,
             },
             {"status": "OK", "time": "1.5ms", "result": 42, "type": None},
-        ]
+        ],
     }
+
+
+async def test_collect_carries_the_request_id_the_buffered_answer_has() -> None:
+    """`query_raw` hands back the RPC response, envelope included.
+
+    The rebuild is a stand-in for that response, so dropping its `id` changed
+    what a public method returns - and no test noticed, because the differential
+    tests compared the statements inside the envelope and not the envelope.
+    """
+    channel = _AsyncChannel([begin(1), rows(0, [{"n": 1}]), finished(0), end(1)])
+    stream = AsyncQueryStream(channel.ops(), "SELECT 1")
+    response = await stream.collect()
+    assert response is not None
+    assert sorted(response) == ["id", "result"]
+    assert response["id"] == str(channel.sent[0].id)
 
 
 async def test_collect_keeps_the_statements_after_a_failure() -> None:
@@ -1356,10 +1372,12 @@ async def test_collect_does_not_retry_when_the_socket_dies_before_any_frame() ->
     """A missing first frame is not proof that the query never ran.
 
     Every other pre-open failure is a refusal the server sent, which proves it
-    did not execute. A dead socket proves nothing: the server frames `begin`
-    before executing, so the frame may have been sent and lost with the
-    connection while the query ran. Retrying that buffered runs it twice -
-    measured against a live server, one `query("CREATE ...")` left two records.
+    did not execute. A dead socket proves nothing, and retrying gains nothing
+    either: the server-side session dies with the socket, so the buffered retry
+    arrives on a fresh unauthenticated one. Measured on the code this replaced,
+    a `CREATE` whose socket was aborted mid-flight raised `Specify a namespace
+    to use` - a query error standing in for a dead connection, while the write
+    itself had already gone through once.
     """
     broken = stream_broken(ConnectionUnavailableError("gone"))
     with pytest.raises(ConnectionUnavailableError):
@@ -1409,9 +1427,10 @@ def test_sync_collect_rebuilds_the_same_shape() -> None:
     channel = _SyncChannel([begin(1), rows(0, [{"n": 1}]), finished(0), end(1)])
     response = QueryStream(channel.ops(), "SELECT 1").collect()
     assert response == {
+        "id": str(channel.sent[0].id),
         "result": [
             {"status": "OK", "time": "1.5ms", "result": [{"n": 1}], "type": None}
-        ]
+        ],
     }
 
 
