@@ -213,8 +213,8 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         Its RPC entry point returns a single response, so there is no sequence
         of frames to read and no request id to route them by: the inherited
         websocket machinery has no socket to work with here. Streaming
-        therefore reports itself unavailable, and ``query_stream`` runs the
-        query the buffered way.
+        therefore reports itself unavailable, and ``.stream()`` runs the query
+        the buffered way and hands its rows back one at a time.
         """
         return AsyncStreamOps.never_streams(
             self._stream_buffered, UNSUPPORTED_BY_EMBEDDED

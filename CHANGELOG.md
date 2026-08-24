@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking (blocking client only):** `select()` returns a builder, like every
+  other CRUD method, so blocking callers need a terminator:
+
+  ```python
+  records = db.select("person")               # before
+  records = db.select("person").execute()     # after
+  ```
+
+  Async callers are unaffected - builders are awaitable, so `await
+  db.select("person")` is unchanged. `select()` was the only CRUD method that
+  was not a builder, which made it the only one that could not be streamed, and
+  reading a large table is the case streaming is most for.
+
+  One wrinkle worth knowing: the blocking rule has been that an operation
+  returns a builder when a clause could follow it and runs on the spot
+  otherwise, which is why `db.delete(rec)` still hands back a record. `select()`
+  takes no clause either, so it is a builder despite that rule rather than
+  because of it. Making `delete()` a builder too would restore the rule - a
+  follow-up, not this release.
+
 ### Added
 
 - Streaming queries, adopted invisibly. Against SurrealDB **v3.3.0** or later
@@ -28,18 +50,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   connection on the buffered path. `query()` inside a client transaction is
   never streamed, because a `commit` arriving mid-stream would commit a prefix
   of the query. `streaming=False` on a connection or on `Surreal`/`AsyncSurreal`
-  puts `query()` back on the buffered path; an explicit `query_stream()` still
+  puts `query()` back on the buffered path; an explicit `.stream()` still
   streams, since asking for a stream outright is taken as meaning it.
 
-- `query_stream()` is the visible half: the rows as they arrive, rather than the
-  whole answer at the end.
+- `.stream()` on any builder is the visible half: the rows as they arrive,
+  rather than the whole answer at the end. Every builder has two terminators
+  now - `await` (or `.execute()`) for the whole answer, `.stream()` for the rows
+  - so streaming is reached the same way you already build a query, and works
+  on `query()`, `select()`, `create()`, `update()`, `upsert()`, `delete()` and
+  `insert()` alike.
 
   Iterate it for rows, or call `.statements()` for one `StatementResult` per
   statement - the shape `query()` returns. A stream is read once, and both
-  views draw from the same frames.
+  views draw from the same frames. `into=` maps each row onto a model as it
+  arrives, which is the case streaming is actually for.
 
   ```python
-  async with db.query_stream("SELECT * FROM person") as stream:
+  async with db.select("person").stream(into=Person) as stream:
       async for person in stream:
           if found(person):
               break            # tells the server to abandon the query

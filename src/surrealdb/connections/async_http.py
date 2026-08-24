@@ -242,33 +242,6 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
             variables=vars,
         )
 
-    def query_stream(
-        self,
-        query: str,
-        vars: dict[str, Value] | None = None,
-        *,
-        require_streaming: bool = False,
-    ) -> AsyncQueryStream:
-        """Run SurrealQL and read the answer row by row.
-
-        HTTP carries one response per request, so this transport cannot
-        stream: the query is run the buffered way and its rows are handed back
-        one at a time. Present so code can move between transports unchanged -
-        connect over ``ws://`` or ``wss://`` for rows that actually arrive as
-        the server produces them.
-
-        Iterate for rows, or use ``.statements()`` for one completed result per
-        statement. ``require_streaming=True`` raises
-        :class:`~surrealdb.errors.UnsupportedFeatureError` here rather than
-        serving the buffered answer.
-        """
-        return AsyncQueryStream(
-            AsyncStreamOps.never_streams(self._stream_buffered, UNSUPPORTED_BY_HTTP),
-            query,
-            vars,
-            require_streaming=require_streaming,
-        )
-
     async def _stream_buffered(
         self,
         query: str,

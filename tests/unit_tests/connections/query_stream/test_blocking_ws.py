@@ -33,7 +33,7 @@ def _seed(connection: BlockingWsSurrealConnection, count: int = 120) -> None:
 def _require_streaming(connection: BlockingWsSurrealConnection) -> None:
     """Skip unless this server really streams - see the async suite's note."""
     try:
-        for _ in connection.query_stream("RETURN 1", require_streaming=True):
+        for _ in connection.query("RETURN 1").stream(require_streaming=True):
             pass
     except UnsupportedFeatureError as exc:
         if connection._streaming_supported is not False:
@@ -58,7 +58,7 @@ def test_streamed_statements_match_the_buffered_answer(
     _seed(blocking_ws_connection)
 
     buffered = _buffered(blocking_ws_connection, MIXED_SQL)
-    streamed = list(blocking_ws_connection.query_stream(MIXED_SQL).statements())
+    streamed = list(blocking_ws_connection.query(MIXED_SQL).stream().statements())
 
     assert [statement.value for statement in streamed] == buffered
     assert [statement.single for statement in streamed] == [False, True, True, False]
@@ -70,7 +70,9 @@ def test_rows_arrive_before_the_query_finishes(
     _require_streaming(blocking_ws_connection)
     _seed(blocking_ws_connection)
 
-    stream = blocking_ws_connection.query_stream("SELECT * FROM stream_wide; SLEEP 2s;")
+    stream = blocking_ws_connection.query(
+        "SELECT * FROM stream_wide; SLEEP 2s;"
+    ).stream()
     started = time.monotonic()
     iterator = iter(stream)
     first_row = next(iterator)
@@ -92,9 +94,9 @@ def test_stopping_early_cancels_the_query_server_side(
 
     started = time.monotonic()
     seen = 0
-    with blocking_ws_connection.query_stream(
+    with blocking_ws_connection.query(
         "SELECT * FROM stream_wide; SLEEP 10s;"
-    ) as stream:
+    ).stream() as stream:
         for _ in stream:
             seen += 1
             if seen == 3:
@@ -128,9 +130,9 @@ def test_another_thread_keeps_working_while_a_stream_is_open(
 
     def consume() -> None:
         started = time.monotonic()
-        with blocking_ws_connection.query_stream(
+        with blocking_ws_connection.query(
             "SELECT * FROM stream_wide; SLEEP 3s;"
-        ) as stream:
+        ).stream() as stream:
             streamed["rows"] = sum(1 for _ in stream)
         streamed["elapsed"] = time.monotonic() - started
 
@@ -175,9 +177,9 @@ def test_a_failed_statement_raises_and_leaves_the_connection_usable(
 
     seen = []
     with pytest.raises(SurrealError, match="boom"):
-        for row in blocking_ws_connection.query_stream(
+        for row in blocking_ws_connection.query(
             "SELECT * FROM stream_wide LIMIT 2; THROW 'boom';"
-        ):
+        ).stream():
             seen.append(row)
 
     assert len(seen) == 2
@@ -220,7 +222,9 @@ def test_a_stream_hands_a_notification_it_read_to_the_live_subscriber(
         # The trailing SLEEP keeps the stream pumping past the write, so the
         # notification lands while this is the only thing reading the socket.
         rows = list(
-            blocking_ws_connection.query_stream("SELECT * FROM stream_wide; SLEEP 2s;")
+            blocking_ws_connection.query(
+                "SELECT * FROM stream_wide; SLEEP 2s;"
+            ).stream()
         )
         writer.join(timeout=30)
         assert 121 <= len(rows) <= 122, len(rows)
@@ -246,9 +250,9 @@ def test_variables_reach_a_streamed_query(
 ) -> None:
     _require_streaming(blocking_ws_connection)
     rows = list(
-        blocking_ws_connection.query_stream(
+        blocking_ws_connection.query(
             "RETURN $left + $right;", {"left": 40, "right": 2}
-        )
+        ).stream()
     )
     assert rows == [42]
 
@@ -265,5 +269,5 @@ def test_query_stream_agrees_with_query_on_any_server(
     _seed(blocking_ws_connection, count=10)
 
     buffered = _buffered(blocking_ws_connection, MIXED_SQL)
-    statements = list(blocking_ws_connection.query_stream(MIXED_SQL).statements())
+    statements = list(blocking_ws_connection.query(MIXED_SQL).stream().statements())
     assert [statement.value for statement in statements] == buffered

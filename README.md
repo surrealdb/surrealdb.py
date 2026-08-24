@@ -587,11 +587,11 @@ Nothing to switch on, and nothing to change in your code:
 people = await db.query("SELECT * FROM person")   # streamed, if the server can
 ```
 
-`query_stream()` is the visible half, for when you want the rows *as* they
-arrive rather than the whole answer at the end:
+`.stream()` on any builder is the visible half, for when you want the rows
+*as* they arrive rather than the whole answer at the end:
 
 ```python
-async for person in db.query_stream("SELECT * FROM person"):
+async for person in db.query("SELECT * FROM person").stream():
     ...
 ```
 
@@ -607,7 +607,7 @@ Nothing is sent until you start iterating.
 Iterate the stream for **rows**, as they arrive:
 
 ```python
-async for person in db.query_stream("SELECT * FROM person"):
+async for person in db.query("SELECT * FROM person").stream():
     print(person["name"])
 ```
 
@@ -615,9 +615,9 @@ or call `.statements()` for one completed result per statement, which is the
 shape `query()` returns:
 
 ```python
-async for statement in db.query_stream(
+async for statement in db.query(
     "SELECT * FROM person; SELECT count() FROM person GROUP ALL"
-).statements():
+).stream().statements():
     print(statement.index, statement.value)
 ```
 
@@ -629,6 +629,23 @@ of rows, as for `RETURN 1 + 2` or `SELECT ... FROM ONLY`.
 A stream is read **once**, and both views draw from the same frames, so pick
 one per call.
 
+### Rows as models
+
+`into=` maps each row as it arrives, which is the case streaming is actually
+for - a large table read one model at a time, never held whole:
+
+```python
+async for person in db.select("person").stream(into=Person):
+    print(person.name)
+```
+
+The same on the blocking client, with `with` instead of `async with`:
+
+```python
+for person in db.select("person").stream(into=Person):
+    print(person.name)
+```
+
 ### Rows are provisional until iteration ends
 
 A row is delivered before the statement that produced it has finished - that is
@@ -637,7 +654,7 @@ it already yielded are void:
 
 ```python
 try:
-    async for row in db.query_stream("SELECT * FROM person; THROW 'nope'"):
+    async for row in db.query("SELECT * FROM person; THROW 'nope'").stream():
         rows.append(row)          # these arrive, then the THROW raises
 except SurrealError:
     rows.clear()                  # what arrived was never final
@@ -657,7 +674,7 @@ early tells the server to abandon the query instead of running it to
 completion:
 
 ```python
-async with db.query_stream("SELECT * FROM huge_table") as stream:
+async with db.query("SELECT * FROM huge_table").stream() as stream:
     async for row in stream:
         if found(row):
             break                 # the server stops here
@@ -678,7 +695,7 @@ at a moment you choose.
 Identical, minus the `a`s:
 
 ```python
-with db.query_stream("SELECT * FROM person") as stream:
+with db.query("SELECT * FROM person").stream() as stream:
     for person in stream:
         print(person["name"])
 ```
@@ -694,7 +711,7 @@ working while a stream is open.
 | --- | --- |
 | WebSocket, server v3.3.0+ | Streams. Rows arrive as they are produced. |
 | WebSocket, older server | Runs the query the buffered way. Learned once per connection. |
-| WebSocket, `query_stream` denied | Same, with its own reason - the operator denied streaming, not querying. |
+| WebSocket, the `query_stream` RPC denied | Same, with its own reason - the operator denied streaming, not querying. |
 | WebSocket, at the concurrency cap | `query()` is buffered for this query only, and it is not remembered: the cap is transient. An explicit `query_stream()` raises instead. |
 | Inside a client transaction | `query()` is never streamed - see the caveats below. |
 | HTTP | Buffered - HTTP carries one response per request. |
@@ -704,7 +721,7 @@ For the streaming `query()` does on your behalf, every one of those is a
 *retry* rather than an error, and it is a refusal from the server that makes it
 safe: `begin` is framed before execution starts, so a refusal with no frame
 behind it means the query never ran, and asking again cannot run it twice. An
-explicit `query_stream()` retries the first three rows the same way, but raises
+explicit `.stream()` retries the first three rows the same way, but raises
 at the concurrency cap rather than quietly going buffered.
 
 A socket that dies before the first frame is **not** such a refusal, and is not
@@ -722,17 +739,17 @@ db = AsyncSurreal("ws://localhost:8000/rpc", streaming=False)
 ```
 
 That switches off the streaming `query()` does on your behalf. It does not
-override an explicit `query_stream()` call, which streams whenever the server
+override an explicit `.stream()` call, which streams whenever the server
 can - asking for a stream outright is taken as meaning it.
 
 For `query()` the fallback costs nothing - the answer is buffered either way.
-For `query_stream()` it gives up the two things streaming is for: rows do not
+For `.stream()` it gives up the two things streaming is for: rows do not
 arrive early, and the whole result is held in memory. When that matters, pass
 `require_streaming=True` and get an `UnsupportedFeatureError` instead of a quiet
 buffered answer:
 
 ```python
-async for row in db.query_stream(sql, require_streaming=True):
+async for row in db.query(sql).stream(require_streaming=True):
     ...
 ```
 
@@ -768,14 +785,14 @@ first, not the second.
   query before raising. The difference only shows when the remainder is slow
   enough for the cancel to land, and it applies to side effects, not just
   results: `CREATE a; THROW 'x'; SLEEP 3s; CREATE b` leaves both records via
-  `query()` and only `a` via `query_stream()`. Wrap the statements in
+  `query()` and only `a` via `.stream()`. Wrap the statements in
   `BEGIN`/`COMMIT` if you need all-or-nothing.
 - **`query()` inside a client transaction is never streamed.** Requests on one
   connection are served concurrently, so a `commit` could arrive while a
   streamed query was still executing and commit a prefix of it. Since nobody
   asked for a stream, the hazard is simply removed: anything from `begin()`
   takes the buffered path.
-- **`query_stream()` inside a transaction still streams**, because asking for a
+- **`.stream()` inside a transaction still streams**, because asking for a
   stream outright is taken as meaning it - but the hazard above is now yours to
   avoid. The stream runs on that transaction, so finish it before committing.
   The `commit` has to land while the server is still executing for this to

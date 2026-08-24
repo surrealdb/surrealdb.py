@@ -533,41 +533,6 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             return False
         return self._streaming_supported is not False
 
-    def query_stream(
-        self,
-        query: str,
-        vars: dict[str, Value] | None = None,
-        session_id: UUID | None = None,
-        txn_id: UUID | None = None,
-        *,
-        require_streaming: bool = False,
-    ) -> QueryStream:
-        """Run SurrealQL and read the answer as it is produced.
-
-        Needs SurrealDB v3.3.0 or later. Against an older server this falls
-        back to a buffered :meth:`query` and replays it, so the call works
-        everywhere - pass ``require_streaming=True`` to be told rather than
-        served the fallback, which is what you want if the reason for
-        streaming is to avoid holding a large result in memory.
-
-        Iterate for rows, or use ``.statements()`` for one completed result per
-        statement - see :class:`surrealdb.QueryStream`, which also covers
-        stopping early and the sense in which a row is provisional::
-
-            for person in db.query_stream("SELECT * FROM person"):
-                ...
-
-        Nothing is sent until iteration starts.
-        """
-        return QueryStream(
-            self._stream_ops(),
-            query,
-            vars,
-            session_id=session_id,
-            txn_id=txn_id,
-            require_streaming=require_streaming,
-        )
-
     def _stream_ops(self) -> SyncStreamOps:
         """Bind the operations a streaming query drives.
 
@@ -1756,20 +1721,6 @@ class BlockingSurrealSession:
     ) -> SyncQueryBuilder:
         return self._connection.query(query, vars, session_id=self._session_id)
 
-    def query_stream(
-        self,
-        query: str,
-        vars: dict[str, Value] | None = None,
-        *,
-        require_streaming: bool = False,
-    ) -> QueryStream:
-        return self._connection.query_stream(
-            query,
-            vars,
-            session_id=self._session_id,
-            require_streaming=require_streaming,
-        )
-
     def query_raw(
         self,
         query: str,
@@ -2043,29 +1994,6 @@ class BlockingSurrealTransaction:
             vars,
             session_id=self._session_id,
             txn_id=self._txn_id,
-        )
-
-    def query_stream(
-        self,
-        query: str,
-        vars: dict[str, Value] | None = None,
-        *,
-        require_streaming: bool = False,
-    ) -> QueryStream:
-        """Stream a query on this transaction.
-
-        Finish the stream before committing: the stream runs on the transaction
-        this object holds, requests on one connection are served concurrently,
-        and a ``commit`` that lands mid-stream commits a prefix of the query
-        rather than the whole of it - the stream's next operation then fails
-        with the transaction already finished.
-        """
-        return self._connection.query_stream(
-            query,
-            vars,
-            session_id=self._session_id,
-            txn_id=self._txn_id,
-            require_streaming=require_streaming,
         )
 
     def query_raw(

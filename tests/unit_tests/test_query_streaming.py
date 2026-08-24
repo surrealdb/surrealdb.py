@@ -1895,8 +1895,8 @@ def test_http_streams_by_buffering_and_says_so_when_asked() -> None:
 
     conn.query_raw = fake_query_raw  # type: ignore[method-assign]
 
-    assert list(conn.query_stream("SELECT 1")) == [{"n": 1}, {"n": 2}, 42]
+    assert list(conn.query("SELECT 1").stream()) == [{"n": 1}, {"n": 2}, 42]
     assert captured == ["SELECT 1"]
 
     with pytest.raises(UnsupportedFeatureError, match="HTTP transport cannot stream"):
-        list(conn.query_stream("SELECT 1", require_streaming=True))
+        list(conn.query("SELECT 1").stream(require_streaming=True))
