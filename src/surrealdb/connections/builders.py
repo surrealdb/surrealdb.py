@@ -58,7 +58,7 @@ import asyncio
 import inspect
 import re
 import threading
-from collections.abc import Awaitable, Callable, Generator, Mapping
+from collections.abc import Awaitable, Callable, Generator, Mapping, Sequence
 from dataclasses import fields, is_dataclass
 from typing import Any, Generic, Literal, TypeVar, cast, overload
 
@@ -299,6 +299,7 @@ class _CrudState:
         op_name: str,
         always_unwrap: bool,
         into: type[Any] | None = None,
+        fields: Sequence[str] | None = None,
     ) -> None:
         self._operation = operation
         self._record = record
@@ -311,6 +312,9 @@ class _CrudState:
         # through ``_map_result`` (which delegates to ``_map_to_class``) before
         # being returned, so ``into=Model`` yields ``Model`` / ``list[Model]``.
         self._into: type[Any] | None = into
+        # SELECT only: the projection, so the server sends just what was asked
+        # for. Every other operation ignores it.
+        self._fields: Sequence[str] | None = fields
 
     def _check_not_executed(self) -> None:
         """Raise if this builder has already been executed.
@@ -321,9 +325,10 @@ class _CrudState:
 
     def _set_clause(self, mode: str, data: Value | None) -> None:
         self._check_not_executed()
-        if self._operation == "DELETE":
+        if self._operation in ("DELETE", "SELECT"):
             raise SurrealError(
-                "DELETE does not support .content/.replace/.merge/.patch clauses"
+                f"{self._operation} does not support "
+                ".content/.replace/.merge/.patch clauses"
             )
         self._mode = mode
         self._data = data
@@ -331,6 +336,12 @@ class _CrudState:
     def _build(self) -> tuple[str, dict[str, Any]]:
         variables: dict[str, Any] = {}
         resource_ref = _resource_to_variable(self._record, variables, "_resource")
+
+        if self._operation == "SELECT":
+            return (
+                f"SELECT {render_projection(self._fields)} FROM {resource_ref}",
+                variables,
+            )
 
         if self._operation == "DELETE":
             return f"DELETE {resource_ref} RETURN BEFORE", variables
@@ -473,6 +484,67 @@ def _constructor_parameters(cls: type[Any]) -> str:
     except (ValueError, TypeError):
         return "(constructor not introspectable)"
     return str(names)
+
+
+def render_projection(fields: Sequence[str] | None) -> str:
+    """Render ``select(fields=[...])`` as the projection of a ``SELECT``.
+
+    ``None`` means every field, so the projection is ``*`` and the emitted query
+    is byte-for-byte what it was before this argument existed.
+
+    A field list cannot be parameter-bound - SurrealQL has no ``SELECT $f`` -
+    so it is the one part that has to be inlined, and therefore the one part
+    that has to be escaped. Each name goes through
+    :func:`~surrealdb.data.types.record_id.escape_identifier`, so a field
+    containing a space, unicode, or SurrealQL punctuation is quoted rather than
+    concatenated into the statement.
+
+    **Dots separate path segments and are escaped individually.** Escaping a
+    whole ``"address.city"`` produces ``⟨address.city⟩``, which the server reads
+    as one field of that literal name and answers ``{"address.city": None}`` -
+    a silent null rather than an error, which is the worst way to be wrong.
+    ``⟨address⟩.⟨city⟩`` selects the nested value, so that is what this emits.
+    The cost is that a field whose name genuinely contains a dot cannot be
+    expressed here; use :meth:`query` for that.
+
+    :raises TypeError: if *fields* is a bare string. ``", ".join("name")``
+        yields ``n, a, m, e`` - one projection per character - so a plain
+        string is refused rather than spread, the same way ``run()`` refuses
+        one for its arguments.
+    :raises ValueError: if the list is empty, or a name is empty or has an
+        empty path segment. ``SELECT  FROM t`` and ``SELECT ⟨⟩ FROM t`` are not
+        what any caller meant.
+    """
+    if fields is None:
+        return "*"
+    if isinstance(fields, str):
+        raise TypeError(
+            "select() fields must be a sequence of field names, not a single "
+            f"string - got {fields!r}. Pass [{fields!r}] for one field."
+        )
+    names = list(fields)
+    if not names:
+        raise ValueError(
+            "select() fields must name at least one field; pass fields=None "
+            "(the default) to select them all"
+        )
+
+    rendered: list[str] = []
+    for field in names:
+        if not isinstance(field, str):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise TypeError(
+                "select() fields must be strings, got "
+                f"{type(field).__name__}: {field!r}"
+            )
+        if not field:
+            raise ValueError("select() fields cannot contain an empty name")
+        segments = field.split(".")
+        if any(not segment for segment in segments):
+            raise ValueError(
+                f"{field!r} is not a valid field path: it has an empty segment"
+            )
+        rendered.append(".".join(escape_identifier(segment) for segment in segments))
+    return ", ".join(rendered)
 
 
 def _map_to_class(cls: type[T], values: list[Any] | Mapping[str, Any]) -> T:
@@ -643,6 +715,138 @@ def _suppress_unretrieved_exception(future: asyncio.Future[Any]) -> None:
         future.exception()
 
 
+class _Executor:
+    """What a builder terminates through, instead of holding the connection.
+
+    Callable for the buffered answer and :meth:`stream` for the rows as they
+    arrive, so a builder can offer both terminators without reaching the
+    connection itself - the same reason a stream is handed bound callables
+    rather than its transport. Being callable keeps every existing
+    ``self._executor(query, params)`` call site unchanged.
+    """
+
+    __slots__ = ("_open_stream", "_run")
+
+    def __init__(
+        self,
+        run: Callable[[str, dict[str, Any]], Any],
+        open_stream: Callable[..., Any],
+    ) -> None:
+        self._run = run
+        self._open_stream = open_stream
+
+    def __call__(self, query: str, params: dict[str, Any]) -> Any:
+        return self._run(query, params)
+
+    def stream(
+        self,
+        query: str,
+        params: dict[str, Any] | None,
+        *,
+        require_streaming: bool = False,
+    ) -> Any:
+        return self._open_stream(query, params, require_streaming=require_streaming)
+
+
+def _open_stream(
+    executor: Any,
+    query: str,
+    variables: dict[str, Any],
+    *,
+    require_streaming: bool,
+) -> Any:
+    """Open a stream through *executor*, or say why it cannot.
+
+    Every builder a connection hands out carries an :class:`_Executor`. A bare
+    callable is only ever passed by a test standing one in, so the check is
+    unreachable in real use - but an explanatory error beats ``AttributeError``
+    if that ever stops being true.
+    """
+    if not isinstance(executor, _Executor):
+        raise SurrealError(
+            "this builder cannot stream: it was built with a plain executor "
+            "rather than one from a connection"
+        )
+    return executor.stream(query, variables, require_streaming=require_streaming)
+
+
+def _mapped_rows_async(stream: Any, into: type[Any] | None) -> Any:
+    """Wrap *stream*'s rows in the model mapping, when one was asked for."""
+    if into is None:
+        return stream
+    _require_model_class(into)
+    return _AsyncMappedRows(stream, into)
+
+
+def _mapped_rows_sync(stream: Any, into: type[Any] | None) -> Any:
+    """The blocking twin of :func:`_mapped_rows_async`."""
+    if into is None:
+        return stream
+    _require_model_class(into)
+    return _SyncMappedRows(stream, into)
+
+
+class _AsyncMappedRows:
+    """A streamed query's rows, each mapped onto a model class.
+
+    A plain iterator rather than an async generator on purpose: wrapping the
+    stream in a generator would put two independently-finalised objects in the
+    chain, and stopping early would then finalise them in an order neither
+    controls - the bug that made ``async for`` + ``break`` log an unhandled
+    ``RuntimeError`` before. Delegating ``__anext__`` keeps one thing to close.
+    """
+
+    __slots__ = ("_cls", "_rows", "_stream")
+
+    def __init__(self, stream: Any, cls: type[Any]) -> None:
+        self._stream = stream
+        self._cls = cls
+        self._rows = stream.__aiter__()
+
+    def __aiter__(self) -> _AsyncMappedRows:
+        return self
+
+    async def __anext__(self) -> Any:
+        row = await self._rows.__anext__()
+        return _map_to_class(self._cls, _require_record(self._cls, row))
+
+    async def __aenter__(self) -> _AsyncMappedRows:
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        await self._stream.aclose()
+
+    async def aclose(self) -> None:
+        await self._stream.aclose()
+
+
+class _SyncMappedRows:
+    """The blocking twin of :class:`_AsyncMappedRows`."""
+
+    __slots__ = ("_cls", "_rows", "_stream")
+
+    def __init__(self, stream: Any, cls: type[Any]) -> None:
+        self._stream = stream
+        self._cls = cls
+        self._rows = stream.__iter__()
+
+    def __iter__(self) -> _SyncMappedRows:
+        return self
+
+    def __next__(self) -> Any:
+        row = next(self._rows)
+        return _map_to_class(self._cls, _require_record(self._cls, row))
+
+    def __enter__(self) -> _SyncMappedRows:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self._stream.close()
+
+    def close(self) -> None:
+        self._stream.close()
+
+
 class _AsyncCachedRunner:
     """Future-based "run once" cache for async builders.
 
@@ -729,8 +933,9 @@ class AsyncCrudBuilder(_CrudState, Generic[T]):
         data: Value | None = None,
         always_unwrap: bool = False,
         into: type[Any] | None = None,
+        fields: Sequence[str] | None = None,
     ) -> None:
-        super().__init__(operation, record, op_name, always_unwrap, into)
+        super().__init__(operation, record, op_name, always_unwrap, into, fields)
         self._executor = executor
         self._runner = _AsyncCachedRunner()
         if data is not None:
@@ -771,6 +976,36 @@ class AsyncCrudBuilder(_CrudState, Generic[T]):
         query, variables = self._build()
         response = await self._executor(query, variables)
         return cast(T, _map_result(self._into, self._extract(response)))
+
+    def stream(
+        self,
+        *,
+        into: type[Any] | None = None,
+        require_streaming: bool = False,
+    ) -> Any:
+        """Read this operation's rows as the server produces them.
+
+        The other terminator: ``await`` gives the whole answer, this gives the
+        rows one at a time. Over a websocket against SurrealDB v3.3.0 or later
+        they arrive as they are produced; everywhere else the query runs the
+        buffered way and its rows are handed back one at a time, so the call
+        works on every transport. Pass ``require_streaming=True`` to be told
+        rather than served the fallback.
+
+        ``into`` maps each row onto a model class as it arrives, which is the
+        case streaming is most useful for - a large table read one model at a
+        time. An ``into=`` given when the builder was made is used if this one
+        is omitted.
+
+        Nothing is sent until iteration starts. Use ``async with`` (or
+        ``aclose()``) so stopping early tells the server to abandon the query.
+        """
+        self._check_not_executed()
+        query, variables = self._build()
+        stream = _open_stream(
+            self._executor, query, variables, require_streaming=require_streaming
+        )
+        return _mapped_rows_async(stream, into or self._into)
 
     async def execute(self) -> T:
         return cast(T, await self._runner.run(self._do_execute))
@@ -826,6 +1061,36 @@ class AsyncInsertBuilder(_InsertState, Generic[T]):
         query, variables = self._build()
         response = await self._executor(query, variables)
         return cast(list[T], _map_result(self._into, self._extract(response)))
+
+    def stream(
+        self,
+        *,
+        into: type[Any] | None = None,
+        require_streaming: bool = False,
+    ) -> Any:
+        """Read this operation's rows as the server produces them.
+
+        The other terminator: ``await`` gives the whole answer, this gives the
+        rows one at a time. Over a websocket against SurrealDB v3.3.0 or later
+        they arrive as they are produced; everywhere else the query runs the
+        buffered way and its rows are handed back one at a time, so the call
+        works on every transport. Pass ``require_streaming=True`` to be told
+        rather than served the fallback.
+
+        ``into`` maps each row onto a model class as it arrives, which is the
+        case streaming is most useful for - a large table read one model at a
+        time. An ``into=`` given when the builder was made is used if this one
+        is omitted.
+
+        Nothing is sent until iteration starts. Use ``async with`` (or
+        ``aclose()``) so stopping early tells the server to abandon the query.
+        """
+        self._check_not_executed()
+        query, variables = self._build()
+        stream = _open_stream(
+            self._executor, query, variables, require_streaming=require_streaming
+        )
+        return _mapped_rows_async(stream, into or self._into)
 
     async def execute(self) -> list[T]:
         return cast(list[T], await self._runner.run(self._do_execute))
@@ -889,6 +1154,26 @@ class AsyncQueryBuilder(_QueryState):
         """
         _require_model_class(cls)
         return AsyncQueryIntoBuilder(self, cls, rows=rows)
+
+    def stream(
+        self,
+        *,
+        into: type[Any] | None = None,
+        require_streaming: bool = False,
+    ) -> Any:
+        """Read this query's rows as the server produces them.
+
+        See :meth:`AsyncCrudBuilder.stream` - same terminator, same fallback,
+        same ``into``. Without ``into``, ``.statements()`` on the result gives
+        one completed result per statement instead of a flat run of rows.
+        """
+        stream = _open_stream(
+            self._executor,
+            self._query,
+            self._variables,
+            require_streaming=require_streaming,
+        )
+        return _mapped_rows_async(stream, into)
 
     async def execute(self) -> list[Value]:
         return cast("list[Value]", await self._fetch_values())
@@ -977,8 +1262,9 @@ class SyncCrudBuilder(_CrudState, Generic[T]):
         data: Value | None = None,
         always_unwrap: bool = False,
         into: type[Any] | None = None,
+        fields: Sequence[str] | None = None,
     ) -> None:
-        super().__init__(operation, record, op_name, always_unwrap, into)
+        super().__init__(operation, record, op_name, always_unwrap, into, fields)
         self._executor = executor
         self._executed = False
         self._cached_result: Any = None
@@ -1009,6 +1295,36 @@ class SyncCrudBuilder(_CrudState, Generic[T]):
     def patch(self, data: Value) -> T:
         self._set_clause(_Clause.PATCH, data)
         return cast(T, self._run_once())
+
+    def stream(
+        self,
+        *,
+        into: type[Any] | None = None,
+        require_streaming: bool = False,
+    ) -> Any:
+        """Read this operation's rows as the server produces them.
+
+        The other terminator: ``await`` gives the whole answer, this gives the
+        rows one at a time. Over a websocket against SurrealDB v3.3.0 or later
+        they arrive as they are produced; everywhere else the query runs the
+        buffered way and its rows are handed back one at a time, so the call
+        works on every transport. Pass ``require_streaming=True`` to be told
+        rather than served the fallback.
+
+        ``into`` maps each row onto a model class as it arrives, which is the
+        case streaming is most useful for - a large table read one model at a
+        time. An ``into=`` given when the builder was made is used if this one
+        is omitted.
+
+        Nothing is sent until iteration starts. Use ``with`` (or
+        ``close()``) so stopping early tells the server to abandon the query.
+        """
+        self._check_not_executed()
+        query, variables = self._build()
+        stream = _open_stream(
+            self._executor, query, variables, require_streaming=require_streaming
+        )
+        return _mapped_rows_sync(stream, into or self._into)
 
     def execute(self) -> T:
         return cast(T, self._run_once())
@@ -1064,6 +1380,36 @@ class SyncInsertBuilder(_InsertState, Generic[T]):
         self._check_not_executed()
         self._data = data
         return cast(list[T], self._run_once())
+
+    def stream(
+        self,
+        *,
+        into: type[Any] | None = None,
+        require_streaming: bool = False,
+    ) -> Any:
+        """Read this operation's rows as the server produces them.
+
+        The other terminator: ``await`` gives the whole answer, this gives the
+        rows one at a time. Over a websocket against SurrealDB v3.3.0 or later
+        they arrive as they are produced; everywhere else the query runs the
+        buffered way and its rows are handed back one at a time, so the call
+        works on every transport. Pass ``require_streaming=True`` to be told
+        rather than served the fallback.
+
+        ``into`` maps each row onto a model class as it arrives, which is the
+        case streaming is most useful for - a large table read one model at a
+        time. An ``into=`` given when the builder was made is used if this one
+        is omitted.
+
+        Nothing is sent until iteration starts. Use ``with`` (or
+        ``close()``) so stopping early tells the server to abandon the query.
+        """
+        self._check_not_executed()
+        query, variables = self._build()
+        stream = _open_stream(
+            self._executor, query, variables, require_streaming=require_streaming
+        )
+        return _mapped_rows_sync(stream, into or self._into)
 
     def execute(self) -> list[T]:
         return cast(list[T], self._run_once())
@@ -1135,6 +1481,26 @@ class SyncQueryBuilder(_QueryState):
             ]
         return _map_to_class(cls, values)
 
+    def stream(
+        self,
+        *,
+        into: type[Any] | None = None,
+        require_streaming: bool = False,
+    ) -> Any:
+        """Read this query's rows as the server produces them.
+
+        See :meth:`AsyncCrudBuilder.stream` - same terminator, same fallback,
+        same ``into``. Without ``into``, ``.statements()`` on the result gives
+        one completed result per statement instead of a flat run of rows.
+        """
+        stream = _open_stream(
+            self._executor,
+            self._query,
+            self._variables,
+            require_streaming=require_streaming,
+        )
+        return _mapped_rows_sync(stream, into)
+
     def execute(self) -> list[Value]:
         return cast("list[Value]", self._run_once())
 
@@ -1165,5 +1531,6 @@ __all__ = [
     "SyncInsertBuilder",
     "SyncQueryBuilder",
     "_UNSET",
+    "_Executor",
     "_map_result",
 ]

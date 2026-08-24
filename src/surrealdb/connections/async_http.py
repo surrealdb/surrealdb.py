@@ -14,6 +14,7 @@ from surrealdb.connections.builders import (
     AsyncInsertBuilder,
     AsyncQueryBuilder,
     M,
+    _Executor,
     _map_result,
 )
 from surrealdb.connections.files import AsyncFiles
@@ -294,10 +295,33 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         return response
 
     def _make_executor(self) -> Any:
+        """Build the executor a builder terminates through.
+
+        ``.stream()`` works here too, and hands back the buffered answer one
+        row at a time - HTTP carries one response per request, so the rows
+        cannot arrive early. Present so builder code moves between transports
+        unchanged.
+        """
+
         async def _executor(query: str, params: dict[str, Any]) -> dict[str, Any]:
             return await self.query_raw(query, params)
 
-        return _executor
+        def _stream(
+            query: str,
+            params: dict[str, Value] | None,
+            *,
+            require_streaming: bool = False,
+        ) -> AsyncQueryStream:
+            return AsyncQueryStream(
+                AsyncStreamOps.never_streams(
+                    self._stream_buffered, UNSUPPORTED_BY_HTTP
+                ),
+                query,
+                params or None,
+                require_streaming=require_streaming,
+            )
+
+        return _Executor(_executor, _stream)
 
     # CRUD overloads --------------------------------------------------------
 

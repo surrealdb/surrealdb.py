@@ -23,6 +23,7 @@ from surrealdb.connections.builders import (
     AsyncInsertBuilder,
     AsyncQueryBuilder,
     M,
+    _Executor,
     _map_result,
 )
 from surrealdb.connections.files import AsyncFiles
@@ -1064,14 +1065,34 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         session_id: UUID | None,
         txn_id: UUID | None,
     ) -> Any:
-        """Build an executor closure that calls query_raw with the right context."""
+        """Build the executor a builder terminates through.
+
+        Callable for the buffered answer, ``.stream()`` for the rows as they
+        arrive. Both carry this builder's session and transaction, so a
+        streamed `select()` runs in the same place its awaited form would.
+        """
 
         async def _executor(query: str, params: dict[str, Any]) -> dict[str, Any]:
             return await self.query_raw(
                 query, params, session_id=session_id, txn_id=txn_id
             )
 
-        return _executor
+        def _stream(
+            query: str,
+            params: dict[str, Value] | None,
+            *,
+            require_streaming: bool = False,
+        ) -> AsyncQueryStream:
+            return AsyncQueryStream(
+                self._stream_ops(),
+                query,
+                params or None,
+                session_id=session_id,
+                txn_id=txn_id,
+                require_streaming=require_streaming,
+            )
+
+        return _Executor(_executor, _stream)
 
     # CRUD overloads --------------------------------------------------------
 
