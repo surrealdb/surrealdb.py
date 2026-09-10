@@ -715,7 +715,7 @@ working while a stream is open.
 | WebSocket, server v3.3.0+ | Streams. Rows arrive as they are produced. |
 | WebSocket, older server | Runs the query the buffered way. Learned once per connection. |
 | WebSocket, the `query_stream` RPC denied | Same, with its own reason - the operator denied streaming, not querying. |
-| WebSocket, at the concurrency cap | `query()` is buffered for this query only, and it is not remembered: the cap is transient. An explicit `query_stream()` raises instead. |
+| WebSocket, at the concurrency cap | `query()` is buffered for this query only, and it is not remembered: the cap is transient. An explicit `.stream()` raises instead. |
 | Inside a client transaction | `query()` is never streamed - see the caveats below. |
 | HTTP | Buffered - HTTP carries one response per request. |
 | Embedded | Buffered. |

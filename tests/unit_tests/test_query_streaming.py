@@ -46,6 +46,8 @@ from surrealdb.errors import (
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 from surrealdb.streaming import (
+    UNSUPPORTED_BY_EMBEDDED,
+    UNSUPPORTED_BY_HTTP,
     UNSUPPORTED_BY_POLICY,
     UNSUPPORTED_BY_SERVER,
     AsyncQueryStream,
@@ -1951,3 +1953,51 @@ def test_a_buffered_builder_refuses_the_streaming_terminator() -> None:
     with pytest.raises(SurrealError, match="after it has executed"):
         builder.stream()
     assert opened == [], "no stream should have been opened"
+
+
+def test_no_user_facing_message_offers_a_method_this_sdk_removed() -> None:
+    """Remediation has to name something a reader can actually call.
+
+    These strings were written when `query_stream()` was the streaming method
+    and `query()` the buffered alternative, so they told a caller whose stream
+    was refused to "use query() instead". Both halves went stale at once when
+    streaming became the default: `query()` is now the method that just tried
+    to stream, and `query_stream()` no longer exists. Scanning the module
+    rather than the four known sites, so the next message added is covered too.
+    """
+    import re as _re
+    from pathlib import Path
+
+    source = Path(streaming.__file__).read_text()
+    # Only the quoted text a caller reads, not comments or docstrings.
+    literals = _re.findall(r'"((?:[^"\\]|\\.)*)"', source)
+    prose = [
+        text
+        for text in literals
+        if " " in text and ("query" in text or "stream" in text)
+    ]
+    assert prose, "the message literals should not have vanished"
+
+    offenders = [text for text in prose if "query_stream()" in text]
+    assert not offenders, (
+        f"these messages offer query_stream(), which this SDK removed: {offenders}"
+    )
+
+    # "use query() instead" is the specific stale advice: query() streams.
+    misdirects = [text for text in prose if "use query() instead" in text]
+    assert not misdirects, (
+        f"query() is the streaming default, so it is not the buffered "
+        f"alternative these suggest: {misdirects}"
+    )
+
+
+def test_every_refusal_reason_says_how_to_get_the_buffered_answer() -> None:
+    """A cached refusal is shown on its own, so it carries its own remedy."""
+    for reason in (
+        UNSUPPORTED_BY_SERVER,
+        UNSUPPORTED_BY_POLICY,
+        UNSUPPORTED_BY_HTTP,
+        UNSUPPORTED_BY_EMBEDDED,
+    ):
+        assert "buffered answer" in reason, reason
+        assert "query_stream()" not in reason, reason

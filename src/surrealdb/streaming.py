@@ -92,23 +92,26 @@ _SYNC_PUMP_SLICE = 0.1
 # Why streaming is unavailable, for the error ``require_streaming=True`` raises.
 # The distinction matters to whoever reads it: one is fixed by upgrading the
 # server, the other cannot be fixed without changing transport.
+_BUFFERED_INSTEAD = (
+    "or await the builder (execute() when blocking) for the buffered answer"
+)
 UNSUPPORTED_BY_SERVER = (
     "this SurrealDB server does not support streaming queries, which need "
-    "v3.3.0 or later. Upgrade the server, or use query() instead"
+    "v3.3.0 or later. Upgrade the server, " + _BUFFERED_INSTEAD
 )
 UNSUPPORTED_BY_POLICY = (
     "this SurrealDB server does not allow streaming queries: its capability "
     "configuration denies the query_stream RPC method. Ask the operator to "
-    "allow it, or use query() instead"
+    "allow it, " + _BUFFERED_INSTEAD
 )
 UNSUPPORTED_BY_HTTP = (
     "the HTTP transport cannot stream query results: its wire format carries "
     "one response per request. Connect over a websocket URL (ws:// or wss://) "
-    "to stream, or use query() instead"
+    "to stream, " + _BUFFERED_INSTEAD
 )
 UNSUPPORTED_BY_EMBEDDED = (
     "the embedded engine does not stream query results through this SDK: it "
-    "answers one response per request. Use query() instead"
+    "answers one response per request. " + _BUFFERED_INSTEAD
 )
 
 
@@ -343,7 +346,7 @@ class _Accumulator:
                 f"{self.version} and this SDK implements revision "
                 f"{QUERY_STREAM_VERSION}. A higher revision means a change "
                 "that is not backwards compatible - upgrade the surrealdb "
-                "package, or use query() instead of query_stream()."
+                "package, " + _BUFFERED_INSTEAD + "."
             )
         statements = frame.get("statements")
         if isinstance(statements, int) and not isinstance(statements, bool):
@@ -753,7 +756,7 @@ class _StreamBase:
             raise SurrealError(
                 "this query stream has already been consumed - a stream is "
                 "read once, and row iteration and .statements() draw from the "
-                "same frames. Call query_stream() again for another pass."
+                "same frames. Open another stream() for another pass."
             )
         self._claimed = True
 
@@ -771,8 +774,8 @@ class _StreamBase:
 
     def _unsupported(self, reason: str | None = None) -> UnsupportedFeatureError:
         return UnsupportedFeatureError(
-            f"{reason or self._reason}, or drop require_streaming=True to let "
-            "query_stream() fall back to a buffered query."
+            f"{reason or self._reason}, or drop require_streaming=True to "
+            "let stream() fall back to a buffered query."
         )
 
     def _decode(self, payload: Any, accumulator: _Accumulator) -> list[_Event]:
