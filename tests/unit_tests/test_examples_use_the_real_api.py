@@ -162,3 +162,61 @@ def test_no_example_iterates_a_coroutine() -> None:
             )
 
     assert not offenders, "examples iterating a coroutine: " + "; ".join(offenders)
+
+
+def _builder_api() -> set[str]:
+    """Every public name reachable on what a `db.<method>()` call hands back."""
+    from surrealdb import AsyncQueryStream, QueryStream
+    from surrealdb.connections import builders
+
+    types = [
+        builders.AsyncCrudBuilder,
+        builders.AsyncInsertBuilder,
+        builders.AsyncQueryBuilder,
+        builders.AsyncQueryIntoBuilder,
+        builders.SyncCrudBuilder,
+        builders.SyncInsertBuilder,
+        builders.SyncQueryBuilder,
+        AsyncQueryStream,
+        QueryStream,
+    ]
+    return {name for cls in types for name in dir(cls) if not name.startswith("_")}
+
+
+def test_no_example_chains_a_terminator_that_does_not_exist() -> None:
+    """`db.query(...).stream()` - the chained half was unchecked.
+
+    The regex above only sees `db.<method>(`, so a builder terminator was
+    invisible to it: `db.query(sql).strem()` would ship. That matters more now
+    that the terminator *is* the API - `.stream()`, `.execute()`, `.statements()`
+    and `.into()` are how a builder is finished, and the streaming examples are
+    made of them.
+    """
+    api = _builder_api() | _public_api()
+    missing: dict[str, list[str]] = {}
+
+    for path, text in _sources():
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            continue  # test_every_example_parses reports these
+        for node in ast.walk(tree):
+            # A call whose function is an attribute of another call: the chain.
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Call)
+                and isinstance(node.func.value.func, ast.Attribute)
+                and isinstance(node.func.value.func.value, ast.Name)
+                and node.func.value.func.value.id == "db"
+            ):
+                continue
+            if node.func.attr not in api:
+                missing.setdefault(node.func.attr, []).append(
+                    str(path.relative_to(_EXAMPLES.parent))
+                )
+
+    assert not missing, "examples chain methods no builder has: " + "; ".join(
+        f".{method}() in {', '.join(sorted(set(files)))}"
+        for method, files in sorted(missing.items())
+    )
