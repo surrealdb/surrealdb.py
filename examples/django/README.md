@@ -184,7 +184,7 @@ class UserViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         # Fetch from SurrealDB
-        return self.request.db.select("users")
+        return self.request.db.select("users").execute()
 ```
 
 ### Serializers

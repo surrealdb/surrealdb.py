@@ -11,7 +11,7 @@ def test_mem_connection() -> None:
         result = db.create("person", {"name": "Alice", "age": 30})
         assert result is not None
 
-        people = db.select("person")
+        people = db.select("person").execute()
         assert people is not None
 
 
@@ -23,7 +23,7 @@ def test_create_and_select() -> None:
         created = db.create("user", {"name": "Bob", "email": "bob@example.com"})
         assert created is not None
 
-        users = db.select("user")
+        users = db.select("user").execute()
         assert users is not None
 
 

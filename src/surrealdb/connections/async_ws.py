@@ -23,14 +23,13 @@ from surrealdb.connections.builders import (
     AsyncInsertBuilder,
     AsyncQueryBuilder,
     M,
-    _map_result,
+    _Executor,
 )
 from surrealdb.connections.files import AsyncFiles
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import (
     AUTH_FALLBACK_QUERY,
     UtilsMixin,
-    render_projection,
 )
 from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import RecordID, RecordIdType
@@ -40,10 +39,17 @@ from surrealdb.errors import (
     SurrealError,
     TransportTimeoutError,
     UnexpectedResponseError,
+    parse_query_error,
     parse_rpc_error,
 )
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
+from surrealdb.streaming import (
+    AsyncQueryStream,
+    AsyncStreamOps,
+    buffered_statements,
+    stream_broken,
+)
 from surrealdb.types import Tokens, Value, parse_auth_result
 
 logger = logging.getLogger(__name__)
@@ -203,11 +209,19 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     def __init__(
         self,
         url: str,
+        *,
+        streaming: bool = True,
     ) -> None:
         """
         The constructor for the AsyncSurrealConnection class.
 
         :param url: The URL of the database to process queries for.
+        :param streaming: Whether queries may be answered as a stream of frames
+            rather than one response. On by default and invisible: the answer is
+            the same either way, so this only decides how it arrives. Pass
+            ``False`` to put every query back on the buffered path - worth doing
+            if a slow consumer of a very large result would rather the server
+            waited than the client buffered.
         """
         self.url: Url = Url(url)
         self.raw_url: str = f"{self.url.raw_url}/rpc"
@@ -234,6 +248,25 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         # of those and to nothing else.
         self._uncorrelated_error: SurrealError | None = None
         self._uncorrelated_for: set[str] = set()
+        # Streaming queries, keyed by the request id whose frames they carry.
+        # Separate from ``self.qry`` because a ``query_stream`` request is
+        # answered by a *sequence* of responses sharing one id, and a future
+        # can only be resolved once: routed through ``self.qry`` the first
+        # frame would resolve the call and every frame after it would be
+        # dropped. Queues hold decoded frames plus a ``_ChannelBroken``
+        # sentinel, so the value type is ``Any``.
+        self._streams: dict[str, Queue[Any]] = {}
+        # Whether this server knows ``query_stream``: ``None`` until one
+        # request settles it. Cached per connection because the answer is a
+        # property of the server build, and re-learning it would cost a
+        # rejected request on every call.
+        self._streaming_supported: bool | None = None
+        # Why it refused, when it did - a server older than v3.3.0 and one whose
+        # capabilities deny `query_stream` need different advice.
+        self._streaming_refusal: str | None = None
+        # Whether this connection may stream at all - the driver-level switch,
+        # distinct from what the server turned out to support.
+        self._streaming_enabled: bool = streaming
 
     def _connect_guard(self) -> asyncio.Lock:
         """The lock serialising ``connect()``, bound to the running loop.
@@ -261,6 +294,20 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             if not fut.done():
                 fut.set_exception(error)
         self.qry.clear()
+        self._break_streams(error)
+
+    def _break_streams(self, error: BaseException) -> None:
+        """Tell every open stream that no more frames are coming.
+
+        Streams wait on a queue rather than on ``self.qry``, so failing the
+        pending futures leaves them untouched - the same trap live subscribers
+        fell into, where nothing was ever put in the queue again and the
+        consumer waited forever with no timeout on the path. A stream's frames
+        are unbounded by design once it has opened, which makes this the only
+        thing that ends one when the socket goes away.
+        """
+        for frames in self._streams.values():
+            frames.put_nowait(stream_broken(error))
 
     def _deliver_uncorrelated(self, error: SurrealError) -> None:
         """Deliver an error the server could not tie to any request.
@@ -287,13 +334,32 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         pending = [
             (query_id, fut) for query_id, fut in self.qry.items() if not fut.done()
         ]
-        if len(pending) == 1:
+        # A streaming query in flight is a candidate exactly as a pending call
+        # is: it too sent a frame the server may have rejected, and now that
+        # `query()` streams, most requests are of that kind. Leaving streams out
+        # meant the error was held for `self.qry` ids alone, so a streamed
+        # request that was the doomed one waited out its opening deadline and
+        # reported a bare timeout instead of the parse error the server sent.
+        candidates = {query_id for query_id, _ in pending} | set(self._streams)
+        if len(candidates) == 1 and pending:
             query_id, fut = pending[0]
             fut.set_exception(error)
             self.qry.pop(query_id, None)
             return
+        # A streaming query in flight is a candidate too, and when it is the
+        # only one the error belongs to it. Without this the frame the server
+        # rejected went unreported: the error was held for a `self.qry` entry
+        # that did not exist, and the stream waited out its opening deadline
+        # and blamed a timeout for what was really a parse error. It is handed
+        # over as the end-of-frames sentinel, which carries the parsed error
+        # itself - re-encoding it as a response would flatten a typed error
+        # back into its message.
+        if len(candidates) == 1:
+            for frames in self._streams.values():
+                frames.put_nowait(stream_broken(error))
+            return
         self._uncorrelated_error = error
-        self._uncorrelated_for = {query_id for query_id, _ in pending}
+        self._uncorrelated_for = candidates
 
     def _take_uncorrelated(self, query_id: str) -> SurrealError | None:
         """Consume a held protocol error if it can belong to *query_id*.
@@ -325,7 +391,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         """
         if self._uncorrelated_error is None:
             return
-        self._uncorrelated_for &= self.qry.keys()
+        self._uncorrelated_for &= self.qry.keys() | self._streams.keys()
         if not self._uncorrelated_for:
             self._forget_uncorrelated()
 
@@ -346,7 +412,12 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
         try:
             if response_id := response.get("id"):
-                if (fut := self.qry.get(response_id)) and not fut.done():
+                # Streams first: a streaming query's id stays registered for
+                # the whole sequence of frames, while ``self.qry`` holds ids
+                # that are answered once.
+                if (frames := self._streams.get(response_id)) is not None:
+                    frames.put_nowait(response)
+                elif (fut := self.qry.get(response_id)) and not fut.done():
                     fut.set_result(response)
             elif response_result := response.get("result"):
                 live_id = str(response_result["id"])
@@ -591,7 +662,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             # authenticated record via `$auth`.
             if self._info_needs_auth_fallback(response):
                 record = self._extract_auth_record(
-                    await self.query(AUTH_FALLBACK_QUERY, session_id=session_id).first()
+                    await self._buffered_first(AUTH_FALLBACK_QUERY, session_id)
                 )
                 if record is not None:
                     return record
@@ -644,6 +715,17 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     ) -> dict[str, Any]:
         if vars is None:
             vars = {}
+        if self._may_stream(txn_id):
+            # Streamed, and the answer rebuilt in the shape a buffered query
+            # returns - so `query()`, `select()`, `create()` and every builder
+            # above this get their rows as the server produces them without
+            # knowing anything about frames. `None` means the query was not run:
+            # the server declined to stream it, so ask the buffered way.
+            streamed = await AsyncQueryStream(
+                self._stream_ops(), query, vars, session_id=session_id
+            )._collect()  # pyright: ignore[reportPrivateUsage]
+            if streamed is not None:
+                return streamed
         kwargs: dict[str, Any] = {"query": query, "params": vars}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -652,6 +734,145 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         message = RequestMessage(RequestMethod.QUERY, **kwargs)
         response = await self._send(message, "query", bypass=True)
         return response
+
+    async def _buffered_first(
+        self, query: str, session_id: UUID | None
+    ) -> Value | None:
+        """Run *query* buffered and return its first statement's result.
+
+        For the queries the SDK issues on its own behalf. Streaming exists to
+        get a caller's data moving sooner; a one-row internal lookup gains
+        nothing from frames, and putting `query_stream` on the wire for
+        something nobody asked for makes the SDK's own traffic harder to reason
+        about - and harder to assert on, which is how this was noticed.
+        """
+        kwargs: dict[str, Any] = {"query": query, "params": {}}
+        if session_id is not None:
+            kwargs["session"] = session_id
+        message = RequestMessage(RequestMethod.QUERY, **kwargs)
+        response = await self._send(message, "getting auth information", bypass=True)
+        statements = buffered_statements(response)
+        if not statements:
+            return None
+        first = statements[0]
+        if first.get("status") == "ERR":
+            raise parse_query_error(first)
+        result: Value = first.get("result")
+        return result
+
+    def _may_stream(self, txn_id: UUID | None) -> bool:
+        """Whether this query may be asked for as a stream.
+
+        A query on a client transaction never is. It would run on the
+        transaction `begin` handed out, and requests on one connection are
+        served concurrently, so a `commit` arriving mid-stream would commit a
+        prefix of the query rather than the whole of it. Excluding them removes
+        the hazard instead of documenting it.
+        """
+        if not self._streaming_enabled or txn_id is not None:
+            return False
+        return self._streaming_supported is not False
+
+    def _stream_ops(self) -> AsyncStreamOps:
+        """Bind the operations a streaming query drives.
+
+        Bound methods rather than the connection itself, so a stream reaches
+        only what it needs: it cannot connect or close, and it can only ask the
+        pending-request machinery whether a held protocol error is its own.
+        """
+        return AsyncStreamOps(
+            registry=self._streams,
+            open_timeout=_RPC_RECV_TIMEOUT,
+            open=self._stream_open,
+            release=self._stream_release,
+            send=self._stream_send,
+            cancel=self._stream_cancel,
+            buffered=self._stream_buffered,
+            supported=self._stream_supported,
+            set_supported=self._stream_set_supported,
+            refusal=self._stream_refusal,
+            take_uncorrelated=self._take_uncorrelated,
+        )
+
+    async def _stream_open(self, request_id: str) -> Queue[Any]:
+        """Register *request_id* and return the queue its frames arrive on.
+
+        Registered before the request is sent, so the reader cannot deliver a
+        frame - or the immediate rejection of an unknown method - before there
+        is anywhere to put it.
+
+        The queue is unbounded, and deliberately so. A bounded one would have
+        to stall the shared reader task when it filled, which deadlocks the
+        common pattern of running another query for each row: the reader would
+        be waiting for the consumer, and the consumer waiting for a reply the
+        stalled reader is holding. The protocol offers no per-stream flow
+        control, so a consumer slower than the server buffers rows in memory
+        until it catches up; ``.statements()``, or stopping the stream early,
+        are the ways out.
+        """
+        await self.connect()
+        frames: Queue[Any] = Queue()
+        self._streams[request_id] = frames
+        return frames
+
+    def _stream_release(self, request_id: str) -> None:
+        """Deregister a stream. Safe to call twice."""
+        self._streams.pop(request_id, None)
+        # A held protocol error may have been waiting for this stream to collect
+        # it; with the stream gone it cannot belong to it, and keeping it would
+        # let it ambush an unrelated request much later.
+        self._prune_uncorrelated()
+
+    async def _stream_send(self, message: RequestMessage) -> None:
+        """Send *message* without registering a reply future.
+
+        Not :meth:`_send`: that awaits exactly one response and pops the id
+        when it arrives, which would resolve the call on the first frame and
+        then route every frame after it nowhere.
+        """
+        await self.connect()
+        assert self.socket is not None
+        try:
+            await self.socket.send(message.WS_CBOR_DESCRIPTOR)
+        except (WebSocketException, OSError) as exc:
+            raise ConnectionUnavailableError(
+                f"the connection to {self.raw_url} failed while starting a "
+                f"streaming query: {exc}"
+            ) from exc
+
+    async def _stream_cancel(self, request_id: str) -> None:
+        """Ask the server to stop the stream *request_id* opened.
+
+        A no-op once the socket has gone: there is nothing left to tell, and
+        going through :meth:`_send` would call ``connect()`` and reopen the
+        connection a caller had just closed - on a new session, where the
+        stream does not exist.
+        """
+        if self.socket is None:
+            return
+        message = RequestMessage(RequestMethod.QUERY_CANCEL, stream=request_id)
+        await self._send(message, "cancelling a streaming query")
+
+    async def _stream_buffered(
+        self,
+        query: str,
+        variables: dict[str, Value],
+        session_id: UUID | None,
+        txn_id: UUID | None,
+    ) -> list[dict[str, Any]]:
+        """Run *query* the buffered way, for a server without streaming."""
+        response = await self.query_raw(query, variables, session_id, txn_id)
+        return buffered_statements(response)
+
+    def _stream_supported(self) -> bool | None:
+        return self._streaming_supported
+
+    def _stream_refusal(self) -> str | None:
+        return self._streaming_refusal
+
+    def _stream_set_supported(self, supported: bool, reason: str | None) -> None:
+        self._streaming_supported = supported
+        self._streaming_refusal = reason
 
     async def version(self, session_id: UUID | None = None) -> str:
         kwargs: dict[str, Any] = {}
@@ -692,7 +913,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         await self._send(message, "unsetting")
 
     @overload
-    async def select(
+    def select(
         self,
         record: RecordID,
         *,
@@ -700,9 +921,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         into: type[M],
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> M | None: ...
+    ) -> AsyncCrudBuilder[M | None]: ...
     @overload
-    async def select(
+    def select(
         self,
         record: Table,
         *,
@@ -710,9 +931,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         into: type[M],
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> list[M]: ...
+    ) -> AsyncCrudBuilder[list[M]]: ...
     @overload
-    async def select(
+    def select(
         self,
         record: str,
         *,
@@ -720,35 +941,35 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         into: type[M],
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> M | list[M] | None: ...
+    ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    async def select(
+    def select(
         self,
         record: RecordID,
         *,
         fields: Sequence[str] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> dict[str, Value] | None: ...
+    ) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
-    async def select(
+    def select(
         self,
         record: Table,
         *,
         fields: Sequence[str] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> list[Value]: ...
+    ) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
-    async def select(
+    def select(
         self,
         record: str,
         *,
         fields: Sequence[str] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> Value: ...
-    async def select(
+    ) -> AsyncCrudBuilder[Value]: ...
+    def select(
         self,
         record: RecordIdType,
         *,
@@ -756,7 +977,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         into: type[M] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
-    ) -> Any:
+    ) -> AsyncCrudBuilder[Any]:
         """Select records.
 
         A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
@@ -778,43 +999,48 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         SurrealQL. A model passed to ``into=`` that declares an ``id`` field
         therefore needs ``fields=["id", ...]``.
         """
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-        projection = render_projection(fields)
-        query = f"SELECT {projection} FROM {resource_ref}"
-
-        response = await self.query_raw(
-            query, variables, session_id=session_id, txn_id=txn_id
+        return AsyncCrudBuilder(
+            executor=self._make_executor(session_id, txn_id),
+            operation="SELECT",
+            record=record,
+            op_name="select",
+            into=into,
+            fields=fields,
         )
-        self.check_response_for_error(response, "select")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # Single-record targets (RecordID / "table:id") unwrap the one-element
-        # result list to the record dict, or None when the record is absent.
-        if self._is_single_record_operation(record):
-            if isinstance(result, list):
-                value: Any = result[0] if result else None
-            else:
-                value = result
-        else:
-            value = result
-        if into is not None:
-            return _map_result(into, value)
-        return value
 
     def _make_executor(
         self,
         session_id: UUID | None,
         txn_id: UUID | None,
     ) -> Any:
-        """Build an executor closure that calls query_raw with the right context."""
+        """Build the executor a builder terminates through.
+
+        Callable for the buffered answer, ``.stream()`` for the rows as they
+        arrive. Both carry this builder's session and transaction, so a
+        streamed `select()` runs in the same place its awaited form would.
+        """
 
         async def _executor(query: str, params: dict[str, Any]) -> dict[str, Any]:
             return await self.query_raw(
                 query, params, session_id=session_id, txn_id=txn_id
             )
 
-        return _executor
+        def _stream(
+            query: str,
+            params: dict[str, Value] | None,
+            *,
+            require_streaming: bool = False,
+        ) -> AsyncQueryStream:
+            return AsyncQueryStream(
+                self._stream_ops(),
+                query,
+                params or None,
+                session_id=session_id,
+                txn_id=txn_id,
+                require_streaming=require_streaming,
+            )
+
+        return _Executor(_executor, _stream)
 
     # CRUD overloads --------------------------------------------------------
 
@@ -1377,6 +1603,19 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             for queue in queues:
                 queue.put_nowait(_LIVE_QUEUE_CLOSED)
 
+        # Streams get an error rather than a clean-end sentinel: a caller
+        # iterating rows asked for all of them, and a socket taken away
+        # mid-stream means it will not get them. `close()` does not go through
+        # `_fail_pending`, so without this a stream would wait on a queue that
+        # nothing will ever fill again - and `_connect_locked` calls `close()`
+        # itself when it finds a dead reader on a live socket, so this is
+        # reachable without the caller closing anything.
+        self._break_streams(
+            ConnectionUnavailableError(
+                "the connection was closed while a streaming query was open."
+            )
+        )
+
         if self.loop is not None and self.loop is not asyncio.get_running_loop():
             _abandon_connection(self.socket, self.recv_task, self.loop)
             self.socket = None
@@ -1526,22 +1765,36 @@ class AsyncSurrealSession:
         await self._connection.unset(key, session_id=self._session_id)
 
     @overload
-    async def select(self, record: RecordID, *, into: type[M]) -> M | None: ...
+    def select(
+        self, record: RecordID, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | None]: ...
     @overload
-    async def select(self, record: Table, *, into: type[M]) -> list[M]: ...
+    def select(self, record: Table, *, into: type[M]) -> AsyncCrudBuilder[list[M]]: ...
     @overload
-    async def select(self, record: str, *, into: type[M]) -> M | list[M] | None: ...
+    def select(
+        self, record: str, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    async def select(self, record: RecordID) -> dict[str, Value] | None: ...
+    def select(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
-    async def select(self, record: Table) -> list[Value]: ...
+    def select(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
-    async def select(self, record: str) -> Value: ...
-    async def select(self, record: RecordIdType, *, into: type[M] | None = None) -> Any:
+    def select(self, record: str) -> AsyncCrudBuilder[Value]: ...
+    def select(
+        self,
+        record: RecordIdType,
+        *,
+        fields: Sequence[str] | None = None,
+        into: type[M] | None = None,
+    ) -> AsyncCrudBuilder[Any]:
+        # Branched because the overloads take `into: type[M]` or nothing, not
+        # `type[M] | None` - the same reason the old delegation branched.
         if into is None:
-            return await self._connection.select(record, session_id=self._session_id)
-        return await self._connection.select(
-            record, into=into, session_id=self._session_id
+            return self._connection.select(
+                record, fields=fields, session_id=self._session_id
+            )
+        return self._connection.select(
+            record, fields=fields, into=into, session_id=self._session_id
         )
 
     @overload
@@ -1790,24 +2043,41 @@ class AsyncSurrealTransaction:
         return await self._connection.version(session_id=self._session_id)
 
     @overload
-    async def select(self, record: RecordID, *, into: type[M]) -> M | None: ...
+    def select(
+        self, record: RecordID, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | None]: ...
     @overload
-    async def select(self, record: Table, *, into: type[M]) -> list[M]: ...
+    def select(self, record: Table, *, into: type[M]) -> AsyncCrudBuilder[list[M]]: ...
     @overload
-    async def select(self, record: str, *, into: type[M]) -> M | list[M] | None: ...
+    def select(
+        self, record: str, *, into: type[M]
+    ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    async def select(self, record: RecordID) -> dict[str, Value] | None: ...
+    def select(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
-    async def select(self, record: Table) -> list[Value]: ...
+    def select(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
-    async def select(self, record: str) -> Value: ...
-    async def select(self, record: RecordIdType, *, into: type[M] | None = None) -> Any:
+    def select(self, record: str) -> AsyncCrudBuilder[Value]: ...
+    def select(
+        self,
+        record: RecordIdType,
+        *,
+        fields: Sequence[str] | None = None,
+        into: type[M] | None = None,
+    ) -> AsyncCrudBuilder[Any]:
         if into is None:
-            return await self._connection.select(
-                record, session_id=self._session_id, txn_id=self._txn_id
+            return self._connection.select(
+                record,
+                fields=fields,
+                session_id=self._session_id,
+                txn_id=self._txn_id,
             )
-        return await self._connection.select(
-            record, into=into, session_id=self._session_id, txn_id=self._txn_id
+        return self._connection.select(
+            record,
+            fields=fields,
+            into=into,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
         )
 
     @overload

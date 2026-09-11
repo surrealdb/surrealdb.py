@@ -12,7 +12,7 @@ from surrealdb.connections.builders import (
     SyncCrudBuilder,
     SyncInsertBuilder,
     SyncQueryBuilder,
-    _map_result,
+    _Executor,
 )
 from surrealdb.connections.files import BlockingFiles
 from surrealdb.connections.sync_template import SyncTemplate
@@ -22,7 +22,6 @@ from surrealdb.connections.utils_mixin import (
     UtilsMixin,
     build_run_query,
     merge_query_vars,
-    render_projection,
 )
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
@@ -34,6 +33,12 @@ from surrealdb.errors import (
 )
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
+from surrealdb.streaming import (
+    UNSUPPORTED_BY_HTTP,
+    QueryStream,
+    SyncStreamOps,
+    buffered_statements,
+)
 from surrealdb.types import Tokens, Value, parse_auth_result
 
 # Live queries need a persistent connection to push notifications down, which
@@ -196,6 +201,16 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
             variables=vars,
         )
 
+    def _stream_buffered(
+        self,
+        query: str,
+        variables: dict[str, Value],
+        session_id: UUID | None,
+        txn_id: UUID | None,
+    ) -> list[dict[str, Any]]:
+        """Run *query* the buffered way, which is all this transport can do."""
+        return buffered_statements(self.query_raw(query, variables))
+
     def query_raw(
         self, query: str, vars: dict[str, Value] | None = None
     ) -> dict[str, Any]:
@@ -209,10 +224,31 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         return response
 
     def _make_executor(self) -> Any:
+        """Build the executor a builder terminates through.
+
+        ``.stream()`` works here too, and hands back the buffered answer one
+        row at a time - HTTP carries one response per request, so the rows
+        cannot arrive early. Present so builder code moves between transports
+        unchanged.
+        """
+
         def _executor(query: str, params: dict[str, Any]) -> dict[str, Any]:
             return self.query_raw(query, params)
 
-        return _executor
+        def _stream(
+            query: str,
+            params: dict[str, Value] | None,
+            *,
+            require_streaming: bool = False,
+        ) -> QueryStream:
+            return QueryStream(
+                SyncStreamOps.never_streams(self._stream_buffered, UNSUPPORTED_BY_HTTP),
+                query,
+                params or None,
+                require_streaming=require_streaming,
+            )
+
+        return _Executor(_executor, _stream)
 
     # CRUD (eager) ----------------------------------------------------------
     #
@@ -473,32 +509,34 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def select(
         self, record: RecordID, *, fields: Sequence[str] | None = None, into: type[M]
-    ) -> M | None: ...
+    ) -> SyncCrudBuilder[M | None]: ...
     @overload
     def select(
         self, record: Table, *, fields: Sequence[str] | None = None, into: type[M]
-    ) -> list[M]: ...
+    ) -> SyncCrudBuilder[list[M]]: ...
     @overload
     def select(
         self, record: str, *, fields: Sequence[str] | None = None, into: type[M]
-    ) -> M | list[M] | None: ...
+    ) -> SyncCrudBuilder[M | list[M] | None]: ...
     @overload
     def select(
         self, record: RecordID, *, fields: Sequence[str] | None = None
-    ) -> dict[str, Value] | None: ...
+    ) -> SyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def select(
         self, record: Table, *, fields: Sequence[str] | None = None
-    ) -> list[Value]: ...
+    ) -> SyncCrudBuilder[list[Value]]: ...
     @overload
-    def select(self, record: str, *, fields: Sequence[str] | None = None) -> Value: ...
+    def select(
+        self, record: str, *, fields: Sequence[str] | None = None
+    ) -> SyncCrudBuilder[Value]: ...
     def select(
         self,
         record: RecordIdType,
         *,
         fields: Sequence[str] | None = None,
         into: type[M] | None = None,
-    ) -> Any:
+    ) -> SyncCrudBuilder[Any]:
         """Select records eagerly.
 
         A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
@@ -520,27 +558,14 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         SurrealQL. A model passed to ``into=`` that declares an ``id`` field
         therefore needs ``fields=["id", ...]``.
         """
-        variables: dict[str, Any] = {}
-        resource_ref = self._resource_to_variable(record, variables, "_resource")
-        projection = render_projection(fields)
-        query = f"SELECT {projection} FROM {resource_ref}"
-
-        response = self.query_raw(query, variables)
-        self.check_response_for_error(response, "select")
-        self._check_query_result(response["result"][0])
-        result = response["result"][0]["result"]
-        # Single-record targets (RecordID / "table:id") unwrap the one-element
-        # result list to the record dict, or None when the record is absent.
-        if self._is_single_record_operation(record):
-            if isinstance(result, list):
-                value: Any = result[0] if result else None
-            else:
-                value = result
-        else:
-            value = result
-        if into is not None:
-            return _map_result(into, value)
-        return value
+        return SyncCrudBuilder(
+            executor=self._make_executor(),
+            operation="SELECT",
+            record=record,
+            op_name="select",
+            into=into,
+            fields=fields,
+        )
 
     def version(self) -> str:
         message = RequestMessage(RequestMethod.VERSION)

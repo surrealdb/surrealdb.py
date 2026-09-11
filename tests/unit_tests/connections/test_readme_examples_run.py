@@ -17,6 +17,7 @@ the README's, in the README's order, so a change to one without the other shows
 up as a diff a reviewer can see.
 """
 
+import pathlib
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -27,7 +28,11 @@ from surrealdb import AsyncSurreal, Surreal
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
-from surrealdb.errors import NotFoundError
+from surrealdb.errors import (
+    NotFoundError,
+    SurrealError,
+    UnsupportedFeatureError,
+)
 
 
 @dataclass
@@ -83,7 +88,7 @@ def test_the_sync_into_block_runs(
 ) -> None:
     db = blocking_ws_connection
 
-    assert db.select(RecordID("person", "tobie"), into=Person) is None
+    assert db.select(RecordID("person", "tobie"), into=Person).execute() is None
     created = db.create(RecordID("person", "tobie"), {"name": "Tobie"}, into=Person)
     assert isinstance(created, Person)
     rows = db.query("SELECT * FROM person").into(Person, rows=True)
@@ -125,7 +130,7 @@ def test_the_sync_usage_block_runs(connection_params: dict[str, Any]) -> None:
         empty = db.create(RecordID("person", "bob")).execute()
         assert empty["id"] == RecordID("person", "bob")
 
-        row = db.select(RecordID("person", "tobie"))
+        row = db.select(RecordID("person", "tobie")).execute()
         assert row is not None
         db.delete(RecordID("person", "bob"))
 
@@ -231,3 +236,189 @@ def test_the_files_encoding_block_runs(
 
     assert blocking_ws_connection.files.get(readme) == b"hello"
     assert blocking_ws_connection.files.get(photo) == b"binary"
+
+
+# ---------------------------------------------------- the "Streaming queries" blocks
+#
+# Added because the section had no coverage at all, and rewriting it broke an
+# example twice: once by claiming `streaming=False` and a transaction stop an
+# explicit stream (neither does), and once by dropping `.stream()` from the
+# `.statements()` chain, leaving `db.query(...).statements()` - an
+# AttributeError, published as documentation. The section is 230 lines and the
+# newest thing in the README, so it is the likeliest to drift.
+#
+# Every block below runs on any server: where streaming is unavailable the query
+# runs the buffered way and its rows are replayed, which is the documented
+# promise. The one block that must not fall back says so with
+# `require_streaming=True`, and skips instead.
+
+
+@pytest.fixture
+def streaming_people(blocking_ws_connection: Any) -> str:
+    blocking_ws_connection.query(
+        "DEFINE TABLE IF NOT EXISTS person; DELETE person; "
+        "CREATE person:a SET name = 'a'; CREATE person:b SET name = 'b'"
+    ).execute()
+    return "person"
+
+
+async def test_the_streaming_rows_block_runs(
+    async_ws_connection: Any, streaming_people: str
+) -> None:
+    """`async for person in db.query(...).stream()` - the headline block."""
+    db = async_ws_connection
+
+    people = await db.query("SELECT * FROM person")
+    assert isinstance(people, list)
+
+    seen = []
+    async for person in db.query("SELECT * FROM person").stream():
+        seen.append(person["name"])
+    assert sorted(seen) == ["a", "b"]
+
+
+async def test_the_statements_block_runs(
+    async_ws_connection: Any, streaming_people: str
+) -> None:
+    """The block that was silently broken: `.stream().statements()`.
+
+    Without `.stream()` this is `AttributeError: 'AsyncQueryBuilder' object has
+    no attribute 'statements'`, which no amount of reading catches.
+    """
+    db = async_ws_connection
+
+    seen = []
+    async for statement in (
+        db.query("SELECT * FROM person; SELECT count() FROM person GROUP ALL")
+        .stream()
+        .statements()
+    ):
+        seen.append((statement.index, statement.value))
+
+    assert [index for index, _ in seen] == [0, 1]
+
+
+async def test_the_rows_as_models_block_runs(
+    async_ws_connection: Any, streaming_people: str
+) -> None:
+    """`db.select("person").stream(into=Person)`, async."""
+    db = async_ws_connection
+
+    names = []
+    async for person in db.select("person", fields=["id", "name"]).stream(into=Person):
+        names.append(person.name)
+    assert sorted(names) == ["a", "b"]
+
+
+def test_the_sync_rows_as_models_block_runs(
+    blocking_ws_connection: Any, streaming_people: str
+) -> None:
+    """The same block on the blocking client, with `for` rather than `async for`."""
+    names = []
+    for person in blocking_ws_connection.select("person", fields=["id", "name"]).stream(
+        into=Person
+    ):
+        names.append(person.name)
+    assert sorted(names) == ["a", "b"]
+
+
+async def test_the_provisional_rows_block_runs(
+    async_ws_connection: Any, streaming_people: str
+) -> None:
+    """Rows arrive, then the THROW raises and they are void."""
+    db = async_ws_connection
+
+    rows: list[Any] = []
+    with pytest.raises(SurrealError):
+        async for row in db.query("SELECT * FROM person; THROW 'nope'").stream():
+            rows.append(row)
+    assert rows, "the README's point is that rows do arrive before the failure"
+    rows.clear()
+    assert rows == []
+
+
+async def test_the_stopping_early_block_runs(
+    async_ws_connection: Any, streaming_people: str
+) -> None:
+    """`async with ... break` - the form the README tells you to use."""
+    db = async_ws_connection
+
+    seen = 0
+    async with db.query("SELECT * FROM person").stream() as stream:
+        async for _ in stream:
+            seen += 1
+            break
+    assert seen == 1
+
+
+def test_the_sync_stopping_early_block_runs(
+    blocking_ws_connection: Any, streaming_people: str
+) -> None:
+    """The blocking twin, with `with`."""
+    names = []
+    with blocking_ws_connection.query("SELECT * FROM person").stream() as stream:
+        for person in stream:
+            names.append(person["name"])
+    assert sorted(names) == ["a", "b"]
+
+
+def test_the_off_switch_block_runs(connection_params: dict[str, Any]) -> None:
+    """`Surreal(url, streaming=False)` - the constructor the README shows."""
+    db = Surreal(connection_params["ws_url"], streaming=False)
+    try:
+        db.signin(connection_params["vars_params"])
+        db.use(connection_params["namespace"], connection_params["database_name"])
+        assert db.query("RETURN 1").execute() == [1]
+    finally:
+        db.close()
+
+
+async def test_the_require_streaming_block_runs(
+    async_ws_connection: Any, streaming_people: str
+) -> None:
+    """`require_streaming=True` - the block that must not fall back.
+
+    Skips where the server cannot stream, which is the whole point of the flag.
+    """
+    db = async_ws_connection
+    try:
+        names = [
+            row["name"]
+            async for row in db.query("SELECT * FROM person").stream(
+                require_streaming=True
+            )
+        ]
+    except UnsupportedFeatureError as exc:
+        pytest.skip(f"this server will not stream: {exc}")
+    assert sorted(names) == ["a", "b"]
+
+
+def test_the_streaming_blocks_are_still_what_the_readme_shows() -> None:
+    """Bind the tests above to the README text, rather than trusting a diff.
+
+    This file's convention has been that each test mirrors the README's
+    statements "so a change to one without the other shows up as a diff a
+    reviewer can see" - which relies on the reviewer noticing. These snippets
+    are the load-bearing ones, so editing the README without editing the test
+    fails here and says which snippet went, instead of leaving a passing test
+    that proves nothing about what is published.
+    """
+    readme = (pathlib.Path(__file__).resolve().parents[3] / "README.md").read_text()
+    section = readme.split("## Streaming queries", 1)
+    assert len(section) == 2, "the README no longer has a Streaming queries section"
+    body = section[1].split("\n## ", 1)[0]
+
+    for snippet in (
+        'async for person in db.query("SELECT * FROM person").stream():',
+        ").stream().statements():",
+        'async for person in db.select("person").stream(into=Person):',
+        'for person in db.select("person").stream(into=Person):',
+        'async with db.query("SELECT * FROM huge_table").stream() as stream:',
+        'with db.query("SELECT * FROM person").stream() as stream:',
+        'AsyncSurreal("ws://localhost:8000/rpc", streaming=False)',
+        "db.query(sql).stream(require_streaming=True)",
+    ):
+        assert snippet in body, (
+            f"the README's streaming section no longer contains {snippet!r} - "
+            "update the test above with it, so what is documented stays tested"
+        )

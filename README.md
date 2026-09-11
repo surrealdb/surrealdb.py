@@ -100,7 +100,7 @@ with Surreal("ws://localhost:8000/rpc") as db:
     )
 
     # Read all the records in the table
-    print(db.select("person"))
+    print(db.select("person").execute())
 
     # Update all records in the table
     print(db.update("person", {
@@ -180,7 +180,9 @@ The builder is **typed** via `@overload`:
 - `str` target     -> `Value` (a record-id string returns a dict; a table-name
   string returns a list - the type checker can't tell them apart, so falls back to `Value`)
 
-`select()` (async and sync) always runs eagerly and unwraps single records:
+`select()` returns a builder, like every other CRUD method - `await` it on the
+async client, `.execute()` it on the blocking one - and it unwraps single
+records:
 
 - `select(RecordID(...))` (or a `"table:id"` string) -> `dict[str, Value] | None`
   (`None` when the record does not exist)
@@ -263,7 +265,8 @@ Use `BoundExcluded` for `..` rather than `..=`, and `None` for an open end
 (`Range(BoundIncluded(1), None)` is `person:1..`).
 
 Two caveats. A range needs a table, so a bare `Range` is not a resource target —
-`db.select(Range(...))` raises `SurrealError`; wrap it in a `RecordID`. And the
+`db.select(Range(...))` raises `SurrealError` when the builder runs; wrap it in
+a `RecordID`. And the
 `@overload`s above resolve on the *static* type `RecordID`, which says nothing
 about the id, so a type checker still reads `select(first_three)` as
 `dict | None` while it returns a list at runtime. Cast, or use the string form,
@@ -306,7 +309,7 @@ rows = await db.query("SELECT * FROM person").into(Person, rows=True)  # list[Pe
 Sync connections take the same `into=` argument and run eagerly:
 
 ```python
-person = db.select(RecordID("person", "tobie"), into=Person)  # Person | None
+person = db.select(RecordID("person", "tobie"), into=Person).execute()  # Person | None
 created = db.create(RecordID("person", "tobie"), {"name": "Tobie"}, into=Person)
 rows = db.query("SELECT * FROM person").into(Person, rows=True)  # list[Person]
 ```
@@ -352,8 +355,8 @@ with Surreal("ws://localhost:8000/rpc") as db:
     # Clause-less run: call .execute() explicitly.
     empty = db.create(RecordID("person", "bob")).execute()
 
-    # select() and delete() always run eagerly and return the result.
-    row = db.select(RecordID("person", "tobie"))  # dict | None
+    # select() returns a builder; delete() still runs eagerly.
+    row = db.select(RecordID("person", "tobie")).execute()  # dict | None
     db.delete(RecordID("person", "bob"))
 
     # query() returns a builder; call .execute()/.first()/.into().
@@ -572,6 +575,236 @@ with Surreal("ws://localhost:8000/rpc") as db:
   separate connection per live subscription (or the async client, which
   fans notifications out to per-subscriber queues).
 
+## Streaming queries
+
+**You get this for free.** Against **SurrealDB v3.3.0 or later** over a
+WebSocket, `query()` already asks for its answer as a stream of frames and
+rebuilds it as it arrives - and so do `select()`, `create()`, `upsert()` and
+every builder, because they all go through the same call. The answer is
+identical; what changes is that the server no longer has to finish before any of
+it reaches you, and there is no single enormous response to decode.
+
+Nothing to switch on, and nothing to change in your code:
+
+```python
+people = await db.query("SELECT * FROM person")   # streamed, if the server can
+```
+
+`.stream()` on any builder is the visible half, for when you want the rows
+*as* they arrive rather than the whole answer at the end:
+
+```python
+async for person in db.query("SELECT * FROM person").stream():
+    ...
+```
+
+It needs the same v3.3.0 server and a WebSocket connection. Against an
+older server, or over HTTP, the query runs the buffered way and its rows are
+handed back one at a time, so the call works everywhere - see
+[Where it streams](#where-it-streams) below.
+
+Nothing is sent until you start iterating.
+
+### Two views over one answer
+
+Iterate the stream for **rows**, as they arrive:
+
+```python
+async for person in db.query("SELECT * FROM person").stream():
+    print(person["name"])
+```
+
+or call `.statements()` for one completed result per statement, which is the
+shape `query()` returns:
+
+```python
+async for statement in db.query(
+    "SELECT * FROM person; SELECT count() FROM person GROUP ALL"
+).stream().statements():
+    print(statement.index, statement.value)
+```
+
+Each `StatementResult` carries `index`, `value`, `time` (the server's own
+timing, verbatim), `query_type` (`"live"` for a `LIVE SELECT`, otherwise
+`None`), and `single` - true when `value` is one bare value rather than a list
+of rows, as for `RETURN 1 + 2` or `SELECT ... FROM ONLY`.
+
+A stream is read **once**, and both views draw from the same frames, so pick
+one per call.
+
+### Rows as models
+
+`into=` maps each row as it arrives, which is the case streaming is actually
+for - a large table read one model at a time, never held whole:
+
+```python
+async for person in db.select("person").stream(into=Person):
+    print(person.name)
+```
+
+The same on the blocking client, with `with` instead of `async with`:
+
+```python
+for person in db.select("person").stream(into=Person):
+    print(person.name)
+```
+
+### Rows are provisional until iteration ends
+
+A row is delivered before the statement that produced it has finished - that is
+the point - so a statement that fails *after* emitting rows raises, and the rows
+it already yielded are void:
+
+```python
+try:
+    async for row in db.query("SELECT * FROM person; THROW 'nope'").stream():
+        rows.append(row)          # these arrive, then the THROW raises
+except SurrealError:
+    rows.clear()                  # what arrived was never final
+```
+
+`.statements()` narrows this rather than removing it: it hands over a
+statement's value only once the server has called that statement final, so a
+statement you have received is settled - but a *later* statement can still
+fail, and earlier ones have already been yielded. For all-or-nothing across the
+whole query, use `query()`, or wrap the statements in `BEGIN`/`COMMIT` so the
+server rolls them back together.
+
+### Stopping early
+
+Use `async with` (or `with`, or call `aclose()` / `close()`) so that stopping
+early tells the server to abandon the query instead of running it to
+completion:
+
+```python
+async with db.query("SELECT * FROM huge_table").stream() as stream:
+    async for row in stream:
+        if found(row):
+            break                 # the server stops here
+```
+
+Closing is not merely tidiness: an abandoned stream is still executing on the
+server, holding one of the connection's stream slots. Abandoning one without
+closing does still clean up once you let go of the iterator - the blocking
+client cancels at that moment, the async client on the event loop's next pass
+over finalisable generators. But *letting go* is the part that is easy to miss:
+a `break` inside a function that keeps running leaves the generator referenced
+by that frame, so the cancel waits for the frame to go, and the query it was
+meant to stop runs to completion in the meantime. Only closing stops the query
+at a moment you choose.
+
+### Blocking client
+
+Identical, minus the `a`s:
+
+```python
+with db.query("SELECT * FROM person").stream() as stream:
+    for person in stream:
+        print(person["name"])
+```
+
+Frames only arrive while somebody reads the socket, so a blocking stream is
+advanced by the thread iterating it. It takes the connection lock in short
+slices rather than holding it, so other callers on the same connection keep
+working while a stream is open.
+
+### Where it streams
+
+| | Behaviour |
+| --- | --- |
+| WebSocket, server v3.3.0+ | Streams. Rows arrive as they are produced. |
+| WebSocket, older server | Runs the query the buffered way. Learned once per connection. |
+| WebSocket, the `query_stream` RPC denied | Same, with its own reason - the operator denied streaming, not querying. |
+| WebSocket, at the concurrency cap | `query()` is buffered for this query only, and it is not remembered: the cap is transient. An explicit `.stream()` raises instead. |
+| Inside a client transaction | `query()` is never streamed - see the caveats below. |
+| HTTP | Buffered - HTTP carries one response per request. |
+| Embedded | Buffered. |
+
+For the streaming `query()` does on your behalf, every one of those is a
+*retry* rather than an error, and it is a refusal from the server that makes it
+safe: `begin` is framed before execution starts, so a refusal with no frame
+behind it means the query never ran, and asking again cannot run it twice. An
+explicit `.stream()` retries the first three rows the same way, but raises
+at the concurrency cap rather than quietly going buffered.
+
+A socket that dies before the first frame is **not** such a refusal, and is not
+retried. `begin` may have been framed and the query may have been executing as
+the connection went, so nothing about it is proven - and retrying gains nothing
+anyway, because the server-side session dies with the socket. It raises the
+connection error instead, exactly as a buffered query on a dying socket always
+has. Retrying it used to report `Specify a namespace to use`, which blamed the
+query for a dead connection.
+
+To take the invisible path off a whole connection:
+
+```python
+db = AsyncSurreal("ws://localhost:8000/rpc", streaming=False)
+```
+
+That switches off the streaming `query()` does on your behalf. It does not
+override an explicit `.stream()` call, which streams whenever the server
+can - asking for a stream outright is taken as meaning it.
+
+For `query()` the fallback costs nothing - the answer is buffered either way.
+For `.stream()` it gives up the two things streaming is for: rows do not
+arrive early, and the whole result is held in memory. When that matters, pass
+`require_streaming=True` and get an `UnsupportedFeatureError` instead of a quiet
+buffered answer:
+
+```python
+async for row in db.query(sql).stream(require_streaming=True):
+    ...
+```
+
+Feature detection is the protocol's own, and no version string is parsed: a
+server without `query_stream` answers `Method not found`, and one whose
+capabilities deny it answers `Method not allowed`. Both mean this connection
+will not stream, both are remembered after one request, and
+`require_streaming=True` reports which of the two it was - upgrading fixes the
+first, not the second.
+
+### Caveats
+
+- **Client-side buffering.** The protocol has no per-stream flow control, so a
+  consumer slower than the server accumulates rows in memory until it catches
+  up. If the work per row is slow, use `.statements()`, or stop the stream and
+  page instead.
+- **One task, or one thread, per stream.** A stream is driven by whoever
+  iterates it, and Python will not let two do so at once: closing an async
+  generator while another task is awaiting a row from it raises
+  `RuntimeError: aclose(): asynchronous generator is already running`, and
+  CPython refuses to run one generator from two threads. To stop a stream
+  another task is waiting on, cancel that task and await it before closing.
+- **Concurrent streams are capped.** A connection allows 32 in flight by
+  default (`SURREAL_WEBSOCKET_MAX_CONCURRENT_STREAMS` on the server); the
+  33rd is refused with a `ValidationError` saying so.
+- **`LIVE SELECT` in a stream.** The statement's value is the live-query id, with
+  `query_type == "live"`. Notifications begin after the stream ends, and - as
+  with `live()` - anything that happens before you call `subscribe_live()` is not
+  delivered, so subscribe promptly.
+- **A failed statement stops the rest of the query.** When a statement fails,
+  iteration raises and the server is asked to abandon what is left - so
+  statements after the failure may never run, where `query()` executes the whole
+  query before raising. The difference only shows when the remainder is slow
+  enough for the cancel to land, and it applies to side effects, not just
+  results: `CREATE a; THROW 'x'; SLEEP 3s; CREATE b` leaves both records via
+  `query()` and only `a` via `.stream()`. Wrap the statements in
+  `BEGIN`/`COMMIT` if you need all-or-nothing.
+- **`query()` inside a client transaction is never streamed.** Requests on one
+  connection are served concurrently, so a `commit` could arrive while a
+  streamed query was still executing and commit a prefix of it. Since nobody
+  asked for a stream, the hazard is simply removed: anything from `begin()`
+  takes the buffered path.
+- **`.stream()` inside a transaction still streams**, because asking for a
+  stream outright is taken as meaning it - but the hazard above is now yours to
+  avoid. The stream runs on that transaction, so finish it before committing.
+  The `commit` has to land while the server is still executing for this to
+  bite, which a fast query usually finishes before; when it does bite it takes
+  a prefix. Measured on `UPDATE ... RETURN AFTER; SLEEP 3s; UPDATE ...` with
+  the `commit` sent during the sleep: the first `UPDATE` was committed, the
+  second never ran, and the stream raised `Couldn't update a finished
+  transaction`.
+
 ## `None`, `Null`, and empty values
 
 SurrealDB has two ways for a field to hold nothing, and they are different
@@ -598,7 +831,7 @@ as `Null`, and sending `Null` back writes NULL again, so the round trip keeps
 the field:
 
 ```python
-row = db.select(rec)             # {"nickname": Null}
+row = db.select(rec).execute()   # {"nickname": Null}
 row["name"] = "new name"
 db.update(rec, row)              # nickname is still NULL
 ```
@@ -622,11 +855,11 @@ it is, and it encodes back under the set tag, so writing a record back keeps the
 field a set:
 
 ```python
-row = db.select(rec)                   # {"tags": SurrealSet(['a', 'b'])}
+row = db.select(rec).execute()         # {"tags": SurrealSet(['a', 'b'])}
 row["name"] = "new name"
 db.update(rec, row)                    # tags is still a set
 
-db.select(rec)["tags"] == ["a", "b"]   # True — it is a list
+db.select(rec).execute()["tags"] == ["a", "b"]   # True — it is a list
 ```
 
 Writing a plain Python `set` still works and is still sent as a set. The order
@@ -775,7 +1008,7 @@ v3.0 is a breaking change. Highlights:
 | n/a                                              | `db.query("...").into(MyDataclass)`                       |
 | Sync `db.query("DELETE foo")` runs immediately   | Sync `db.query("DELETE foo").execute()` (returns list)     |
 | Sync `db.create(rec)[...]` (magic auto-exec)     | Sync `db.create(rec, data)` eager, or `db.create(rec).execute()` |
-| `db.select(RecordID(...))` -> `[record]`         | `db.select(RecordID(...))` -> `record` dict or `None`     |
+| `db.select(RecordID(...))` -> `[record]`         | `db.select(RecordID(...))` -> a builder; `await`/`.execute()` for the `record` dict or `None` |
 | `db.delete("my-table")` (silently inlined)       | `db.delete(Table("my-table"))` (raw string rejected)      |
 | A NULL field read as `None`                      | A NULL field reads as `Null` (`None` still means NONE)    |
 | `set<T>` read as a Python `set`                  | `set<T>` reads as a `SurrealSet` (writing a `set` is unchanged) |

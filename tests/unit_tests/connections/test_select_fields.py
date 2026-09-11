@@ -31,7 +31,7 @@ from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
-from surrealdb.connections.utils_mixin import render_projection
+from surrealdb.connections.builders import render_projection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
@@ -56,7 +56,7 @@ def test_only_the_named_fields_come_back(
 ) -> None:
     table = _rows(blocking_ws_connection)
 
-    row = blocking_ws_connection.select(RecordID(table, 1), fields=["a", "b"])
+    row = blocking_ws_connection.select(RecordID(table, 1), fields=["a", "b"]).execute()
 
     assert row == {"a": 1, "b": 2}
 
@@ -67,7 +67,7 @@ def test_the_default_is_unchanged(
     """``fields=None`` has to emit exactly what it emitted before this existed."""
     table = _rows(blocking_ws_connection)
 
-    row: Any = blocking_ws_connection.select(RecordID(table, 1))
+    row: Any = blocking_ws_connection.select(RecordID(table, 1)).execute()
 
     assert set(row) == {"a", "b", "blob", "address", "my field", "héllo", "id"}
     assert render_projection(None) == "*"
@@ -79,7 +79,7 @@ def test_a_table_target_projects_every_row(
     table = _rows(blocking_ws_connection)
     blocking_ws_connection.query(f"CREATE {table}:2 SET a = 9, b = 8").execute()
 
-    rows: Any = blocking_ws_connection.select(Table(table), fields=["a"])
+    rows: Any = blocking_ws_connection.select(Table(table), fields=["a"]).execute()
 
     assert sorted(row["a"] for row in rows) == [1, 9]
     assert all(set(row) == {"a"} for row in rows)
@@ -91,8 +91,16 @@ def test_id_is_not_included_unless_asked_for(
     """Documented, and the thing most likely to surprise an ``into=`` user."""
     table = _rows(blocking_ws_connection)
 
-    assert "id" not in blocking_ws_connection.select(RecordID(table, 1), fields=["a"])
-    assert "id" in blocking_ws_connection.select(RecordID(table, 1), fields=["id", "a"])
+    assert (
+        "id"
+        not in blocking_ws_connection.select(RecordID(table, 1), fields=["a"]).execute()
+    )
+    assert (
+        "id"
+        in blocking_ws_connection.select(
+            RecordID(table, 1), fields=["id", "a"]
+        ).execute()
+    )
 
 
 def test_it_composes_with_into(
@@ -109,7 +117,7 @@ def test_it_composes_with_into(
 
     row = blocking_ws_connection.select(
         RecordID(table, 1), fields=["a", "b"], into=Partial
-    )
+    ).execute()
 
     assert row == Partial(a=1, b=2)
 
@@ -128,7 +136,9 @@ def test_a_dotted_name_walks_into_the_nested_object(
     """
     table = _rows(blocking_ws_connection)
 
-    row = blocking_ws_connection.select(RecordID(table, 1), fields=["address.city"])
+    row = blocking_ws_connection.select(
+        RecordID(table, 1), fields=["address.city"]
+    ).execute()
 
     assert row == {"address": {"city": "Paris"}}
     assert render_projection(["address.city"]) == "address.city"
@@ -146,7 +156,7 @@ def test_a_name_needing_quotes_is_quoted(
 ) -> None:
     table = _rows(blocking_ws_connection)
 
-    row = blocking_ws_connection.select(RecordID(table, 1), fields=[field])
+    row = blocking_ws_connection.select(RecordID(table, 1), fields=[field]).execute()
 
     assert row == {field: expected}
 
@@ -163,7 +173,9 @@ def test_a_field_list_cannot_smuggle_in_surrealql(
     table = _rows(blocking_ws_connection)
     hostile = "b FROM other_table; --"
 
-    row: Any = blocking_ws_connection.select(RecordID(table, 1), fields=["a", hostile])
+    row: Any = blocking_ws_connection.select(
+        RecordID(table, 1), fields=["a", hostile]
+    ).execute()
 
     assert row["a"] == 1
     assert row[hostile] is None, "the injected text was not treated as a field name"
@@ -204,7 +216,7 @@ def test_the_refusal_happens_before_any_io(
     table = _rows(blocking_ws_connection)
 
     with pytest.raises(TypeError):
-        blocking_ws_connection.select(RecordID(table, 1), fields="a")  # pyright: ignore[reportArgumentType]
+        blocking_ws_connection.select(RecordID(table, 1), fields="a").execute()  # pyright: ignore[reportArgumentType]
 
     assert blocking_ws_connection.query("RETURN 1").first() == 1
 
@@ -217,7 +229,9 @@ def test_the_blocking_http_transport_agrees(
 ) -> None:
     table = _rows(blocking_http_connection)
 
-    assert blocking_http_connection.select(RecordID(table, 1), fields=["a"]) == {"a": 1}
+    assert blocking_http_connection.select(
+        RecordID(table, 1), fields=["a"]
+    ).execute() == {"a": 1}
 
 
 async def test_the_async_ws_transport_agrees(

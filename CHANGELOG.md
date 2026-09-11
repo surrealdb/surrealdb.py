@@ -7,7 +7,97 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking (blocking client only):** `select()` returns a builder, like every
+  other CRUD method, so blocking callers need a terminator:
+
+  ```python
+  records = db.select("person")               # before
+  records = db.select("person").execute()     # after
+  ```
+
+  Async callers are unaffected - builders are awaitable, so `await
+  db.select("person")` is unchanged. `select()` was the only CRUD method that
+  was not a builder, which made it the only one that could not be streamed, and
+  reading a large table is the case streaming is most for.
+
+  One wrinkle worth knowing: the blocking rule has been that an operation
+  returns a builder when a clause could follow it and runs on the spot
+  otherwise, which is why `db.delete(rec)` still hands back a record. `select()`
+  takes no clause either, so it is a builder despite that rule rather than
+  because of it. Making `delete()` a builder too would restore the rule - a
+  follow-up, not this release.
+
 ### Added
+
+- Streaming queries, adopted invisibly. Against SurrealDB **v3.3.0** or later
+  over a websocket, `query()` now asks for its answer as a sequence of frames
+  and rebuilds it as they arrive - and so do `select()`, `create()`, `upsert()`
+  and every builder, because they all reach the wire through the same call. The
+  answer is identical; the server no longer has to finish before any of it
+  reaches the client, and there is no single enormous response to decode. No
+  code changes, and nothing to switch on.
+
+  Every *refusal* is a retry rather than an error - an older server, a denied
+  capability, a connection at its concurrency cap. That is safe because the
+  server frames `begin` before it begins executing, so a refusal with no frame
+  behind it means the query never ran. A socket that dies before the first frame
+  is not a refusal and is not retried: the server may have framed `begin` and
+  begun executing as the connection went, so re-asking could run a write twice.
+  Absent and denied are remembered per connection; the concurrency cap
+  deliberately is not, since remembering a transient refusal would strand the
+  connection on the buffered path. `query()` inside a client transaction is
+  never streamed, because a `commit` arriving mid-stream would commit a prefix
+  of the query. `streaming=False` on a connection or on `Surreal`/`AsyncSurreal`
+  puts `query()` back on the buffered path; an explicit `.stream()` still
+  streams, since asking for a stream outright is taken as meaning it.
+
+- `.stream()` on any builder is the visible half: the rows as they arrive,
+  rather than the whole answer at the end. Every builder has two terminators
+  now - `await` (or `.execute()`) for the whole answer, `.stream()` for the rows
+  - so streaming is reached the same way you already build a query. On the async
+  client that is every CRUD method: `query()`, `select()`, `create()`,
+  `update()`, `upsert()`, `delete()` and `insert()`. On the blocking client it is
+  the ones that hand back a builder - `query()`, `select()`, `create()`,
+  `update()` and `upsert()` - because `delete()` and a data-carrying `insert()`
+  still run on the spot and return their result. Making those two builders too
+  is the follow-up noted below.
+
+  Iterate it for rows, or call `.statements()` for one `StatementResult` per
+  statement - the shape `query()` returns. A stream is read once, and both
+  views draw from the same frames. `into=` maps each row onto a model as it
+  arrives, which is the case streaming is actually for.
+
+  ```python
+  async with db.select("person").stream(into=Person) as stream:
+      async for person in stream:
+          if found(person):
+              break            # tells the server to abandon the query
+  ```
+
+  Rows are **provisional** until iteration finishes: a statement that fails
+  after emitting rows raises, and the rows it already yielded are void. That is
+  inherent to streaming rather than a wart - `.statements()` and `query()` are
+  the all-or-nothing views.
+
+  Against a server without the method, one whose capabilities deny it, over
+  HTTP, or on the embedded engine, the query runs the buffered way and its rows
+  are replayed one at a time, so the same code works everywhere; the answer is
+  identical, but rows do not arrive early and the whole result is held.
+  `require_streaming=True` raises `UnsupportedFeatureError` instead when that
+  trade matters, and reports which of those it was - upgrading fixes a server
+  that lacks the method, not one that denies it. Detection is the protocol's
+  own, remembered per connection, so no version string is parsed.
+
+  A statement that fails mid-stream stops the rest of the query, unlike
+  `query()`, which runs the whole query before raising. Use `BEGIN`/`COMMIT`
+  when the statements after a failure must still run - or must all roll back.
+
+  Available on all four connection classes and on sessions and transactions
+  opened from them. Streaming inside a transaction works, but finish the stream
+  before committing: a `commit` that lands mid-stream commits a prefix of the
+  query.
 
 - `File` is a member of the public `Value` union. It was omitted when file
   support landed, so `db.create(table, {"attachment": File(...)})` - the main

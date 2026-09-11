@@ -249,7 +249,12 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-        surrealdb-version: ["v2.0.5", "v2.1.9", "v2.2.8", "v2.3.10", "v3.0.5", "nightly"]
+        # v3.3.0-beta.3 is pinned because it is the first release whose `begin`
+        # frame carries the `version` field this client implements - the
+        # `query_stream` method itself landed in beta.1. It is what makes the
+        # streaming tests run rather than skip; `nightly` covers it too but is
+        # `continue-on-error`, so the pin is what actually gates.
+        surrealdb-version: ["v2.0.5", "v2.1.9", "v2.2.8", "v2.3.10", "v3.0.5", "v3.3.0-beta.3", "nightly"]
     name: Core Tests - Python ${{ matrix.python-version }} - SurrealDB ${{ matrix.surrealdb-version }}
     steps:
       - name: Checkout repository
@@ -290,19 +295,52 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
-      - name: Run unit tests (HTTP)
-        run: uv run pytest --ignore=tests/unit_tests/connections/embedded
+      # Both transports are covered by one run: every transport has its own
+      # test files, and each builds its own connection. This step used to be
+      # two, labelled (HTTP) and (WebSocket), running the identical command and
+      # differing only by `SURREALDB_URL` - which nothing outside `examples/`
+      # has ever read, so both ran the whole suite over both transports. The
+      # step below asserts that coverage rather than assuming it.
+      - name: Check both transports are covered
+        run: |
+          status=0
+          for transport in async_http blocking_http async_ws blocking_ws; do
+            # Counted first: GNU xargs runs the command even on empty input,
+            # so a transport with no files at all would otherwise collect the
+            # whole suite and look covered.
+            found=$(find tests/unit_tests -name "test_$transport.py" \
+              -not -path '*/connections/embedded/*' | wc -l | tr -d ' ')
+            if [ "$found" -eq 0 ]; then
+              echo "::error::no test_$transport.py files found"
+              status=1
+              continue
+            fi
+            # `--verbose` is in addopts, so the count sits in a line of `=`
+            # padding rather than at the start of one.
+            count=$(find tests/unit_tests -name "test_$transport.py" \
+              -not -path '*/connections/embedded/*' -print0 \
+              | xargs -0 uv run pytest --collect-only -q 2>/dev/null \
+              | grep -oE '[0-9]+ tests? collected' | grep -oE '[0-9]+')
+            echo "$transport: ${count:-0} tests across $found files"
+            if [ "${count:-0}" -eq 0 ]; then
+              echo "::error::$transport collected no tests"
+              status=1
+            fi
+          done
+          exit $status
         env:
           PYTHONPATH: ./src
-          SURREALDB_URL: http://localhost:8000
-          SURREALDB_VERSION: ${{ matrix.surrealdb-version }}
-          PYTHONWARNINGS: ignore::ResourceWarning
 
-      - name: Run unit tests (WebSocket)
+      - name: Run unit tests
         run: uv run pytest --ignore=tests/unit_tests/connections/embedded
         env:
           PYTHONPATH: ./src
-          SURREALDB_URL: ws://localhost:8000
+          # The suite builds its URLs from these two. `SURREALDB_URL` is read
+          # only by the examples, so setting that alone pointed nothing
+          # anywhere - the tests reached the server because the defaults
+          # happened to match.
+          SURREALDB_HOST: localhost
+          SURREALDB_PORT: "8000"
           SURREALDB_VERSION: ${{ matrix.surrealdb-version }}
           PYTHONWARNINGS: ignore::ResourceWarning
 

@@ -80,6 +80,23 @@ services:
     profiles:
       - v2-3
 
+  # SurrealDB 3.3.x - the first release that streams query results, so this is
+  # what the `query_stream` integration tests need. Point the suite at it with
+  # `SURREALDB_PORT=8033 uv run pytest`; against anything older those tests
+  # skip themselves.
+  surrealdb-v3-3:
+    image: surrealdb/surrealdb:${SURREALDB_V3_3_VERSION:-v3.3.0-beta.3}
+    command: "start --allow-all"
+    environment:
+      - SURREAL_USER=root
+      - SURREAL_PASS=root
+      - SURREAL_INSECURE_FORWARD_ACCESS_ERRORS=true
+      - SURREAL_LOG=debug
+    ports:
+      - "8033:8000"
+    profiles:
+      - v3-3
+
   # SurrealDB 3.x (bearer access tests)
   surrealdb-v3:
     image: surrealdb/surrealdb:v3.0.5

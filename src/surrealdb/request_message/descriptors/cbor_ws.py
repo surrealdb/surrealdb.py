@@ -96,6 +96,12 @@ KILL_VALIDATOR = _build_validator(RequestMethod.KILL.value, _list_schema())
 QUERY_VALIDATOR = _build_validator(
     RequestMethod.QUERY.value, _list_schema(min_length=2, max_length=2)
 )
+QUERY_STREAM_VALIDATOR = _build_validator(
+    RequestMethod.QUERY_STREAM.value, _list_schema(min_length=2, max_length=2)
+)
+QUERY_CANCEL_VALIDATOR = _build_validator(
+    RequestMethod.QUERY_CANCEL.value, _list_schema(min_length=1, max_length=1)
+)
 INSERT_VALIDATOR = _build_validator(
     RequestMethod.INSERT.value, _list_schema(min_length=2, max_length=2)
 )
@@ -133,6 +139,8 @@ _VALIDATORS: dict[RequestMethod, SchemaValidator] = {
     RequestMethod.LIVE: LIVE_VALIDATOR,
     RequestMethod.KILL: KILL_VALIDATOR,
     RequestMethod.QUERY: QUERY_VALIDATOR,
+    RequestMethod.QUERY_STREAM: QUERY_STREAM_VALIDATOR,
+    RequestMethod.QUERY_CANCEL: QUERY_CANCEL_VALIDATOR,
     RequestMethod.INSERT: INSERT_VALIDATOR,
     RequestMethod.PATCH: PATCH_VALIDATOR,
     RequestMethod.SELECT: SELECT_VALIDATOR,
@@ -223,6 +231,10 @@ class WsCborDescriptor:
             return self.prep_kill(obj)
         elif obj.method == RequestMethod.QUERY:
             return self.prep_query(obj)
+        elif obj.method == RequestMethod.QUERY_STREAM:
+            return self.prep_query_stream(obj)
+        elif obj.method == RequestMethod.QUERY_CANCEL:
+            return self.prep_query_cancel(obj)
         elif obj.method == RequestMethod.INSERT:
             return self.prep_insert(obj)
         elif obj.method == RequestMethod.PATCH:
@@ -375,6 +387,40 @@ class WsCborDescriptor:
             "params": [obj.kwargs.get("query"), obj.kwargs.get("params", {})],
         }
         _inject_session_txn(data, obj)
+        _validate_payload(data, obj.method)
+        return encode(data)
+
+    def prep_query_stream(self, obj: RequestMessage) -> bytes:
+        data = {
+            "id": obj.id,
+            "method": obj.method.value,
+            "params": [obj.kwargs.get("query"), obj.kwargs.get("params", {})],
+        }
+        _inject_session_txn(data, obj)
+        _validate_payload(data, obj.method)
+        return encode(data)
+
+    def prep_query_cancel(self, obj: RequestMessage) -> bytes:
+        # Guarded like `prep_cancel`, and for a sharper reason: the validator
+        # only checks that `params` holds one item, so a missing or misnamed
+        # keyword encodes as `params: [None]`, which the server answers by
+        # reporting no such stream. The caller is then told its cancel
+        # succeeded in finding nothing to stop, and the real stream runs on.
+        stream = obj.kwargs.get("stream")
+        if stream is None:
+            raise ValueError("query_cancel requires stream (the request id)")
+        data = {
+            "id": obj.id,
+            "method": obj.method.value,
+            "params": [stream],
+        }
+        # Session only, like `prep_cancel` and `prep_commit`: this names a
+        # stream in the connection's own registry rather than running anything
+        # on a transaction, and forwarding `txn` would ask the server to run it
+        # inside the transaction the stream being cancelled is still holding.
+        session = obj.kwargs.get("session")
+        if session is not None:
+            data["session"] = str(session) if isinstance(session, UUID) else session
         _validate_payload(data, obj.method)
         return encode(data)
 

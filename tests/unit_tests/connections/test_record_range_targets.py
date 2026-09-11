@@ -27,6 +27,7 @@ import pytest
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+from surrealdb.connections.builders import SyncCrudBuilder
 from surrealdb.data.types.range import BoundExcluded, BoundIncluded, Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
@@ -56,7 +57,7 @@ def test_select_returns_every_record_in_the_range(
 
     result = blocking_ws_connection.select(
         RecordID(table, Range(BoundIncluded(1), BoundIncluded(3)))
-    )
+    ).execute()
 
     assert _ids(result) == [1, 2, 3]
 
@@ -68,8 +69,8 @@ def test_the_record_id_and_string_spellings_agree(
 
     typed = blocking_ws_connection.select(
         RecordID(table, Range(BoundIncluded(1), BoundIncluded(3)))
-    )
-    spelled = blocking_ws_connection.select(f"{table}:1..=3")
+    ).execute()
+    spelled = blocking_ws_connection.select(f"{table}:1..=3").execute()
 
     assert typed == spelled
 
@@ -81,7 +82,7 @@ def test_an_excluded_end_bound_is_honoured(
 
     result = blocking_ws_connection.select(
         RecordID(table, Range(BoundIncluded(1), BoundExcluded(3)))
-    )
+    ).execute()
 
     assert _ids(result) == [1, 2]
 
@@ -91,7 +92,7 @@ def test_an_open_range_covers_the_whole_table(
 ) -> None:
     table = _rows(blocking_ws_connection)
 
-    result = blocking_ws_connection.select(RecordID(table, Range(None, None)))
+    result = blocking_ws_connection.select(RecordID(table, Range(None, None))).execute()
 
     assert _ids(result) == [1, 2, 3]
 
@@ -111,7 +112,7 @@ def test_a_range_that_matches_nothing_is_an_empty_list(
 
     result: Any = blocking_ws_connection.select(
         RecordID(table, Range(BoundIncluded(90), BoundIncluded(99)))
-    )
+    ).execute()
 
     assert result == []
 
@@ -122,11 +123,11 @@ def test_a_plain_record_id_still_unwraps(
     """The neighbouring behaviour this must not disturb."""
     table = _rows(blocking_ws_connection)
 
-    row = blocking_ws_connection.select(RecordID(table, 1))
+    row = blocking_ws_connection.select(RecordID(table, 1)).execute()
 
     assert isinstance(row, dict)
     assert row["n"] == 1
-    assert blocking_ws_connection.select(RecordID(table, 404)) is None
+    assert blocking_ws_connection.select(RecordID(table, 404)).execute() is None
 
 
 # --------------------------------------------------------------- write paths
@@ -142,7 +143,7 @@ def test_delete_returns_every_record_it_removed(
     )
 
     assert _ids(removed) == [1, 2, 3]
-    assert blocking_ws_connection.select(Table(table)) == []
+    assert blocking_ws_connection.select(Table(table)).execute() == []
 
 
 def test_update_returns_every_record_it_wrote(
@@ -155,7 +156,9 @@ def test_update_returns_every_record_it_wrote(
     )
 
     assert _ids(written) == [1, 2, 3]
-    assert [row["n"] for row in blocking_ws_connection.select(Table(table))] == [
+    assert [
+        row["n"] for row in blocking_ws_connection.select(Table(table)).execute()
+    ] == [
         9,
         9,
         9,
@@ -183,6 +186,11 @@ def test_a_range_matching_one_record_still_returns_a_list(
         if operation == "update"
         else getattr(blocking_ws_connection, operation)(one)
     )
+    # Dispatched by name, so the terminator cannot be written inline: `select`
+    # builds (it is the one read path you might want to stream), while `delete`
+    # takes no clause and runs on the spot.
+    if isinstance(result, SyncCrudBuilder):
+        result = result.execute()
 
     assert isinstance(result, list), (
         f"{operation}() collapsed a one-record range to a single record"
@@ -205,7 +213,7 @@ def test_into_maps_every_record_in_the_range(
 
     rows = blocking_ws_connection.select(
         RecordID(table, Range(BoundIncluded(1), BoundIncluded(3))), into=Row
-    )
+    ).execute()
 
     assert isinstance(rows, list)
     assert sorted(row.n for row in rows) == [1, 2, 3]
@@ -224,7 +232,7 @@ def test_the_http_transport_agrees(
 
     result = blocking_http_connection.select(
         RecordID(table, Range(BoundIncluded(1), BoundIncluded(2)))
-    )
+    ).execute()
 
     assert _ids(result) == [1, 2]
 
@@ -255,9 +263,13 @@ def test_a_bare_range_is_refused_with_an_explanation(
     blocking_ws_connection: BlockingWsSurrealConnection, operation: str
 ) -> None:
     with pytest.raises(SurrealError) as caught:
-        getattr(blocking_ws_connection, operation)(
+        outcome = getattr(blocking_ws_connection, operation)(
             Range(BoundIncluded(1), BoundIncluded(3))
         )
+        # `select` builds, so its refusal lands when the query is built rather
+        # than when the builder is made. `delete` has already raised by here.
+        if isinstance(outcome, SyncCrudBuilder):
+            outcome.execute()
 
     message = str(caught.value)
     assert "names no table" in message
@@ -272,6 +284,6 @@ def test_the_string_advice_no_longer_recommends_a_bare_range(
 ) -> None:
     """The message that sent callers into the failure above."""
     with pytest.raises(SurrealError) as caught:
-        blocking_ws_connection.select("not a valid target!")
+        blocking_ws_connection.select("not a valid target!").execute()
 
     assert "Range instance" not in str(caught.value)

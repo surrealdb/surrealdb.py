@@ -58,7 +58,7 @@ import asyncio
 import inspect
 import re
 import threading
-from collections.abc import Awaitable, Callable, Generator, Mapping
+from collections.abc import Awaitable, Callable, Generator, Mapping, Sequence
 from dataclasses import fields, is_dataclass
 from typing import Any, Generic, Literal, TypeVar, cast, overload
 
@@ -292,6 +292,10 @@ class _Clause:
 class _CrudState:
     """Holds the configurable state for a CRUD builder."""
 
+    # Set when `.stream()` hands a stream out, so the run-once guard
+    # sees a streamed builder as used - see `_claim_for_stream`.
+    _streamed: bool = False
+
     def __init__(
         self,
         operation: str,
@@ -299,6 +303,7 @@ class _CrudState:
         op_name: str,
         always_unwrap: bool,
         into: type[Any] | None = None,
+        fields: Sequence[str] | None = None,
     ) -> None:
         self._operation = operation
         self._record = record
@@ -311,6 +316,9 @@ class _CrudState:
         # through ``_map_result`` (which delegates to ``_map_to_class``) before
         # being returned, so ``into=Model`` yields ``Model`` / ``list[Model]``.
         self._into: type[Any] | None = into
+        # SELECT only: the projection, so the server sends just what was asked
+        # for. Every other operation ignores it.
+        self._fields: Sequence[str] | None = fields
 
     def _check_not_executed(self) -> None:
         """Raise if this builder has already been executed.
@@ -321,9 +329,10 @@ class _CrudState:
 
     def _set_clause(self, mode: str, data: Value | None) -> None:
         self._check_not_executed()
-        if self._operation == "DELETE":
+        if self._operation in ("DELETE", "SELECT"):
             raise SurrealError(
-                "DELETE does not support .content/.replace/.merge/.patch clauses"
+                f"{self._operation} does not support "
+                ".content/.replace/.merge/.patch clauses"
             )
         self._mode = mode
         self._data = data
@@ -331,6 +340,12 @@ class _CrudState:
     def _build(self) -> tuple[str, dict[str, Any]]:
         variables: dict[str, Any] = {}
         resource_ref = _resource_to_variable(self._record, variables, "_resource")
+
+        if self._operation == "SELECT":
+            return (
+                f"SELECT {render_projection(self._fields)} FROM {resource_ref}",
+                variables,
+            )
 
         if self._operation == "DELETE":
             return f"DELETE {resource_ref} RETURN BEFORE", variables
@@ -376,6 +391,10 @@ class _CrudState:
 
 class _InsertState:
     """State for INSERT builder."""
+
+    # Set when `.stream()` hands a stream out, so the run-once guard
+    # sees a streamed builder as used - see `_claim_for_stream`.
+    _streamed: bool = False
 
     def __init__(
         self,
@@ -439,6 +458,10 @@ class _InsertState:
 class _QueryState:
     """State for query builder."""
 
+    # Set when `.stream()` hands a stream out, so the run-once guard
+    # sees a streamed builder as used - see `_claim_for_stream`.
+    _streamed: bool = False
+
     def __init__(self, query: str, variables: dict[str, Value] | None) -> None:
         self._query = query
         self._variables: dict[str, Any] = dict(variables) if variables else {}
@@ -473,6 +496,67 @@ def _constructor_parameters(cls: type[Any]) -> str:
     except (ValueError, TypeError):
         return "(constructor not introspectable)"
     return str(names)
+
+
+def render_projection(fields: Sequence[str] | None) -> str:
+    """Render ``select(fields=[...])`` as the projection of a ``SELECT``.
+
+    ``None`` means every field, so the projection is ``*`` and the emitted query
+    is byte-for-byte what it was before this argument existed.
+
+    A field list cannot be parameter-bound - SurrealQL has no ``SELECT $f`` -
+    so it is the one part that has to be inlined, and therefore the one part
+    that has to be escaped. Each name goes through
+    :func:`~surrealdb.data.types.record_id.escape_identifier`, so a field
+    containing a space, unicode, or SurrealQL punctuation is quoted rather than
+    concatenated into the statement.
+
+    **Dots separate path segments and are escaped individually.** Escaping a
+    whole ``"address.city"`` produces ``⟨address.city⟩``, which the server reads
+    as one field of that literal name and answers ``{"address.city": None}`` -
+    a silent null rather than an error, which is the worst way to be wrong.
+    ``⟨address⟩.⟨city⟩`` selects the nested value, so that is what this emits.
+    The cost is that a field whose name genuinely contains a dot cannot be
+    expressed here; use :meth:`query` for that.
+
+    :raises TypeError: if *fields* is a bare string. ``", ".join("name")``
+        yields ``n, a, m, e`` - one projection per character - so a plain
+        string is refused rather than spread, the same way ``run()`` refuses
+        one for its arguments.
+    :raises ValueError: if the list is empty, or a name is empty or has an
+        empty path segment. ``SELECT  FROM t`` and ``SELECT ⟨⟩ FROM t`` are not
+        what any caller meant.
+    """
+    if fields is None:
+        return "*"
+    if isinstance(fields, str):
+        raise TypeError(
+            "select() fields must be a sequence of field names, not a single "
+            f"string - got {fields!r}. Pass [{fields!r}] for one field."
+        )
+    names = list(fields)
+    if not names:
+        raise ValueError(
+            "select() fields must name at least one field; pass fields=None "
+            "(the default) to select them all"
+        )
+
+    rendered: list[str] = []
+    for field in names:
+        if not isinstance(field, str):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise TypeError(
+                "select() fields must be strings, got "
+                f"{type(field).__name__}: {field!r}"
+            )
+        if not field:
+            raise ValueError("select() fields cannot contain an empty name")
+        segments = field.split(".")
+        if any(not segment for segment in segments):
+            raise ValueError(
+                f"{field!r} is not a valid field path: it has an empty segment"
+            )
+        rendered.append(".".join(escape_identifier(segment) for segment in segments))
+    return ", ".join(rendered)
 
 
 def _map_to_class(cls: type[T], values: list[Any] | Mapping[str, Any]) -> T:
@@ -643,6 +727,199 @@ def _suppress_unretrieved_exception(future: asyncio.Future[Any]) -> None:
         future.exception()
 
 
+class _Executor:
+    """What a builder terminates through, instead of holding the connection.
+
+    Callable for the buffered answer and :meth:`stream` for the rows as they
+    arrive, so a builder can offer both terminators without reaching the
+    connection itself - the same reason a stream is handed bound callables
+    rather than its transport. Being callable keeps every existing
+    ``self._executor(query, params)`` call site unchanged.
+    """
+
+    __slots__ = ("_open_stream", "_run")
+
+    def __init__(
+        self,
+        run: Callable[[str, dict[str, Any]], Any],
+        open_stream: Callable[..., Any],
+    ) -> None:
+        self._run = run
+        self._open_stream = open_stream
+
+    def __call__(self, query: str, params: dict[str, Any]) -> Any:
+        return self._run(query, params)
+
+    def stream(
+        self,
+        query: str,
+        params: dict[str, Any] | None,
+        *,
+        require_streaming: bool = False,
+    ) -> Any:
+        return self._open_stream(query, params, require_streaming=require_streaming)
+
+
+def _open_stream(
+    executor: Any,
+    query: str,
+    variables: dict[str, Any],
+    *,
+    require_streaming: bool,
+) -> Any:
+    """Open a stream through *executor*, or say why it cannot.
+
+    Every builder a connection hands out carries an :class:`_Executor`. A bare
+    callable is only ever passed by a test standing one in, so the check is
+    unreachable in real use - but an explanatory error beats ``AttributeError``
+    if that ever stops being true.
+    """
+    if not isinstance(executor, _Executor):
+        raise SurrealError(
+            "this builder cannot stream: it was built with a plain executor "
+            "rather than one from a connection"
+        )
+    return executor.stream(query, variables, require_streaming=require_streaming)
+
+
+def _refuse_if_streamed(builder: Any) -> None:
+    """Stop the buffered terminator re-running an operation `.stream()` already ran.
+
+    `execute()` is idempotent through the runner, so it never needed a guard
+    against itself - but streaming runs the operation outside that cache, so a
+    following `await` used to issue it a second time. Measured on a live server:
+    `create(...).stream()` then `await` on the same builder left two records.
+    """
+    if builder._streamed:
+        raise SurrealError(
+            f"Cannot execute a {type(builder).__name__} after .stream() - the "
+            "operation has already run. Create a new builder for a fresh one."
+        )
+
+
+def _claim_for_stream(builder: Any) -> None:
+    """Mark *builder* used, so a second terminator raises instead of re-running.
+
+    A builder describes one operation. Awaiting it twice has always issued one
+    RPC, and reconfiguring it after it ran has always raised - but `.stream()`
+    arrived outside that bookkeeping, so `create(...).stream()` followed by
+    `await` on the same builder created the record a second time, and
+    `await q` followed by `q.stream()` ran the statements again. Measured on a
+    live server: 1 row, then 2.
+    """
+    builder._streamed = True
+
+
+def _mapped_rows_async(stream: Any, into: type[Any] | None) -> Any:
+    """Wrap *stream*'s rows in the model mapping, when one was asked for."""
+    if into is None:
+        return stream
+    _require_model_class(into)
+    return _AsyncMappedRows(stream, into)
+
+
+def _mapped_rows_sync(stream: Any, into: type[Any] | None) -> Any:
+    """The blocking twin of :func:`_mapped_rows_async`."""
+    if into is None:
+        return stream
+    _require_model_class(into)
+    return _SyncMappedRows(stream, into)
+
+
+class _AsyncMappedIterator:
+    """One pass over a stream's rows, each mapped onto a model class.
+
+    A plain iterator rather than an async generator on purpose: wrapping the
+    stream in a generator would put two independently-finalised objects in one
+    chain, and stopping early would finalise them in an order neither controls
+    - the bug that made ``async for`` + ``break`` log an unhandled
+    ``RuntimeError`` before.
+    """
+
+    __slots__ = ("_cls", "_rows")
+
+    def __init__(self, rows: Any, cls: type[Any]) -> None:
+        self._rows = rows
+        self._cls = cls
+
+    def __aiter__(self) -> _AsyncMappedIterator:
+        return self
+
+    async def __anext__(self) -> Any:
+        row = await self._rows.__anext__()
+        return _map_to_class(self._cls, _require_record(self._cls, row))
+
+
+class _AsyncMappedRows:
+    """A streamed query whose rows are mapped onto a model class.
+
+    Deliberately not an iterator itself. Caching the stream's view here and
+    returning ``self`` moved two things off the caller's loop and onto this
+    object: the stream's read-once claim, so a second pass silently resumed it
+    mid-flight where the un-mapped path raises; and the only strong reference
+    to the view, so letting go of the loop stopped cancelling the query - which
+    is the whole reason :class:`~surrealdb.QueryStream` holds its view weakly.
+    Both were measured. Delegating on each call gives both back.
+    """
+
+    __slots__ = ("_cls", "_stream")
+
+    def __init__(self, stream: Any, cls: type[Any]) -> None:
+        self._stream = stream
+        self._cls = cls
+
+    def __aiter__(self) -> _AsyncMappedIterator:
+        return _AsyncMappedIterator(self._stream.__aiter__(), self._cls)
+
+    async def __aenter__(self) -> _AsyncMappedRows:
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        await self._stream.aclose()
+
+    async def aclose(self) -> None:
+        await self._stream.aclose()
+
+
+class _SyncMappedIterator:
+    """The blocking twin of :class:`_AsyncMappedIterator`."""
+
+    __slots__ = ("_cls", "_rows")
+
+    def __init__(self, rows: Any, cls: type[Any]) -> None:
+        self._rows = rows
+        self._cls = cls
+
+    def __iter__(self) -> _SyncMappedIterator:
+        return self
+
+    def __next__(self) -> Any:
+        row = next(self._rows)
+        return _map_to_class(self._cls, _require_record(self._cls, row))
+
+
+class _SyncMappedRows:
+    """The blocking twin of :class:`_AsyncMappedRows`."""
+
+    __slots__ = ("_cls", "_stream")
+
+    def __init__(self, stream: Any, cls: type[Any]) -> None:
+        self._stream = stream
+        self._cls = cls
+
+    def __iter__(self) -> _SyncMappedIterator:
+        return _SyncMappedIterator(self._stream.__iter__(), self._cls)
+
+    def __enter__(self) -> _SyncMappedRows:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self._stream.close()
+
+    def close(self) -> None:
+        self._stream.close()
+
+
 class _AsyncCachedRunner:
     """Future-based "run once" cache for async builders.
 
@@ -729,8 +1006,9 @@ class AsyncCrudBuilder(_CrudState, Generic[T]):
         data: Value | None = None,
         always_unwrap: bool = False,
         into: type[Any] | None = None,
+        fields: Sequence[str] | None = None,
     ) -> None:
-        super().__init__(operation, record, op_name, always_unwrap, into)
+        super().__init__(operation, record, op_name, always_unwrap, into, fields)
         self._executor = executor
         self._runner = _AsyncCachedRunner()
         if data is not None:
@@ -745,7 +1023,7 @@ class AsyncCrudBuilder(_CrudState, Generic[T]):
         the user should be able to retry with the same builder). See
         ``_AsyncCachedRunner.run`` for the full cancellation contract.
         """
-        if self._runner.has_started:
+        if self._runner.has_started or self._streamed:
             raise SurrealError(
                 f"Cannot reconfigure a {self.__class__.__name__} after it has "
                 "executed. Create a new builder for a fresh operation."
@@ -768,9 +1046,41 @@ class AsyncCrudBuilder(_CrudState, Generic[T]):
         return self
 
     async def _do_execute(self) -> T:
+        _refuse_if_streamed(self)
         query, variables = self._build()
         response = await self._executor(query, variables)
         return cast(T, _map_result(self._into, self._extract(response)))
+
+    def stream(
+        self,
+        *,
+        into: type[Any] | None = None,
+        require_streaming: bool = False,
+    ) -> Any:
+        """Read this operation's rows as the server produces them.
+
+        The other terminator: ``await`` gives the whole answer, this gives the
+        rows one at a time. Over a websocket against SurrealDB v3.3.0 or later
+        they arrive as they are produced; everywhere else the query runs the
+        buffered way and its rows are handed back one at a time, so the call
+        works on every transport. Pass ``require_streaming=True`` to be told
+        rather than served the fallback.
+
+        ``into`` maps each row onto a model class as it arrives, which is the
+        case streaming is most useful for - a large table read one model at a
+        time. An ``into=`` given when the builder was made is used if this one
+        is omitted.
+
+        Nothing is sent until iteration starts. Use ``async with`` (or
+        ``aclose()``) so stopping early tells the server to abandon the query.
+        """
+        self._check_not_executed()
+        query, variables = self._build()
+        stream = _open_stream(
+            self._executor, query, variables, require_streaming=require_streaming
+        )
+        _claim_for_stream(self)
+        return _mapped_rows_async(stream, into or self._into)
 
     async def execute(self) -> T:
         return cast(T, await self._runner.run(self._do_execute))
@@ -806,7 +1116,7 @@ class AsyncInsertBuilder(_InsertState, Generic[T]):
         the user should be able to retry with the same builder). See
         ``_AsyncCachedRunner.run`` for the full cancellation contract.
         """
-        if self._runner.has_started:
+        if self._runner.has_started or self._streamed:
             raise SurrealError(
                 f"Cannot reconfigure a {self.__class__.__name__} after it has "
                 "executed. Create a new builder for a fresh operation."
@@ -823,9 +1133,41 @@ class AsyncInsertBuilder(_InsertState, Generic[T]):
         return self
 
     async def _do_execute(self) -> list[T]:
+        _refuse_if_streamed(self)
         query, variables = self._build()
         response = await self._executor(query, variables)
         return cast(list[T], _map_result(self._into, self._extract(response)))
+
+    def stream(
+        self,
+        *,
+        into: type[Any] | None = None,
+        require_streaming: bool = False,
+    ) -> Any:
+        """Read this operation's rows as the server produces them.
+
+        The other terminator: ``await`` gives the whole answer, this gives the
+        rows one at a time. Over a websocket against SurrealDB v3.3.0 or later
+        they arrive as they are produced; everywhere else the query runs the
+        buffered way and its rows are handed back one at a time, so the call
+        works on every transport. Pass ``require_streaming=True`` to be told
+        rather than served the fallback.
+
+        ``into`` maps each row onto a model class as it arrives, which is the
+        case streaming is most useful for - a large table read one model at a
+        time. An ``into=`` given when the builder was made is used if this one
+        is omitted.
+
+        Nothing is sent until iteration starts. Use ``async with`` (or
+        ``aclose()``) so stopping early tells the server to abandon the query.
+        """
+        self._check_not_executed()
+        query, variables = self._build()
+        stream = _open_stream(
+            self._executor, query, variables, require_streaming=require_streaming
+        )
+        _claim_for_stream(self)
+        return _mapped_rows_async(stream, into or self._into)
 
     async def execute(self) -> list[T]:
         return cast(list[T], await self._runner.run(self._do_execute))
@@ -856,6 +1198,8 @@ class AsyncQueryBuilder(_QueryState):
         self._runner = _AsyncCachedRunner()
 
     async def _fetch_values(self) -> list[Any]:
+        _refuse_if_streamed(self)
+
         async def _do() -> list[Any]:
             response = await self._executor(self._query, self._variables)
             return self._statement_values(response)
@@ -889,6 +1233,42 @@ class AsyncQueryBuilder(_QueryState):
         """
         _require_model_class(cls)
         return AsyncQueryIntoBuilder(self, cls, rows=rows)
+
+    def _check_not_executed(self) -> None:
+        """Raise if this builder has already been terminated.
+
+        `await`/`.execute()` is idempotent by way of the runner, so the guard
+        exists for the *other* terminator: streaming a builder that has already
+        been fetched, or fetching one that has already been streamed, would be a
+        second RPC either way.
+        """
+        if self._runner.has_started or self._streamed:
+            raise SurrealError(
+                f"Cannot reconfigure a {self.__class__.__name__} after it has "
+                "executed. Create a new builder for a fresh operation."
+            )
+
+    def stream(
+        self,
+        *,
+        into: type[Any] | None = None,
+        require_streaming: bool = False,
+    ) -> Any:
+        """Read this query's rows as the server produces them.
+
+        See :meth:`AsyncCrudBuilder.stream` - same terminator, same fallback,
+        same ``into``. Without ``into``, ``.statements()`` on the result gives
+        one completed result per statement instead of a flat run of rows.
+        """
+        self._check_not_executed()
+        stream = _open_stream(
+            self._executor,
+            self._query,
+            self._variables,
+            require_streaming=require_streaming,
+        )
+        _claim_for_stream(self)
+        return _mapped_rows_async(stream, into)
 
     async def execute(self) -> list[Value]:
         return cast("list[Value]", await self._fetch_values())
@@ -977,8 +1357,9 @@ class SyncCrudBuilder(_CrudState, Generic[T]):
         data: Value | None = None,
         always_unwrap: bool = False,
         into: type[Any] | None = None,
+        fields: Sequence[str] | None = None,
     ) -> None:
-        super().__init__(operation, record, op_name, always_unwrap, into)
+        super().__init__(operation, record, op_name, always_unwrap, into, fields)
         self._executor = executor
         self._executed = False
         self._cached_result: Any = None
@@ -988,7 +1369,7 @@ class SyncCrudBuilder(_CrudState, Generic[T]):
             self._data = data
 
     def _check_not_executed(self) -> None:
-        if self._executed:
+        if self._executed or self._streamed:
             raise SurrealError(
                 f"Cannot reconfigure a {self.__class__.__name__} after it has "
                 "executed. Create a new builder for a fresh operation."
@@ -1010,10 +1391,42 @@ class SyncCrudBuilder(_CrudState, Generic[T]):
         self._set_clause(_Clause.PATCH, data)
         return cast(T, self._run_once())
 
+    def stream(
+        self,
+        *,
+        into: type[Any] | None = None,
+        require_streaming: bool = False,
+    ) -> Any:
+        """Read this operation's rows as the server produces them.
+
+        The other terminator: ``await`` gives the whole answer, this gives the
+        rows one at a time. Over a websocket against SurrealDB v3.3.0 or later
+        they arrive as they are produced; everywhere else the query runs the
+        buffered way and its rows are handed back one at a time, so the call
+        works on every transport. Pass ``require_streaming=True`` to be told
+        rather than served the fallback.
+
+        ``into`` maps each row onto a model class as it arrives, which is the
+        case streaming is most useful for - a large table read one model at a
+        time. An ``into=`` given when the builder was made is used if this one
+        is omitted.
+
+        Nothing is sent until iteration starts. Use ``with`` (or
+        ``close()``) so stopping early tells the server to abandon the query.
+        """
+        self._check_not_executed()
+        query, variables = self._build()
+        stream = _open_stream(
+            self._executor, query, variables, require_streaming=require_streaming
+        )
+        _claim_for_stream(self)
+        return _mapped_rows_sync(stream, into or self._into)
+
     def execute(self) -> T:
         return cast(T, self._run_once())
 
     def _run_once(self) -> Any:
+        _refuse_if_streamed(self)
         with self._lock:
             if not self._executed:
                 query, variables = self._build()
@@ -1049,7 +1462,7 @@ class SyncInsertBuilder(_InsertState, Generic[T]):
         self._lock = threading.Lock()
 
     def _check_not_executed(self) -> None:
-        if self._executed:
+        if self._executed or self._streamed:
             raise SurrealError(
                 f"Cannot reconfigure a {self.__class__.__name__} after it has "
                 "executed. Create a new builder for a fresh operation."
@@ -1069,6 +1482,7 @@ class SyncInsertBuilder(_InsertState, Generic[T]):
         return cast(list[T], self._run_once())
 
     def _run_once(self) -> Any:
+        _refuse_if_streamed(self)
         with self._lock:
             if not self._executed:
                 query, variables = self._build()
@@ -1135,6 +1549,36 @@ class SyncQueryBuilder(_QueryState):
             ]
         return _map_to_class(cls, values)
 
+    def _check_not_executed(self) -> None:
+        """Raise if this builder has already been terminated - see the async twin."""
+        if self._executed or self._streamed:
+            raise SurrealError(
+                f"Cannot reconfigure a {self.__class__.__name__} after it has "
+                "executed. Create a new builder for a fresh operation."
+            )
+
+    def stream(
+        self,
+        *,
+        into: type[Any] | None = None,
+        require_streaming: bool = False,
+    ) -> Any:
+        """Read this query's rows as the server produces them.
+
+        See :meth:`AsyncCrudBuilder.stream` - same terminator, same fallback,
+        same ``into``. Without ``into``, ``.statements()`` on the result gives
+        one completed result per statement instead of a flat run of rows.
+        """
+        self._check_not_executed()
+        stream = _open_stream(
+            self._executor,
+            self._query,
+            self._variables,
+            require_streaming=require_streaming,
+        )
+        _claim_for_stream(self)
+        return _mapped_rows_sync(stream, into)
+
     def execute(self) -> list[Value]:
         return cast("list[Value]", self._run_once())
 
@@ -1146,6 +1590,7 @@ class SyncQueryBuilder(_QueryState):
         return cast(Value, values[0])
 
     def _run_once(self) -> list[Any]:
+        _refuse_if_streamed(self)
         with self._lock:
             if not self._executed:
                 response = self._executor(self._query, self._variables)
@@ -1165,5 +1610,6 @@ __all__ = [
     "SyncInsertBuilder",
     "SyncQueryBuilder",
     "_UNSET",
+    "_Executor",
     "_map_result",
 ]

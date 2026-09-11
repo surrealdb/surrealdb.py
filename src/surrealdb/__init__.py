@@ -83,6 +83,11 @@ from surrealdb.errors import (
     ValidationDetailKind,
     ValidationError,
 )
+from surrealdb.streaming import (
+    AsyncQueryStream,
+    QueryStream,
+    StatementResult,
+)
 from surrealdb.types import Tokens, Value
 
 # The optional native engine. Probed here, *below* the imports above, rather
@@ -142,6 +147,10 @@ __all__ = [
     "SyncCrudBuilder",
     "SyncInsertBuilder",
     "SyncQueryBuilder",
+    # Streaming queries (returned by a builder's .stream(), and what it yields)
+    "AsyncQueryStream",
+    "QueryStream",
+    "StatementResult",
     # Data types
     "Table",
     "Duration",
@@ -272,7 +281,22 @@ else:
 
 def Surreal(
     url: str,
+    *,
+    streaming: bool = True,
 ) -> BlockingSurrealConnection:
+    """Open a connection to *url*, picking the transport from its scheme.
+
+    Args:
+        url: A ``ws://``, ``wss://``, ``http://``, ``https://``, ``mem://`` or
+            ``file://`` address.
+        streaming: Whether queries on a websocket connection may be answered as
+            a stream of frames rather than one response. On by default and
+            invisible - the answer is the same either way - so this only decides
+            how it arrives. ``False`` puts ordinary queries back on the buffered
+            path; a builder's explicit ``.stream()`` still streams, since asking
+            for a stream outright is taken as meaning it. Ignored by the
+            transports that cannot stream.
+    """
     constructed_url = Url(url)
     if constructed_url.scheme in _EMBEDDED_SCHEMES:
         if not _EMBEDDED_AVAILABLE:
@@ -287,14 +311,29 @@ def Surreal(
         constructed_url.scheme == UrlScheme.WS
         or constructed_url.scheme == UrlScheme.WSS
     ):
-        return BlockingWsSurrealConnection(url=url)
+        return BlockingWsSurrealConnection(url=url, streaming=streaming)
     else:
         raise UnsupportedEngineError(url)
 
 
 def AsyncSurreal(
     url: str,
+    *,
+    streaming: bool = True,
 ) -> AsyncSurrealConnection:
+    """Open a connection to *url*, picking the transport from its scheme.
+
+    Args:
+        url: A ``ws://``, ``wss://``, ``http://``, ``https://``, ``mem://`` or
+            ``file://`` address.
+        streaming: Whether queries on a websocket connection may be answered as
+            a stream of frames rather than one response. On by default and
+            invisible - the answer is the same either way - so this only decides
+            how it arrives. ``False`` puts ordinary queries back on the buffered
+            path; a builder's explicit ``.stream()`` still streams, since asking
+            for a stream outright is taken as meaning it. Ignored by the
+            transports that cannot stream.
+    """
     constructed_url = Url(url)
     if constructed_url.scheme in _EMBEDDED_SCHEMES:
         if not _EMBEDDED_AVAILABLE:
@@ -309,7 +348,7 @@ def AsyncSurreal(
         constructed_url.scheme == UrlScheme.WS
         or constructed_url.scheme == UrlScheme.WSS
     ):
-        return AsyncWsSurrealConnection(url=url)
+        return AsyncWsSurrealConnection(url=url, streaming=streaming)
     else:
         raise UnsupportedEngineError(url)
 
