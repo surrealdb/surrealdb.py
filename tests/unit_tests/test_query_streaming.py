@@ -30,7 +30,11 @@ from surrealdb import streaming
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
-from surrealdb.connections.builders import SyncQueryBuilder, _Executor
+from surrealdb.connections.builders import (
+    SyncQueryBuilder,
+    _Executor,
+    _mapped_rows_sync,
+)
 from surrealdb.data.cbor import decode, encode
 from surrealdb.errors import (
     ConnectionUnavailableError,
@@ -2001,3 +2005,49 @@ def test_every_refusal_reason_says_how_to_get_the_buffered_answer() -> None:
     ):
         assert "buffered answer" in reason, reason
         assert "query_stream()" not in reason, reason
+
+
+# ------------------------------------------- into= must not weaken the stream
+#
+# The mapping wrapper used to cache the stream's view in its own `__init__` and
+# return `self` from `__iter__`, which quietly moved two things off the caller's
+# loop: the read-once claim, so a second pass resumed the stream mid-flight
+# where the un-mapped path raises; and the only strong reference to the view, so
+# letting go of the loop no longer cancelled the query - defeating the weak
+# reference `QueryStream` holds for exactly that purpose. Both measured.
+
+
+class _Mapped:
+    def __init__(self, n: int = 0) -> None:
+        self.n = n
+
+
+def _mapped_pair(frames: list[Any]) -> tuple[Any, Any]:
+    channel = _SyncChannel(list(frames), answer_cancel=True)
+    stream = QueryStream(channel.ops(), "SELECT n FROM w")
+    return channel, _mapped_rows_sync(stream, _Mapped)
+
+
+_MANY = [begin(1), rows(0, [{"n": i} for i in range(20)]), finished(0), end(1)]
+
+
+def test_a_mapped_stream_is_still_read_once() -> None:
+    channel, view = _mapped_pair(_MANY)
+    for taken, _ in enumerate(view, start=1):
+        if taken == 2:
+            break
+    with pytest.raises(SurrealError):
+        list(view)
+    assert channel is not None
+
+
+def test_abandoning_a_mapped_stream_still_cancels_at_that_moment() -> None:
+    """The caller keeps the stream object; only the loop lets go.
+
+    That is the case the wrapper broke: it held the view itself, so the cancel
+    waited for the caller's variable instead of the caller's loop.
+    """
+    channel, view = _mapped_pair(_MANY)
+    for _ in view:
+        break
+    assert channel.cancelled, "abandoning the loop should have cancelled the query"

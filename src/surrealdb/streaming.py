@@ -910,17 +910,18 @@ class _SyncView:
 class AsyncQueryStream(_StreamBase):
     """A streaming query answer, iterated for rows or for statements.
 
-    Returned by ``query_stream`` on the async transports. Nothing is sent until
+    Returned by a builder's ``.stream()`` on the async transports. Nothing is
+    sent until
     iteration starts, so building one costs nothing.
 
     Iterate it directly for **rows**, as they arrive::
 
-        async for row in db.query_stream("SELECT * FROM person"):
+        async for row in db.query("SELECT * FROM person").stream():
             ...
 
     or call :meth:`statements` for one completed result per statement::
 
-        async for statement in db.query_stream(sql).statements():
+        async for statement in db.query(sql).stream().statements():
             print(statement.index, statement.value)
 
     A stream is read once, and the two views draw from the same frames.
@@ -935,7 +936,7 @@ class AsyncQueryStream(_StreamBase):
     Use ``async with``, or call :meth:`aclose`, to stop early and have the
     server abandon the query rather than run it to completion::
 
-        async with db.query_stream(sql) as stream:
+        async with db.query(sql).stream() as stream:
             async for row in stream:
                 if enough(row):
                     break
@@ -1273,7 +1274,7 @@ class QueryStream(_StreamBase):
     The blocking counterpart of :class:`AsyncQueryStream`, with identical
     semantics; see that class. Iterate for rows::
 
-        for row in db.query_stream("SELECT * FROM person"):
+        for row in db.query("SELECT * FROM person").stream():
             ...
 
     or use :meth:`statements` for one completed result per statement. Use

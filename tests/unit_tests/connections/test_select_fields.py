@@ -31,7 +31,7 @@ from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
-from surrealdb.connections.utils_mixin import render_projection
+from surrealdb.connections.builders import render_projection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 

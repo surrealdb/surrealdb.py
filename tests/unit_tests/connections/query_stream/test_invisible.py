@@ -180,7 +180,7 @@ def test_blocking_query_returns_the_same_answer_either_way(
 
     Without this, deleting the streaming branch from the blocking `query_raw`
     broke nothing: the rest of the blocking streaming suite calls
-    `query_stream` explicitly, which never consults `_may_stream`.
+    `.stream()` explicitly, which never consults `_may_stream`.
     """
     streamed = BlockingWsSurrealConnection(connection_params["ws_url"])
     buffered = BlockingWsSurrealConnection(connection_params["ws_url"], streaming=False)

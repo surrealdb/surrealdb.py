@@ -7,13 +7,6 @@ from surrealdb.connections.builders import (
     _is_single_record_operation,  # pyright: ignore[reportPrivateUsage]
     _resource_to_variable,  # pyright: ignore[reportPrivateUsage]
 )
-
-# Re-exported: `render_projection` lives with the builders now, since the
-# SELECT builder is what renders a projection. Kept importable from here so
-# nothing that already imported it has to move.
-from surrealdb.connections.builders import (
-    render_projection as render_projection,
-)
 from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import (
     RecordID,

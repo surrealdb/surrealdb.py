@@ -826,29 +826,50 @@ def _mapped_rows_sync(stream: Any, into: type[Any] | None) -> Any:
     return _SyncMappedRows(stream, into)
 
 
-class _AsyncMappedRows:
-    """A streamed query's rows, each mapped onto a model class.
+class _AsyncMappedIterator:
+    """One pass over a stream's rows, each mapped onto a model class.
 
     A plain iterator rather than an async generator on purpose: wrapping the
-    stream in a generator would put two independently-finalised objects in the
-    chain, and stopping early would then finalise them in an order neither
-    controls - the bug that made ``async for`` + ``break`` log an unhandled
-    ``RuntimeError`` before. Delegating ``__anext__`` keeps one thing to close.
+    stream in a generator would put two independently-finalised objects in one
+    chain, and stopping early would finalise them in an order neither controls
+    - the bug that made ``async for`` + ``break`` log an unhandled
+    ``RuntimeError`` before.
     """
 
-    __slots__ = ("_cls", "_rows", "_stream")
+    __slots__ = ("_cls", "_rows")
 
-    def __init__(self, stream: Any, cls: type[Any]) -> None:
-        self._stream = stream
+    def __init__(self, rows: Any, cls: type[Any]) -> None:
+        self._rows = rows
         self._cls = cls
-        self._rows = stream.__aiter__()
 
-    def __aiter__(self) -> _AsyncMappedRows:
+    def __aiter__(self) -> _AsyncMappedIterator:
         return self
 
     async def __anext__(self) -> Any:
         row = await self._rows.__anext__()
         return _map_to_class(self._cls, _require_record(self._cls, row))
+
+
+class _AsyncMappedRows:
+    """A streamed query whose rows are mapped onto a model class.
+
+    Deliberately not an iterator itself. Caching the stream's view here and
+    returning ``self`` moved two things off the caller's loop and onto this
+    object: the stream's read-once claim, so a second pass silently resumed it
+    mid-flight where the un-mapped path raises; and the only strong reference
+    to the view, so letting go of the loop stopped cancelling the query - which
+    is the whole reason :class:`~surrealdb.QueryStream` holds its view weakly.
+    Both were measured. Delegating on each call gives both back.
+    """
+
+    __slots__ = ("_cls", "_stream")
+
+    def __init__(self, stream: Any, cls: type[Any]) -> None:
+        self._stream = stream
+        self._cls = cls
+
+    def __aiter__(self) -> _AsyncMappedIterator:
+        return _AsyncMappedIterator(self._stream.__aiter__(), self._cls)
 
     async def __aenter__(self) -> _AsyncMappedRows:
         return self
@@ -860,22 +881,34 @@ class _AsyncMappedRows:
         await self._stream.aclose()
 
 
-class _SyncMappedRows:
-    """The blocking twin of :class:`_AsyncMappedRows`."""
+class _SyncMappedIterator:
+    """The blocking twin of :class:`_AsyncMappedIterator`."""
 
-    __slots__ = ("_cls", "_rows", "_stream")
+    __slots__ = ("_cls", "_rows")
 
-    def __init__(self, stream: Any, cls: type[Any]) -> None:
-        self._stream = stream
+    def __init__(self, rows: Any, cls: type[Any]) -> None:
+        self._rows = rows
         self._cls = cls
-        self._rows = stream.__iter__()
 
-    def __iter__(self) -> _SyncMappedRows:
+    def __iter__(self) -> _SyncMappedIterator:
         return self
 
     def __next__(self) -> Any:
         row = next(self._rows)
         return _map_to_class(self._cls, _require_record(self._cls, row))
+
+
+class _SyncMappedRows:
+    """The blocking twin of :class:`_AsyncMappedRows`."""
+
+    __slots__ = ("_cls", "_stream")
+
+    def __init__(self, stream: Any, cls: type[Any]) -> None:
+        self._stream = stream
+        self._cls = cls
+
+    def __iter__(self) -> _SyncMappedIterator:
+        return _SyncMappedIterator(self._stream.__iter__(), self._cls)
 
     def __enter__(self) -> _SyncMappedRows:
         return self
