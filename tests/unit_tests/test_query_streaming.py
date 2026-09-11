@@ -1255,7 +1255,7 @@ def test_sync_a_failed_statement_raises() -> None:
 
 async def _collect(frames: list[Any], **kwargs: Any) -> Any:
     channel = _AsyncChannel(frames, **kwargs)
-    return await AsyncQueryStream(channel.ops(), "SELECT 1").collect(), channel
+    return await AsyncQueryStream(channel.ops(), "SELECT 1")._collect(), channel
 
 
 async def test_collect_rebuilds_the_shape_a_buffered_query_returns() -> None:
@@ -1299,7 +1299,7 @@ async def test_collect_carries_the_request_id_the_buffered_answer_has() -> None:
     """
     channel = _AsyncChannel([begin(1), rows(0, [{"n": 1}]), finished(0), end(1)])
     stream = AsyncQueryStream(channel.ops(), "SELECT 1")
-    response = await stream.collect()
+    response = await stream._collect()
     assert response is not None
     assert sorted(response) == ["id", "result"]
     assert response["id"] == str(channel.sent[0].id)
@@ -1412,7 +1412,7 @@ async def test_collect_is_bounded_by_the_deadline_a_buffered_call_had() -> None:
     # test spends the job's whole timeout to say less than a failing one.
     with pytest.raises(TransportTimeoutError, match="no answer within"):
         await asyncio.wait_for(
-            AsyncQueryStream(channel.ops(), "RETURN sleep(5s)").collect(), 3.0
+            AsyncQueryStream(channel.ops(), "RETURN sleep(5s)")._collect(), 3.0
         )
 
 
@@ -1426,14 +1426,14 @@ async def test_collect_forwards_the_session_it_was_given() -> None:
     """
     session = uuid.uuid4()
     channel = _AsyncChannel([begin(1), value(0, 1), finished(0, single=True), end(1)])
-    await AsyncQueryStream(channel.ops(), "RETURN 1", session_id=session).collect()
+    await AsyncQueryStream(channel.ops(), "RETURN 1", session_id=session)._collect()
     assert channel.sent[0].kwargs["session"] == session
     assert "txn" not in channel.sent[0].kwargs
 
 
 def test_sync_collect_rebuilds_the_same_shape() -> None:
     channel = _SyncChannel([begin(1), rows(0, [{"n": 1}]), finished(0), end(1)])
-    response = QueryStream(channel.ops(), "SELECT 1").collect()
+    response = QueryStream(channel.ops(), "SELECT 1")._collect()
     assert response == {
         "id": str(channel.sent[0].id),
         "result": [
@@ -1444,7 +1444,7 @@ def test_sync_collect_rebuilds_the_same_shape() -> None:
 
 def test_sync_collect_hands_back_none_on_a_refusal() -> None:
     channel = _SyncChannel([METHOD_NOT_FOUND])
-    assert QueryStream(channel.ops(), "SELECT 1").collect() is None
+    assert QueryStream(channel.ops(), "SELECT 1")._collect() is None
     assert channel.supported_flag is False
 
 
@@ -1452,7 +1452,7 @@ def test_sync_collect_does_not_retry_when_the_socket_dies_before_any_frame() -> 
     """The same rule on the blocking transport - see the async copy."""
     channel = _SyncChannel([stream_broken(ConnectionUnavailableError("gone"))])
     with pytest.raises(ConnectionUnavailableError):
-        QueryStream(channel.ops(), "SELECT 1").collect()
+        QueryStream(channel.ops(), "SELECT 1")._collect()
 
 
 def test_sync_collect_does_not_remember_a_transient_refusal() -> None:
@@ -1464,7 +1464,7 @@ def test_sync_collect_does_not_remember_a_transient_refusal() -> None:
     either.
     """
     channel = _SyncChannel([TOO_MANY])
-    assert QueryStream(channel.ops(), "SELECT 1").collect() is None
+    assert QueryStream(channel.ops(), "SELECT 1")._collect() is None
     assert channel.supported_flag is None
 
 
@@ -2051,3 +2051,33 @@ def test_abandoning_a_mapped_stream_still_cancels_at_that_moment() -> None:
     for _ in view:
         break
     assert channel.cancelled, "abandoning the loop should have cancelled the query"
+
+
+def test_the_buffered_rebuild_is_read_once_like_every_other_view() -> None:
+    """`_collect()` ran the query afresh on every call, and was public.
+
+    It is the reconstruction `query_raw` uses, and `query_raw` builds a new
+    stream per call - so nothing internal noticed that it never took the
+    read-once claim the row and statement views take. Measured on a live
+    server: `collect()` twice on one stream object left a `CREATE` executed
+    twice. It is `_collect` now, and claims.
+    """
+    channel = _SyncChannel([begin(1), rows(0, [{"n": 1}]), finished(0), end(1)])
+    stream = QueryStream(channel.ops(), "CREATE thing SET n = 1")
+
+    first = stream._collect()
+    assert first is not None
+    assert len(channel.sent) == 1, "one request for one collect"
+
+    with pytest.raises(SurrealError):
+        stream._collect()
+    assert len(channel.sent) == 1, "the refused call must not reach the wire"
+
+
+def test_the_buffered_rebuild_is_not_public() -> None:
+    """A caller reaching for it would get a second execution, so it is hidden."""
+    from surrealdb import AsyncQueryStream
+
+    for cls in (AsyncQueryStream, QueryStream):
+        public = [name for name in dir(cls) if not name.startswith("_")]
+        assert "collect" not in public, f"{cls.__name__} exposes collect(): {public}"

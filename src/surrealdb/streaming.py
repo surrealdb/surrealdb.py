@@ -1069,7 +1069,7 @@ class AsyncQueryStream(_StreamBase):
             finalizer.detach()
             await self._teardown(request_id, frames, ended=accumulator.ended)
 
-    async def collect(self) -> dict[str, Any] | None:
+    async def _collect(self) -> dict[str, Any] | None:
         """Run the query as a stream and rebuild the answer a buffered one gives.
 
         This is how streaming reaches callers who never asked for it: ``query``
@@ -1087,6 +1087,7 @@ class AsyncQueryStream(_StreamBase):
         every statement including the ones after a failure; and a refusal hands
         the decision back to the caller instead of running the query itself.
         """
+        self._claim()
         ops = self._ops
         if ops.supported() is False:
             return None
@@ -1399,12 +1400,13 @@ class QueryStream(_StreamBase):
             self._apply(event)
             yield event
 
-    def collect(self) -> dict[str, Any] | None:
+    def _collect(self) -> dict[str, Any] | None:
         """Run the query as a stream and rebuild the buffered answer.
 
         The blocking twin of :meth:`AsyncQueryStream.collect`; see that method
         for why ``None`` means "ask the buffered way" and why it is always safe.
         """
+        self._claim()
         ops = self._ops
         if ops.supported() is False:
             return None

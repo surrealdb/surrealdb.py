@@ -488,7 +488,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             # the server declined to stream it, so ask the buffered way.
             streamed = QueryStream(
                 self._stream_ops(), query, vars, session_id=session_id
-            ).collect()
+            )._collect()  # pyright: ignore[reportPrivateUsage]
             if streamed is not None:
                 return streamed
         kwargs: dict[str, Any] = {"query": query, "params": vars}
