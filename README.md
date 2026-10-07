@@ -765,10 +765,13 @@ first, not the second.
 
 ### Caveats
 
-- **Client-side buffering.** The protocol has no per-stream flow control, so a
-  consumer slower than the server accumulates rows in memory until it catches
-  up. If the work per row is slow, use `.statements()`, or stop the stream and
-  page instead.
+- **Client-side buffering is bounded, not absent.** The protocol has no
+  per-stream flow control, so the only way to slow the server is to stop reading
+  the socket - which the async client now does once a stream is far enough
+  ahead, and undoes the moment anything else on the connection needs the reader.
+  A slow consumer therefore holds a bounded number of frames rather than the
+  rest of the answer, at the cost of the server pausing mid-query. The blocking
+  client reads only on demand and never held anything to begin with.
 - **One task, or one thread, per stream.** A stream is driven by whoever
   iterates it, and Python will not let two do so at once: closing an async
   generator while another task is awaiting a row from it raises

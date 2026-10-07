@@ -378,3 +378,70 @@ async def test_a_failed_statement_stops_the_rest_of_the_query(
     # reached the server.
     await asyncio.sleep(5)
     assert await present() == ["se_div:a"]
+
+
+async def test_a_slow_consumer_does_not_hold_the_whole_answer(
+    async_ws_connection: AsyncWsSurrealConnection,
+) -> None:
+    """The reader stops taking frames once a stream is far enough ahead.
+
+    Before, one task drained the socket into an unbounded per-stream queue, so a
+    consumer slower than the server held the rest of the answer in memory:
+    measured at 7,504 of 8,000 rows after reading 300.
+    """
+    await _require_streaming(async_ws_connection)
+    # Enough rows that the answer is far more frames than the bound: batches ramp
+    # to 256 rows, so 20,000 rows is ~78 frames against a bound of 32. With a
+    # smaller table the whole answer fits under the bound and the test cannot
+    # fail - which is exactly what an earlier 4,000-row version of it did.
+    await _seed(async_ws_connection, count=20_000)
+
+    peak = 0
+    taken = 0
+    async with async_ws_connection.query("SELECT * FROM stream_wide").rows() as rows:
+        async for _ in rows:
+            taken += 1
+            if taken % 25 == 0:
+                await asyncio.sleep(0.01)
+            held = next(iter(async_ws_connection._streams.values()), None)
+            if held is not None:
+                peak = max(peak, held.qsize())
+            if taken >= 300:
+                break
+
+    assert peak <= 40, f"held {peak} frames, so the bound is not holding"
+
+
+async def test_a_query_from_inside_a_slow_loop_still_answers(
+    async_ws_connection: AsyncWsSurrealConnection,
+) -> None:
+    """The escape hatch, and the reason the queue was unbounded to begin with.
+
+    Pausing the reader to slow a stream also withholds every other answer on
+    that connection - and since each ordinary query is itself a stream now, that
+    includes one issued from inside the loop. Without the hatch this hangs
+    rather than fails, which is why the timeout is explicit.
+    """
+    await _require_streaming(async_ws_connection)
+    # Enough frames to exceed the bound, or the reader never pauses and the
+    # deadlock this guards against cannot happen - see the note above.
+    await _seed(async_ws_connection, count=20_000)
+
+    taken = 0
+    inner: list[Any] = []
+    async with async_ws_connection.query("SELECT * FROM stream_wide").rows() as rows:
+        async for _ in rows:
+            taken += 1
+            if taken == 50:
+                # One long stall rather than many short ones, so the reader has
+                # certainly saturated and parked before the query below is
+                # issued. Sprinkling short sleeps instead left it a race the
+                # test usually won, which made it pass without the hatch.
+                await asyncio.sleep(0.5)
+                inner = await asyncio.wait_for(
+                    async_ws_connection.query("RETURN 'inner'"), 20
+                )
+            if taken >= 100:
+                break
+
+    assert inner == ["inner"], inner

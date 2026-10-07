@@ -58,6 +58,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   puts `query()` back on the buffered path; an explicit `.rows()` still
   streams, since asking for a stream outright is taken as meaning it.
 
+- The async client bounds what a slow stream holds. One task drains the socket
+  for every kind of traffic on a connection, so the only backpressure the
+  protocol allows is to stop reading it - which the reader now does once a
+  stream is 32 frames ahead, resuming when its consumer drains to 8. Before,
+  a consumer reading 300 rows of an 8,000-row table held 7,504 of them.
+
+  Pausing is safe only while nothing else needs the reader, so it does not
+  pause while another stream is still waiting, nor while a request or a live
+  subscription is outstanding, and opening any stream resumes it. That matters
+  because every ordinary query is a stream now, so the `query()` a consumer
+  runs from inside its own loop is exactly the case that would otherwise
+  deadlock - measured, before the escape hatch was widened to cover it.
+
+  The blocking client reads on demand and never held anything.
+
 - `.rows()` on any builder is the visible half: the rows as they arrive,
   rather than the whole answer at the end. Every builder has two terminators
   now - `await` (or `.execute()`) for the whole answer, `.rows()` for the rows

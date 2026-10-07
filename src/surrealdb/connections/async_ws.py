@@ -123,8 +123,13 @@ async def _read_frames(
                 return
             try:
                 connection._route_frame(data)  # pyright: ignore[reportPrivateUsage]
+                gate = connection._reader_gate  # pyright: ignore[reportPrivateUsage]
             finally:
                 del connection
+            # Held deliberately as the gate alone: an `asyncio.Event` refers to
+            # nothing, so waiting here keeps no connection alive.
+            if not gate.is_set():
+                await gate.wait()
     except (ConnectionClosed, WebSocketException, asyncio.CancelledError):
         # Connection was closed or cancelled, this is expected
         pass
@@ -134,6 +139,36 @@ async def _read_frames(
         connection = ref()
         if connection is not None:
             connection._reader_stopped()  # pyright: ignore[reportPrivateUsage]
+
+
+# A stream's frames are held in memory between arriving and being read, so a
+# consumer slower than the server grows that held set without limit. These are
+# the marks at which the connection's reader stops taking frames off the socket
+# and starts again: high enough that an ordinary consumer never reaches them,
+# low enough that the pause is short.
+_STREAM_HIGH_WATER = 32
+_STREAM_LOW_WATER = 8
+
+
+class _StreamQueue(Queue[Any]):
+    """A stream's frame queue which can pause and resume the socket reader.
+
+    Pausing the reader is the only backpressure the WebSocket protocol allows -
+    there is no way to ask the server for fewer frames - and it is safe only
+    while nothing else on the connection is waiting to be read, which is what
+    the reader checks before it pauses. Resuming is this queue's job, because
+    it is the only thing that sees a consumer catch up.
+    """
+
+    def __init__(self, gate: "asyncio.Event") -> None:
+        super().__init__()
+        self._gate = gate
+
+    async def get(self) -> Any:
+        frame = await super().get()
+        if self.qsize() <= _STREAM_LOW_WATER:
+            self._gate.set()
+        return frame
 
 
 def _abandon_connection(
@@ -256,6 +291,11 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         # dropped. Queues hold decoded frames plus a ``_ChannelBroken``
         # sentinel, so the value type is ``Any``.
         self._streams: dict[str, Queue[Any]] = {}
+        # Set means "keep reading". Cleared only while a stream is over its
+        # high-water mark and nothing else on this connection is waiting for
+        # the reader - see `_route_frame`.
+        self._reader_gate: asyncio.Event = asyncio.Event()
+        self._reader_gate.set()
         # Whether this server knows ``query_stream``: ``None`` until one
         # request settles it. Cached per connection because the answer is a
         # property of the server build, and re-learning it would cost a
@@ -417,6 +457,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
                 # that are answered once.
                 if (frames := self._streams.get(response_id)) is not None:
                     frames.put_nowait(response)
+                    self._pause_reader_if_saturated(frames)
                 elif (fut := self.qry.get(response_id)) and not fut.done():
                     fut.set_result(response)
             elif response_result := response.get("result"):
@@ -435,6 +476,33 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             self._fail_pending(
                 UnexpectedResponseError(f"could not route a websocket frame: {exc}")
             )
+
+    def _pause_reader_if_saturated(self, frames: Queue[Any]) -> None:
+        """Stop taking frames off the socket while this stream is far ahead.
+
+        Only while nothing else needs the reader. One task drains one socket
+        carrying every kind of traffic, so pausing it to slow a stream would
+        also withhold the reply to a request the consumer is waiting for -
+        which is the deadlock that made this queue unbounded to begin with, and
+        is why `_send` and the live subscriptions open the gate again.
+        """
+        if frames.qsize() < _STREAM_HIGH_WATER:
+            return
+        if self.qry or self.live_queues:
+            return
+        for other in self._streams.values():
+            if other is not frames and other.qsize() < _STREAM_HIGH_WATER:
+                # Another stream is still waiting for frames. Pausing now would
+                # starve it - and since every ordinary query is itself a stream
+                # now, that includes the `query()` a consumer runs from inside
+                # its own loop, which is the deadlock this whole mechanism has
+                # to avoid. Measured: without this, that pattern hangs.
+                return
+        self._reader_gate.clear()
+
+    def _resume_reader(self) -> None:
+        """Let the reader go, because something other than a stream needs it."""
+        self._reader_gate.set()
 
     def _reader_stopped(self) -> None:
         """Tell everyone still waiting that no more frames are coming."""
@@ -467,6 +535,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         fut = self.loop.create_future()
         query_id = message.id
         self.qry[query_id] = fut
+        self._resume_reader()
         try:
             # correlate message to query, send and forget it
             try:
@@ -811,8 +880,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         are the ways out.
         """
         await self.connect()
-        frames: Queue[Any] = Queue()
+        frames = _StreamQueue(self._reader_gate)
         self._streams[request_id] = frames
+        self._resume_reader()
         return frames
 
     def _stream_release(self, request_id: str) -> None:
@@ -1467,6 +1537,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             self.live_queues[suid] = []
 
         self.live_queues[suid].append(result_queue)
+        self._resume_reader()
 
         async def _iter() -> AsyncGenerator[dict[str, Any], None]:
             try:
