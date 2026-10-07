@@ -36,6 +36,7 @@ from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     ConnectionUnavailableError,
+    NotAllowedError,
     SurrealError,
     TransportTimeoutError,
     UnexpectedResponseError,
@@ -689,7 +690,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.INVALIDATE, **kwargs)
         await self._send(message, "invalidating")
-        self.token = None
+        if session_id is None:
+            self.token = None
 
     async def signup(
         self, vars: dict[str, Value], session_id: UUID | None = None
@@ -701,7 +703,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         response = await self._send(message, "signup")
         self.check_response_for_result(response, "signup")
         tokens = parse_auth_result(response["result"])
-        self.token = tokens.access
+        if session_id is None:
+            self.token = tokens.access
         return tokens
 
     async def signin(
@@ -714,7 +717,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         response = await self._send(message, "signing in")
         self.check_response_for_result(response, "signing in")
         tokens = parse_auth_result(response["result"])
-        self.token = tokens.access
+        if session_id is None:
+            self.token = tokens.access
         return tokens
 
     async def info(self, session_id: UUID | None = None) -> Value:
@@ -1659,7 +1663,13 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         # the connection and then open sessions from it. Callers can still
         # sign in / invalidate on the session to change its identity.
         if self.token is not None:
-            await self.authenticate(self.token, session_id=session_id)
+            try:
+                await self.authenticate(self.token, session_id=session_id)
+            except NotAllowedError as e:
+                if not e.is_token_expired:
+                    await self.detach(session_id)
+                    raise
+                self.token = None
         return AsyncSurrealSession(self, session_id)
 
     async def close(self) -> None:

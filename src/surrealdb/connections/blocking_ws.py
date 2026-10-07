@@ -38,6 +38,7 @@ from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     ConnectionUnavailableError,
+    NotAllowedError,
     TransportTimeoutError,
     UnexpectedResponseError,
     parse_query_error,
@@ -387,7 +388,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         message = RequestMessage(RequestMethod.INVALIDATE, **kwargs)
         self.id = message.id
         self._send(message, "invalidating")
-        self.token = None
+        if session_id is None:
+            self.token = None
 
     def signup(self, vars: dict[str, Value], session_id: UUID | None = None) -> Tokens:
         kwargs: dict[str, Any] = {"data": vars}
@@ -398,7 +400,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         response = self._send(message, "signup")
         self.check_response_for_result(response, "signup")
         tokens = parse_auth_result(response["result"])
-        self.token = tokens.access
+        if session_id is None:
+            self.token = tokens.access
         return tokens
 
     def signin(self, vars: dict[str, Value], session_id: UUID | None = None) -> Tokens:
@@ -410,7 +413,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         response = self._send(message, "signing in")
         self.check_response_for_result(response, "signing in")
         tokens = parse_auth_result(response["result"])
-        self.token = tokens.access
+        if session_id is None:
+            self.token = tokens.access
         return tokens
 
     def info(self, session_id: UUID | None = None) -> Value:
@@ -1606,7 +1610,13 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         # the connection and then open sessions from it. Callers can still
         # sign in / invalidate on the session to change its identity.
         if self.token is not None:
-            self.authenticate(self.token, session_id=session_id)
+            try:
+                self.authenticate(self.token, session_id=session_id)
+            except NotAllowedError as e:
+                if not e.is_token_expired:
+                    self.detach(session_id)
+                    raise
+                self.token = None
         return BlockingSurrealSession(self, session_id)
 
     def close(self) -> None:
