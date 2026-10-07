@@ -288,7 +288,7 @@ def test_real_notifications_are_not_mistaken_for_the_end(
         elif action == "UPDATE":
             blocking_ws_connection_secondary.update("thing:target", {"n": 2})
         else:
-            blocking_ws_connection_secondary.delete("thing:target")
+            blocking_ws_connection_secondary.delete("thing:target").execute()
 
         notification = _next_within(subscription)
         assert notification["action"] == action

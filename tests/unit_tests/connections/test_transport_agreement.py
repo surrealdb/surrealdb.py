@@ -322,7 +322,7 @@ def test_an_absent_record_answers_the_same_everywhere(
 
     assert blocking_ws_connection.select(missing).execute() is None
     assert blocking_ws_connection.update(missing, {"name": "n"}) is None
-    assert blocking_ws_connection.delete(missing) is None
+    assert blocking_ws_connection.delete(missing).execute() is None
 
 
 def test_a_present_record_still_comes_back_as_a_record(

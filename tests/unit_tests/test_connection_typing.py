@@ -145,9 +145,12 @@ def test_blocking_session_crud_overload_precision() -> None:
     assert_type(session.upsert("person"), SyncCrudBuilder[Value])
 
     # delete is eager on sync connections: it returns the result directly.
-    assert_type(session.delete(RecordID("person", 1)), dict[str, Value] | None)
-    assert_type(session.delete(Table("person")), list[Value])
-    assert_type(session.delete("person"), Value)
+    assert_type(
+        session.delete(RecordID("person", 1)),
+        SyncCrudBuilder[dict[str, Value] | None],
+    )
+    assert_type(session.delete(Table("person")), SyncCrudBuilder[list[Value]])
+    assert_type(session.delete("person"), SyncCrudBuilder[Value])
 
 
 def test_blocking_transaction_crud_overload_precision() -> None:
@@ -172,9 +175,12 @@ def test_blocking_transaction_crud_overload_precision() -> None:
     assert_type(txn.upsert("person"), SyncCrudBuilder[Value])
 
     # delete is eager on sync connections: it returns the result directly.
-    assert_type(txn.delete(RecordID("person", 1)), dict[str, Value] | None)
-    assert_type(txn.delete(Table("person")), list[Value])
-    assert_type(txn.delete("person"), Value)
+    assert_type(
+        txn.delete(RecordID("person", 1)),
+        SyncCrudBuilder[dict[str, Value] | None],
+    )
+    assert_type(txn.delete(Table("person")), SyncCrudBuilder[list[Value]])
+    assert_type(txn.delete("person"), SyncCrudBuilder[Value])
 
 
 # ---------------------------------------------------------------------------
@@ -305,8 +311,14 @@ def test_blocking_connection_into_overload_precision() -> None:
         )
 
         # delete is eager on sync: single -> M | None, table -> list[M].
-        assert_type(conn.delete(RecordID("person", 1), into=_Person), _Person | None)
-        assert_type(conn.delete(Table("person"), into=_Person), list[_Person])
+        assert_type(
+            conn.delete(RecordID("person", 1), into=_Person),
+            SyncCrudBuilder[_Person | None],
+        )
+        assert_type(
+            conn.delete(Table("person"), into=_Person),
+            SyncCrudBuilder[list[_Person]],
+        )
 
         # insert: no-data builder carrying M vs eager list[M].
         assert_type(
@@ -344,7 +356,10 @@ def test_blocking_wrapper_into_overload_precision() -> None:
         assert_type(
             wrapper.create(RecordID("person", 1), {"name": "x"}, into=_Person), _Person
         )
-        assert_type(wrapper.delete(RecordID("person", 1), into=_Person), _Person | None)
+        assert_type(
+            wrapper.delete(RecordID("person", 1), into=_Person),
+            SyncCrudBuilder[_Person],
+        )
         assert_type(
             wrapper.insert(Table("person"), into=_Person), SyncInsertBuilder[_Person]
         )

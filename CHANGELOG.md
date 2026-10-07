@@ -22,12 +22,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was not a builder, which made it the only one that could not be streamed, and
   reading a large table is the case streaming is most for.
 
-  One wrinkle worth knowing: the blocking rule has been that an operation
-  returns a builder when a clause could follow it and runs on the spot
-  otherwise, which is why `db.delete(rec)` still hands back a record. `select()`
-  takes no clause either, so it is a builder despite that rule rather than
-  because of it. Making `delete()` a builder too would restore the rule - a
-  follow-up, not this release.
+  `delete()` moved with it, for the same reason and in the same release, so the
+  rule is simply that every CRUD operation returns a builder:
+
+  ```python
+  deleted = db.delete(Table("person"))             # before
+  deleted = db.delete(Table("person")).execute()   # after
+  ```
+
+  `DELETE ... RETURN BEFORE` returns rows, so it streams like the rest. The
+  session and transaction forms already *declared* a builder while delegating
+  to an eager connection, so this also makes those signatures true.
 
 ### Added
 
@@ -57,12 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than the whole answer at the end. Every builder has two terminators
   now - `await` (or `.execute()`) for the whole answer, `.rows()` for the rows
   - so streaming is reached the same way you already build a query. On the async
-  client that is every CRUD method: `query()`, `select()`, `create()`,
-  `update()`, `upsert()`, `delete()` and `insert()`. On the blocking client it is
-  the ones that hand back a builder - `query()`, `select()`, `create()`,
-  `update()` and `upsert()` - because `delete()` and a data-carrying `insert()`
-  still run on the spot and return their result. Making those two builders too
-  is the follow-up noted below.
+  client and the blocking one alike, that is every CRUD method: `query()`,
+  `select()`, `create()`, `update()`, `upsert()`, `delete()` and `insert()`.
 
   `statements()` on a query is the other view: one `StatementResult` per
   statement, each once the server says it is complete, so what it yields is

@@ -40,7 +40,7 @@ def main() -> None:
         print(f"Query result: {result}")
 
         # Delete all people
-        db.delete("person")
+        db.delete("person").execute()
         print("Deleted all people")
 
 

@@ -382,33 +382,38 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         return builder.content(data)
 
     @overload
-    def delete(self, record: RecordID, *, into: type[M]) -> M | None: ...
+    def delete(
+        self, record: RecordID, *, into: type[M]
+    ) -> SyncCrudBuilder[M | None]: ...
     @overload
-    def delete(self, record: Table, *, into: type[M]) -> list[M]: ...
+    def delete(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
     @overload
-    def delete(self, record: str, *, into: type[M]) -> M | list[M] | None: ...
+    def delete(
+        self, record: str, *, into: type[M]
+    ) -> SyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    def delete(self, record: RecordID) -> dict[str, Value] | None: ...
+    def delete(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
-    def delete(self, record: Table) -> list[Value]: ...
+    def delete(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
-    def delete(self, record: str) -> Value: ...
-    def delete(self, record: RecordIdType, *, into: type[M] | None = None) -> Any:
-        """Delete records eagerly and return the deleted record(s).
+    def delete(self, record: str) -> SyncCrudBuilder[Value]: ...
+    def delete(
+        self, record: RecordIdType, *, into: type[M] | None = None
+    ) -> SyncCrudBuilder[Any]:
+        """Delete records, returning a builder.
 
         A ``RecordID`` (or ``"table:id"``) returns the deleted record, or
         ``None`` when no record was deleted (matching select); a ``Table`` (or
         bare name) returns the list of deleted records. Pass ``into=Model`` to
         map the deleted record(s) onto ``Model``.
         """
-        builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
+        return SyncCrudBuilder(
             executor=self._make_executor(),
             operation="DELETE",
             record=record,
             op_name="delete",
             into=into,
         )
-        return builder.execute()
 
     @overload
     def insert(

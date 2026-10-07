@@ -132,7 +132,7 @@ def test_the_sync_usage_block_runs(connection_params: dict[str, Any]) -> None:
 
         row = db.select(RecordID("person", "tobie")).execute()
         assert row is not None
-        db.delete(RecordID("person", "bob"))
+        db.delete(RecordID("person", "bob")).execute()
 
         db.query("DELETE person;").execute()
 

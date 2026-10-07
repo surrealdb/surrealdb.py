@@ -45,7 +45,7 @@ def test_delete_operation() -> None:
 
         db.create("temp", {"data": "test"})
 
-        deleted = db.delete("temp")
+        deleted = db.delete("temp").execute()
         assert deleted is not None
 
 

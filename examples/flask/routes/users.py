@@ -152,7 +152,7 @@ def delete_user(user_id):
     """Delete a user."""
     try:
         db = get_db()
-        result = db.delete(user_id)
+        result = db.delete(user_id).execute()
 
         if not result:
             return jsonify({"error": f"User {user_id} not found"}), 404

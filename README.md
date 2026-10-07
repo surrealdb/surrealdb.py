@@ -355,9 +355,9 @@ with Surreal("ws://localhost:8000/rpc") as db:
     # Clause-less run: call .execute() explicitly.
     empty = db.create(RecordID("person", "bob")).execute()
 
-    # select() returns a builder; delete() still runs eagerly.
+    # Every CRUD call returns a builder; .execute() runs it.
     row = db.select(RecordID("person", "tobie")).execute()  # dict | None
-    db.delete(RecordID("person", "bob"))
+    db.delete(RecordID("person", "bob")).execute()
 
     # query() returns a builder; call .execute()/.first()/.into().
     db.query("DELETE person;").execute()

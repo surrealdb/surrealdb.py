@@ -140,7 +140,7 @@ def test_delete_returns_every_record_it_removed(
 
     removed = blocking_ws_connection.delete(
         RecordID(table, Range(BoundIncluded(1), BoundIncluded(3)))
-    )
+    ).execute()
 
     assert _ids(removed) == [1, 2, 3]
     assert blocking_ws_connection.select(Table(table)).execute() == []
