@@ -13,6 +13,10 @@ import surrealdb.connections.blocking_http as blocking_http_module
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.data.cbor import encode
 
+# Not the server the rest of the suite talks to, and deliberately not taken from
+# `connection_params`: every request below is mocked, so this is the address the
+# mock is registered against rather than somewhere to connect. `SURREALDB_PORT`
+# has nothing to point at here.
 URL = "http://localhost:8000"
 RPC = f"{URL}/rpc"
 

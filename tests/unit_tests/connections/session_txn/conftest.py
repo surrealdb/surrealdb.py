@@ -8,6 +8,7 @@ or when session-scoped create/query return empty.
 """
 
 import contextlib
+from typing import Any
 
 import pytest
 
@@ -86,8 +87,8 @@ def session_txn_requires_v3(
 
 
 @pytest.fixture
-def ws_url() -> str:
-    return "ws://localhost:8000"
+def ws_url(connection_params: dict[str, Any]) -> str:
+    return str(connection_params["ws_url"])
 
 
 @pytest.fixture

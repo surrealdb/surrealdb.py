@@ -71,7 +71,7 @@ def test_insert_into_an_awkward_table_name_round_trips(
     assert isinstance(written, list) and written
     assert written[0]["id"].table_name == table
 
-    back = blocking_ws_connection.select(Table(table))
+    back = blocking_ws_connection.select(Table(table)).execute()
     assert isinstance(back, list)
     assert [row["marker"] for row in back] == [marker]
 
@@ -87,7 +87,7 @@ def test_create_and_select_agree_with_insert(
     blocking_ws_connection.create(RecordID(table, "a"), {"n": 1})
     blocking_ws_connection.insert(Table(table), [{"n": 2}])
 
-    rows: Any = blocking_ws_connection.select(Table(table))
+    rows: Any = blocking_ws_connection.select(Table(table)).execute()
     assert isinstance(rows, list)
     assert sorted(row["n"] for row in rows) == [1, 2]
 
@@ -132,7 +132,7 @@ def test_the_http_transport_agrees(
 
     blocking_http_connection.insert(Table(table), [{"marker": marker}])
 
-    back = blocking_http_connection.select(Table(table))
+    back = blocking_http_connection.select(Table(table)).execute()
     assert isinstance(back, list)
     assert [row["marker"] for row in back] == [marker]
 

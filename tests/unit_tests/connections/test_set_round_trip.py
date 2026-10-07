@@ -72,13 +72,13 @@ def test_a_schemafull_set_field_can_be_written_back(
     ).execute()
     blocking_ws_connection.query(f"CREATE {table}:1 SET nums = <set>[1,2]").execute()
 
-    row = blocking_ws_connection.select(RecordID(table, 1))
+    row = blocking_ws_connection.select(RecordID(table, 1)).execute()
     assert isinstance(row["nums"], SurrealSet)
 
     # The whole point: this used to raise a coercion error.
     blocking_ws_connection.update(RecordID(table, 1), row)
 
-    after = blocking_ws_connection.select(RecordID(table, 1))
+    after = blocking_ws_connection.select(RecordID(table, 1)).execute()
     assert after["nums"] == [1, 2]
 
 
@@ -92,7 +92,7 @@ def test_a_schemaless_set_field_stays_a_set(
     ).execute()
 
     blocking_ws_connection.update(
-        RecordID(table, 1), blocking_ws_connection.select(RecordID(table, 1))
+        RecordID(table, 1), blocking_ws_connection.select(RecordID(table, 1)).execute()
     )
 
     # Asked of the server, not of the decoded value: what matters is the type

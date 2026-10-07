@@ -19,6 +19,14 @@ from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 
 
+# These pin the `vars` -> wire `params` vocabulary at the `query_raw` API
+# boundary, so they observe the buffered request by patching `_send`. The
+# connections are built with `streaming=False` for that reason: with streaming
+# on, `query_raw` reaches the wire through the frame path instead and `_send` is
+# never called, so the fake would capture nothing and a real connection would be
+# attempted. That the streamed request carries the same `params` in the same
+# place is pinned separately, by
+# `test_query_streaming.py::test_query_stream_encodes_the_same_params_as_query`.
 def _capture(store: dict[str, Any]) -> Any:
     """Build a fake ``_send`` that records the outgoing RequestMessage."""
 
@@ -44,7 +52,7 @@ def _async_capture(store: dict[str, Any]) -> Any:
 async def test_async_ws_query_raw_vars_keyword(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    conn = AsyncWsSurrealConnection("ws://localhost:8000/rpc")
+    conn = AsyncWsSurrealConnection("ws://localhost:8000/rpc", streaming=False)
     store: dict[str, Any] = {}
     monkeypatch.setattr(conn, "_send", _async_capture(store))
 
@@ -59,7 +67,7 @@ async def test_async_ws_query_raw_vars_keyword(
 async def test_async_ws_query_raw_vars_defaults_to_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    conn = AsyncWsSurrealConnection("ws://localhost:8000/rpc")
+    conn = AsyncWsSurrealConnection("ws://localhost:8000/rpc", streaming=False)
     store: dict[str, Any] = {}
     monkeypatch.setattr(conn, "_send", _async_capture(store))
 
@@ -71,7 +79,7 @@ async def test_async_ws_query_raw_vars_defaults_to_empty(
 def test_blocking_ws_query_raw_vars_keyword(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    conn = BlockingWsSurrealConnection("ws://localhost:8000/rpc")
+    conn = BlockingWsSurrealConnection("ws://localhost:8000/rpc", streaming=False)
     store: dict[str, Any] = {}
     monkeypatch.setattr(conn, "_send", _capture(store))
 
@@ -86,7 +94,7 @@ def test_blocking_ws_query_raw_vars_positional(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The bound-variable argument stays positional-compatible after the rename."""
-    conn = BlockingWsSurrealConnection("ws://localhost:8000/rpc")
+    conn = BlockingWsSurrealConnection("ws://localhost:8000/rpc", streaming=False)
     store: dict[str, Any] = {}
     monkeypatch.setattr(conn, "_send", _capture(store))
 

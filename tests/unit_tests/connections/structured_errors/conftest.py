@@ -30,9 +30,9 @@ def _is_surrealdb_v3_or_later(version_str: str) -> bool:
 
 
 @pytest.fixture(scope="module")
-def v3_ws() -> Generator[dict[str, Any], None, None]:
+def v3_ws(server_urls: dict[str, str]) -> Generator[dict[str, Any], None, None]:
     """Root-authenticated WS connection, skipped if server is not >= 3.0.0."""
-    url = "ws://localhost:8000"
+    url = server_urls["ws_url"]
     namespace = "test_structured_errors_ns"
     database = "test_structured_errors_db"
     conn = BlockingWsSurrealConnection(url)

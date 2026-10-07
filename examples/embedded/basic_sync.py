@@ -19,7 +19,7 @@ def main() -> None:
         print(f"Created person: {person}")
 
         # Query all people
-        people = db.select("person")
+        people = db.select("person").execute()
         print(f"All people: {people}")
 
         # Update the person
@@ -40,7 +40,7 @@ def main() -> None:
         print(f"Query result: {result}")
 
         # Delete all people
-        db.delete("person")
+        db.delete("person").execute()
         print("Deleted all people")
 
 

@@ -52,7 +52,7 @@ def main():
         print(f"JSON schema: {Person.model_json_schema()}")
 
         # List of people
-        people_raw = db.select("person")
+        people_raw = db.select("person").execute()
         if isinstance(people_raw, list):
             people = [Person.model_validate(person) for person in people_raw]
             print(f"List of people ({type(people)}): {people}")

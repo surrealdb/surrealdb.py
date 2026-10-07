@@ -77,7 +77,7 @@ def test_versioned_store_persists_across_connections() -> None:
         with Surreal(db_url) as db:
             db.use("test", "test")
 
-            assert db.select("person:one")["name"] == "Ada"
+            assert db.select("person:one").execute()["name"] == "Ada"
 
 
 def test_versioned_scheme_preserves_a_caller_query_string() -> None:

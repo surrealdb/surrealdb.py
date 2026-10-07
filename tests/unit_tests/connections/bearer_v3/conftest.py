@@ -26,14 +26,14 @@ def _is_surrealdb_v3(version_str: str) -> bool:
 
 
 @pytest.fixture(scope="module")
-def bearer_v3_root_ws() -> Iterator[dict[str, Any]]:
+def bearer_v3_root_ws(server_urls: dict[str, str]) -> Iterator[dict[str, Any]]:
     """
     Root-authenticated WebSocket connection and version check.
 
     Skips all bearer_v3 tests when no server is reachable or version is not 3.x.
     Yields url, namespace, database_name, and the root connection for setup.
     """
-    url = "ws://localhost:8000"
+    url = server_urls["ws_url"]
     namespace = "test_ns"
     database_name = "test_db"
     connection = BlockingWsSurrealConnection(url)

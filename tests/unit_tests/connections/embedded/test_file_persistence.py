@@ -47,7 +47,7 @@ def test_sync_file_persistence() -> None:
         with Surreal(db_url) as db:
             db.use("test", "test")
 
-            records = db.select("persistent")
+            records = db.select("persistent").execute()
             assert records is not None
 
 

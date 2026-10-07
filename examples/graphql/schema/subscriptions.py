@@ -1,6 +1,6 @@
 """GraphQL subscription resolvers."""
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import strawberry
 from strawberry.types import Info

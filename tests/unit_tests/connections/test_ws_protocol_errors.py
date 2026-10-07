@@ -60,7 +60,7 @@ def _within_budget(call: Any) -> tuple[str, Any]:
         # still has to reach the wire.
         (
             "record id with a null table",
-            lambda db: db.select(RecordID._unchecked(None, 1)),  # pyright: ignore[reportPrivateUsage]
+            lambda db: db.select(RecordID._unchecked(None, 1)).execute(),  # pyright: ignore[reportPrivateUsage]
         ),
     ],
 )
@@ -84,7 +84,7 @@ def test_connection_still_usable_after_a_protocol_error(
     with pytest.raises(SurrealError):
         blocking_ws_connection.select(
             RecordID._unchecked(None, 1)  # pyright: ignore[reportPrivateUsage]
-        )
+        ).execute()
 
     assert blocking_ws_connection.query("RETURN 1").first() == 1
 

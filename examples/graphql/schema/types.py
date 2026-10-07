@@ -1,7 +1,5 @@
 """GraphQL type definitions."""
 
-from typing import Optional
-
 import strawberry
 
 
@@ -12,7 +10,7 @@ class User:
     id: str
     name: str
     email: str
-    age: Optional[int] = None
+    age: int | None = None
 
 
 @strawberry.type

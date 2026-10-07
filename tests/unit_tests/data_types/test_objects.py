@@ -163,8 +163,10 @@ def test_object_with_special_characters_in_keys_roundtrip() -> None:
 
 # Database fixture
 @pytest.fixture
-async def surrealdb_connection() -> AsyncGenerator[AsyncWsSurrealConnection, None]:
-    url = "ws://localhost:8000/rpc"
+async def surrealdb_connection(
+    ws_url: str,
+) -> AsyncGenerator[AsyncWsSurrealConnection, None]:
+    url = ws_url
     password = "root"
     username = "root"
     vars_params: dict[str, Value] = {"username": username, "password": password}

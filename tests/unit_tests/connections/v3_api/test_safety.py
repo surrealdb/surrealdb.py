@@ -209,7 +209,7 @@ def test_sync_unsafe_string_record_rejected(
     _sync_setup: None,
 ) -> None:
     with pytest.raises(SurrealError):
-        blocking_ws_connection.delete("counter:1..10; REMOVE TABLE counter;")
+        blocking_ws_connection.delete("counter:1..10; REMOVE TABLE counter;").execute()
 
 
 @pytest.mark.asyncio
@@ -341,7 +341,7 @@ def test_string_record_id_with_extra_colons_rejected(
     literal-parsing rules for compound IDs, so we refuse to guess.
     """
     with pytest.raises(SurrealError, match="Ambiguous record-id"):
-        blocking_ws_connection.delete("counter:part:rest")
+        blocking_ws_connection.delete("counter:part:rest").execute()
 
 
 # ---------------------------------------------------------------------------

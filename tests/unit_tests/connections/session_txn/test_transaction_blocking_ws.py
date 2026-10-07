@@ -101,7 +101,7 @@ def test_transaction_query_select(
     assert len(result) == 1
     assert result[0].get("name") == "txn-query"
 
-    selected = txn.select("session_txn_test:txn_query")
+    selected = txn.select("session_txn_test:txn_query").execute()
     assert selected is not None
     assert selected.get("name") == "txn-query"
 

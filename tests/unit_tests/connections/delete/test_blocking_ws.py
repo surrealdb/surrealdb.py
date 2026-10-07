@@ -17,7 +17,7 @@ def test_delete_string(
     blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()
 
     # Delete operation returns the deleted record
-    outcome = blocking_ws_connection.delete("user:tobie")
+    outcome = blocking_ws_connection.delete("user:tobie").execute()
     assert outcome is not None
     assert outcome["id"] == record_id
     assert outcome["name"] == "Tobie"
@@ -34,7 +34,7 @@ def test_delete_record_id(
     blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()
 
     # Delete operation returns the deleted record
-    outcome = blocking_ws_connection.delete(record_id)
+    outcome = blocking_ws_connection.delete(record_id).execute()
     assert outcome is not None
     assert outcome["id"] == record_id
     assert outcome["name"] == "Tobie"
@@ -50,7 +50,7 @@ def test_delete_record_id_absent(
     blocking_ws_connection.query("DELETE user;").execute()
 
     # Deleting an absent record returns None (matching select).
-    outcome = blocking_ws_connection.delete(RecordID("user", "missing"))
+    outcome = blocking_ws_connection.delete(RecordID("user", "missing")).execute()
     assert outcome is None
 
 
@@ -60,7 +60,7 @@ def test_delete_string_absent(
     blocking_ws_connection.query("DELETE user;").execute()
 
     # Deleting an absent "table:id" record returns None (matching select).
-    outcome = blocking_ws_connection.delete("user:missing")
+    outcome = blocking_ws_connection.delete("user:missing").execute()
     assert outcome is None
 
 
@@ -71,7 +71,7 @@ def test_delete_table(blocking_ws_connection: BlockingWsSurrealConnection) -> No
 
     # Delete all users in the table
     table = Table("user")
-    outcome = blocking_ws_connection.delete(table)
+    outcome = blocking_ws_connection.delete(table).execute()
     # Table delete returns list of deleted records
     assert len(outcome) == 2
     assert any(record["name"] == "Tobie" for record in outcome)

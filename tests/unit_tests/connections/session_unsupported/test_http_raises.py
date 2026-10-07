@@ -5,6 +5,9 @@ from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.errors import UnsupportedFeatureError
 
 
+# The URLs below are never connected to: each of these methods raises before it
+# would reach the network, which is the whole point of the test. They are not
+# taken from `connection_params` because there is nothing to reach.
 def test_async_http_attach_raises() -> None:
     conn = AsyncHttpSurrealConnection("http://localhost:8000")
 

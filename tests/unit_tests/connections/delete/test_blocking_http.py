@@ -29,7 +29,7 @@ def test_debug_delete(blocking_http_connection: BlockingHttpSurrealConnection) -
 
     # Debug: Check what delete actually returns. delete() runs eagerly and
     # returns the deleted record directly (no builder / .execute()).
-    outcome = blocking_http_connection.delete("user:tobie")
+    outcome = blocking_http_connection.delete("user:tobie").execute()
     print(f"DEBUG: Delete outcome: {outcome!r}")
     print(f"DEBUG: Type: {type(outcome)}")
 
@@ -45,7 +45,7 @@ def test_delete_string(
     blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()
 
     # Delete operation returns the deleted record
-    outcome = blocking_http_connection.delete("user:tobie")
+    outcome = blocking_http_connection.delete("user:tobie").execute()
     assert outcome is not None
     assert outcome["id"] == record_id
     assert outcome["name"] == "Tobie"
@@ -62,7 +62,7 @@ def test_delete_record_id(
     blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()
 
     # Delete operation returns the deleted record
-    outcome = blocking_http_connection.delete(record_id)
+    outcome = blocking_http_connection.delete(record_id).execute()
     assert outcome is not None
     assert outcome["id"] == record_id
     assert outcome["name"] == "Tobie"
@@ -78,7 +78,7 @@ def test_delete_record_id_absent(
     blocking_http_connection.query("DELETE user;").execute()
 
     # Deleting an absent record returns None (matching select).
-    outcome = blocking_http_connection.delete(RecordID("user", "missing"))
+    outcome = blocking_http_connection.delete(RecordID("user", "missing")).execute()
     assert outcome is None
 
 
@@ -88,7 +88,7 @@ def test_delete_string_absent(
     blocking_http_connection.query("DELETE user;").execute()
 
     # Deleting an absent "table:id" record returns None (matching select).
-    outcome = blocking_http_connection.delete("user:missing")
+    outcome = blocking_http_connection.delete("user:missing").execute()
     assert outcome is None
 
 
@@ -99,7 +99,7 @@ def test_delete_table(blocking_http_connection: BlockingHttpSurrealConnection) -
 
     # Delete all users in the table
     table = Table("user")
-    outcome = blocking_http_connection.delete(table)
+    outcome = blocking_http_connection.delete(table).execute()
     # Table delete returns list of deleted records
     assert len(outcome) == 2
     assert any(record["name"] == "Tobie" for record in outcome)

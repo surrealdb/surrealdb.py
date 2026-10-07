@@ -8,9 +8,11 @@ from surrealdb.types import Value
 
 
 @pytest.fixture(autouse=True)
-def setup_blocking_http_signup() -> Iterator[dict[str, Any]]:
+def setup_blocking_http_signup(
+    connection_params: dict[str, Any],
+) -> Iterator[dict[str, Any]]:
     """Setup fixture for blocking HTTP signup tests"""
-    url = "http://localhost:8000"
+    url = connection_params["url"]
     password = "root"
     username = "root"
     vars_params: dict[str, Value] = {

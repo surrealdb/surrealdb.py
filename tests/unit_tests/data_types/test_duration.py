@@ -289,8 +289,10 @@ def test_duration_encodes_with_the_compact_tag() -> None:
 
 
 @pytest.fixture
-async def surrealdb_connection() -> AsyncGenerator[AsyncWsSurrealConnection, None]:
-    url = "ws://localhost:8000/rpc"
+async def surrealdb_connection(
+    ws_url: str,
+) -> AsyncGenerator[AsyncWsSurrealConnection, None]:
+    url = ws_url
     vars_params: dict[str, Value] = {"username": "root", "password": "root"}
     connection = AsyncWsSurrealConnection(url)
     await connection.signin(vars_params)

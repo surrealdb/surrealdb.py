@@ -123,11 +123,13 @@ import asyncio
 import websockets
 import json
 
+
 async def listen():
-    async with websockets.connect('ws://localhost:8000/ws/users') as ws:
+    async with websockets.connect("ws://localhost:8000/ws/users") as ws:
         async for message in ws:
             data = json.loads(message)
-            print('Live update:', data)
+            print("Live update:", data)
+
 
 asyncio.run(listen())
 ```

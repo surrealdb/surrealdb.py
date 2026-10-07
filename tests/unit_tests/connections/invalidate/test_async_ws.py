@@ -1,5 +1,5 @@
 from collections.abc import AsyncIterator
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -8,9 +8,11 @@ from surrealdb.types import Value
 
 
 @pytest.fixture
-async def main_connection() -> AsyncIterator[AsyncWsSurrealConnection]:
+async def main_connection(
+    connection_params: dict[str, Any],
+) -> AsyncIterator[AsyncWsSurrealConnection]:
     """Create a separate connection for the main connection that creates the test data"""
-    url = "ws://localhost:8000"
+    url = connection_params["ws_url"]
     password = "root"
     username = "root"
     vars_params: dict[str, Value] = {

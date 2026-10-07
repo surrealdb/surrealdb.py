@@ -8,9 +8,11 @@ from surrealdb.types import Value
 
 
 @pytest.fixture(autouse=True)
-async def setup_async_ws_signin() -> AsyncIterator[dict[str, Any]]:
+async def setup_async_ws_signin(
+    connection_params: dict[str, Any],
+) -> AsyncIterator[dict[str, Any]]:
     """Setup fixture for async WS signin tests"""
-    url = "ws://localhost:8000"
+    url = connection_params["ws_url"]
     password = "root"
     username = "root"
     database_name = "test_db"

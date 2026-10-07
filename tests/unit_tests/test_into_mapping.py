@@ -311,7 +311,7 @@ def test_sync_select_record_id_into_returns_model(
         return _ok([record])
 
     monkeypatch.setattr(conn, "query_raw", fake_query_raw)
-    out = conn.select(RecordID("person", "tobie"), into=Person)
+    out = conn.select(RecordID("person", "tobie"), into=Person).execute()
     assert isinstance(out, Person)
     assert out.name == "Tobie"
 
@@ -327,7 +327,7 @@ def test_sync_select_absent_into_returns_none(
         return _ok([])
 
     monkeypatch.setattr(conn, "query_raw", fake_query_raw)
-    assert conn.select(RecordID("person", "missing"), into=Person) is None
+    assert conn.select(RecordID("person", "missing"), into=Person).execute() is None
 
 
 def test_sync_select_table_into_returns_list_of_models(
@@ -345,7 +345,7 @@ def test_sync_select_table_into_returns_list_of_models(
         return _ok(rows)
 
     monkeypatch.setattr(conn, "query_raw", fake_query_raw)
-    out = conn.select(Table("person"), into=Person)
+    out = conn.select(Table("person"), into=Person).execute()
     assert isinstance(out, list)
     assert [p.name for p in out] == ["A", "B"]
 
@@ -367,7 +367,7 @@ def test_sync_select_without_into_returns_raw_dict(
         return _ok([record])
 
     monkeypatch.setattr(conn, "query_raw", fake_query_raw)
-    out = conn.select(RecordID("person", "tobie"))
+    out = conn.select(RecordID("person", "tobie")).execute()
     assert out == record
     assert not isinstance(out, Person)
 
@@ -434,7 +434,7 @@ def test_select_into_rejects_something_that_is_not_a_class(
     monkeypatch.setattr(conn, "query_raw", fake_query_raw)
 
     with pytest.raises(TypeError, match="into="):
-        conn.select(RecordID("person", "tobie"), into=5)
+        conn.select(RecordID("person", "tobie"), into=5).execute()
 
 
 def test_into_still_accepts_every_supported_model_kind() -> None:

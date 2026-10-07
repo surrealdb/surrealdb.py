@@ -155,7 +155,9 @@ def test_sync_select_record_id_into(
     _sync_setup: None,
 ) -> None:
     blocking_ws_connection.query("CREATE person:tobie SET name = 'Tobie';").execute()
-    out = blocking_ws_connection.select(RecordID("person", "tobie"), into=Person)
+    out = blocking_ws_connection.select(
+        RecordID("person", "tobie"), into=Person
+    ).execute()
     assert isinstance(out, Person)
     assert out.name == "Tobie"
 
@@ -164,7 +166,9 @@ def test_sync_select_absent_into(
     blocking_ws_connection: BlockingWsSurrealConnection,
     _sync_setup: None,
 ) -> None:
-    out = blocking_ws_connection.select(RecordID("person", "missing"), into=Person)
+    out = blocking_ws_connection.select(
+        RecordID("person", "missing"), into=Person
+    ).execute()
     assert out is None
 
 
@@ -174,7 +178,7 @@ def test_sync_select_table_into(
 ) -> None:
     blocking_ws_connection.query("CREATE person:tobie SET name = 'Tobie';").execute()
     blocking_ws_connection.query("CREATE person:jaime SET name = 'Jaime';").execute()
-    out = blocking_ws_connection.select(Table("person"), into=Person)
+    out = blocking_ws_connection.select(Table("person"), into=Person).execute()
     assert isinstance(out, list)
     assert len(out) == 2
     assert all(isinstance(p, Person) for p in out)

@@ -8,9 +8,11 @@ from surrealdb.types import Value
 
 
 @pytest.fixture(autouse=True)
-def setup_blocking_ws_signup() -> Iterator[dict[str, Any]]:
+def setup_blocking_ws_signup(
+    connection_params: dict[str, Any],
+) -> Iterator[dict[str, Any]]:
     """Setup fixture for blocking WS signup tests"""
-    url = "ws://localhost:8000"
+    url = connection_params["ws_url"]
     password = "root"
     username = "root"
     vars_params: dict[str, Value] = {

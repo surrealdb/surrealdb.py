@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator
+from typing import Any
 
 import pytest
 
@@ -39,8 +40,11 @@ async def setup_schema(
 
 
 @pytest.mark.asyncio
-async def test_signin_root(setup_schema: None) -> None:
-    url = "http://localhost:8000"
+async def test_signin_root(
+    setup_schema: None,
+    connection_params: dict[str, Any],
+) -> None:
+    url = connection_params["url"]
     vars_params: dict[str, Value] = {
         "username": "root",
         "password": "root",
@@ -51,8 +55,11 @@ async def test_signin_root(setup_schema: None) -> None:
 
 
 @pytest.mark.asyncio
-async def test_signin_namespace(setup_schema: None) -> None:
-    url = "http://localhost:8000"
+async def test_signin_namespace(
+    setup_schema: None,
+    connection_params: dict[str, Any],
+) -> None:
+    url = connection_params["url"]
     connection = AsyncHttpSurrealConnection(url)
     vars: dict[str, Value] = {
         "namespace": "test_ns",
@@ -64,8 +71,11 @@ async def test_signin_namespace(setup_schema: None) -> None:
 
 
 @pytest.mark.asyncio
-async def test_signin_database(setup_schema: None) -> None:
-    url = "http://localhost:8000"
+async def test_signin_database(
+    setup_schema: None,
+    connection_params: dict[str, Any],
+) -> None:
+    url = connection_params["url"]
     connection = AsyncHttpSurrealConnection(url)
     vars: dict[str, Value] = {
         "namespace": "test_ns",
@@ -78,8 +88,11 @@ async def test_signin_database(setup_schema: None) -> None:
 
 
 @pytest.mark.asyncio
-async def test_signin_record(setup_schema: None) -> None:
-    url = "http://localhost:8000"
+async def test_signin_record(
+    setup_schema: None,
+    connection_params: dict[str, Any],
+) -> None:
+    url = connection_params["url"]
     vars: dict[str, Value] = {
         "namespace": "test_ns",
         "database": "test_db",

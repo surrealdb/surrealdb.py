@@ -13,6 +13,8 @@ class RequestMethod(Enum):
     UNSET = "unset"
     SELECT = "select"
     QUERY = "query"
+    QUERY_STREAM = "query_stream"
+    QUERY_CANCEL = "query_cancel"
     CREATE = "create"
     INSERT = "insert"
     INSERT_RELATION = "insert_relation"

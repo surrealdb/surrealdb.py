@@ -70,13 +70,13 @@ def test_blocking_ws_read_modify_write_keeps_a_null_field(
         f"CREATE {TABLE}:bws SET name = 'ada', nickname = NULL;"
     ).execute()
 
-    row = blocking_ws_connection.select(record)
+    row = blocking_ws_connection.select(record).execute()
     assert row["nickname"] is Null, "a NULL field must decode to Null, not None"
 
     row["name"] = "ada l."
     blocking_ws_connection.update(record, row)
 
-    after = blocking_ws_connection.select(record)
+    after = blocking_ws_connection.select(record).execute()
     assert "nickname" in after, "the NULL field was deleted by writing the record back"
     assert after["nickname"] is Null
     assert (
@@ -93,11 +93,11 @@ def test_blocking_http_read_modify_write_keeps_a_null_field(
         f"CREATE {TABLE}:bhttp SET name = 'ada', nickname = NULL;"
     ).execute()
 
-    row = blocking_http_connection.select(record)
+    row = blocking_http_connection.select(record).execute()
     row["name"] = "ada l."
     blocking_http_connection.update(record, row)
 
-    after = blocking_http_connection.select(record)
+    after = blocking_http_connection.select(record).execute()
     assert "nickname" in after
     assert after["nickname"] is Null
 
