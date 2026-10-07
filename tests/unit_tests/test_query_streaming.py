@@ -2081,3 +2081,49 @@ def test_the_buffered_rebuild_is_not_public() -> None:
     for cls in (AsyncQueryStream, QueryStream):
         public = [name for name in dir(cls) if not name.startswith("_")]
         assert "collect" not in public, f"{cls.__name__} exposes collect(): {public}"
+
+
+async def test_a_none_valued_statement_contributes_no_rows() -> None:
+    """`LET`, `SLEEP` and `RETURN NONE` produce no row, matching the JS SDK.
+
+    Their value reached the row view as a bare `None`, which made
+    `rows(into=Model)` fail on any multi-statement query - after it had already
+    yielded every valid model, since the NONE arrives last.
+    """
+    rows_out = await collect_rows(
+        [
+            begin(2),
+            rows(0, [{"n": 1}]),
+            finished(0),
+            value(1, None),
+            finished(1, single=True),
+            end(2),
+        ]
+    )
+    assert rows_out == [{"n": 1}]
+
+
+async def test_a_none_valued_statement_still_reaches_the_statements_view() -> None:
+    """Skipped as a row, reported as a result - the two views disagree on purpose."""
+    statements = await collect_statements(
+        [
+            begin(2),
+            rows(0, [{"n": 1}]),
+            finished(0),
+            value(1, None),
+            finished(1, single=True),
+            end(2),
+        ]
+    )
+    assert [(s.index, s.value, s.single) for s in statements] == [
+        (0, [{"n": 1}], False),
+        (1, None, True),
+    ]
+
+
+async def test_a_scalar_statement_still_yields_one_row() -> None:
+    """`RETURN 1 + 2` is one row; only NONE is nothing."""
+    rows_out = await collect_rows(
+        [begin(1), value(0, 3), finished(0, single=True), end(1)]
+    )
+    assert rows_out == [3]

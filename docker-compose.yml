@@ -85,7 +85,7 @@ services:
   # `SURREALDB_PORT=8033 uv run pytest`; against anything older those tests
   # skip themselves.
   surrealdb-v3-3:
-    image: surrealdb/surrealdb:${SURREALDB_V3_3_VERSION:-v3.3.0-beta.3}
+    image: surrealdb/surrealdb:${SURREALDB_V3_3_VERSION:-v3.3.0}
     command: "start --allow-all"
     environment:
       - SURREAL_USER=root

@@ -61,9 +61,9 @@ def the_whole_answer(db: Surreal) -> None:
 def rows_as_they_arrive(db: Surreal) -> None:
     """`.stream()` gives you each row as the server produces it.
 
-    Iterating is flat across statements, so this counts one more than the
-    `.execute()` above did: the `SLEEP` is a statement too, and its (empty)
-    value arrives as a row. `.statements()` below keeps them apart.
+    Iterating is flat across statements: a statement with a single value, like
+    `RETURN 42`, is one row, and one whose value is NONE, like the `SLEEP`
+    here, is no rows at all. `.statements()` below keeps the statements apart.
     """
     started = time.monotonic()
     first_at: float | None = None

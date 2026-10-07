@@ -244,9 +244,10 @@ async def test_two_streams_run_concurrently_on_one_connection(
             "the slow stream had already finished, so the two never overlapped"
         )
         slow_rows = await slow_task
-        # SLEEP's own None, then every row `_seed` created. Exact, because a
-        # `> 1` bound would accept any amount of frame loss or truncation.
-        assert len(slow_rows) == 121, len(slow_rows)
+        # Every row `_seed` created, and nothing for the SLEEP: a statement
+        # whose value is NONE contributes no row. Exact, because a `> 1` bound
+        # would accept any amount of frame loss or truncation.
+        assert len(slow_rows) == 120, len(slow_rows)
     finally:
         await slow.aclose()
         await quick.aclose()

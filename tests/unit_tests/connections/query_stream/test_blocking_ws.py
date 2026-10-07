@@ -227,7 +227,9 @@ def test_a_stream_hands_a_notification_it_read_to_the_live_subscriber(
             ).stream()
         )
         writer.join(timeout=30)
-        assert 121 <= len(rows) <= 122, len(rows)
+        # The SLEEP contributes no row, so this is the seeded rows exactly;
+        # the write the other thread made may or may not land inside the scan.
+        assert 120 <= len(rows) <= 121, len(rows)
 
         # Read off the subscriber's own queue with a deadline, not by iterating
         # the generator. `next()` would fall through to reading the socket when

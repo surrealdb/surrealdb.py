@@ -375,6 +375,14 @@ class _Accumulator:
         value: Value = frame.get("value")
         if self._retain_rows:
             self._singles[index] = value
+        if value is None:
+            # A statement whose value is NONE - `LET`, `SLEEP`, `RETURN NONE`,
+            # anything with `RETURN NONE` - contributes no rows, matching the
+            # JavaScript SDK. It still reaches the statements view, which
+            # reports its value as None. NULL is a distinct `Null`, so this
+            # drops no data, and a None inside a list arrives as a row through
+            # `_rows_frame` rather than here.
+            return []
         return [_Row(index, value)]
 
     def _finished_frame(self, frame: dict[str, Any]) -> list[_Event]:
