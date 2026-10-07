@@ -69,7 +69,7 @@ embedded = [
     "surrealdb-embedded==3.0.0-beta.8",
 ]
 pydantic = [
-    "pydantic>=2.12.0",
+    "pydantic>=2.13.5",
 ]
 memory = [
     # `>=`, deliberately, unlike `embedded`'s exact pin above. The memory client
@@ -89,19 +89,19 @@ memory = [
 dev = [
     { include-group = "test" },
     "surrealdb[memory,pydantic]",
-    "maturin>=1.0",
-    "mypy>=1.18.2",
-    "pyright>=1.1.407",
-    "ruff>=0.14.6",
-    "types-requests>=2.32.4",   # Type stubs for requests
+    "maturin>=1.15.0",
+    "mypy>=2.4.0",
+    "pyright>=1.1.414",
+    "ruff>=0.16.10",
+    "types-requests>=2.33.0.20261006",   # Type stubs for requests
 ]
 test = [
-    "coverage>=7.0.0",
-    "hypothesis>=6.135.16",
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.0.0",
-    "responses>=0.25.0",
+    "coverage>=7.16.2",
+    "hypothesis>=6.168.5",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "responses>=0.26.3",
 ]
 
 # --------------------------------------------------

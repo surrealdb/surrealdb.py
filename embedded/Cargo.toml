@@ -14,7 +14,7 @@ pyo3-async-runtimes = { version = "0.29", features = ["tokio-runtime"] }
 surrealdb-core = { version = "3", default-features = false, features = ["kv-mem", "kv-surrealkv"] }
 surrealdb-types = "3"
 tokio = { version = "1", features = ["full"] }
-uuid = "1.23"
+uuid = "1.27"
 
 [profile.release]
 lto = true
