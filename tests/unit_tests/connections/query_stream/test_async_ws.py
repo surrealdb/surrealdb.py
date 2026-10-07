@@ -445,3 +445,25 @@ async def test_a_query_from_inside_a_slow_loop_still_answers(
                 break
 
     assert inner == ["inner"], inner
+
+
+async def test_frames_report_a_failed_statement_against_a_real_server(
+    async_ws_connection: AsyncWsSurrealConnection,
+) -> None:
+    """The reason the frame view exists, against a server that really throws."""
+    await _require_streaming(async_ws_connection)
+    await _seed(async_ws_connection, count=2)
+
+    sql = "SELECT * FROM stream_wide; THROW 'boom'; RETURN 42"
+    kinds: list[tuple[str, int]] = []
+    async for frame in async_ws_connection.query(sql).stream():
+        kinds.append((type(frame).__name__, frame.index))
+
+    assert ("ErrorFrame", 1) in kinds
+    assert ("DoneFrame", 2) in kinds, (
+        f"the statement after the failure should still complete: {kinds}"
+    )
+
+    # The row view, on the same query, stops at the failure instead.
+    with pytest.raises(SurrealError):
+        [row async for row in async_ws_connection.query(sql).rows()]

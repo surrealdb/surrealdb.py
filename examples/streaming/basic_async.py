@@ -18,7 +18,13 @@ import asyncio
 import time
 from dataclasses import dataclass
 
-from surrealdb import AsyncSurreal, RecordID
+from surrealdb import (
+    AsyncSurreal,
+    DoneFrame,
+    ErrorFrame,
+    RecordID,
+    ValueFrame,
+)
 from surrealdb.errors import UnsupportedFeatureError
 
 URL = "ws://localhost:8000/rpc"
@@ -140,6 +146,23 @@ async def when_the_server_cannot_stream(db: AsyncSurreal) -> None:
         print(f"  require_streaming=True -> refused: {error}")
 
 
+async def frames_when_a_statement_fails(db: AsyncSurreal) -> None:
+    """`.stream()` is the low-level view: one statement can fail and the rest go on.
+
+    `rows()` and `statements()` both stop at the first failure. This does not -
+    which is the only reason to reach for frames.
+    """
+    sql = "SELECT * FROM person LIMIT 2; THROW 'nope'; RETURN 42"
+
+    async for frame in db.query(sql).stream():
+        if isinstance(frame, ValueFrame):
+            print(f"  statement {frame.index}: value {frame.value!r}")
+        elif isinstance(frame, ErrorFrame):
+            print(f"  statement {frame.index}: failed - {frame.error}")
+        elif isinstance(frame, DoneFrame):
+            print(f"  statement {frame.index}: complete in {frame.result.time}")
+
+
 async def main() -> None:
     async with AsyncSurreal(URL) as db:
         await db.signin({"username": "root", "password": "root"})
@@ -160,6 +183,9 @@ async def main() -> None:
 
         print("\nOne result per statement:")
         await one_result_per_statement(db)
+
+        print("\nFrames, when a statement fails:")
+        await frames_when_a_statement_fails(db)
 
         print("\nWhen streaming is not available:")
         await when_the_server_cannot_stream(db)

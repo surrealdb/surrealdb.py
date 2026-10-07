@@ -85,8 +85,11 @@ from surrealdb.errors import (
 )
 from surrealdb.streaming import (
     AsyncQueryStream,
+    DoneFrame,
+    ErrorFrame,
     QueryStream,
     StatementResult,
+    ValueFrame,
 )
 from surrealdb.types import Tokens, Value
 
@@ -150,7 +153,10 @@ __all__ = [
     # Streaming queries (returned by a builder's rows()/statements())
     "AsyncQueryStream",
     "QueryStream",
+    "DoneFrame",
+    "ErrorFrame",
     "StatementResult",
+    "ValueFrame",
     # Data types
     "Table",
     "Duration",

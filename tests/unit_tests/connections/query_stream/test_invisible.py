@@ -247,3 +247,42 @@ def test_a_blocking_query_in_a_transaction_is_never_streamed(
         assert len(first) == 2
     finally:
         blocking_ws_connection.commit(txn)
+
+
+async def test_frames_report_the_same_failure_either_way(
+    connection_params: dict[str, Any],
+) -> None:
+    """The frame view must not depend on whether the server streamed.
+
+    The buffered replay stopped at a failed statement, which is right for the
+    views that raise on one and wrong for frames: the server has already sent
+    the statements after it, so the fallback reported a short query while a
+    streaming server reported the whole of it.
+    """
+    sql = "SELECT * FROM inv ORDER BY id LIMIT 2; THROW 'nope'; RETURN 42"
+    streamed = AsyncWsSurrealConnection(connection_params["ws_url"])
+    buffered = AsyncWsSurrealConnection(connection_params["ws_url"], streaming=False)
+    try:
+        for db in (streamed, buffered):
+            await db.signin(connection_params["vars_params"])
+            await db.use(
+                namespace=connection_params["namespace"],
+                database=connection_params["database_name"],
+            )
+        await streamed.query(SEED)
+
+        shapes = []
+        for db in (streamed, buffered):
+            shapes.append(
+                [
+                    (type(frame).__name__, frame.index)
+                    async for frame in db.query(sql).stream()
+                ]
+            )
+
+        assert shapes[0] == shapes[1], f"streamed {shapes[0]} but buffered {shapes[1]}"
+        assert ("ErrorFrame", 1) in shapes[0]
+        assert ("DoneFrame", 2) in shapes[0], shapes[0]
+    finally:
+        await streamed.close()
+        await buffered.close()

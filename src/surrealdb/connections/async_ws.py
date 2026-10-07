@@ -1101,6 +1101,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             *,
             require_streaming: bool = False,
             statements: bool = False,
+            frames: bool = False,
         ) -> AsyncQueryStream:
             return AsyncQueryStream(
                 self._stream_ops(),
@@ -1110,6 +1111,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
                 txn_id=txn_id,
                 require_streaming=require_streaming,
                 statements=statements,
+                frames=frames,
             )
 
         return _Executor(_executor, _stream)

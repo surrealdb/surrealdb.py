@@ -283,6 +283,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
             *,
             require_streaming: bool = False,
             statements: bool = False,
+            frames: bool = False,
         ) -> AsyncQueryStream:
             return AsyncQueryStream(
                 AsyncStreamOps.never_streams(
@@ -292,6 +293,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
                 params or None,
                 require_streaming=require_streaming,
                 statements=statements,
+                frames=frames,
             )
 
         return _Executor(_executor, _stream)

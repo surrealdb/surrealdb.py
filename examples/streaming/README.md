@@ -39,6 +39,8 @@ Streaming with the async client:
   rest of the query
 - `.statements()` — one completed result per statement, for multi-statement
   queries
+- `.stream()` — every value, error and completion as a frame, which is what to
+  use when one statement should be able to fail while the rest carry on
 - `require_streaming=True` — be told rather than served the buffered fallback
 
 Run with:
@@ -49,7 +51,7 @@ python examples/streaming/basic_async.py
 
 ### `basic_sync.py`
 
-The same six things on the blocking client, with `with` instead of `async with`
+The same seven things on the blocking client, with `with` instead of `async with`
 and `.execute()` where the async form awaits.
 
 Run with:

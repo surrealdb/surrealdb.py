@@ -24,7 +24,13 @@ from typing import Any
 
 import pytest
 
-from surrealdb import AsyncSurreal, Surreal
+from surrealdb import (
+    AsyncSurreal,
+    DoneFrame,
+    ErrorFrame,
+    Surreal,
+    ValueFrame,
+)
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
@@ -391,6 +397,28 @@ async def test_the_require_streaming_block_runs(
     assert sorted(names) == ["a", "b"]
 
 
+async def test_the_frames_block_runs(
+    async_ws_connection: Any, streaming_people: str
+) -> None:
+    """The frame view, and the claim that the statement after a failure runs."""
+    db = async_ws_connection
+
+    kinds: list[tuple[str, int]] = []
+    async for frame in db.query(
+        "SELECT * FROM person; THROW 'nope'; RETURN 42"
+    ).stream():
+        kinds.append((type(frame).__name__, frame.index))
+        if isinstance(frame, ValueFrame):
+            assert frame.value is not None
+        elif isinstance(frame, ErrorFrame):
+            assert str(frame.error)
+        elif isinstance(frame, DoneFrame):
+            assert frame.result.index == frame.index
+
+    assert ("ErrorFrame", 1) in kinds
+    assert ("DoneFrame", 2) in kinds, kinds
+
+
 def test_the_streaming_blocks_are_still_what_the_readme_shows() -> None:
     """Bind the tests above to the README text, rather than trusting a diff.
 
@@ -415,6 +443,8 @@ def test_the_streaming_blocks_are_still_what_the_readme_shows() -> None:
         'with db.query("SELECT * FROM person").rows() as stream:',
         'AsyncSurreal("ws://localhost:8000/rpc", streaming=False)',
         "db.query(sql).rows(require_streaming=True)",
+        "from surrealdb import DoneFrame, ErrorFrame, ValueFrame",
+        "if isinstance(frame, ValueFrame):",
     ):
         assert snippet in body, (
             f"the README's streaming section no longer contains {snippet!r} - "

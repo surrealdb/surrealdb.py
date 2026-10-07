@@ -834,6 +834,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             *,
             require_streaming: bool = False,
             statements: bool = False,
+            frames: bool = False,
         ) -> QueryStream:
             return QueryStream(
                 self._stream_ops(),
@@ -843,6 +844,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 txn_id=txn_id,
                 require_streaming=require_streaming,
                 statements=statements,
+                frames=frames,
             )
 
         return _Executor(_executor, _stream)

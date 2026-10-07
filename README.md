@@ -632,6 +632,35 @@ of rows, as for `RETURN 1 + 2` or `SELECT ... FROM ONLY`.
 A stream is read **once**, and both views draw from the same frames, so pick
 one per call.
 
+### Frames, when neither view will do
+
+`.stream()` is the low-level view, and almost always the wrong one to start
+with. It yields every value, error and completion as the frame that says which,
+each carrying the `index` of the statement it belongs to:
+
+```python
+from surrealdb import DoneFrame, ErrorFrame, ValueFrame
+
+async for frame in db.query("SELECT * FROM person; THROW 'nope'; RETURN 42").stream():
+    if isinstance(frame, ValueFrame):
+        print(frame.index, frame.value)
+    elif isinstance(frame, ErrorFrame):
+        print(frame.index, "failed:", frame.error)
+    elif isinstance(frame, DoneFrame):
+        print(frame.index, "complete", frame.result.time)
+```
+
+Frames are for the one thing `rows()` and `statements()` cannot show: **one
+statement failing while the statements after it carry on.** Both of those stop
+at the first failure; here the `THROW` arrives as an `ErrorFrame` and `RETURN 42`
+still produces its value and its `DoneFrame`.
+
+The same rules apply as everywhere else. A value is provisional until its
+statement's `DoneFrame`, and an `ErrorFrame` retracts the values already yielded
+for that index - the difference is that you see it happen rather than having
+iteration raise. Statements are counted by their `DoneFrame`s. A query that
+could not be completed at all, such as one whose connection died, still raises.
+
 ### Rows as models
 
 `into=` maps each row as it arrives, which is the case streaming is actually

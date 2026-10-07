@@ -73,6 +73,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   The blocking client reads on demand and never held anything.
 
+- `stream()` on a query is the low-level view: every value, error and
+  completion as a `ValueFrame`, `ErrorFrame` or `DoneFrame`, each carrying the
+  `index` of its statement. Matching the JavaScript SDK's `stream()`, and for
+  the one thing the other two views cannot show - a statement failing while the
+  statements after it carry on, where `rows()` and `statements()` both stop at
+  the first failure. Discriminated by type rather than by predicate methods,
+  which is how Python tells things apart.
+
+  These are not wire frames: the protocol's own framing stays inside the SDK,
+  so the rules it exists to apply - provisional values, retraction on failure,
+  counting statements by their completions - are still applied here rather than
+  handed to the caller. A query that could not be completed at all still raises.
+
 - `.rows()` on any builder is the visible half: the rows as they arrive,
   rather than the whole answer at the end. Every builder has two terminators
   now - `await` (or `.execute()`) for the whole answer, `.rows()` for the rows

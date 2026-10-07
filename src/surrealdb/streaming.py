@@ -147,6 +147,44 @@ class StatementResult:
 
 
 @dataclass(frozen=True)
+class ValueFrame:
+    """A value for statement ``index`` - a row, or its whole single value.
+
+    Provisional until that statement's :class:`DoneFrame`: an :class:`ErrorFrame`
+    for the same index retracts every value already yielded for it.
+    """
+
+    index: int
+    value: Value
+
+
+@dataclass(frozen=True)
+class ErrorFrame:
+    """Statement ``index`` failed, retracting the values it had yielded.
+
+    Yielded rather than raised, which is the whole reason to read frames: the
+    statements after a failed one carry on, where the row and statement views
+    stop at the first failure.
+    """
+
+    index: int
+    error: ServerError
+    time: str
+    query_type: str | None
+
+
+@dataclass(frozen=True)
+class DoneFrame:
+    """Statement ``index`` is complete, with everything it produced.
+
+    Statements are counted by these, not by what the query said it would run.
+    """
+
+    index: int
+    result: StatementResult
+
+
+@dataclass(frozen=True)
 class _Row:
     """A row - or a single statement's whole value - is available now."""
 
@@ -523,14 +561,20 @@ def _error_response(error: ServerError) -> dict[str, Any]:
 
 
 def _buffered_events(
-    statements: list[dict[str, Any]], *, retain_rows: bool
+    statements: list[dict[str, Any]], *, retain_rows: bool, frames: bool = False
 ) -> Iterator[_Event]:
     """Replay a buffered ``query`` answer as the events a stream would emit.
 
-    What a server without ``query_stream`` gives us, shaped so the two views
-    read it exactly as they read a real stream. A statement whose value is a
-    list is a row list; anything else is one bare value - the same distinction
-    the ``single`` flag draws on the wire.
+    What a server without ``query_stream`` gives us, shaped so the views read it
+    exactly as they read a real stream. A statement whose value is a list is a
+    row list; anything else is one bare value - the same distinction the
+    ``single`` flag draws on the wire.
+
+    Stopping at a failed statement is right for the views that raise on one,
+    since nothing after it would be delivered anyway. It is wrong for frames,
+    which report a failure and carry on - and the server has already sent the
+    statements after it, so truncating here would make the fallback disagree
+    with the streamed path about a query the frame view exists to describe.
     """
     for index, statement in enumerate(statements):
         if statement.get("status") == "ERR":
@@ -541,7 +585,9 @@ def _buffered_events(
                 time=str(statement.get("time", "")),
                 query_type=raw_type if isinstance(raw_type, str) else None,
             )
-            return
+            if not frames:
+                return
+            continue
         result: Value = statement.get("result")
         rows: list[Value] = result if isinstance(result, list) else [result]
         single = not isinstance(result, list)
@@ -753,6 +799,10 @@ class _StreamBase:
         # connection's stream slots until the connection itself went away.
         self._cancellable = False
 
+    # Set by the frame view. A statement failure is then delivered rather than
+    # raised - see `_apply`.
+    _frames: bool = False
+
     def _claim(self) -> None:
         """Refuse a second pass over a stream that can only be read once.
 
@@ -809,8 +859,14 @@ class _StreamBase:
         return accumulator.feed(response["result"])
 
     def _apply(self, event: _Event) -> None:
-        """Raise what an event says failed. Returns for anything deliverable."""
-        if isinstance(event, _Failed):
+        """Raise what an event says failed. Returns for anything deliverable.
+
+        A statement failure is delivered rather than raised when the caller is
+        reading frames, since seeing one statement fail while the rest carry on
+        is what frames are for. A query that could not be completed at all still
+        raises, whichever view is reading.
+        """
+        if isinstance(event, _Failed) and not self._frames:
             raise event.error
         if isinstance(event, _Ended) and event.error is not None:
             raise event.error
@@ -852,6 +908,17 @@ def _pick_row(event: _Event) -> Any:
 
 def _pick_statement(event: _Event) -> Any:
     return event.result if isinstance(event, _Completed) else _SKIP
+
+
+def _pick_frame(event: _Event) -> Any:
+    """Every value, error and completion, as the frame that says which it is."""
+    if isinstance(event, _Row):
+        return ValueFrame(event.index, event.value)
+    if isinstance(event, _Failed):
+        return ErrorFrame(event.index, event.error, event.time, event.query_type)
+    if isinstance(event, _Completed):
+        return DoneFrame(event.result.index, event.result)
+    return _SKIP
 
 
 class _AsyncView:
@@ -961,6 +1028,7 @@ class AsyncQueryStream(_StreamBase):
         txn_id: UUID | None = None,
         require_streaming: bool = False,
         statements: bool = False,
+        frames: bool = False,
     ) -> None:
         super().__init__(
             query,
@@ -981,6 +1049,7 @@ class AsyncQueryStream(_StreamBase):
         # they return, which is what this class documents.
         self._view: _AsyncView | None = None
         self._statements = statements
+        self._frames = frames
 
     def __aiter__(self) -> AsyncIterator[Any]:
         # Claimed here rather than on first iteration. Deferring it meant a
@@ -989,7 +1058,9 @@ class AsyncQueryStream(_StreamBase):
         # the one that had - holding a stream on the server - open. It also
         # reports the mistake at the call that made it.
         self._claim()
-        if self._statements:
+        if self._frames:
+            self._view = _AsyncView(self._drive(retain_rows=True), _pick_frame)
+        elif self._statements:
             self._view = _AsyncView(self._drive(retain_rows=True), _pick_statement)
         else:
             self._view = _AsyncView(self._drive(retain_rows=False), _pick_row)
@@ -1223,7 +1294,9 @@ class AsyncQueryStream(_StreamBase):
         statements = await self._ops.buffered(
             self._query, self._variables, self._session_id, self._txn_id
         )
-        return list(_buffered_events(statements, retain_rows=retain_rows))
+        return list(
+            _buffered_events(statements, retain_rows=retain_rows, frames=self._frames)
+        )
 
     async def _teardown(
         self, request_id: str, frames: asyncio.Queue[Any], *, ended: bool
@@ -1306,6 +1379,7 @@ class QueryStream(_StreamBase):
         txn_id: UUID | None = None,
         require_streaming: bool = False,
         statements: bool = False,
+        frames: bool = False,
     ) -> None:
         super().__init__(
             query,
@@ -1326,11 +1400,14 @@ class QueryStream(_StreamBase):
         # cancel there and then.
         self._view: weakref.ReferenceType[_SyncView] | None = None
         self._statements = statements
+        self._frames = frames
 
     def __iter__(self) -> Iterator[Any]:
         # See :meth:`AsyncQueryStream.__aiter__` for why this claims here.
         self._claim()
-        if self._statements:
+        if self._frames:
+            view = _SyncView(self._drive(retain_rows=True), _pick_frame)
+        elif self._statements:
             view = _SyncView(self._drive(retain_rows=True), _pick_statement)
         else:
             view = _SyncView(self._drive(retain_rows=False), _pick_row)
@@ -1501,7 +1578,9 @@ class QueryStream(_StreamBase):
         statements = self._ops.buffered(
             self._query, self._variables, self._session_id, self._txn_id
         )
-        return list(_buffered_events(statements, retain_rows=retain_rows))
+        return list(
+            _buffered_events(statements, retain_rows=retain_rows, frames=self._frames)
+        )
 
     def _teardown(
         self, request_id: str, frames: queue.Queue[Any], *, ended: bool

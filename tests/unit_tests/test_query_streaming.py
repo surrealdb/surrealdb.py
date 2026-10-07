@@ -25,7 +25,7 @@ from unittest import mock
 import pytest
 from websockets.protocol import State
 
-from surrealdb import streaming
+from surrealdb import DoneFrame, ErrorFrame, ValueFrame, streaming
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
@@ -2126,3 +2126,70 @@ async def test_a_scalar_statement_still_yields_one_row() -> None:
         [begin(1), value(0, 3), finished(0, single=True), end(1)]
     )
     assert rows_out == [3]
+
+
+# ------------------------------------------------------------- the frame view
+#
+# The low-level view, for the one thing the other two cannot show: a statement
+# failing while the statements after it carry on. Matching the JavaScript SDK's
+# `stream()`, which yields the same three kinds.
+
+
+async def collect_frames(frames_in: list[Any], **kwargs: Any) -> list[Any]:
+    channel = _AsyncChannel(frames_in, **kwargs)
+    stream = AsyncQueryStream(channel.ops(), "SELECT 1", frames=True)
+    return [frame async for frame in stream]
+
+
+_THROWN = {"code": -32006, "message": "An error occurred: boom"}
+
+
+async def test_frames_carry_on_past_a_failed_statement() -> None:
+    """The row view raises here; frames report and continue."""
+    out = await collect_frames(
+        [
+            begin(3),
+            rows(0, [{"n": 1}]),
+            finished(0),
+            finished(1, error=_THROWN),
+            value(2, 42),
+            finished(2, single=True),
+            end(3),
+        ]
+    )
+    assert [type(f).__name__ for f in out] == [
+        "ValueFrame",
+        "DoneFrame",
+        "ErrorFrame",
+        "ValueFrame",
+        "DoneFrame",
+    ]
+    assert [f.index for f in out] == [0, 0, 1, 2, 2]
+
+
+async def test_an_error_frame_carries_the_index_of_what_it_retracts() -> None:
+    """A value is provisional until its own DoneFrame, so the index is the link."""
+    out = await collect_frames(
+        [begin(1), rows(0, [{"n": 1}, {"n": 2}]), finished(0, error=_THROWN), end(1)]
+    )
+    values = [f for f in out if isinstance(f, ValueFrame)]
+    errors = [f for f in out if isinstance(f, ErrorFrame)]
+    assert [f.index for f in values] == [0, 0]
+    assert [f.index for f in errors] == [0]
+    assert not [f for f in out if isinstance(f, DoneFrame)]
+
+
+async def test_a_query_that_could_not_complete_still_raises_for_frames() -> None:
+    """A *statement* failure is a frame; the *query* failing is not."""
+    with pytest.raises(SurrealError):
+        await collect_frames(
+            [begin(1), rows(0, [{"n": 1}]), finished(0), end(1, error=_THROWN)]
+        )
+
+
+async def test_the_frame_view_is_read_once_like_the_others() -> None:
+    channel = _AsyncChannel([begin(1), value(0, 1), finished(0, single=True), end(1)])
+    stream = AsyncQueryStream(channel.ops(), "SELECT 1", frames=True)
+    assert [f async for f in stream]
+    with pytest.raises(SurrealError, match="already been consumed"):
+        [f async for f in stream]

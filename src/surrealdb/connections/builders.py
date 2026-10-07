@@ -757,12 +757,14 @@ class _Executor:
         *,
         require_streaming: bool = False,
         statements: bool = False,
+        frames: bool = False,
     ) -> Any:
         return self._open_stream(
             query,
             params,
             require_streaming=require_streaming,
             statements=statements,
+            frames=frames,
         )
 
 
@@ -773,6 +775,7 @@ def _open_stream(
     *,
     require_streaming: bool,
     statements: bool = False,
+    frames: bool = False,
 ) -> Any:
     """Open a stream through *executor*, or say why it cannot.
 
@@ -791,6 +794,7 @@ def _open_stream(
         variables,
         require_streaming=require_streaming,
         statements=statements,
+        frames=frames,
     )
 
 
@@ -1281,6 +1285,32 @@ class AsyncQueryBuilder(_QueryState):
         _claim_for_stream(self)
         return stream
 
+    def stream(self, *, require_streaming: bool = False) -> Any:
+        """Read every value, error and completion as the frame that says which.
+
+        The low-level view, and almost always the wrong one to start with: use
+        :meth:`rows` for the rows as they arrive, or ``statements()`` for each
+        statement once it is final. Frames are for what neither can show, which
+        is one statement failing while the statements after it carry on, and
+        each statement's completion as it happens.
+
+        Yields :class:`~surrealdb.ValueFrame`, :class:`~surrealdb.ErrorFrame`
+        and :class:`~surrealdb.DoneFrame`, each carrying the ``index`` of the
+        statement it belongs to. A value is provisional until its statement's
+        ``DoneFrame``, and an ``ErrorFrame`` retracts the values already yielded
+        for that index. A query that could not be completed at all still raises.
+        """
+        self._check_not_executed()
+        stream = _open_stream(
+            self._executor,
+            self._query,
+            self._variables,
+            require_streaming=require_streaming,
+            frames=True,
+        )
+        _claim_for_stream(self)
+        return stream
+
     def rows(
         self,
         *,
@@ -1607,6 +1637,32 @@ class SyncQueryBuilder(_QueryState):
             self._variables,
             require_streaming=require_streaming,
             statements=True,
+        )
+        _claim_for_stream(self)
+        return stream
+
+    def stream(self, *, require_streaming: bool = False) -> Any:
+        """Read every value, error and completion as the frame that says which.
+
+        The low-level view, and almost always the wrong one to start with: use
+        :meth:`rows` for the rows as they arrive, or ``statements()`` for each
+        statement once it is final. Frames are for what neither can show, which
+        is one statement failing while the statements after it carry on, and
+        each statement's completion as it happens.
+
+        Yields :class:`~surrealdb.ValueFrame`, :class:`~surrealdb.ErrorFrame`
+        and :class:`~surrealdb.DoneFrame`, each carrying the ``index`` of the
+        statement it belongs to. A value is provisional until its statement's
+        ``DoneFrame``, and an ``ErrorFrame`` retracts the values already yielded
+        for that index. A query that could not be completed at all still raises.
+        """
+        self._check_not_executed()
+        stream = _open_stream(
+            self._executor,
+            self._query,
+            self._variables,
+            require_streaming=require_streaming,
+            frames=True,
         )
         _claim_for_stream(self)
         return stream

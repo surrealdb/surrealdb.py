@@ -241,6 +241,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
             *,
             require_streaming: bool = False,
             statements: bool = False,
+            frames: bool = False,
         ) -> QueryStream:
             return QueryStream(
                 SyncStreamOps.never_streams(self._stream_buffered, UNSUPPORTED_BY_HTTP),
@@ -248,6 +249,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
                 params or None,
                 require_streaming=require_streaming,
                 statements=statements,
+                frames=frames,
             )
 
         return _Executor(_executor, _stream)
