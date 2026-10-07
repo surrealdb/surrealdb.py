@@ -31,9 +31,7 @@ async def test_async_http_streams_by_buffering(
     buffered = await async_http_connection.query(MIXED_SQL)
     statements = [
         statement
-        async for statement in async_http_connection.query(MIXED_SQL)
-        .stream()
-        .statements()
+        async for statement in async_http_connection.query(MIXED_SQL).statements()
     ]
     assert [statement.value for statement in statements] == buffered
     assert [statement.single for statement in statements] == [False, True, False]
@@ -41,7 +39,7 @@ async def test_async_http_streams_by_buffering(
     expected: list[object] = []
     for result in buffered:
         expected.extend(result if isinstance(result, list) else [result])
-    assert [row async for row in async_http_connection.query(MIXED_SQL).stream()] == (
+    assert [row async for row in async_http_connection.query(MIXED_SQL).rows()] == (
         expected
     )
 
@@ -50,7 +48,7 @@ async def test_async_http_says_so_when_streaming_is_required(
     async_http_connection: AsyncHttpSurrealConnection,
 ) -> None:
     with pytest.raises(UnsupportedFeatureError, match="HTTP transport cannot stream"):
-        async for _ in async_http_connection.query("RETURN 1").stream(
+        async for _ in async_http_connection.query("RETURN 1").rows(
             require_streaming=True
         ):
             pass
@@ -62,7 +60,7 @@ def test_blocking_http_streams_by_buffering(
     blocking_http_connection.query(SEED).execute()
 
     buffered = blocking_http_connection.query(MIXED_SQL).execute()
-    statements = list(blocking_http_connection.query(MIXED_SQL).stream().statements())
+    statements = list(blocking_http_connection.query(MIXED_SQL).statements())
     assert [statement.value for statement in statements] == buffered
 
 
@@ -70,4 +68,4 @@ def test_blocking_http_says_so_when_streaming_is_required(
     blocking_http_connection: BlockingHttpSurrealConnection,
 ) -> None:
     with pytest.raises(UnsupportedFeatureError, match="HTTP transport cannot stream"):
-        list(blocking_http_connection.query("RETURN 1").stream(require_streaming=True))
+        list(blocking_http_connection.query("RETURN 1").rows(require_streaming=True))

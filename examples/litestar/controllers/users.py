@@ -1,7 +1,5 @@
 """User CRUD endpoints."""
 
-from typing import List
-
 from litestar import Controller, delete, get, post, put
 from litestar.di import Provide
 from litestar.exceptions import InternalServerException, NotFoundException
@@ -51,10 +49,10 @@ class UserController(Controller):
                 age=user_data.get("age"),
             )
         except Exception as e:
-            raise InternalServerException(f"Database error: {str(e)}")
+            raise InternalServerException(f"Database error: {e!s}")
 
     @get(return_dto=UserResponseDTO)
-    async def list_users(self, db: AsyncSurrealConnection) -> List[UserResponse]:
+    async def list_users(self, db: AsyncSurrealConnection) -> list[UserResponse]:
         """Get all users."""
         try:
             result = await db.select("users")
@@ -75,7 +73,7 @@ class UserController(Controller):
 
             return users
         except Exception as e:
-            raise InternalServerException(f"Database error: {str(e)}")
+            raise InternalServerException(f"Database error: {e!s}")
 
     @get("/{user_id:str}", return_dto=UserResponseDTO)
     async def get_user(self, user_id: str, db: AsyncSurrealConnection) -> UserResponse:
@@ -98,7 +96,7 @@ class UserController(Controller):
         except NotFoundException:
             raise
         except Exception as e:
-            raise InternalServerException(f"Database error: {str(e)}")
+            raise InternalServerException(f"Database error: {e!s}")
 
     @put("/{user_id:str}", dto=UserUpdateDTO, return_dto=UserResponseDTO)
     async def update_user(
@@ -138,7 +136,7 @@ class UserController(Controller):
         except NotFoundException:
             raise
         except Exception as e:
-            raise InternalServerException(f"Database error: {str(e)}")
+            raise InternalServerException(f"Database error: {e!s}")
 
     @delete("/{user_id:str}", status_code=HTTP_204_NO_CONTENT)
     async def delete_user(self, user_id: str, db: AsyncSurrealConnection) -> None:
@@ -151,4 +149,4 @@ class UserController(Controller):
         except NotFoundException:
             raise
         except Exception as e:
-            raise InternalServerException(f"Database error: {str(e)}")
+            raise InternalServerException(f"Database error: {e!s}")

@@ -51,7 +51,7 @@ async def _require_streaming(connection: AsyncWsSurrealConnection) -> None:
     the connection's learned flag, so that is what is checked.
     """
     try:
-        async for _ in connection.query("RETURN 1").stream(require_streaming=True):
+        async for _ in connection.query("RETURN 1").rows(require_streaming=True):
             pass
     except UnsupportedFeatureError as exc:
         if connection._streaming_supported is not False:
@@ -86,9 +86,7 @@ async def test_streamed_statements_match_the_buffered_answer(
     buffered = await _buffered(async_ws_connection, MIXED_SQL)
     streamed = [
         statement
-        async for statement in async_ws_connection.query(MIXED_SQL)
-        .stream()
-        .statements()
+        async for statement in async_ws_connection.query(MIXED_SQL).statements()
     ]
 
     assert [statement.value for statement in streamed] == buffered
@@ -115,7 +113,7 @@ async def test_rows_flatten_the_buffered_answer(
     for result in buffered:
         expected.extend(result if isinstance(result, list) else [result])
 
-    rows = [row async for row in async_ws_connection.query(MIXED_SQL).stream()]
+    rows = [row async for row in async_ws_connection.query(MIXED_SQL).rows()]
     assert rows == expected
 
 
@@ -131,7 +129,7 @@ async def test_rows_arrive_before_the_query_finishes(
     await _require_streaming(async_ws_connection)
     await _seed(async_ws_connection)
 
-    stream = async_ws_connection.query("SELECT * FROM stream_wide; SLEEP 2s;").stream()
+    stream = async_ws_connection.query("SELECT * FROM stream_wide; SLEEP 2s;").rows()
     started = time.monotonic()
     iterator = stream.__aiter__()
     first_row = await iterator.__anext__()
@@ -161,7 +159,7 @@ async def test_stopping_early_cancels_the_query_server_side(
     seen = 0
     async with async_ws_connection.query(
         "SELECT * FROM stream_wide; SLEEP 10s;"
-    ).stream() as stream:
+    ).rows() as stream:
         async for _ in stream:
             seen += 1
             if seen == 3:
@@ -188,7 +186,7 @@ async def test_a_buffered_query_answers_while_a_stream_is_open(
     started = time.monotonic()
     async with async_ws_connection.query(
         "SLEEP 2s; SELECT * FROM stream_wide LIMIT 2;"
-    ).stream() as stream:
+    ).rows() as stream:
         iterator = stream.__aiter__()
 
         async def first_row() -> Any:
@@ -234,8 +232,8 @@ async def test_two_streams_run_concurrently_on_one_connection(
     await _require_streaming(async_ws_connection)
     await _seed(async_ws_connection)
 
-    slow = async_ws_connection.query("SLEEP 3s; SELECT * FROM stream_wide;").stream()
-    quick = async_ws_connection.query("RETURN 'quick';").stream()
+    slow = async_ws_connection.query("SLEEP 3s; SELECT * FROM stream_wide;").rows()
+    quick = async_ws_connection.query("RETURN 'quick';").rows()
     try:
         slow_task = asyncio.create_task(_collect(slow))
         # The quick stream is opened second and must complete first.
@@ -263,7 +261,7 @@ async def test_a_failed_statement_raises_and_leaves_the_connection_usable(
     with pytest.raises(SurrealError, match="boom"):
         async for row in async_ws_connection.query(
             "SELECT * FROM stream_wide LIMIT 2; THROW 'boom'; RETURN 'after';"
-        ).stream():
+        ).rows():
             seen.append(row)
 
     # The rows delivered before the failure were real, and the failure did not
@@ -286,9 +284,7 @@ async def test_a_streamed_live_select_reports_its_id_and_delivers(
         statement
         async for statement in async_ws_connection.query(
             "LIVE SELECT * FROM stream_live;"
-        )
-        .stream()
-        .statements()
+        ).statements()
     ]
     assert len(statements) == 1
     assert statements[0].query_type == "live"
@@ -314,7 +310,7 @@ async def test_variables_reach_a_streamed_query(
         row
         async for row in async_ws_connection.query(
             "RETURN $left + $right;", {"left": 40, "right": 2}
-        ).stream()
+        ).rows()
     ]
     assert rows == [42]
 
@@ -334,9 +330,7 @@ async def test_query_stream_agrees_with_query_on_any_server(
     buffered = await _buffered(async_ws_connection, MIXED_SQL)
     statements = [
         statement
-        async for statement in async_ws_connection.query(MIXED_SQL)
-        .stream()
-        .statements()
+        async for statement in async_ws_connection.query(MIXED_SQL).statements()
     ]
     assert [statement.value for statement in statements] == buffered
 
@@ -378,7 +372,7 @@ async def test_a_failed_statement_stops_the_rest_of_the_query(
 
     await reset()
     with pytest.raises(SurrealError, match=thrown):
-        async for _ in async_ws_connection.query(sql).stream():
+        async for _ in async_ws_connection.query(sql).rows():
             pass
     # Long enough that the trailing CREATE would have landed had the cancel not
     # reached the server.

@@ -268,7 +268,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     def _make_executor(self) -> Any:
         """Build the executor a builder terminates through.
 
-        ``.stream()`` works here too, and hands back the buffered answer one
+        ``rows()`` works here too, and hands back the buffered answer one
         row at a time - HTTP carries one response per request, so the rows
         cannot arrive early. Present so builder code moves between transports
         unchanged.
@@ -282,6 +282,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
             params: dict[str, Value] | None,
             *,
             require_streaming: bool = False,
+            statements: bool = False,
         ) -> AsyncQueryStream:
             return AsyncQueryStream(
                 AsyncStreamOps.never_streams(
@@ -290,6 +291,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
                 query,
                 params or None,
                 require_streaming=require_streaming,
+                statements=statements,
             )
 
         return _Executor(_executor, _stream)

@@ -45,8 +45,7 @@ async def test_async_embedded_streams_by_buffering(
 
     buffered = await async_embedded.query(MIXED_SQL)
     statements = [
-        statement
-        async for statement in async_embedded.query(MIXED_SQL).stream().statements()
+        statement async for statement in async_embedded.query(MIXED_SQL).statements()
     ]
     assert [statement.value for statement in statements] == buffered
     assert [statement.single for statement in statements] == [False, True, False]
@@ -54,7 +53,7 @@ async def test_async_embedded_streams_by_buffering(
     expected: list[object] = []
     for result in buffered:
         expected.extend(result if isinstance(result, list) else [result])
-    assert [row async for row in async_embedded.query(MIXED_SQL).stream()] == expected
+    assert [row async for row in async_embedded.query(MIXED_SQL).rows()] == expected
 
 
 async def test_async_embedded_says_so_when_streaming_is_required(
@@ -63,7 +62,7 @@ async def test_async_embedded_says_so_when_streaming_is_required(
     with pytest.raises(
         UnsupportedFeatureError, match="embedded engine does not stream"
     ):
-        async for _ in async_embedded.query("RETURN 1").stream(require_streaming=True):
+        async for _ in async_embedded.query("RETURN 1").rows(require_streaming=True):
             pass
 
 
@@ -78,7 +77,7 @@ async def test_async_embedded_never_reaches_the_websocket_machinery(
     shows.
     """
     await async_embedded.query(SEED)
-    assert [row async for row in async_embedded.query(MIXED_SQL).stream()] != []
+    assert [row async for row in async_embedded.query(MIXED_SQL).rows()] != []
     assert async_embedded._streams == {}
     assert async_embedded.socket is None
 
@@ -91,7 +90,7 @@ async def test_async_embedded_statement_errors_still_raise(
     with pytest.raises(SurrealError, match="boom"):
         async for row in async_embedded.query(
             "SELECT * FROM stream_emb LIMIT 2; THROW 'boom';"
-        ).stream():
+        ).rows():
             seen.append(row)
     assert len(seen) == 2
 
@@ -102,7 +101,7 @@ def test_blocking_embedded_streams_by_buffering(
     blocking_embedded.query(SEED).execute()
 
     buffered = blocking_embedded.query(MIXED_SQL).execute()
-    statements = list(blocking_embedded.query(MIXED_SQL).stream().statements())
+    statements = list(blocking_embedded.query(MIXED_SQL).statements())
     assert [statement.value for statement in statements] == buffered
     assert blocking_embedded._streams == {}
 
@@ -113,4 +112,4 @@ def test_blocking_embedded_says_so_when_streaming_is_required(
     with pytest.raises(
         UnsupportedFeatureError, match="embedded engine does not stream"
     ):
-        list(blocking_embedded.query("RETURN 1").stream(require_streaming=True))
+        list(blocking_embedded.query("RETURN 1").rows(require_streaming=True))

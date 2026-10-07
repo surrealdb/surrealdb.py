@@ -10,7 +10,7 @@ Two things are worth separating, because only one of them needs any code:
   ask for their answer as a sequence of frames and rebuild it as it arrives.
   Nothing to switch on, and the answer is identical — so there is nothing to
   change in existing code.
-- **Streaming to _you_** is what `.stream()` adds: each row reaches your loop as
+- **Streaming to _you_** is what `.rows()` adds: each row reaches your loop as
   it is produced, you can stop early, and you never have to hold the whole
   answer.
 
@@ -19,7 +19,7 @@ The difference is not subtle. Both scripts print it, using the same query
 
 ```
   await / .execute()         -> 2000 rows, none of them before 2.00s
-  .stream()                  -> 2001 rows, first one at 0.00s, last at 2.01s
+  .rows()                  -> 2001 rows, first one at 0.00s, last at 2.01s
 ```
 
 Same frames on the wire either way. What changes is whether the client hands
@@ -32,8 +32,8 @@ them to you as they land or accumulates them first.
 Streaming with the async client:
 
 - `await db.query(...)` — the whole answer, which already streams underneath
-- `.stream()` — rows as they arrive, with the timings above
-- `.stream(into=Person)` — each row mapped onto a model as it arrives, so a
+- `.rows()` — rows as they arrive, with the timings above
+- `.rows(into=Person)` — each row mapped onto a model as it arrives, so a
   large table is read one model at a time and never held whole
 - `async with ... break` — stopping early, which asks the server to abandon the
   rest of the query

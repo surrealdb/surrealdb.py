@@ -50,12 +50,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   connection on the buffered path. `query()` inside a client transaction is
   never streamed, because a `commit` arriving mid-stream would commit a prefix
   of the query. `streaming=False` on a connection or on `Surreal`/`AsyncSurreal`
-  puts `query()` back on the buffered path; an explicit `.stream()` still
+  puts `query()` back on the buffered path; an explicit `.rows()` still
   streams, since asking for a stream outright is taken as meaning it.
 
-- `.stream()` on any builder is the visible half: the rows as they arrive,
+- `.rows()` on any builder is the visible half: the rows as they arrive,
   rather than the whole answer at the end. Every builder has two terminators
-  now - `await` (or `.execute()`) for the whole answer, `.stream()` for the rows
+  now - `await` (or `.execute()`) for the whole answer, `.rows()` for the rows
   - so streaming is reached the same way you already build a query. On the async
   client that is every CRUD method: `query()`, `select()`, `create()`,
   `update()`, `upsert()`, `delete()` and `insert()`. On the blocking client it is
@@ -64,13 +64,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still run on the spot and return their result. Making those two builders too
   is the follow-up noted below.
 
-  Iterate it for rows, or call `.statements()` for one `StatementResult` per
-  statement - the shape `query()` returns. A stream is read once, and both
-  views draw from the same frames. `into=` maps each row onto a model as it
-  arrives, which is the case streaming is actually for.
+  `statements()` on a query is the other view: one `StatementResult` per
+  statement, each once the server says it is complete, so what it yields is
+  never retracted. Only on a query, since one CRUD operation is one statement.
+  Either view is read once. `into=` maps each row onto a model as it arrives,
+  which is the case streaming is actually for.
+
+  The names follow the JavaScript SDK, where `rows()` and `statements()` are
+  the views and `stream()` is a lower-level frame view this SDK does not offer.
+  A statement with a single value, like `RETURN 1 + 2`, is one row; one whose
+  value is NONE, like a `LET` or a `SLEEP`, is no rows.
 
   ```python
-  async with db.select("person").stream(into=Person) as stream:
+  async with db.select("person").rows(into=Person) as stream:
       async for person in stream:
           if found(person):
               break            # tells the server to abandon the query

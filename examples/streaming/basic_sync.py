@@ -6,7 +6,7 @@ Two things are worth separating, because only one of them needs any code:
   websocket, ``query()``, ``select()``, ``create()`` and every builder ask for
   their answer as a sequence of frames and rebuild it as it arrives. Nothing to
   switch on, and the answer is identical.
-* **Streaming to *you*** is what ``.stream()`` adds: the rows reach your loop as
+* **Streaming to *you*** is what ``.rows()`` adds: the rows reach your loop as
   the server produces them, instead of all together at the end.
 
 Run with a server on ``ws://localhost:8000``:
@@ -48,7 +48,7 @@ def seed(db: Surreal) -> None:
 def the_whole_answer(db: Surreal) -> None:
     """`.execute()` gives you everything, once the query has finished.
 
-    The same query as `.stream()` uses below, so the two timings compare.
+    The same query as `.rows()` uses below, so the two timings compare.
     """
     started = time.monotonic()
     statements = db.query(SLOW_QUERY).execute()
@@ -59,7 +59,7 @@ def the_whole_answer(db: Surreal) -> None:
 
 
 def rows_as_they_arrive(db: Surreal) -> None:
-    """`.stream()` gives you each row as the server produces it.
+    """`.rows()` gives you each row as the server produces it.
 
     Iterating is flat across statements: a statement with a single value, like
     `RETURN 42`, is one row, and one whose value is NONE, like the `SLEEP`
@@ -69,13 +69,13 @@ def rows_as_they_arrive(db: Surreal) -> None:
     first_at: float | None = None
     seen = 0
 
-    for _person in db.query(SLOW_QUERY).stream():
+    for _person in db.query(SLOW_QUERY).rows():
         if first_at is None:
             first_at = time.monotonic() - started
         seen += 1
 
     print(
-        f"  .stream()                  -> {seen} rows, "
+        f"  .rows()                  -> {seen} rows, "
         f"first one at {first_at:.2f}s, last at {time.monotonic() - started:.2f}s"
     )
 
@@ -84,10 +84,10 @@ def rows_as_models(db: Surreal) -> None:
     """`into=` maps each row as it arrives, so nothing is held whole."""
     people: list[Person] = []
 
-    for person in db.select("person", fields=["id", "name"]).stream(into=Person):
+    for person in db.select("person", fields=["id", "name"]).rows(into=Person):
         people.append(person)
 
-    print(f"  .stream(into=Person)       -> {len(people)} Person instances")
+    print(f"  .rows(into=Person)       -> {len(people)} Person instances")
     print(f"                                first: {people[0]}")
 
 
@@ -99,7 +99,7 @@ def stopping_early(db: Surreal) -> None:
     """
     started = time.monotonic()
 
-    with db.query(SLOW_QUERY).stream() as stream:
+    with db.query(SLOW_QUERY).rows() as stream:
         for person in stream:
             print(f"  found {person['name']!r}, stopping there")
             break
@@ -116,7 +116,7 @@ def one_result_per_statement(db: Surreal) -> None:
         "SELECT * FROM person LIMIT 3; SELECT count() FROM person GROUP ALL"
     )
 
-    for statement in query.stream().statements():
+    for statement in query.statements():
         kind = "rows" if isinstance(statement.value, list) else "value"
         print(f"  statement {statement.index}: {kind}, took {statement.time}")
 
@@ -130,9 +130,7 @@ def when_the_server_cannot_stream(db: Surreal) -> None:
     you, and you get told instead of served a fallback.
     """
     try:
-        for _ in db.query("SELECT * FROM person LIMIT 1").stream(
-            require_streaming=True
-        ):
+        for _ in db.query("SELECT * FROM person LIMIT 1").rows(require_streaming=True):
             print("  require_streaming=True -> this server streams")
             break
     except UnsupportedFeatureError as error:

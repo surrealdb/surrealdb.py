@@ -292,7 +292,7 @@ class _Clause:
 class _CrudState:
     """Holds the configurable state for a CRUD builder."""
 
-    # Set when `.stream()` hands a stream out, so the run-once guard
+    # Set when rows()/statements() hands a stream out, so the run-once guard
     # sees a streamed builder as used - see `_claim_for_stream`.
     _streamed: bool = False
 
@@ -392,7 +392,7 @@ class _CrudState:
 class _InsertState:
     """State for INSERT builder."""
 
-    # Set when `.stream()` hands a stream out, so the run-once guard
+    # Set when rows()/statements() hands a stream out, so the run-once guard
     # sees a streamed builder as used - see `_claim_for_stream`.
     _streamed: bool = False
 
@@ -458,7 +458,7 @@ class _InsertState:
 class _QueryState:
     """State for query builder."""
 
-    # Set when `.stream()` hands a stream out, so the run-once guard
+    # Set when rows()/statements() hands a stream out, so the run-once guard
     # sees a streamed builder as used - see `_claim_for_stream`.
     _streamed: bool = False
 
@@ -756,8 +756,14 @@ class _Executor:
         params: dict[str, Any] | None,
         *,
         require_streaming: bool = False,
+        statements: bool = False,
     ) -> Any:
-        return self._open_stream(query, params, require_streaming=require_streaming)
+        return self._open_stream(
+            query,
+            params,
+            require_streaming=require_streaming,
+            statements=statements,
+        )
 
 
 def _open_stream(
@@ -766,6 +772,7 @@ def _open_stream(
     variables: dict[str, Any],
     *,
     require_streaming: bool,
+    statements: bool = False,
 ) -> Any:
     """Open a stream through *executor*, or say why it cannot.
 
@@ -779,20 +786,25 @@ def _open_stream(
             "this builder cannot stream: it was built with a plain executor "
             "rather than one from a connection"
         )
-    return executor.stream(query, variables, require_streaming=require_streaming)
+    return executor.stream(
+        query,
+        variables,
+        require_streaming=require_streaming,
+        statements=statements,
+    )
 
 
 def _refuse_if_streamed(builder: Any) -> None:
-    """Stop the buffered terminator re-running an operation `.stream()` already ran.
+    """Stop the buffered terminator re-running an operation already streamed.
 
     `execute()` is idempotent through the runner, so it never needed a guard
     against itself - but streaming runs the operation outside that cache, so a
     following `await` used to issue it a second time. Measured on a live server:
-    `create(...).stream()` then `await` on the same builder left two records.
+    `create(...).rows()` then `await` on the same builder left two records.
     """
     if builder._streamed:
         raise SurrealError(
-            f"Cannot execute a {type(builder).__name__} after .stream() - the "
+            f"Cannot execute a {type(builder).__name__} after streaming it - the "
             "operation has already run. Create a new builder for a fresh one."
         )
 
@@ -801,10 +813,10 @@ def _claim_for_stream(builder: Any) -> None:
     """Mark *builder* used, so a second terminator raises instead of re-running.
 
     A builder describes one operation. Awaiting it twice has always issued one
-    RPC, and reconfiguring it after it ran has always raised - but `.stream()`
-    arrived outside that bookkeeping, so `create(...).stream()` followed by
+    RPC, and reconfiguring it after it ran has always raised - but streaming
+    arrived outside that bookkeeping, so `create(...).rows()` followed by
     `await` on the same builder created the record a second time, and
-    `await q` followed by `q.stream()` ran the statements again. Measured on a
+    `await q` followed by `q.rows()` ran the statements again. Measured on a
     live server: 1 row, then 2.
     """
     builder._streamed = True
@@ -1051,7 +1063,7 @@ class AsyncCrudBuilder(_CrudState, Generic[T]):
         response = await self._executor(query, variables)
         return cast(T, _map_result(self._into, self._extract(response)))
 
-    def stream(
+    def rows(
         self,
         *,
         into: type[Any] | None = None,
@@ -1138,7 +1150,7 @@ class AsyncInsertBuilder(_InsertState, Generic[T]):
         response = await self._executor(query, variables)
         return cast(list[T], _map_result(self._into, self._extract(response)))
 
-    def stream(
+    def rows(
         self,
         *,
         into: type[Any] | None = None,
@@ -1248,7 +1260,28 @@ class AsyncQueryBuilder(_QueryState):
                 "executed. Create a new builder for a fresh operation."
             )
 
-    def stream(
+    def statements(self, *, require_streaming: bool = False) -> Any:
+        """Read one completed result per statement, as each finishes.
+
+        Where :meth:`rows` delivers rows as they arrive, this delivers a
+        statement once the server says it is complete, with all of its rows.
+        What it yields is never retracted, so a statement can be acted on while
+        the statements after it are still running.
+
+        Only on a query, since one CRUD operation is one statement.
+        """
+        self._check_not_executed()
+        stream = _open_stream(
+            self._executor,
+            self._query,
+            self._variables,
+            require_streaming=require_streaming,
+            statements=True,
+        )
+        _claim_for_stream(self)
+        return stream
+
+    def rows(
         self,
         *,
         into: type[Any] | None = None,
@@ -1256,9 +1289,9 @@ class AsyncQueryBuilder(_QueryState):
     ) -> Any:
         """Read this query's rows as the server produces them.
 
-        See :meth:`AsyncCrudBuilder.stream` - same terminator, same fallback,
-        same ``into``. Without ``into``, ``.statements()`` on the result gives
-        one completed result per statement instead of a flat run of rows.
+        See :meth:`AsyncCrudBuilder.rows` - same terminator, same fallback,
+        same ``into``. Without ``into``, ``statements()`` on the builder gives one completed result
+        per statement instead of a flat run of rows.
         """
         self._check_not_executed()
         stream = _open_stream(
@@ -1391,7 +1424,7 @@ class SyncCrudBuilder(_CrudState, Generic[T]):
         self._set_clause(_Clause.PATCH, data)
         return cast(T, self._run_once())
 
-    def stream(
+    def rows(
         self,
         *,
         into: type[Any] | None = None,
@@ -1557,7 +1590,28 @@ class SyncQueryBuilder(_QueryState):
                 "executed. Create a new builder for a fresh operation."
             )
 
-    def stream(
+    def statements(self, *, require_streaming: bool = False) -> Any:
+        """Read one completed result per statement, as each finishes.
+
+        Where :meth:`rows` delivers rows as they arrive, this delivers a
+        statement once the server says it is complete, with all of its rows.
+        What it yields is never retracted, so a statement can be acted on while
+        the statements after it are still running.
+
+        Only on a query - see the async twin.
+        """
+        self._check_not_executed()
+        stream = _open_stream(
+            self._executor,
+            self._query,
+            self._variables,
+            require_streaming=require_streaming,
+            statements=True,
+        )
+        _claim_for_stream(self)
+        return stream
+
+    def rows(
         self,
         *,
         into: type[Any] | None = None,
@@ -1565,9 +1619,9 @@ class SyncQueryBuilder(_QueryState):
     ) -> Any:
         """Read this query's rows as the server produces them.
 
-        See :meth:`AsyncCrudBuilder.stream` - same terminator, same fallback,
-        same ``into``. Without ``into``, ``.statements()`` on the result gives
-        one completed result per statement instead of a flat run of rows.
+        See :meth:`AsyncCrudBuilder.rows` - same terminator, same fallback,
+        same ``into``. Without ``into``, ``statements()`` on the builder gives one completed result
+        per statement instead of a flat run of rows.
         """
         self._check_not_executed()
         stream = _open_stream(

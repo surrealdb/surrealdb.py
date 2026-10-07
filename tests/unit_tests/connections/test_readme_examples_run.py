@@ -242,7 +242,7 @@ def test_the_files_encoding_block_runs(
 #
 # Added because the section had no coverage at all, and rewriting it broke an
 # example twice: once by claiming `streaming=False` and a transaction stop an
-# explicit stream (neither does), and once by dropping `.stream()` from the
+# explicit stream (neither does), and once by dropping `.rows()` from the
 # `.statements()` chain, leaving `db.query(...).statements()` - an
 # AttributeError, published as documentation. The section is 230 lines and the
 # newest thing in the README, so it is the likeliest to drift.
@@ -265,14 +265,14 @@ def streaming_people(blocking_ws_connection: Any) -> str:
 async def test_the_streaming_rows_block_runs(
     async_ws_connection: Any, streaming_people: str
 ) -> None:
-    """`async for person in db.query(...).stream()` - the headline block."""
+    """`async for person in db.query(...).rows()` - the headline block."""
     db = async_ws_connection
 
     people = await db.query("SELECT * FROM person")
     assert isinstance(people, list)
 
     seen = []
-    async for person in db.query("SELECT * FROM person").stream():
+    async for person in db.query("SELECT * FROM person").rows():
         seen.append(person["name"])
     assert sorted(seen) == ["a", "b"]
 
@@ -280,19 +280,17 @@ async def test_the_streaming_rows_block_runs(
 async def test_the_statements_block_runs(
     async_ws_connection: Any, streaming_people: str
 ) -> None:
-    """The block that was silently broken: `.stream().statements()`.
+    """The block that was silently broken: `.statements()`.
 
-    Without `.stream()` this is `AttributeError: 'AsyncQueryBuilder' object has
+    Without `.rows()` this is `AttributeError: 'AsyncQueryBuilder' object has
     no attribute 'statements'`, which no amount of reading catches.
     """
     db = async_ws_connection
 
     seen = []
-    async for statement in (
-        db.query("SELECT * FROM person; SELECT count() FROM person GROUP ALL")
-        .stream()
-        .statements()
-    ):
+    async for statement in db.query(
+        "SELECT * FROM person; SELECT count() FROM person GROUP ALL"
+    ).statements():
         seen.append((statement.index, statement.value))
 
     assert [index for index, _ in seen] == [0, 1]
@@ -301,11 +299,11 @@ async def test_the_statements_block_runs(
 async def test_the_rows_as_models_block_runs(
     async_ws_connection: Any, streaming_people: str
 ) -> None:
-    """`db.select("person").stream(into=Person)`, async."""
+    """`db.select("person").rows(into=Person)`, async."""
     db = async_ws_connection
 
     names = []
-    async for person in db.select("person", fields=["id", "name"]).stream(into=Person):
+    async for person in db.select("person", fields=["id", "name"]).rows(into=Person):
         names.append(person.name)
     assert sorted(names) == ["a", "b"]
 
@@ -315,7 +313,7 @@ def test_the_sync_rows_as_models_block_runs(
 ) -> None:
     """The same block on the blocking client, with `for` rather than `async for`."""
     names = []
-    for person in blocking_ws_connection.select("person", fields=["id", "name"]).stream(
+    for person in blocking_ws_connection.select("person", fields=["id", "name"]).rows(
         into=Person
     ):
         names.append(person.name)
@@ -330,7 +328,7 @@ async def test_the_provisional_rows_block_runs(
 
     rows: list[Any] = []
     with pytest.raises(SurrealError):
-        async for row in db.query("SELECT * FROM person; THROW 'nope'").stream():
+        async for row in db.query("SELECT * FROM person; THROW 'nope'").rows():
             rows.append(row)
     assert rows, "the README's point is that rows do arrive before the failure"
     rows.clear()
@@ -344,7 +342,7 @@ async def test_the_stopping_early_block_runs(
     db = async_ws_connection
 
     seen = 0
-    async with db.query("SELECT * FROM person").stream() as stream:
+    async with db.query("SELECT * FROM person").rows() as stream:
         async for _ in stream:
             seen += 1
             break
@@ -356,7 +354,7 @@ def test_the_sync_stopping_early_block_runs(
 ) -> None:
     """The blocking twin, with `with`."""
     names = []
-    with blocking_ws_connection.query("SELECT * FROM person").stream() as stream:
+    with blocking_ws_connection.query("SELECT * FROM person").rows() as stream:
         for person in stream:
             names.append(person["name"])
     assert sorted(names) == ["a", "b"]
@@ -384,7 +382,7 @@ async def test_the_require_streaming_block_runs(
     try:
         names = [
             row["name"]
-            async for row in db.query("SELECT * FROM person").stream(
+            async for row in db.query("SELECT * FROM person").rows(
                 require_streaming=True
             )
         ]
@@ -409,14 +407,14 @@ def test_the_streaming_blocks_are_still_what_the_readme_shows() -> None:
     body = section[1].split("\n## ", 1)[0]
 
     for snippet in (
-        'async for person in db.query("SELECT * FROM person").stream():',
-        ").stream().statements():",
-        'async for person in db.select("person").stream(into=Person):',
-        'for person in db.select("person").stream(into=Person):',
-        'async with db.query("SELECT * FROM huge_table").stream() as stream:',
-        'with db.query("SELECT * FROM person").stream() as stream:',
+        'async for person in db.query("SELECT * FROM person").rows():',
+        ").statements():",
+        'async for person in db.select("person").rows(into=Person):',
+        'for person in db.select("person").rows(into=Person):',
+        'async with db.query("SELECT * FROM huge_table").rows() as stream:',
+        'with db.query("SELECT * FROM person").rows() as stream:',
         'AsyncSurreal("ws://localhost:8000/rpc", streaming=False)',
-        "db.query(sql).stream(require_streaming=True)",
+        "db.query(sql).rows(require_streaming=True)",
     ):
         assert snippet in body, (
             f"the README's streaming section no longer contains {snippet!r} - "

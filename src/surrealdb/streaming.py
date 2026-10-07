@@ -918,18 +918,19 @@ class _SyncView:
 class AsyncQueryStream(_StreamBase):
     """A streaming query answer, iterated for rows or for statements.
 
-    Returned by a builder's ``.stream()`` on the async transports. Nothing is
+    Returned by a builder's ``rows()`` or ``statements()`` on the async
+    transports. Nothing is
     sent until
     iteration starts, so building one costs nothing.
 
     Iterate it directly for **rows**, as they arrive::
 
-        async for row in db.query("SELECT * FROM person").stream():
+        async for row in db.query("SELECT * FROM person").rows():
             ...
 
     or call :meth:`statements` for one completed result per statement::
 
-        async for statement in db.query(sql).stream().statements():
+        async for statement in db.query(sql).statements():
             print(statement.index, statement.value)
 
     A stream is read once, and the two views draw from the same frames.
@@ -944,7 +945,7 @@ class AsyncQueryStream(_StreamBase):
     Use ``async with``, or call :meth:`aclose`, to stop early and have the
     server abandon the query rather than run it to completion::
 
-        async with db.query(sql).stream() as stream:
+        async with db.query(sql).rows() as stream:
             async for row in stream:
                 if enough(row):
                     break
@@ -959,6 +960,7 @@ class AsyncQueryStream(_StreamBase):
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
         require_streaming: bool = False,
+        statements: bool = False,
     ) -> None:
         super().__init__(
             query,
@@ -978,21 +980,19 @@ class AsyncQueryStream(_StreamBase):
         # it is what lets `aclose()` and `async with` stop the query *before*
         # they return, which is what this class documents.
         self._view: _AsyncView | None = None
+        self._statements = statements
 
-    def __aiter__(self) -> AsyncIterator[Value]:
+    def __aiter__(self) -> AsyncIterator[Any]:
         # Claimed here rather than on first iteration. Deferring it meant a
         # second view could be built and replace the first before anything
         # refused it, so `aclose()` closed the view that had never run and left
         # the one that had - holding a stream on the server - open. It also
         # reports the mistake at the call that made it.
         self._claim()
-        self._view = _AsyncView(self._drive(retain_rows=False), _pick_row)
-        return self._view
-
-    def statements(self) -> AsyncIterator[StatementResult]:
-        """Yield one :class:`StatementResult` per statement, as each finishes."""
-        self._claim()
-        self._view = _AsyncView(self._drive(retain_rows=True), _pick_statement)
+        if self._statements:
+            self._view = _AsyncView(self._drive(retain_rows=True), _pick_statement)
+        else:
+            self._view = _AsyncView(self._drive(retain_rows=False), _pick_row)
         return self._view
 
     async def __aenter__(self) -> AsyncQueryStream:
@@ -1283,7 +1283,7 @@ class QueryStream(_StreamBase):
     The blocking counterpart of :class:`AsyncQueryStream`, with identical
     semantics; see that class. Iterate for rows::
 
-        for row in db.query("SELECT * FROM person").stream():
+        for row in db.query("SELECT * FROM person").rows():
             ...
 
     or use :meth:`statements` for one completed result per statement. Use
@@ -1305,6 +1305,7 @@ class QueryStream(_StreamBase):
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
         require_streaming: bool = False,
+        statements: bool = False,
     ) -> None:
         super().__init__(
             query,
@@ -1324,18 +1325,15 @@ class QueryStream(_StreamBase):
         # by refcount at the moment the caller lets go of it, which runs the
         # cancel there and then.
         self._view: weakref.ReferenceType[_SyncView] | None = None
+        self._statements = statements
 
-    def __iter__(self) -> Iterator[Value]:
+    def __iter__(self) -> Iterator[Any]:
         # See :meth:`AsyncQueryStream.__aiter__` for why this claims here.
         self._claim()
-        view = _SyncView(self._drive(retain_rows=False), _pick_row)
-        self._view = weakref.ref(view)
-        return view
-
-    def statements(self) -> Iterator[StatementResult]:
-        """Yield one :class:`StatementResult` per statement, as each finishes."""
-        self._claim()
-        view = _SyncView(self._drive(retain_rows=True), _pick_statement)
+        if self._statements:
+            view = _SyncView(self._drive(retain_rows=True), _pick_statement)
+        else:
+            view = _SyncView(self._drive(retain_rows=False), _pick_row)
         self._view = weakref.ref(view)
         return view
 

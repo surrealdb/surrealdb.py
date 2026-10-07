@@ -164,8 +164,8 @@ This directory contains comprehensive examples demonstrating how to integrate Su
 **Reading a query's rows as the server produces them**
 
 - Ordinary queries already stream (v3.3.0+ over a websocket) - nothing to switch on
-- `.stream()` for rows as they arrive, on any builder
-- `.stream(into=Model)` to map each row as it lands
+- `.rows()` for rows as they arrive, on any builder
+- `.rows(into=Model)` to map each row as it lands
 - Stopping early, which abandons the rest of the query server-side
 - `.statements()` for one completed result per statement
 - Buffered fallback everywhere else, with `require_streaming=True` to opt out

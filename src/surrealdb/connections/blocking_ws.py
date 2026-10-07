@@ -833,6 +833,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             params: dict[str, Value] | None,
             *,
             require_streaming: bool = False,
+            statements: bool = False,
         ) -> QueryStream:
             return QueryStream(
                 self._stream_ops(),
@@ -841,6 +842,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 session_id=session_id,
                 txn_id=txn_id,
                 require_streaming=require_streaming,
+                statements=statements,
             )
 
         return _Executor(_executor, _stream)

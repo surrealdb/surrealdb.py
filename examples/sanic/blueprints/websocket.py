@@ -61,7 +61,7 @@ async def users_live_query(request, ws):
                     json.dumps(
                         {
                             "type": "error",
-                            "message": f"Live query error: {str(e)}",
+                            "message": f"Live query error: {e!s}",
                         }
                     )
                 )
@@ -100,7 +100,7 @@ async def users_live_query(request, ws):
             json.dumps(
                 {
                     "type": "error",
-                    "message": f"Connection error: {str(e)}",
+                    "message": f"Connection error: {e!s}",
                 }
             )
         )

@@ -6,7 +6,7 @@ Two things are worth separating, because only one of them needs any code:
   websocket, ``query()``, ``select()``, ``create()`` and every builder ask for
   their answer as a sequence of frames and rebuild it as it arrives. Nothing to
   switch on, and the answer is identical.
-* **Streaming to *you*** is what ``.stream()`` adds: the rows reach your loop as
+* **Streaming to *you*** is what ``.rows()`` adds: the rows reach your loop as
   the server produces them, instead of all together at the end.
 
 Run with a server on ``ws://localhost:8000``:
@@ -49,7 +49,7 @@ async def seed(db: AsyncSurreal) -> None:
 async def the_whole_answer(db: AsyncSurreal) -> None:
     """`await` gives you everything, once the query has finished.
 
-    The same query as `.stream()` uses below, so the two timings compare.
+    The same query as `.rows()` uses below, so the two timings compare.
     """
     started = time.monotonic()
     statements = await db.query(SLOW_QUERY)
@@ -60,7 +60,7 @@ async def the_whole_answer(db: AsyncSurreal) -> None:
 
 
 async def rows_as_they_arrive(db: AsyncSurreal) -> None:
-    """`.stream()` gives you each row as the server produces it.
+    """`.rows()` gives you each row as the server produces it.
 
     Iterating is flat across statements: a statement with a single value, like
     `RETURN 42`, is one row, and one whose value is NONE, like the `SLEEP`
@@ -70,13 +70,13 @@ async def rows_as_they_arrive(db: AsyncSurreal) -> None:
     first_at: float | None = None
     seen = 0
 
-    async for _person in db.query(SLOW_QUERY).stream():
+    async for _person in db.query(SLOW_QUERY).rows():
         if first_at is None:
             first_at = time.monotonic() - started
         seen += 1
 
     print(
-        f"  .stream()                  -> {seen} rows, "
+        f"  .rows()                  -> {seen} rows, "
         f"first one at {first_at:.2f}s, last at {time.monotonic() - started:.2f}s"
     )
 
@@ -85,10 +85,10 @@ async def rows_as_models(db: AsyncSurreal) -> None:
     """`into=` maps each row as it arrives, so nothing is held whole."""
     people: list[Person] = []
 
-    async for person in db.select("person", fields=["id", "name"]).stream(into=Person):
+    async for person in db.select("person", fields=["id", "name"]).rows(into=Person):
         people.append(person)
 
-    print(f"  .stream(into=Person)       -> {len(people)} Person instances")
+    print(f"  .rows(into=Person)       -> {len(people)} Person instances")
     print(f"                                first: {people[0]}")
 
 
@@ -100,7 +100,7 @@ async def stopping_early(db: AsyncSurreal) -> None:
     """
     started = time.monotonic()
 
-    async with db.query(SLOW_QUERY).stream() as stream:
+    async with db.query(SLOW_QUERY).rows() as stream:
         async for person in stream:
             print(f"  found {person['name']!r}, stopping there")
             break
@@ -117,7 +117,7 @@ async def one_result_per_statement(db: AsyncSurreal) -> None:
         "SELECT * FROM person LIMIT 3; SELECT count() FROM person GROUP ALL"
     )
 
-    async for statement in query.stream().statements():
+    async for statement in query.statements():
         kind = "rows" if isinstance(statement.value, list) else "value"
         print(f"  statement {statement.index}: {kind}, took {statement.time}")
 
@@ -131,7 +131,7 @@ async def when_the_server_cannot_stream(db: AsyncSurreal) -> None:
     you, and you get told instead of served a fallback.
     """
     try:
-        async for _ in db.query("SELECT * FROM person LIMIT 1").stream(
+        async for _ in db.query("SELECT * FROM person LIMIT 1").rows(
             require_streaming=True
         ):
             print("  require_streaming=True -> this server streams")

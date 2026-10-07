@@ -184,11 +184,11 @@ def _builder_api() -> set[str]:
 
 
 def test_no_example_chains_a_terminator_that_does_not_exist() -> None:
-    """`db.query(...).stream()` - the chained half was unchecked.
+    """`db.query(...).rows()` - the chained half was unchecked.
 
     The regex above only sees `db.<method>(`, so a builder terminator was
     invisible to it: `db.query(sql).strem()` would ship. That matters more now
-    that the terminator *is* the API - `.stream()`, `.execute()`, `.statements()`
+    that the terminator *is* the API - `.rows()`, `.execute()`, `.statements()`
     and `.into()` are how a builder is finished, and the streaming examples are
     made of them.
     """

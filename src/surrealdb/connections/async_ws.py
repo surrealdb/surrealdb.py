@@ -1015,7 +1015,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
     ) -> Any:
         """Build the executor a builder terminates through.
 
-        Callable for the buffered answer, ``.stream()`` for the rows as they
+        Callable for the buffered answer, ``rows()`` for the rows as they
         arrive. Both carry this builder's session and transaction, so a
         streamed `select()` runs in the same place its awaited form would.
         """
@@ -1030,6 +1030,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             params: dict[str, Value] | None,
             *,
             require_streaming: bool = False,
+            statements: bool = False,
         ) -> AsyncQueryStream:
             return AsyncQueryStream(
                 self._stream_ops(),
@@ -1038,6 +1039,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
                 session_id=session_id,
                 txn_id=txn_id,
                 require_streaming=require_streaming,
+                statements=statements,
             )
 
         return _Executor(_executor, _stream)

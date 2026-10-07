@@ -15,7 +15,6 @@ everything that proof cannot reach.
 import asyncio
 import gc
 import queue
-import re
 import threading
 import time
 import uuid
@@ -291,8 +290,8 @@ async def collect_rows(frames: list[Any], **kwargs: Any) -> list[Any]:
 
 async def collect_statements(frames: list[Any], **kwargs: Any) -> list[StatementResult]:
     channel = _AsyncChannel(frames, **kwargs)
-    stream = AsyncQueryStream(channel.ops(), "SELECT 1")
-    return [statement async for statement in stream.statements()]
+    stream = AsyncQueryStream(channel.ops(), "SELECT 1", statements=True)
+    return [statement async for statement in stream]
 
 
 # --------------------------------------------------------------------------- #
@@ -663,7 +662,7 @@ async def test_the_two_views_cannot_both_be_read() -> None:
     stream = AsyncQueryStream(channel.ops(), "RETURN 1")
     assert [row async for row in stream] == [1]
     with pytest.raises(SurrealError, match="already been consumed"):
-        [s async for s in stream.statements()]
+        [row async for row in stream]
 
 
 # --------------------------------------------------------------------------- #
@@ -1123,8 +1122,8 @@ async def test_an_unknown_method_falls_back_to_a_buffered_query() -> None:
 async def test_the_fallback_replays_statements_with_the_right_single_flag() -> None:
     """A buffered list is a row list; anything else is one bare value."""
     channel = _AsyncChannel([METHOD_NOT_FOUND], buffered=BUFFERED)
-    stream = AsyncQueryStream(channel.ops(), "SELECT 1")
-    statements = [s async for s in stream.statements()]
+    stream = AsyncQueryStream(channel.ops(), "SELECT 1", statements=True)
+    statements = [s async for s in stream]
     assert [(s.index, s.single, s.value) for s in statements] == [
         (0, False, [{"n": 1}, {"n": 2}]),
         (1, True, 42),
@@ -1212,7 +1211,7 @@ def test_sync_rows_and_statements_agree_with_the_async_views() -> None:
     assert list(QueryStream(channel.ops(), "SELECT 1")) == [1, 2, 9]
 
     channel = _SyncChannel(frames)
-    statements = list(QueryStream(channel.ops(), "SELECT 1").statements())
+    statements = list(QueryStream(channel.ops(), "SELECT 1", statements=True))
     assert [(s.single, s.value) for s in statements] == [(False, [1, 2]), (True, 9)]
 
 
@@ -1903,26 +1902,26 @@ def test_http_streams_by_buffering_and_says_so_when_asked() -> None:
 
     conn.query_raw = fake_query_raw  # type: ignore[method-assign]
 
-    assert list(conn.query("SELECT 1").stream()) == [{"n": 1}, {"n": 2}, 42]
+    assert list(conn.query("SELECT 1").rows()) == [{"n": 1}, {"n": 2}, 42]
     assert captured == ["SELECT 1"]
 
     with pytest.raises(UnsupportedFeatureError, match="HTTP transport cannot stream"):
-        list(conn.query("SELECT 1").stream(require_streaming=True))
+        list(conn.query("SELECT 1").rows(require_streaming=True))
 
 
 # --------------------------------------------------------- one builder, one run
 #
-# `.stream()` arrived outside the builders' run-once bookkeeping, so a builder
+# `.rows()` arrived outside the builders' run-once bookkeeping, so a builder
 # could be terminated twice and the operation would run twice: measured on a
-# live server, `create(...).stream()` followed by `await` on the same builder
-# left two records, and `await q` followed by `q.stream()` ran the statements
+# live server, `create(...).rows()` followed by `await` on the same builder
+# left two records, and `await q` followed by `q.rows()` ran the statements
 # again. The buffered terminator has always been idempotent through its runner,
 # which is exactly why nothing caught this - the second run came in through the
 # other door.
 
 
 def test_a_streamed_builder_refuses_the_buffered_terminator() -> None:
-    """`.stream()` then `.execute()` is an error, not a second run."""
+    """`.rows()` then `.execute()` is an error, not a second run."""
     calls: list[str] = []
 
     def executor(query: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -1933,14 +1932,14 @@ def test_a_streamed_builder_refuses_the_buffered_terminator() -> None:
     ex = _Executor(executor, lambda q, p, **kw: QueryStream(channel.ops(), q, p))
 
     builder = SyncQueryBuilder(executor=ex, query="CREATE thing SET n = 1")
-    assert list(builder.stream()) == [{"n": 1}]
-    with pytest.raises(SurrealError, match=re.escape("after .stream()")):
+    assert list(builder.rows()) == [{"n": 1}]
+    with pytest.raises(SurrealError, match="after streaming it"):
         builder.execute()
     assert calls == [], "the buffered path must not have been reached at all"
 
 
 def test_a_buffered_builder_refuses_the_streaming_terminator() -> None:
-    """And the other way round: `.execute()` then `.stream()`."""
+    """And the other way round: `.execute()` then `.rows()`."""
     channel = _SyncChannel([begin(1), rows(0, [{"n": 1}]), finished(0), end(1)])
     opened: list[str] = []
 
@@ -1955,7 +1954,7 @@ def test_a_buffered_builder_refuses_the_streaming_terminator() -> None:
     builder = SyncQueryBuilder(executor=ex, query="CREATE thing SET n = 1")
     builder.execute()
     with pytest.raises(SurrealError, match="after it has executed"):
-        builder.stream()
+        builder.rows()
     assert opened == [], "no stream should have been opened"
 
 
