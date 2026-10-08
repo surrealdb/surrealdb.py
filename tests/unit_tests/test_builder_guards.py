@@ -258,7 +258,7 @@ def test_iterating_a_builder_uses_the_rows_it_was_given_a_model_for() -> None:
         n: int
 
     channel = _SyncChannel([begin(1), rows(0, [{"n": 1}]), finished(0), end(1)])
-    builder: SyncCrudBuilder[Any] = SyncCrudBuilder(
+    builder: SyncCrudBuilder[list[Row]] = SyncCrudBuilder(
         executor=_streaming(channel),
         operation="SELECT",
         record=Table("t"),

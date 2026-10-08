@@ -698,6 +698,23 @@ for person in db.select("person").rows(into=Person):
     print(person.name)
 ```
 
+The rows are typed, so a type checker sees what each loop yields. A record is
+`dict[str, Value]` and `into=Model` gives `Model`, however the target is spelled
+(`Table`, `RecordID` or a string), and the same goes for iterating the builder
+directly:
+
+```python
+for row in db.select(Table("person")):                # dict[str, Value]
+    ...
+for person in db.select(Table("person"), into=Person):  # Person
+    print(person.name)
+```
+
+A query's rows can be any value, so `query(...).rows()` yields `Any` unless you
+pass `into=`. What `rows()` returns is a `SyncRows[T]` (or `AsyncRows[T]`) - the
+iterable that also works as a context manager - which is the name to annotate
+with if you pass one around.
+
 ### Rows are provisional until iteration ends
 
 A row is delivered before the statement that produced it has finished - that is

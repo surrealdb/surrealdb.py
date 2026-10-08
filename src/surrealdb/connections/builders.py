@@ -84,6 +84,7 @@ from typing import (
     Generic,
     Literal,
     NoReturn,
+    Protocol,
     TypeVar,
     cast,
     overload,
@@ -113,6 +114,28 @@ T_co = TypeVar("T_co", covariant=True)
 # return precisely typed model instances (``M`` / ``list[M]`` / ``M | None``)
 # rather than the raw ``dict`` / ``list[Value]`` shapes.
 M = TypeVar("M")
+U_co = TypeVar("U_co", covariant=True)
+
+_Record = dict[str, Value]
+
+
+class SyncRows(Protocol[U_co]):
+    """What ``rows()`` hands a blocking caller: the rows, and a way to stop early."""
+
+    def __iter__(self) -> Iterator[U_co]: ...
+    def __enter__(self) -> SyncRows[U_co]: ...
+    def __exit__(self, *exc_info: object) -> None: ...
+    def close(self) -> None: ...
+
+
+class AsyncRows(Protocol[U_co]):
+    """What ``rows()`` hands an async caller: the rows, and a way to stop early."""
+
+    def __aiter__(self) -> AsyncIterator[U_co]: ...
+    async def __aenter__(self) -> AsyncRows[U_co]: ...
+    async def __aexit__(self, *exc_info: object) -> None: ...
+    async def aclose(self) -> None: ...
+
 
 AsyncExecutor = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
 SyncExecutor = Callable[[str, dict[str, Any]], dict[str, Any]]
@@ -368,34 +391,6 @@ class _WarnIfDropped:
         )
 
 
-class _AsyncBuilderIteration:
-    """Make an awaitable builder iterable with ``async for``.
-
-    ``await builder`` gives the whole answer and ``async for row in builder``
-    gives the rows as the server produces them: the blocking builders'
-    iteration, for the other terminator. It is ``rows()`` and nothing else, so
-    it streams where the server can and hands back the buffered rows one at a
-    time where it cannot.
-
-    It hands back the stream's own iterator rather than wrapping ``rows()`` in a
-    generator, so ``async for x in builder`` and ``async for x in
-    builder.rows()`` are the same thing and the documented way of stopping early
-    applies unchanged.
-    """
-
-    if TYPE_CHECKING:
-
-        def rows(
-            self,
-            *,
-            into: type[Any] | None = ...,
-            require_streaming: bool = ...,
-        ) -> Any: ...
-
-    def __aiter__(self) -> AsyncIterator[Any]:
-        return cast("AsyncIterator[Any]", self.rows().__aiter__())
-
-
 class _SyncBuilderGuards(_WarnIfDropped):
     """Make a blocking builder fail clearly when it is used as its result.
 
@@ -403,25 +398,13 @@ class _SyncBuilderGuards(_WarnIfDropped):
     forgot the terminator would otherwise meet it as an unrelated
     ``TypeError`` further down. Iterating a builder is a terminator in its own
     right: it streams the rows, so ``for row in db.select(...)`` reads a large
-    table without holding all of it. The dunders that would *return* the whole
+    table without holding all of it - that lives on each builder, because its
+    row type depends on the builder's. The dunders that would *return* the whole
     answer stay refused - ``.execute()`` is the one place that happens.
 
     The refusals are runtime-only: type checkers should keep reporting
     ``len(db.select(...))`` as an error rather than see it as valid.
     """
-
-    if TYPE_CHECKING:
-
-        def rows(
-            self,
-            *,
-            into: type[Any] | None = ...,
-            require_streaming: bool = ...,
-        ) -> Any: ...
-
-    def __iter__(self) -> Iterator[Any]:
-        with self.rows() as stream:
-            yield from stream
 
     if not TYPE_CHECKING:
 
@@ -1158,7 +1141,7 @@ class _AsyncCachedRunner:
 # ---------------------------------------------------------------------------
 
 
-class AsyncCrudBuilder(_AsyncBuilderIteration, _CrudState, Generic[T]):
+class AsyncCrudBuilder(_CrudState, Generic[T]):
     """Awaitable CRUD builder for async connections.
 
     Awaiting the same builder twice (or from concurrent tasks) only issues
@@ -1221,6 +1204,55 @@ class AsyncCrudBuilder(_AsyncBuilderIteration, _CrudState, Generic[T]):
         response = await self._executor(query, variables)
         return cast(T, _map_result(self._into, self._extract(response)))
 
+    @overload
+    def __aiter__(self: AsyncCrudBuilder[list[Value]]) -> AsyncIterator[_Record]: ...
+    @overload
+    def __aiter__(self: AsyncCrudBuilder[Value]) -> AsyncIterator[_Record]: ...
+    @overload
+    def __aiter__(self: AsyncCrudBuilder[list[U]]) -> AsyncIterator[U]: ...
+    @overload
+    def __aiter__(self: AsyncCrudBuilder[U | list[U] | None]) -> AsyncIterator[U]: ...
+    @overload
+    def __aiter__(self: AsyncCrudBuilder[U | list[U]]) -> AsyncIterator[U]: ...
+    @overload
+    def __aiter__(self: AsyncCrudBuilder[U | None]) -> AsyncIterator[U]: ...
+    @overload
+    def __aiter__(self: AsyncCrudBuilder[U]) -> AsyncIterator[U]: ...
+    def __aiter__(self) -> AsyncIterator[Any]:
+        return cast("AsyncIterator[Any]", self.rows().__aiter__())
+
+    @overload
+    def rows(
+        self, *, into: type[M], require_streaming: bool = False
+    ) -> AsyncRows[M]: ...
+    @overload
+    def rows(
+        self: AsyncCrudBuilder[list[Value]], *, require_streaming: bool = False
+    ) -> AsyncRows[_Record]: ...
+    @overload
+    def rows(
+        self: AsyncCrudBuilder[Value], *, require_streaming: bool = False
+    ) -> AsyncRows[_Record]: ...
+    @overload
+    def rows(
+        self: AsyncCrudBuilder[list[U]], *, require_streaming: bool = False
+    ) -> AsyncRows[U]: ...
+    @overload
+    def rows(
+        self: AsyncCrudBuilder[U | list[U] | None], *, require_streaming: bool = False
+    ) -> AsyncRows[U]: ...
+    @overload
+    def rows(
+        self: AsyncCrudBuilder[U | list[U]], *, require_streaming: bool = False
+    ) -> AsyncRows[U]: ...
+    @overload
+    def rows(
+        self: AsyncCrudBuilder[U | None], *, require_streaming: bool = False
+    ) -> AsyncRows[U]: ...
+    @overload
+    def rows(
+        self: AsyncCrudBuilder[U], *, require_streaming: bool = False
+    ) -> AsyncRows[U]: ...
     def rows(
         self,
         *,
@@ -1261,7 +1293,7 @@ class AsyncCrudBuilder(_AsyncBuilderIteration, _CrudState, Generic[T]):
         return self.execute().__await__()
 
 
-class AsyncInsertBuilder(_AsyncBuilderIteration, _InsertState, Generic[T]):
+class AsyncInsertBuilder(_InsertState, Generic[T]):
     """Awaitable INSERT builder for async connections (idempotent).
 
     Re-configuring the builder *after* it has executed raises rather than
@@ -1310,6 +1342,25 @@ class AsyncInsertBuilder(_AsyncBuilderIteration, _InsertState, Generic[T]):
         response = await self._executor(query, variables)
         return cast(list[T], _map_result(self._into, self._extract(response)))
 
+    @overload
+    def __aiter__(self: AsyncInsertBuilder[Value]) -> AsyncIterator[_Record]: ...
+    @overload
+    def __aiter__(self: AsyncInsertBuilder[U]) -> AsyncIterator[U]: ...
+    def __aiter__(self) -> AsyncIterator[Any]:
+        return cast("AsyncIterator[Any]", self.rows().__aiter__())
+
+    @overload
+    def rows(
+        self, *, into: type[M], require_streaming: bool = False
+    ) -> AsyncRows[M]: ...
+    @overload
+    def rows(
+        self: AsyncInsertBuilder[Value], *, require_streaming: bool = False
+    ) -> AsyncRows[_Record]: ...
+    @overload
+    def rows(
+        self: AsyncInsertBuilder[U], *, require_streaming: bool = False
+    ) -> AsyncRows[U]: ...
     def rows(
         self,
         *,
@@ -1350,7 +1401,7 @@ class AsyncInsertBuilder(_AsyncBuilderIteration, _InsertState, Generic[T]):
         return self.execute().__await__()
 
 
-class AsyncQueryBuilder(_AsyncBuilderIteration, _QueryState):
+class AsyncQueryBuilder(_QueryState):
     """Awaitable QUERY builder for async connections.
 
     Always returns ``list[Value]`` - one entry per statement - even for a
@@ -1472,6 +1523,15 @@ class AsyncQueryBuilder(_AsyncBuilderIteration, _QueryState):
         _claim_for_stream(self)
         return stream
 
+    def __aiter__(self) -> AsyncIterator[Any]:
+        return self.rows().__aiter__()
+
+    @overload
+    def rows(
+        self, *, into: type[M], require_streaming: bool = False
+    ) -> AsyncRows[M]: ...
+    @overload
+    def rows(self, *, require_streaming: bool = False) -> AsyncRows[Any]: ...
     def rows(
         self,
         *,
@@ -1617,6 +1677,56 @@ class SyncCrudBuilder(_SyncBuilderGuards, _CrudState, Generic[T]):
         self._set_clause(_Clause.PATCH, data)
         return cast(T, self._run_once())
 
+    @overload
+    def __iter__(self: SyncCrudBuilder[list[Value]]) -> Iterator[_Record]: ...
+    @overload
+    def __iter__(self: SyncCrudBuilder[Value]) -> Iterator[_Record]: ...
+    @overload
+    def __iter__(self: SyncCrudBuilder[list[U]]) -> Iterator[U]: ...
+    @overload
+    def __iter__(self: SyncCrudBuilder[U | list[U] | None]) -> Iterator[U]: ...
+    @overload
+    def __iter__(self: SyncCrudBuilder[U | list[U]]) -> Iterator[U]: ...
+    @overload
+    def __iter__(self: SyncCrudBuilder[U | None]) -> Iterator[U]: ...
+    @overload
+    def __iter__(self: SyncCrudBuilder[U]) -> Iterator[U]: ...
+    def __iter__(self) -> Iterator[Any]:
+        with self.rows() as stream:
+            yield from stream
+
+    @overload
+    def rows(
+        self, *, into: type[M], require_streaming: bool = False
+    ) -> SyncRows[M]: ...
+    @overload
+    def rows(
+        self: SyncCrudBuilder[list[Value]], *, require_streaming: bool = False
+    ) -> SyncRows[_Record]: ...
+    @overload
+    def rows(
+        self: SyncCrudBuilder[Value], *, require_streaming: bool = False
+    ) -> SyncRows[_Record]: ...
+    @overload
+    def rows(
+        self: SyncCrudBuilder[list[U]], *, require_streaming: bool = False
+    ) -> SyncRows[U]: ...
+    @overload
+    def rows(
+        self: SyncCrudBuilder[U | list[U] | None], *, require_streaming: bool = False
+    ) -> SyncRows[U]: ...
+    @overload
+    def rows(
+        self: SyncCrudBuilder[U | list[U]], *, require_streaming: bool = False
+    ) -> SyncRows[U]: ...
+    @overload
+    def rows(
+        self: SyncCrudBuilder[U | None], *, require_streaming: bool = False
+    ) -> SyncRows[U]: ...
+    @overload
+    def rows(
+        self: SyncCrudBuilder[U], *, require_streaming: bool = False
+    ) -> SyncRows[U]: ...
     def rows(
         self,
         *,
@@ -1706,6 +1816,26 @@ class SyncInsertBuilder(_SyncBuilderGuards, _InsertState, Generic[T]):
         self._data = data
         return cast(list[T], self._run_once())
 
+    @overload
+    def __iter__(self: SyncInsertBuilder[Value]) -> Iterator[_Record]: ...
+    @overload
+    def __iter__(self: SyncInsertBuilder[U]) -> Iterator[U]: ...
+    def __iter__(self) -> Iterator[Any]:
+        with self.rows() as stream:
+            yield from stream
+
+    @overload
+    def rows(
+        self, *, into: type[M], require_streaming: bool = False
+    ) -> SyncRows[M]: ...
+    @overload
+    def rows(
+        self: SyncInsertBuilder[Value], *, require_streaming: bool = False
+    ) -> SyncRows[_Record]: ...
+    @overload
+    def rows(
+        self: SyncInsertBuilder[U], *, require_streaming: bool = False
+    ) -> SyncRows[U]: ...
     def rows(
         self,
         *,
@@ -1855,6 +1985,16 @@ class SyncQueryBuilder(_SyncBuilderGuards, _QueryState):
         _claim_for_stream(self)
         return stream
 
+    def __iter__(self) -> Iterator[Any]:
+        with self.rows() as stream:
+            yield from stream
+
+    @overload
+    def rows(
+        self, *, into: type[M], require_streaming: bool = False
+    ) -> SyncRows[M]: ...
+    @overload
+    def rows(self, *, require_streaming: bool = False) -> SyncRows[Any]: ...
     def rows(
         self,
         *,
