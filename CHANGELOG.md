@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `QueryError.timeout` returns the `Duration` the statement exceeded instead of
+  always `None`. It was annotated `dict[str, Any] | None` and documented as
+  `{"secs": ..., "nanos": ...}`, and the body only accepted a `dict` — but
+  SurrealDB 3.x sends a `Duration`, so the property reported nothing for every
+  timeout on both websocket and HTTP. `is_timed_out` was always correct, which is
+  part of why it went unnoticed: the branch a caller writes worked and only the
+  detail inside it was empty.
+
+  Still `None` on 2.x, which sends no structured detail for a timeout — that
+  surfaces as an `InternalError` rather than a `QueryError`, so there is nothing
+  to read a duration out of. A `{"secs": ..., "nanos": ...}` mapping is accepted
+  and converted, since no supported version sends one but it is what the old
+  annotation promised. Found by reviewing surrealdb.js, which fixed the same
+  mismatch in its own declaration.
+
 - **Breaking (blocking client only):** `select()` returns a builder, like every
   other CRUD method, so blocking callers need a terminator:
 

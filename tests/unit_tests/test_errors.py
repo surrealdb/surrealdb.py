@@ -2,6 +2,7 @@
 
 import pytest
 
+from surrealdb import Duration
 from surrealdb.errors import (
     AlreadyExistsDetailKind,
     AlreadyExistsError,
@@ -264,7 +265,12 @@ class TestParseRpcErrorNewFormat:
         )
         assert isinstance(err, QueryError)
         assert err.is_timed_out is True
-        assert err.timeout == {"secs": 5, "nanos": 0}
+        # Normalised to a `Duration`, whatever shape it arrived in. This payload
+        # is hand-built in the `{secs, nanos}` form the old annotation promised;
+        # no supported version actually sends it - 3.x sends a `Duration` and 2.x
+        # sends no structured detail at all - which is why this test passed while
+        # `timeout` returned `None` for every real timeout.
+        assert err.timeout == Duration(5_000_000_000)
 
     def test_query_cancelled(self) -> None:
         err = parse_rpc_error(
