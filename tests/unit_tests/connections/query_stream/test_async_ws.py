@@ -21,6 +21,9 @@ import pytest
 from surrealdb import AsyncQueryStream
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.errors import SurrealError, UnsupportedFeatureError
+from tests.unit_tests.connections.query_stream.expectation import (
+    skip_unless_streaming_is_expected,
+)
 
 # Every shape a statement's value can take: a row list, a bare value from a
 # `RETURN`, a bare record from `SELECT ... FROM ONLY`, and a list that is a
@@ -56,7 +59,7 @@ async def _require_streaming(connection: AsyncWsSurrealConnection) -> None:
     except UnsupportedFeatureError as exc:
         if connection._streaming_supported is not False:
             raise
-        pytest.skip(f"this server will not stream: {exc}")
+        skip_unless_streaming_is_expected(exc)
 
 
 async def _buffered(connection: AsyncWsSurrealConnection, sql: str) -> list[Any]:
