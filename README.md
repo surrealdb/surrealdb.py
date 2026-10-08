@@ -1258,7 +1258,8 @@ every 5 seconds of its own accord, which the library answers automatically — s
 the socket is rarely idle for long in either direction.
 
 Both options are ignored by the HTTP and embedded transports, which have no
-websocket, exactly as `streaming` is.
+websocket, exactly as `streaming` is. They require `websockets` 15.0 or newer,
+which is the SDK's declared floor.
 
 ## Files
 

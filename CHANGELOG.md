@@ -49,6 +49,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the constructor rather than passed on, because `websockets` accepts them and
   then pings in a tight loop.
 
+  This raises the `websockets` floor from 14.1 to **15.0**, which is the first
+  release whose *sync* client accepts these arguments at all - the async client
+  has had them throughout. Passing them on 14.x raised `TypeError: connect() got
+  an unexpected keyword argument` and took every blocking websocket connection
+  down with it, so there is no version of this that works below 15.0.
+
 - Streaming queries, adopted invisibly. Against SurrealDB **v3.3.0** or later
   over a websocket, `query()` now asks for its answer as a sequence of frames
   and rebuilds it as they arrive - and so do `select()`, `create()`, `upsert()`
