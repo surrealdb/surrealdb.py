@@ -342,6 +342,12 @@ jobs:
           SURREALDB_HOST: localhost
           SURREALDB_PORT: "8000"
           SURREALDB_VERSION: ${{ matrix.surrealdb-version }}
+          # What this server must do about streaming (v3.3.0 and later: stream).
+          # The streaming tests skip themselves on a server that refuses, which
+          # is also what a regression looks like - so on a leg that must stream,
+          # a refusal fails them instead, and on one that must not, the
+          # fallback is asserted. See tests/.../query_stream/expectation.py.
+          SURREALDB_EXPECT_STREAMING: ${{ (matrix.surrealdb-version == 'v3.3.0' || matrix.surrealdb-version == 'nightly') && '1' || '0' }}
           PYTHONWARNINGS: ignore::ResourceWarning
 
   test-memory:

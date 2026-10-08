@@ -14,6 +14,9 @@ import pytest
 
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.errors import SurrealError, UnsupportedFeatureError
+from tests.unit_tests.connections.query_stream.expectation import (
+    skip_unless_streaming_is_expected,
+)
 
 MIXED_SQL = (
     "SELECT * FROM stream_wide ORDER BY id LIMIT 3; "
@@ -38,7 +41,7 @@ def _require_streaming(connection: BlockingWsSurrealConnection) -> None:
     except UnsupportedFeatureError as exc:
         if connection._streaming_supported is not False:
             raise
-        pytest.skip(f"this server will not stream: {exc}")
+        skip_unless_streaming_is_expected(exc)
 
 
 def _buffered(connection: BlockingWsSurrealConnection, sql: str) -> list[Any]:
