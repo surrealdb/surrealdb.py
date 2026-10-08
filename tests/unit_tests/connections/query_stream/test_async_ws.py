@@ -18,7 +18,7 @@ from uuid import UUID
 
 import pytest
 
-from surrealdb import AsyncQueryStream
+from surrealdb import AsyncRows
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.errors import SurrealError, UnsupportedFeatureError
 from tests.unit_tests.connections.query_stream.expectation import (
@@ -218,7 +218,7 @@ async def test_a_buffered_query_answers_while_a_stream_is_open(
     )
 
 
-async def _collect(stream: AsyncQueryStream) -> list[Any]:
+async def _collect(stream: AsyncRows[Any]) -> list[Any]:
     return [row async for row in stream]
 
 

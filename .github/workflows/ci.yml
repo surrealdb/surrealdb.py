@@ -107,7 +107,7 @@ jobs:
         run: uv sync --group dev
 
       - name: Run pyright checks
-        run: uv run pyright src/
+        run: uv run pyright src/ tests/unit_tests/test_builder_row_typing.py
 
       - name: Run pyright checks (agent memory)
         run: uv run pyright memory/src

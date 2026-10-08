@@ -609,6 +609,15 @@ async for person in db.query("SELECT * FROM person").rows():
     ...
 ```
 
+Iterating the builder itself is the same thing without the `.rows()`, on the
+async client as on the blocking one - `await builder` for the whole answer,
+`async for row in builder` for the rows as they arrive:
+
+```python
+async for person in db.select(Table("person")):
+    ...
+```
+
 It needs the same v3.3.0 server and a WebSocket connection. Against an
 older server, or over HTTP, the query runs the buffered way and its rows are
 handed back one at a time, so the call works everywhere - see
@@ -688,6 +697,23 @@ The same on the blocking client, with `with` instead of `async with`:
 for person in db.select("person").rows(into=Person):
     print(person.name)
 ```
+
+The rows are typed, so a type checker sees what each loop yields. A record is
+`dict[str, Value]` and `into=Model` gives `Model`, however the target is spelled
+(`Table`, `RecordID` or a string), and the same goes for iterating the builder
+directly:
+
+```python
+for row in db.select(Table("person")):                # dict[str, Value]
+    ...
+for person in db.select(Table("person"), into=Person):  # Person
+    print(person.name)
+```
+
+A query's rows can be any value, so `query(...).rows()` yields `Any` unless you
+pass `into=`. What `rows()` returns is a `SyncRows[T]` (or `AsyncRows[T]`) - the
+iterable that also works as a context manager - which is the name to annotate
+with if you pass one around.
 
 ### Rows are provisional until iteration ends
 

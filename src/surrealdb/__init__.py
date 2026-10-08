@@ -19,9 +19,11 @@ from surrealdb.connections.builders import (
     AsyncInsertBuilder,
     AsyncQueryBuilder,
     AsyncQueryIntoBuilder,
+    AsyncRows,
     SyncCrudBuilder,
     SyncInsertBuilder,
     SyncQueryBuilder,
+    SyncRows,
 )
 from surrealdb.connections.files import AsyncFiles, BlockingFiles, FileMetadata
 from surrealdb.connections.url import Url, UrlScheme
@@ -152,7 +154,9 @@ __all__ = [
     "SyncQueryBuilder",
     # Streaming queries (returned by a builder's rows()/statements())
     "AsyncQueryStream",
+    "AsyncRows",
     "QueryStream",
+    "SyncRows",
     "DoneFrame",
     "ErrorFrame",
     "StatementResult",
