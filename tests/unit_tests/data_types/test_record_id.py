@@ -227,9 +227,12 @@ def test_record_id_str_with_integer_id() -> None:
 
 
 def test_record_id_str_with_angle_bracket_escape() -> None:
-    """Test RecordID string representation with angle bracket in identifier."""
+    """A ``⟩`` in the id moves that half to backtick delimiters.
+
+    Previously ``test:⟨foo\⟩bar⟩``, which SurrealDB 3.x refuses to parse.
+    """
     record_id = RecordID("test", "foo⟩bar")
-    assert str(record_id) == "test:⟨foo\\⟩bar⟩"
+    assert str(record_id) == "test:`foo⟩bar`"
 
 
 def test_record_id_direct_id_interpolation_is_unsafe() -> None:
@@ -731,10 +734,13 @@ class TestEscapeIdentifier:
         assert escape_identifier("_") == "⟨_⟩"
         assert escape_identifier("123_456") == "⟨123_456⟩"
 
-    def test_closing_bracket_inside_is_escaped(self) -> None:
-        # ``⟩`` inside a name must be escaped as ``\⟩`` so it doesn't
-        # close the wrapping ``⟨...⟩`` early.
-        assert escape_identifier("foo⟩bar") == "⟨foo\\⟩bar⟩"
+    def test_a_closing_bracket_switches_to_backtick_delimiters(self) -> None:
+        # This used to assert ``⟨foo\⟩bar⟩``, which was right about the intent -
+        # ``⟩`` must not close the wrapper early - and wrong about the server.
+        # SurrealDB 3.x answers ``Parse error: Invalid escape sequence`` for
+        # ``\⟩`` inside ``⟨...⟩``; 2.3.10 accepts it. Backticks are read the same
+        # by both, so a name holding ``⟩`` is delimited with those instead.
+        assert escape_identifier("foo⟩bar") == "`foo⟩bar`"
 
     def test_opening_bracket_inside_is_left_unescaped(self) -> None:
         # ``⟨`` inside a name is not escaped; SurrealQL's parser
@@ -743,9 +749,11 @@ class TestEscapeIdentifier:
         # the current behaviour so callers know what we emit.
         assert escape_identifier("foo⟨bar") == "⟨foo⟨bar⟩"
 
-    def test_backslash_inside_is_left_unescaped(self) -> None:
-        # Backslashes are not escaped by ``escape_identifier``. Names
-        # containing ``\`` are passed through; consumers that need
-        # round-trip safety with ``Table(...)`` for arbitrary unicode
-        # should pre-validate or escape before constructing ``Table``.
-        assert escape_identifier("foo\\bar") == "⟨foo\\bar⟩"
+    def test_a_backslash_is_doubled_inside_backtick_delimiters(self) -> None:
+        # This used to assert that backslashes were passed through untouched,
+        # and told callers to "pre-validate or escape before constructing
+        # Table". They cannot: the emitted ``⟨foo\bar⟩`` is an invalid escape
+        # on 3.x and an internal error on 2.3.10, and a *trailing* backslash
+        # escaped the closing delimiter so the identifier never terminated.
+        assert escape_identifier("foo\\bar") == "`foo\\\\bar`"
+        assert escape_identifier("trailing\\") == "`trailing\\\\`"

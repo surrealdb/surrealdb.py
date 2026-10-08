@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `escape_identifier` emitted identifiers SurrealDB cannot parse. It wrapped
+  every delimited name in `⟨...⟩` and escaped `⟩` as `\⟩`, on the stated
+  assumption that `⟨...⟩` accepts any string on every supported version. It does
+  not, and the failures were not symmetric — each of these was produced by the
+  old code and refused by a live server:
+
+  | emitted | 2.3.10 | 3.2.3 |
+  | --- | --- | --- |
+  | `⟨with\⟩angle⟩` | accepted | `Invalid escape sequence` |
+  | `⟨back\slash⟩` | internal error | `Invalid escape sequence` |
+  | `⟨trailing\⟩` | internal error | `Unexpected end of file` |
+
+  The last is the worst: a trailing backslash escapes the closing delimiter, so
+  the identifier never terminates and consumes whatever followed it in the
+  statement. A name containing `\` or `⟩` is now delimited with backticks,
+  doubling `\` and escaping `` ` ``, which both versions read identically.
+  Names that already worked keep their exact previous output.
+
+  This reaches `escape_identifier` itself, `RecordID.__str__`, table-name
+  inlining on `INSERT`, and `select(fields=[...])`. Found by reviewing
+  surrealdb.js, which fixed the same defect in its own escaping.
+
 - `QueryError.timeout` returns the `Duration` the statement exceeded instead of
   always `None`. It was annotated `dict[str, Any] | None` and documented as
   `{"secs": ..., "nanos": ...}`, and the body only accepted a `dict` — but
