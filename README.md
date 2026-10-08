@@ -609,6 +609,15 @@ async for person in db.query("SELECT * FROM person").rows():
     ...
 ```
 
+Iterating the builder itself is the same thing without the `.rows()`, on the
+async client as on the blocking one - `await builder` for the whole answer,
+`async for row in builder` for the rows as they arrive:
+
+```python
+async for person in db.select(Table("person")):
+    ...
+```
+
 It needs the same v3.3.0 server and a WebSocket connection. Against an
 older server, or over HTTP, the query runs the buffered way and its rows are
 handed back one at a time, so the call works everywhere - see

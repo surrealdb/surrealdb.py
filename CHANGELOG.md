@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Async builders are iterable. `async for row in db.select(Table("person")):`
+  streams the rows as the server produces them, matching the blocking builders'
+  `for row in ...`: `await builder` gives the whole answer and `async for` gives
+  the rows as they arrive. It is `.rows()` and nothing else, on every async
+  builder (`select()`, `create()`, `update()`, `upsert()`, `delete()`,
+  `insert()` and `query()`), so it streams where the server can and falls back
+  to the buffered rows where it cannot, and stopping early is cleaned up the
+  same way.
+
 ## [3.0.0-beta.9] - 2026-10-08
 
 Upgrading from `3.0.0-beta.8`: on the **blocking** client, `select()` and

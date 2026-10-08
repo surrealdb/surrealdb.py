@@ -68,7 +68,15 @@ import inspect
 import re
 import threading
 import warnings
-from collections.abc import Awaitable, Callable, Generator, Iterator, Mapping, Sequence
+from collections.abc import (
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Generator,
+    Iterator,
+    Mapping,
+    Sequence,
+)
 from dataclasses import fields, is_dataclass
 from typing import (
     TYPE_CHECKING,
@@ -358,6 +366,34 @@ class _WarnIfDropped:
             stacklevel=2,
             source=self,
         )
+
+
+class _AsyncBuilderIteration:
+    """Make an awaitable builder iterable with ``async for``.
+
+    ``await builder`` gives the whole answer and ``async for row in builder``
+    gives the rows as the server produces them: the blocking builders'
+    iteration, for the other terminator. It is ``rows()`` and nothing else, so
+    it streams where the server can and hands back the buffered rows one at a
+    time where it cannot.
+
+    It hands back the stream's own iterator rather than wrapping ``rows()`` in a
+    generator, so ``async for x in builder`` and ``async for x in
+    builder.rows()`` are the same thing and the documented way of stopping early
+    applies unchanged.
+    """
+
+    if TYPE_CHECKING:
+
+        def rows(
+            self,
+            *,
+            into: type[Any] | None = ...,
+            require_streaming: bool = ...,
+        ) -> Any: ...
+
+    def __aiter__(self) -> AsyncIterator[Any]:
+        return cast("AsyncIterator[Any]", self.rows().__aiter__())
 
 
 class _SyncBuilderGuards(_WarnIfDropped):
@@ -1122,7 +1158,7 @@ class _AsyncCachedRunner:
 # ---------------------------------------------------------------------------
 
 
-class AsyncCrudBuilder(_CrudState, Generic[T]):
+class AsyncCrudBuilder(_AsyncBuilderIteration, _CrudState, Generic[T]):
     """Awaitable CRUD builder for async connections.
 
     Awaiting the same builder twice (or from concurrent tasks) only issues
@@ -1225,7 +1261,7 @@ class AsyncCrudBuilder(_CrudState, Generic[T]):
         return self.execute().__await__()
 
 
-class AsyncInsertBuilder(_InsertState, Generic[T]):
+class AsyncInsertBuilder(_AsyncBuilderIteration, _InsertState, Generic[T]):
     """Awaitable INSERT builder for async connections (idempotent).
 
     Re-configuring the builder *after* it has executed raises rather than
@@ -1314,7 +1350,7 @@ class AsyncInsertBuilder(_InsertState, Generic[T]):
         return self.execute().__await__()
 
 
-class AsyncQueryBuilder(_QueryState):
+class AsyncQueryBuilder(_AsyncBuilderIteration, _QueryState):
     """Awaitable QUERY builder for async connections.
 
     Always returns ``list[Value]`` - one entry per statement - even for a
