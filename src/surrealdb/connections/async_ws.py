@@ -30,6 +30,7 @@ from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import (
     AUTH_FALLBACK_QUERY,
     UtilsMixin,
+    check_keepalive,
 )
 from surrealdb.data.cbor import decode
 from surrealdb.data.types.record_id import RecordID, RecordIdType
@@ -247,6 +248,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         url: str,
         *,
         streaming: bool = True,
+        ping_interval: float | None = 30.0,
+        ping_timeout: float | None = 10.0,
     ) -> None:
         """
         The constructor for the AsyncSurrealConnection class.
@@ -258,6 +261,12 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             ``False`` to put every query back on the buffered path - worth doing
             if a slow consumer of a very large result would rather the server
             waited than the client buffered.
+        :param ping_interval: Seconds between keepalive pings sent on an idle
+            socket, or ``None`` to send none. Defaults to 30.
+        :param ping_timeout: Seconds to wait for the matching pong before the
+            connection is considered dead and closed, or ``None`` to wait
+            indefinitely. Defaults to 10, so a gone peer is noticed within
+            roughly ``ping_interval + ping_timeout``.
         """
         self.url: Url = Url(url)
         self.raw_url: str = f"{self.url.raw_url}/rpc"
@@ -265,6 +274,10 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.port: int | None = self.url.port
         self.token: str | None = None
         self.socket: Any = None  # WebSocket connection
+        self._ping_interval: float | None = check_keepalive(
+            "ping_interval", ping_interval
+        )
+        self._ping_timeout: float | None = check_keepalive("ping_timeout", ping_timeout)
         self.loop: AbstractEventLoop | None = None
         self.qry: dict[str, Future[dict[str, Any]]] = {}
         self.recv_task: Task[None] | None = None
@@ -659,6 +672,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
                 self.raw_url,
                 max_size=None,
                 subprotocols=[websockets.Subprotocol("cbor")],
+                ping_interval=self._ping_interval,
+                ping_timeout=self._ping_timeout,
             )
         except asyncio.TimeoutError as exc:
             raise TransportTimeoutError(

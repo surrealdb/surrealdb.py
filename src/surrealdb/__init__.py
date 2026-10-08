@@ -289,6 +289,8 @@ def Surreal(
     url: str,
     *,
     streaming: bool = True,
+    ping_interval: float | None = 30.0,
+    ping_timeout: float | None = 10.0,
 ) -> BlockingSurrealConnection:
     """Open a connection to *url*, picking the transport from its scheme.
 
@@ -303,6 +305,13 @@ def Surreal(
             since asking
             for a stream outright is taken as meaning it. Ignored by the
             transports that cannot stream.
+        ping_interval: Seconds between keepalive pings on an idle websocket, or
+            ``None`` to send none. Defaults to 30. Ignored by the transports that
+            have no websocket.
+        ping_timeout: Seconds to wait for the matching pong before the connection
+            is treated as dead, or ``None`` to wait indefinitely. Defaults to 10,
+            so a peer that has gone away is noticed within roughly
+            ``ping_interval + ping_timeout``.
     """
     constructed_url = Url(url)
     if constructed_url.scheme in _EMBEDDED_SCHEMES:
@@ -318,7 +327,12 @@ def Surreal(
         constructed_url.scheme == UrlScheme.WS
         or constructed_url.scheme == UrlScheme.WSS
     ):
-        return BlockingWsSurrealConnection(url=url, streaming=streaming)
+        return BlockingWsSurrealConnection(
+            url=url,
+            streaming=streaming,
+            ping_interval=ping_interval,
+            ping_timeout=ping_timeout,
+        )
     else:
         raise UnsupportedEngineError(url)
 
@@ -327,6 +341,8 @@ def AsyncSurreal(
     url: str,
     *,
     streaming: bool = True,
+    ping_interval: float | None = 30.0,
+    ping_timeout: float | None = 10.0,
 ) -> AsyncSurrealConnection:
     """Open a connection to *url*, picking the transport from its scheme.
 
@@ -341,6 +357,13 @@ def AsyncSurreal(
             since asking
             for a stream outright is taken as meaning it. Ignored by the
             transports that cannot stream.
+        ping_interval: Seconds between keepalive pings on an idle websocket, or
+            ``None`` to send none. Defaults to 30. Ignored by the transports that
+            have no websocket.
+        ping_timeout: Seconds to wait for the matching pong before the connection
+            is treated as dead, or ``None`` to wait indefinitely. Defaults to 10,
+            so a peer that has gone away is noticed within roughly
+            ``ping_interval + ping_timeout``.
     """
     constructed_url = Url(url)
     if constructed_url.scheme in _EMBEDDED_SCHEMES:
@@ -356,7 +379,12 @@ def AsyncSurreal(
         constructed_url.scheme == UrlScheme.WS
         or constructed_url.scheme == UrlScheme.WSS
     ):
-        return AsyncWsSurrealConnection(url=url, streaming=streaming)
+        return AsyncWsSurrealConnection(
+            url=url,
+            streaming=streaming,
+            ping_interval=ping_interval,
+            ping_timeout=ping_timeout,
+        )
     else:
         raise UnsupportedEngineError(url)
 

@@ -33,6 +33,7 @@ from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import (
     AUTH_FALLBACK_QUERY,
     UtilsMixin,
+    check_keepalive,
 )
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
@@ -112,7 +113,14 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         id: The ID of the connection.
     """
 
-    def __init__(self, url: str, *, streaming: bool = True) -> None:
+    def __init__(
+        self,
+        url: str,
+        *,
+        streaming: bool = True,
+        ping_interval: float | None = 30.0,
+        ping_timeout: float | None = 10.0,
+    ) -> None:
         """
         The constructor for the BlockingWsSurrealConnection class.
 
@@ -121,6 +129,12 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             rather than one response. On by default and invisible: the answer is
             the same either way, so this only decides how it arrives. Pass
             ``False`` to put every query back on the buffered path.
+        :param ping_interval: Seconds between keepalive pings sent on an idle
+            socket, or ``None`` to send none. Defaults to 30.
+        :param ping_timeout: Seconds to wait for the matching pong before the
+            connection is considered dead and closed, or ``None`` to wait
+            indefinitely. Defaults to 10, so a gone peer is noticed within
+            roughly ``ping_interval + ping_timeout``.
         """
         self.url: Url = Url(url)
         self.raw_url: str = f"{self.url.raw_url}/rpc"
@@ -129,6 +143,10 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.id: str = str(uuid.uuid4())
         self.token: str | None = None
         self.socket: ClientConnection | None = None
+        self._ping_interval: float | None = check_keepalive(
+            "ping_interval", ping_interval
+        )
+        self._ping_timeout: float | None = check_keepalive("ping_timeout", ping_timeout)
         self._lock: threading.Lock = threading.Lock()
         # Live-query notification queues keyed by live-query UUID string. A
         # ``subscribe_live`` consumer registers its own queue here so that
@@ -165,6 +183,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 self.raw_url,
                 max_size=None,
                 subprotocols=[websockets.Subprotocol("cbor")],
+                ping_interval=self._ping_interval,
+                ping_timeout=self._ping_timeout,
             )
         except TimeoutError as exc:
             raise TransportTimeoutError(
