@@ -360,13 +360,16 @@ def test_sync_builder_has_no_magic_auto_execute(
     must NOT run the operation; only ``.execute()`` / a clause method does.
     Pins the eager-model contract so a future refactor that re-introduces
     magic consumption breaks here and forces an explicit decision.
+
+    Iterating is not on the list: it is an explicit terminator that streams the
+    rows, like ``.rows()``, and so lives on each builder with its row type.
     """
     blocking_ws_connection.query("CREATE counter:bool_check SET n = 5").execute()
     builder = blocking_ws_connection.query(
         "UPDATE counter:bool_check SET n = n + 1 RETURN AFTER"
     )
     assert bool(builder) is True  # object truthiness - does NOT execute
-    for magic in ("__bool__", "__eq__", "__getitem__", "__iter__", "__len__"):
+    for magic in ("__bool__", "__eq__", "__getitem__", "__len__"):
         assert magic not in type(builder).__dict__
     # The UPDATE never ran: n is still 5.
     after = blocking_ws_connection.query("SELECT n FROM counter:bool_check").first()

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The rows a builder yields are typed. `for row in db.select(...)` and
+  `db.select(...).rows()` returned `Any`, so a typo in `row["nmae"]` went
+  unnoticed by a type checker. A record is now `dict[str, Value]` and
+  `into=Model` gives `Model`, for every target spelling (`Table`, `RecordID`,
+  string) and on `select`, `create`, `update`, `upsert`, `delete` and `insert`,
+  blocking and async. `query(...).rows()` stays `Any` unless `into=` is passed,
+  since a query's rows can be any value.
+
+  `rows()` now returns `SyncRows[T]` / `AsyncRows[T]` (exported, for annotating)
+  instead of `Any`. This is a typing-only change: the object returned is the
+  same one. Code that annotated the result as `AsyncQueryStream` or
+  `QueryStream` will need to use these instead, since `rows(into=Model)` has
+  always returned a mapping wrapper rather than the stream itself.
+
 ### Added
 
 - Async builders are iterable. `async for row in db.select(Table("person")):`

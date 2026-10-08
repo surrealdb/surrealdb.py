@@ -84,7 +84,9 @@ async def test_iteration_maps_rows_onto_the_model_the_builder_was_given() -> Non
 
     channel = _channel([{"n": 1}, {"n": 2}])
 
-    assert [row async for row in _select(channel, into=Row)] == [Row(1), Row(2)]
+    builder: AsyncCrudBuilder[list[Row]] = _select(channel, into=Row)
+
+    assert [row async for row in builder] == [Row(1), Row(2)]
 
 
 async def test_a_builder_is_spent_once_iterated() -> None:
