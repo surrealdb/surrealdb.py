@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0-beta.9] - 2026-10-08
+
+Upgrading from `3.0.0-beta.8`: on the **blocking** client, `select()` and
+`delete()` now return a builder, so `db.select("person")` needs a terminator -
+`.execute()`, or iterate it to stream the rows. A builder you forget to run now
+warns. See *Changed* below.
+
 ### Changed
 
 - `escape_identifier` emitted identifiers SurrealDB cannot parse. It wrapped
@@ -732,7 +739,8 @@ Follow-up to `3.0.0-alpha.1` that finalises the v3 API surface and fixes a batch
 ### Added
 - Initial stable release of the SurrealDB Python client.
 
-[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.8...HEAD
+[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.9...HEAD
+[3.0.0-beta.9]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.8...v3.0.0-beta.9
 [3.0.0-beta.8]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.7...v3.0.0-beta.8
 [3.0.0-beta.7]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.6...v3.0.0-beta.7
 [3.0.0-beta.6]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.5...v3.0.0-beta.6
