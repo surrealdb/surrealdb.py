@@ -9,7 +9,17 @@ anything.
 ``is_timed_out`` was always correct, which is part of why this went unnoticed:
 the branch a caller is most likely to write worked, and only the detail inside
 it was empty.
+
+The server-backed tests below need a server that reports a *structured* timeout.
+2.x does not: the same query comes back as an ``InternalError`` with no details,
+so there is no duration to read and nothing for these to assert. They gate on
+that capability rather than on a version number, so they begin running by
+themselves if 2.x ever gains the detail, and skip rather than fail on a 3.x
+build that somehow lacks it. The unit-level tests at the bottom need no server
+and never skip.
 """
+
+from typing import Any
 
 import pytest
 
@@ -24,6 +34,42 @@ from surrealdb.errors import QueryError
 # off rather than the statement happening to be slow.
 TIMES_OUT = "SELECT sleep(2s) FROM 1 TIMEOUT 10ms"
 
+# Resolved once: it cannot change while the suite runs, and the probe costs a
+# connection plus a deliberate timeout.
+_STRUCTURED: bool | None = None
+
+
+def _probe_structured_timeout(connection_params: dict[str, Any]) -> bool:
+    connection = BlockingWsSurrealConnection(connection_params["ws_url"])
+    try:
+        connection.signin(connection_params["vars_params"])
+        connection.use(
+            namespace=connection_params["namespace"],
+            database=connection_params["database_name"],
+        )
+        try:
+            connection.query(TIMES_OUT).execute()
+        except QueryError as error:
+            return error.is_timed_out
+        except Exception:
+            return False
+        return False
+    finally:
+        connection.close()
+
+
+@pytest.fixture
+def needs_structured_timeout(connection_params: dict[str, Any]) -> None:
+    """Skip unless the server reports a timeout as a structured ``QueryError``."""
+    global _STRUCTURED
+    if _STRUCTURED is None:
+        _STRUCTURED = _probe_structured_timeout(connection_params)
+    if not _STRUCTURED:
+        pytest.skip(
+            "server reports timeouts without structured details (2.x); "
+            "there is no duration to read"
+        )
+
 
 def _timed_out(connection: object) -> QueryError:
     with pytest.raises(QueryError) as caught:
@@ -34,6 +80,7 @@ def _timed_out(connection: object) -> QueryError:
 
 def test_the_timeout_is_a_duration_not_none(
     blocking_ws_connection: BlockingWsSurrealConnection,
+    needs_structured_timeout: None,
 ) -> None:
     error = _timed_out(blocking_ws_connection)
 
@@ -42,6 +89,7 @@ def test_the_timeout_is_a_duration_not_none(
 
 def test_the_duration_is_the_one_the_statement_asked_for(
     blocking_ws_connection: BlockingWsSurrealConnection,
+    needs_structured_timeout: None,
 ) -> None:
     """10ms in the statement, 10ms back - not merely "some Duration"."""
     error = _timed_out(blocking_ws_connection)
@@ -53,6 +101,7 @@ def test_the_duration_is_the_one_the_statement_asked_for(
 
 def test_the_blocking_http_transport_agrees(
     blocking_http_connection: BlockingHttpSurrealConnection,
+    needs_structured_timeout: None,
 ) -> None:
     error = _timed_out(blocking_http_connection)
 
@@ -63,6 +112,7 @@ def test_the_blocking_http_transport_agrees(
 async def test_the_async_transports_agree(
     async_ws_connection: AsyncWsSurrealConnection,
     async_http_connection: AsyncHttpSurrealConnection,
+    needs_structured_timeout: None,
 ) -> None:
     for connection in (async_ws_connection, async_http_connection):
         with pytest.raises(QueryError) as caught:
