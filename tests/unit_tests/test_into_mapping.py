@@ -382,6 +382,7 @@ def test_sync_select_without_into_returns_raw_dict(
         pytest.param(lambda **kwargs: kwargs, id="function"),
     ],
 )
+@pytest.mark.filterwarnings("ignore:.*was called at:RuntimeWarning")
 def test_into_rejects_something_that_is_not_a_class(not_a_class: Any) -> None:
     """A caller mistake reports itself, rather than crashing the formatter.
 
@@ -408,6 +409,7 @@ def test_into_rejects_something_that_is_not_a_class(not_a_class: Any) -> None:
     assert not sent, "the query was sent before the argument was checked"
 
 
+@pytest.mark.filterwarnings("ignore:.*was called at:RuntimeWarning")
 def test_async_into_rejects_something_that_is_not_a_class() -> None:
     """The async builder validates on the call, not on the await."""
 

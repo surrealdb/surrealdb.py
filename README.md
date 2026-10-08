@@ -332,12 +332,19 @@ accepts ['id', 'name'].
 Give the extra fields defaults, add them to the model, or `SELECT` only the
 columns it declares.
 
-Sync usage is **eager** - there is no `await` to defer to, so the
-connection methods run single-shot operations immediately and return the
-plain result. A builder is only handed back for the deferred no-data form
-so you can pick a clause; there are **no** magic methods, so a builder
-never auto-executes on `bool()`, `==`, indexing, iteration, or attribute
-access.
+Sync usage has no `await` to defer to, so the rule is: **a write you give its
+data runs immediately; everything else returns a builder.**
+`create/update/upsert/insert(target, data)` run at once and return the result.
+`select()`, `delete()`, `query()` and the no-data write forms return a builder,
+which you run with `.execute()` (or a clause such as `.merge(...)`), or iterate
+to stream the rows. A builder never auto-executes on `bool()`, `==`, indexing
+or attribute access, and `len(...)` or indexing one raises a `TypeError` that
+tells you to call `.execute()`.
+
+A builder you never run does nothing, so one that is thrown away unrun - a
+`db.delete(Table("person"))` missing its `.execute()`, or an async call missing
+its `await` - emits a `RuntimeWarning` naming the call and the line that made
+it, the way asyncio does for a coroutine that was never awaited.
 
 ```python
 from surrealdb import Surreal
@@ -355,9 +362,13 @@ with Surreal("ws://localhost:8000/rpc") as db:
     # Clause-less run: call .execute() explicitly.
     empty = db.create(RecordID("person", "bob")).execute()
 
-    # Every CRUD call returns a builder; .execute() runs it.
+    # select() and delete() return a builder; .execute() runs it.
     row = db.select(RecordID("person", "tobie")).execute()  # dict | None
     db.delete(RecordID("person", "bob")).execute()
+
+    # Iterating a builder streams its rows instead of loading them all.
+    for person in db.select(Table("person")):
+        print(person["name"])
 
     # query() returns a builder; call .execute()/.first()/.into().
     db.query("DELETE person;").execute()

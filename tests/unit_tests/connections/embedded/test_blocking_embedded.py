@@ -74,7 +74,7 @@ def test_let_and_unset() -> None:
 
         db.let("name", "David")
 
-        result = db.query("CREATE person SET name = $name")
+        result = db.query("CREATE person SET name = $name").execute()
         assert result is not None
 
         db.unset("name")

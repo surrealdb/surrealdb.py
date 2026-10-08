@@ -59,8 +59,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was not a builder, which made it the only one that could not be streamed, and
   reading a large table is the case streaming is most for.
 
-  `delete()` moved with it, for the same reason and in the same release, so the
-  rule is simply that every CRUD operation returns a builder:
+  `delete()` moved with it, for the same reason and in the same release. The
+  blocking rule is now: a write you give its data (`create`, `update`, `upsert`
+  or `insert` with `data`) runs immediately, and everything else - `select()`,
+  `delete()`, `query()` and the no-data write forms - returns a builder:
 
   ```python
   deleted = db.delete(Table("person"))             # before
@@ -72,6 +74,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to an eager connection, so this also makes those signatures true.
 
 ### Added
+
+- A builder that is dropped without running now says so. A builder sends
+  nothing until it is terminated, so `db.delete(Table("person"))` with no
+  `.execute()` deleted nothing and raised nothing - the failure mode the
+  blocking `select()`/`delete()` change makes easy to hit, and one the async
+  client always had with a forgotten `await`. Every builder, sync and async,
+  now emits a `RuntimeWarning` when it is garbage-collected unrun, naming the
+  call and the line that made it, the way asyncio does for a coroutine that was
+  never awaited. A builder that ran and failed, or whose constructor raised, is
+  not reported.
+
+  It immediately found a test in this repository that had never run the query
+  it asserted on.
+
+- Blocking builders are iterable. `for row in db.select(Table("person")):`
+  streams the rows as the server produces them (and hands them back one at a
+  time where it cannot stream), and leaving the loop early abandons the
+  server-side query. Iterating is a terminator like `.rows()`, not an implicit
+  `.execute()`: nothing about `bool()`, `==` or indexing runs a builder.
+
+- `len()` and indexing a blocking builder raise a `TypeError` that names
+  `.execute()`, in place of an unrelated failure further down. Type checkers
+  still report both as errors at the call site. `bool(builder)` stays `True`.
+
+- The blocking `insert()` builder has `.rows()`, as the async one already did.
 
 - `ping_interval` and `ping_timeout` on the websocket connections and on the
   `Surreal`/`AsyncSurreal` factories, in seconds, either accepting `None` to

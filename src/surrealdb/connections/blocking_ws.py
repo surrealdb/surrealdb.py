@@ -812,7 +812,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> Any:
-        """Select records eagerly.
+        """Select records, returning a builder.
 
         A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
         when it is absent. A ``Table`` (or bare table-name string) returns the
@@ -873,12 +873,11 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
 
         return _Executor(_executor, _stream)
 
-    # CRUD (eager) ----------------------------------------------------------
+    # CRUD -------------------------------------------------------------------
     #
-    # Sync CRUD runs single-shot operations immediately: passing ``data``
-    # executes and returns the result, while the no-data form returns a
-    # ``SyncCrudBuilder`` so the caller can pick a clause. ``select`` and
-    # ``delete`` always run eagerly.
+    # Sync CRUD with ``data`` runs immediately and returns the result; the
+    # no-data form returns a ``SyncCrudBuilder`` so the caller can pick a
+    # clause. ``select`` and ``delete`` always return a builder.
 
     @overload
     def create(
