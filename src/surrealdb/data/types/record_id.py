@@ -116,16 +116,33 @@ _UNQUOTED_IDENTIFIER_ALPHA = frozenset(
 def escape_identifier(identifier: str) -> str:
     """Escape a string identifier for use inside SurrealQL.
 
-    Wraps the identifier in ``⟨...⟩`` (with any ``⟩`` inside replaced by
-    ``\\⟩``) unless every character is an ASCII letter, digit or underscore
-    *and* at least one is an ASCII letter - a name that is all-digit or
-    all-underscore is wrapped too, to disambiguate it from a numeric id in
-    SurrealQL's record-id literal syntax.
+    A name of ASCII letters, digits and underscores containing at least one
+    letter and not starting with a digit is returned bare. Anything else is
+    delimited, with the delimiter chosen by what the name contains:
 
-    Wrapping is always safe: SurrealDB accepts any string inside ``⟨...⟩``,
-    including spaces, unicode and emoji, on every supported version. So the
-    bare form is an optimisation for the common case, and anything the parser
-    might not take unquoted is wrapped rather than guessed at.
+    * ``⟨...⟩`` when the name holds neither ``\\`` nor ``⟩`` - spaces, unicode,
+      emoji, backticks and a lone ``⟨`` are all literal inside it;
+    * ``` `...` ``` otherwise, escaping ``\\`` as ``\\\\`` and ``` ` ``` as
+      ``` \\` ```.
+
+    The second form exists because ``⟨...⟩`` is *not* the universal wrapper this
+    function once claimed. Inside it there is no escape that every supported
+    version reads the same way, verified against live servers:
+
+    ======================  ==========  =========
+    emitted                 2.3.10      3.2.3
+    ======================  ==========  =========
+    ``⟨with\\⟩angle⟩``        accepted    Invalid escape sequence
+    ``⟨back\\slash⟩``         internal    Invalid escape sequence
+    ``⟨trailing\\⟩``          internal    Unexpected end of file
+    ======================  ==========  =========
+
+    The last is the worst of them: a trailing backslash escapes the closing
+    delimiter, so the identifier never terminates and swallows whatever follows
+    it. Backticks with doubled backslashes are read identically by both.
+
+    Names that already worked keep their exact previous output, so this only
+    changes what was broken.
 
     Used by :meth:`RecordID.__str__` for record-id rendering and by the
     v3 CRUD builders for ``INSERT`` target inlining (SurrealDB rejects
@@ -147,8 +164,10 @@ def escape_identifier(identifier: str) -> str:
     has_no_alpha = _UNQUOTED_IDENTIFIER_ALPHA.isdisjoint(identifier)
 
     if unsafe or starts_with_digit or has_no_alpha:
-        escaped = identifier.replace("⟩", "\\⟩")
-        return f"⟨{escaped}⟩"
+        if "\\" not in identifier and "⟩" not in identifier:
+            return f"⟨{identifier}⟩"
+        escaped = identifier.replace("\\", "\\\\").replace("`", "\\`")
+        return f"`{escaped}`"
     return identifier
 
 
