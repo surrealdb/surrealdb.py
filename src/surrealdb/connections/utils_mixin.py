@@ -185,6 +185,33 @@ def _body_text(body: bytes) -> str:
 
 # These are re-exported for backwards compatibility with downstream code
 # that imported them via ``surrealdb.connections.utils_mixin``.
+def check_keepalive(name: str, value: float | None) -> float | None:
+    """Validate a websocket keepalive interval, in seconds.
+
+    ``None`` is passed through: ``websockets`` reads it as "no keepalive ping"
+    for ``ping_interval`` and "wait forever for the pong" for ``ping_timeout``,
+    and both are legitimate behind a proxy that keeps its own liveness.
+
+    Anything else must be a positive number. A zero or negative interval is
+    rejected here rather than handed on, because ``websockets`` accepts it and
+    then pings in a tight loop.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(  # pyright: ignore[reportUnnecessaryIsInstance]
+        value, (int, float)
+    ):
+        raise TypeError(
+            f"{name} must be a number of seconds or None, not "
+            f"{type(value).__name__}: {value!r}"
+        )
+    if value <= 0:
+        raise ValueError(
+            f"{name} must be greater than zero, or None to disable it; got {value!r}"
+        )
+    return float(value)
+
+
 __all__ = [
     "RecordID",
     "RecordIdType",
@@ -192,6 +219,7 @@ __all__ = [
     "Table",
     "UtilsMixin",
     "build_run_query",
+    "check_keepalive",
     "merge_query_vars",
 ]
 

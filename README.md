@@ -1233,6 +1233,34 @@ async with AsyncSurreal("ws://localhost:8000") as db:
 
 For a complete example with configuration options and best practices, see [`examples/logfire/`](https://github.com/surrealdb/surrealdb.py/tree/main/examples/logfire).
 
+## WebSocket keepalive
+
+Websocket connections send a keepalive ping on an idle socket and close the
+connection if the pong does not come back. Both intervals are in seconds, and
+both accept `None` to switch that half off:
+
+```python
+from surrealdb import Surreal
+
+# the defaults
+db = Surreal("ws://localhost:8000/rpc", ping_interval=30, ping_timeout=10)
+
+# behind a proxy with a short idle timeout
+db = Surreal("ws://localhost:8000/rpc", ping_interval=10)
+
+# let something else handle liveness
+db = Surreal("ws://localhost:8000/rpc", ping_interval=None)
+```
+
+A peer that goes away is noticed within roughly `ping_interval + ping_timeout`,
+so the defaults detect it in about 40 seconds. SurrealDB also pings the client
+every 5 seconds of its own accord, which the library answers automatically — so
+the socket is rarely idle for long in either direction.
+
+Both options are ignored by the HTTP and embedded transports, which have no
+websocket, exactly as `streaming` is. They require `websockets` 15.0 or newer,
+which is the SDK's declared floor.
+
 ## Files
 
 SurrealDB can store files in a bucket - in memory, on disk, or on object storage

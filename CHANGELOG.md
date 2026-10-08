@@ -36,6 +36,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `ping_interval` and `ping_timeout` on the websocket connections and on the
+  `Surreal`/`AsyncSurreal` factories, in seconds, either accepting `None` to
+  disable that half. They were previously unreachable: the SDK passed nothing to
+  `websockets` and took its defaults, so anyone behind a proxy with a different
+  idle policy had no lever short of reaching into `connection.socket`.
+
+  **The defaults change from the library's 20/20 to 30/10** - a longer gap
+  between pings on an idle socket, and a shorter wait before a silent peer is
+  declared gone. A peer that disappears is still noticed in about the same time,
+  roughly `ping_interval + ping_timeout`. Zero and negative values are refused at
+  the constructor rather than passed on, because `websockets` accepts them and
+  then pings in a tight loop.
+
+  This raises the `websockets` floor from 14.1 to **15.0**, which is the first
+  release whose *sync* client accepts these arguments at all - the async client
+  has had them throughout. Passing them on 14.x raised `TypeError: connect() got
+  an unexpected keyword argument` and took every blocking websocket connection
+  down with it, so there is no version of this that works below 15.0.
+
 - Streaming queries, adopted invisibly. Against SurrealDB **v3.3.0** or later
   over a websocket, `query()` now asks for its answer as a sequence of frames
   and rebuilds it as they arrive - and so do `select()`, `create()`, `upsert()`
