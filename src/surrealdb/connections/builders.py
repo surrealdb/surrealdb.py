@@ -13,15 +13,24 @@ Async vs sync
   operation. Their clause methods (``.content`` / ``.replace`` / ``.merge``
   / ``.patch``) return ``self`` so the builder stays awaitable, and the RPC
   only fires on ``await`` / ``.execute()``.
-- **Sync** builders are *eager*: there is no ``await`` to defer execution to,
-  so the sync connection methods run single-shot operations immediately and
-  hand back the plain result. A sync builder is only returned for the
-  deferred forms - ``db.create(record)`` with no data, or ``db.insert(table)``
-  with no data - and every terminal method on it (``.content`` / ``.replace``
-  / ``.merge`` / ``.patch`` / ``.relation().content(...)`` / ``.execute()``)
-  runs the operation and returns the underlying result. Sync builders carry
-  **no** magic dunders: they never auto-execute on ``bool()``, ``==``,
-  indexing, iteration, or attribute access.
+- **Sync** connections have no ``await`` to defer execution to, so a write
+  given its data - ``db.create(record, data)`` and the like - runs at once and
+  hands back the plain result. Everything else returns a builder: ``select()``,
+  ``delete()``, ``query()``, and the no-data write forms (``db.create(record)``,
+  ``db.insert(table)``). A clause method (``.content`` / ``.replace`` /
+  ``.merge`` / ``.patch`` / ``.relation().content(...)``) or ``.execute()``
+  runs it and returns the underlying result; ``.rows()``, or simply iterating
+  the builder, streams the rows instead. Sync builders never auto-execute on
+  ``bool()``, ``==``, indexing or attribute access, and ``len()`` and indexing
+  raise a ``TypeError`` that names ``.execute()`` rather than failing obscurely.
+
+Dropped builders
+----------------
+A builder sends nothing until it is terminated, so one that is thrown away
+unrun - ``db.delete(Table("person"))`` with no ``.execute()`` or ``await`` - is
+a silent no-op. Every builder therefore emits a ``RuntimeWarning`` naming the
+call and where it was made if it is garbage-collected without having run,
+exactly as asyncio does for a coroutine that was never awaited.
 
 Idempotency (async only)
 ------------------------
@@ -58,9 +67,19 @@ import asyncio
 import inspect
 import re
 import threading
-from collections.abc import Awaitable, Callable, Generator, Mapping, Sequence
+import warnings
+from collections.abc import Awaitable, Callable, Generator, Iterator, Mapping, Sequence
 from dataclasses import fields, is_dataclass
-from typing import Any, Generic, Literal, TypeVar, cast, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Generic,
+    Literal,
+    NoReturn,
+    TypeVar,
+    cast,
+    overload,
+)
 
 from surrealdb.data.types.range import Range
 from surrealdb.data.types.record_id import RecordID, RecordIdType, escape_identifier
@@ -289,7 +308,104 @@ class _Clause:
 # ---------------------------------------------------------------------------
 
 
-class _CrudState:
+_PACKAGE_DIR = __file__.rsplit("connections", 1)[0]
+
+
+def _caller_location() -> str:
+    """Where in the caller's code a builder was made, for the dropped warning."""
+    current = inspect.currentframe()
+    frame = current.f_back if current is not None else None
+    while frame is not None and frame.f_code.co_filename.startswith(_PACKAGE_DIR):
+        frame = frame.f_back
+    if frame is None:
+        return "an unknown location"
+    return f"{frame.f_code.co_filename}:{frame.f_lineno}"
+
+
+class _WarnIfDropped:
+    """Warn when a builder is thrown away without ever running.
+
+    A builder describes an operation and sends nothing until it is terminated,
+    so ``db.delete(Table("person"))`` on its own deletes nothing and raises
+    nothing. asyncio reports the same mistake for a coroutine ("was never
+    awaited"); a builder is an ordinary object, so it has to say so itself.
+    """
+
+    # `_executor` is the last thing a constructor sets, so a builder whose
+    # constructor raised (and was never handed to anyone) is not reported.
+    _launched: bool = False
+    _streamed: bool = False
+    _origin: str = ""
+    _op_name: str = "query"
+
+    def __new__(cls, *args: Any, **kwargs: Any) -> Any:
+        self = super().__new__(cls)
+        self._origin = _caller_location()
+        return self
+
+    def __del__(self) -> None:
+        if self._launched or self._streamed or not hasattr(self, "_executor"):
+            return
+        terminator = (
+            "awaited"
+            if hasattr(type(self), "__await__")
+            else "executed (.execute(), .rows(), or iterating it)"
+        )
+        warnings.warn(
+            f"{self._op_name}() was called at {self._origin} but its builder was "
+            f"never {terminator}, so nothing was sent to the server.",
+            RuntimeWarning,
+            stacklevel=2,
+            source=self,
+        )
+
+
+class _SyncBuilderGuards(_WarnIfDropped):
+    """Make a blocking builder fail clearly when it is used as its result.
+
+    ``db.select("person")`` hands back a builder, not rows, and a caller who
+    forgot the terminator would otherwise meet it as an unrelated
+    ``TypeError`` further down. Iterating a builder is a terminator in its own
+    right: it streams the rows, so ``for row in db.select(...)`` reads a large
+    table without holding all of it. The dunders that would *return* the whole
+    answer stay refused - ``.execute()`` is the one place that happens.
+
+    The refusals are runtime-only: type checkers should keep reporting
+    ``len(db.select(...))`` as an error rather than see it as valid.
+    """
+
+    if TYPE_CHECKING:
+
+        def rows(
+            self,
+            *,
+            into: type[Any] | None = ...,
+            require_streaming: bool = ...,
+        ) -> Any: ...
+
+    def __iter__(self) -> Iterator[Any]:
+        with self.rows() as stream:
+            yield from stream
+
+    if not TYPE_CHECKING:
+
+        def _refuse(self) -> NoReturn:
+            raise TypeError(
+                f"{self._op_name}() returns a builder, not its result. Call "
+                ".execute() to run it, or iterate it to read the rows as they arrive."
+            )
+
+        def __len__(self) -> int:
+            self._refuse()
+
+        def __getitem__(self, key: object) -> Any:
+            self._refuse()
+
+        def __bool__(self) -> bool:
+            return True
+
+
+class _CrudState(_WarnIfDropped):
     """Holds the configurable state for a CRUD builder."""
 
     # Set when rows()/statements() hands a stream out, so the run-once guard
@@ -389,8 +505,10 @@ class _CrudState:
         return result
 
 
-class _InsertState:
+class _InsertState(_WarnIfDropped):
     """State for INSERT builder."""
+
+    _op_name = "insert"
 
     # Set when rows()/statements() hands a stream out, so the run-once guard
     # sees a streamed builder as used - see `_claim_for_stream`.
@@ -455,7 +573,7 @@ class _InsertState:
         return _check_first_statement(stmts)
 
 
-class _QueryState:
+class _QueryState(_WarnIfDropped):
     """State for query builder."""
 
     # Set when rows()/statements() hands a stream out, so the run-once guard
@@ -1091,6 +1209,7 @@ class AsyncCrudBuilder(_CrudState, Generic[T]):
         ``aclose()``) so stopping early tells the server to abandon the query.
         """
         self._check_not_executed()
+        self._launched = True
         query, variables = self._build()
         stream = _open_stream(
             self._executor, query, variables, require_streaming=require_streaming
@@ -1099,6 +1218,7 @@ class AsyncCrudBuilder(_CrudState, Generic[T]):
         return _mapped_rows_async(stream, into or self._into)
 
     async def execute(self) -> T:
+        self._launched = True
         return cast(T, await self._runner.run(self._do_execute))
 
     def __await__(self) -> Generator[Any, None, T]:
@@ -1178,6 +1298,7 @@ class AsyncInsertBuilder(_InsertState, Generic[T]):
         ``aclose()``) so stopping early tells the server to abandon the query.
         """
         self._check_not_executed()
+        self._launched = True
         query, variables = self._build()
         stream = _open_stream(
             self._executor, query, variables, require_streaming=require_streaming
@@ -1186,6 +1307,7 @@ class AsyncInsertBuilder(_InsertState, Generic[T]):
         return _mapped_rows_async(stream, into or self._into)
 
     async def execute(self) -> list[T]:
+        self._launched = True
         return cast(list[T], await self._runner.run(self._do_execute))
 
     def __await__(self) -> Generator[Any, None, list[T]]:
@@ -1214,6 +1336,7 @@ class AsyncQueryBuilder(_QueryState):
         self._runner = _AsyncCachedRunner()
 
     async def _fetch_values(self) -> list[Any]:
+        self._launched = True
         _refuse_if_streamed(self)
 
         async def _do() -> list[Any]:
@@ -1275,6 +1398,7 @@ class AsyncQueryBuilder(_QueryState):
         Only on a query, since one CRUD operation is one statement.
         """
         self._check_not_executed()
+        self._launched = True
         stream = _open_stream(
             self._executor,
             self._query,
@@ -1301,6 +1425,7 @@ class AsyncQueryBuilder(_QueryState):
         for that index. A query that could not be completed at all still raises.
         """
         self._check_not_executed()
+        self._launched = True
         stream = _open_stream(
             self._executor,
             self._query,
@@ -1324,6 +1449,7 @@ class AsyncQueryBuilder(_QueryState):
         per statement instead of a flat run of rows.
         """
         self._check_not_executed()
+        self._launched = True
         stream = _open_stream(
             self._executor,
             self._query,
@@ -1384,8 +1510,8 @@ class AsyncQueryIntoBuilder(Generic[T_co]):
 # ---------------------------------------------------------------------------
 
 
-class SyncCrudBuilder(_CrudState, Generic[T]):
-    """Eager CRUD builder for sync connections.
+class SyncCrudBuilder(_SyncBuilderGuards, _CrudState, Generic[T]):
+    """CRUD builder for sync connections.
 
     Sync connection methods run single-shot operations (``db.create(record,
     data)``) immediately and return the plain result. This builder is only
@@ -1397,8 +1523,9 @@ class SyncCrudBuilder(_CrudState, Generic[T]):
       ``.patch(data)`` run ``CREATE/UPDATE/UPSERT ... <CLAUSE> $data``.
     - ``.execute()`` runs the clause-less form.
 
-    There are **no** magic dunders: the builder never auto-executes on
-    ``bool()``, ``==``, indexing, iteration, or attribute access. Repeat
+    The builder never auto-executes on ``bool()``, ``==``, indexing or
+    attribute access. Iterating it is an explicit terminator that streams the
+    rows (see :meth:`rows`). Repeat
     ``.execute()`` calls return the cached result; calling another clause
     method after the builder has executed raises rather than silently
     returning the stale result.
@@ -1478,6 +1605,7 @@ class SyncCrudBuilder(_CrudState, Generic[T]):
         ``close()``) so stopping early tells the server to abandon the query.
         """
         self._check_not_executed()
+        self._launched = True
         query, variables = self._build()
         stream = _open_stream(
             self._executor, query, variables, require_streaming=require_streaming
@@ -1489,6 +1617,7 @@ class SyncCrudBuilder(_CrudState, Generic[T]):
         return cast(T, self._run_once())
 
     def _run_once(self) -> Any:
+        self._launched = True
         _refuse_if_streamed(self)
         with self._lock:
             if not self._executed:
@@ -1499,13 +1628,13 @@ class SyncCrudBuilder(_CrudState, Generic[T]):
             return self._cached_result
 
 
-class SyncInsertBuilder(_InsertState, Generic[T]):
-    """Eager INSERT builder for sync connections.
+class SyncInsertBuilder(_SyncBuilderGuards, _InsertState, Generic[T]):
+    """INSERT builder for sync connections.
 
     Handed back only for the deferred no-data form (``db.insert(table)``).
     ``.content(data)`` and ``.execute()`` run the operation and return the
     inserted record(s); ``.relation()`` toggles ``INSERT RELATION`` and
-    returns ``self`` for chaining. There are **no** magic dunders.
+    returns ``self`` for chaining; ``.rows()`` (or iterating it) streams them.
     Reconfiguring the builder *after* it has executed raises rather than
     silently returning the cached result.
     """
@@ -1541,10 +1670,31 @@ class SyncInsertBuilder(_InsertState, Generic[T]):
         self._data = data
         return cast(list[T], self._run_once())
 
+    def rows(
+        self,
+        *,
+        into: type[Any] | None = None,
+        require_streaming: bool = False,
+    ) -> Any:
+        """Read the inserted rows as the server produces them.
+
+        See :meth:`AsyncInsertBuilder.rows` - same terminator, same fallback,
+        same ``into``.
+        """
+        self._check_not_executed()
+        self._launched = True
+        query, variables = self._build()
+        stream = _open_stream(
+            self._executor, query, variables, require_streaming=require_streaming
+        )
+        _claim_for_stream(self)
+        return _mapped_rows_sync(stream, into or self._into)
+
     def execute(self) -> list[T]:
         return cast(list[T], self._run_once())
 
     def _run_once(self) -> Any:
+        self._launched = True
         _refuse_if_streamed(self)
         with self._lock:
             if not self._executed:
@@ -1555,8 +1705,8 @@ class SyncInsertBuilder(_InsertState, Generic[T]):
             return self._cached_result
 
 
-class SyncQueryBuilder(_QueryState):
-    """Eager QUERY builder for sync connections.
+class SyncQueryBuilder(_SyncBuilderGuards, _QueryState):
+    """QUERY builder for sync connections.
 
     ``db.query(sql)`` returns this builder; the caller triggers execution
     explicitly:
@@ -1568,7 +1718,7 @@ class SyncQueryBuilder(_QueryState):
     - ``.into(cls)`` -> the N statement results mapped positionally onto a
       dataclass / class.
 
-    There are **no** magic dunders. Idempotent: ``.execute()``,
+    Iterating it streams the rows. Idempotent: ``.execute()``,
     ``.first()``, and ``.into(cls)`` all share a single cached fetch.
     """
 
@@ -1631,6 +1781,7 @@ class SyncQueryBuilder(_QueryState):
         Only on a query - see the async twin.
         """
         self._check_not_executed()
+        self._launched = True
         stream = _open_stream(
             self._executor,
             self._query,
@@ -1657,6 +1808,7 @@ class SyncQueryBuilder(_QueryState):
         for that index. A query that could not be completed at all still raises.
         """
         self._check_not_executed()
+        self._launched = True
         stream = _open_stream(
             self._executor,
             self._query,
@@ -1680,6 +1832,7 @@ class SyncQueryBuilder(_QueryState):
         per statement instead of a flat run of rows.
         """
         self._check_not_executed()
+        self._launched = True
         stream = _open_stream(
             self._executor,
             self._query,
@@ -1700,6 +1853,7 @@ class SyncQueryBuilder(_QueryState):
         return cast(Value, values[0])
 
     def _run_once(self) -> list[Any]:
+        self._launched = True
         _refuse_if_streamed(self)
         with self._lock:
             if not self._executed:

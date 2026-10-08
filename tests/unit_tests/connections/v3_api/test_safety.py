@@ -165,6 +165,7 @@ def test_sync_into_shares_parent_fetch(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.filterwarnings("ignore:.*was called at:RuntimeWarning")
 def test_sync_builder_repr_does_not_execute(
     blocking_ws_connection: BlockingWsSurrealConnection,
     _sync_setup: None,

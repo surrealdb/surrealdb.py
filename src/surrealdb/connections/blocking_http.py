@@ -254,7 +254,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
 
         return _Executor(_executor, _stream)
 
-    # CRUD (eager) ----------------------------------------------------------
+    # CRUD -------------------------------------------------------------------
     #
     # Passing ``data`` runs the operation immediately and returns the result;
     # the no-data form returns a builder so the caller can pick a clause.
@@ -546,7 +546,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         fields: Sequence[str] | None = None,
         into: type[M] | None = None,
     ) -> SyncCrudBuilder[Any]:
-        """Select records eagerly.
+        """Select records, returning a builder.
 
         A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
         when it is absent. A ``Table`` (or bare table-name string) returns the
