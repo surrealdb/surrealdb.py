@@ -15,7 +15,13 @@ again, a ``ServerError`` describes a decision the server already made.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    # `surrealdb.data.types.duration` imports `InvalidDurationError` from here,
+    # so importing it at module scope is a cycle. The property below imports it
+    # where it is used instead.
+    from surrealdb.data.types.duration import Duration
 
 # ------------------------------------------------------------------ #
 #  Base                                                                #
@@ -286,15 +292,39 @@ class QueryError(ServerError):
         return _detail_kind(self.details) == "TransactionConflict"
 
     @property
-    def timeout(self) -> dict[str, Any] | None:
-        """The timeout duration (``{"secs": ..., "nanos": ...}``) or ``None``."""
+    def timeout(self) -> Duration | None:
+        """The timeout the statement exceeded, or ``None``.
+
+        A :class:`~surrealdb.Duration`, which is what the server sends - the
+        previous annotation said ``{"secs": ..., "nanos": ...}`` and the body
+        only accepted a ``dict``, so this returned ``None`` for every timeout on
+        every transport. Verified against SurrealDB 3.2.3, where the detail
+        arrives as ``{"kind": "TimedOut", "details": {"duration": Duration(...)}}``
+        on both websocket and HTTP.
+
+        Still ``None`` on 2.x, which sends no structured detail for a timeout at
+        all - that surfaces as an ``InternalError`` rather than a ``QueryError``,
+        so there is nothing to read the duration out of.
+
+        A ``{"secs": ..., "nanos": ...}`` mapping is also accepted and converted,
+        since no supported version sends one but the shape was what the old
+        annotation promised.
+        """
+        from surrealdb.data.types.duration import Duration
+
         if _detail_kind(self.details) != "TimedOut":
             return None
         inner = _detail_inner(self.details)
-        if isinstance(inner, dict):
-            duration = inner.get("duration")
-            if isinstance(duration, dict):
-                return duration
+        if not isinstance(inner, dict):
+            return None
+        duration = inner.get("duration")
+        if isinstance(duration, Duration):
+            return duration
+        if isinstance(duration, dict):
+            secs = duration.get("secs")
+            nanos = duration.get("nanos")
+            if isinstance(secs, int) and isinstance(nanos, int):
+                return Duration(secs * 1_000_000_000 + nanos)
         return None
 
 
