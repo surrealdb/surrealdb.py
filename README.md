@@ -938,6 +938,45 @@ with Surreal("ws://localhost:8000/rpc") as db:
         print("could not reach the server:", error)
 ```
 
+### Permissions do not raise
+
+A signed-in record user whose `PERMISSIONS` deny a statement does not get an
+error. The server filters instead, the way row-level security does elsewhere:
+the statement comes back `OK` with an empty result, `query_raw()` reports
+`status: "OK"`, and nothing is raised.
+
+```python
+db.signup({"namespace": "ns", "database": "db", "access": "account", "variables": {...}})
+db.use("ns", "db")
+
+db.query("CREATE thing SET v = 1").execute()        # [[]] - denied, nothing was written
+db.select(Table("thing")).execute()                 # []   - rows you cannot see are omitted
+db.query("UPDATE thing:theirs SET v = 9").execute() # [[]] - denied, nothing was changed
+```
+
+This is deliberate, and the SDK does not turn it into an error. An error that
+only appeared when a record exists but is not yours would tell the caller the
+record exists, and one that depended on a `WHERE` in a permission rule would
+leak what that rule hides. It could not be told apart from an ordinary empty
+result in any case: a denied `UPDATE` of an existing record and an `UPDATE` of
+one that does not exist come back identically.
+
+Two things follow when you are debugging:
+
+- **An empty result from a write is ambiguous.** A write returns the rows it
+  touched *as the user could select them*. If the user may `CREATE` a record
+  but not `SELECT` it back, the record is created and the result is still empty.
+  Check the outcome by reading the record with a connection that can see it,
+  not by the write's own result.
+- **Nothing was written does not mean nothing was denied.** An empty result tells
+  you the statement produced no visible rows. To find out which rule is
+  responsible, test the same statement as a user the rule lets through, or
+  review the table's `PERMISSIONS` clause.
+
+A root user is not subject to table permissions, so the same statement succeeds
+for them - which is also the quickest way to confirm a rule, and not the query,
+is what filtered the result.
+
 ### Talking to a SurrealDB 2.x server
 
 Six things behave differently against SurrealDB 2.x, all because of what the
