@@ -48,7 +48,7 @@ from surrealdb.connections.import_export import (
     import_sql,
 )
 from surrealdb.connections.live import LiveSubscription
-from surrealdb.connections.server_version import ServerVersionMixin
+from surrealdb.connections.server_version import ServerVersionMixin, asks_for_refresh
 from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.timeouts import (
     DEFAULT_TIMEOUT,
@@ -275,7 +275,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         return tokens
 
     def signin(self, vars: dict[str, Value]) -> Tokens:
-        if not self._version_learned:
+        if not self._version_learned and asks_for_refresh(vars):
             self._handshake()
         self._require_signin(vars)
         message = RequestMessage(RequestMethod.SIGN_IN, params=vars)
