@@ -92,7 +92,31 @@ def test_a_batch_refuses_what_it_cannot_send(db: Blocking) -> None:
         db.batch().query("  ;  ")
     with pytest.raises(ValueError, match=r"\$n is already bound"):
         db.batch().query("RETURN $n", {"n": 1}).query("RETURN $n", {"n": 2})
-    db.batch().query("RETURN $n", {"n": 1}).query("RETURN $n", {"n": 1}).execute()
+    db.batch().query("LET $m = $n", {"n": 1}).query("RETURN $n", {"n": 1}).execute()
+
+
+def test_a_batch_refuses_what_would_end_its_transaction(db: Blocking) -> None:
+    for query in (
+        "CREATE thing:a; COMMIT",
+        "cancel transaction",
+        "/* first */ BEGIN",
+        "CREATE thing:a -- note\n; Commit TRANSACTION",
+    ):
+        with pytest.raises(ValueError, match="would end it"):
+            db.batch().query(query)
+    with pytest.raises(ValueError, match="last statement"):
+        db.batch().query("RETURN 1").query("CREATE thing:a").execute()
+    with pytest.raises(ValueError, match="last statement"):
+        db.batch().query("RETURN 1; CREATE thing:a").execute()
+    results = (
+        db.batch()
+        .query("CREATE thing:a SET note = 'COMMIT; RETURN'")
+        .query("UPDATE thing:a SET n = 1 RETURN NONE")
+        .query("RETURN 2")
+        .execute()
+    )
+    assert results[-1] == 2
+    assert _count(db, "thing") == 1
 
 
 async def test_async_batch(adb: Async) -> None:

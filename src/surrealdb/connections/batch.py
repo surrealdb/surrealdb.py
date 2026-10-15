@@ -4,8 +4,9 @@ The statements are wrapped in ``BEGIN TRANSACTION; ... COMMIT TRANSACTION;``
 and sent as a single query, so they all apply or none do. Unlike
 ``begin_transaction()``, nothing is held open on the server between requests,
 so it works over HTTP and on SurrealDB 2 as well as over a websocket on 3.
-On SurrealDB 2, a ``RETURN`` statement ends a transaction early, and its value
-is the only result.
+Only the last statement may be a ``RETURN``: SurrealDB 2 and 3.3 end the
+transaction there, skipping whatever follows. Statements that begin, commit or
+cancel a transaction are refused, since they would end this one.
 
 Example::
 
@@ -17,7 +18,8 @@ Example::
     )
 """
 
-from collections.abc import Awaitable, Collection, Mapping, Sequence
+import re
+from collections.abc import Awaitable, Collection, Iterator, Mapping, Sequence
 from typing import Any, Protocol, TypeVar, cast
 
 from surrealdb.errors import (
@@ -30,6 +32,9 @@ from surrealdb.features import parse_version
 from surrealdb.types import Value
 
 _NOT_EXECUTED = "not executed due to a failed transaction"
+_QUOTE_CLOSERS = {"⟨": "⟩", "`": "`", '"': '"', "'": "'"}
+_ENDS_TRANSACTION = re.compile(r"\s*(BEGIN|COMMIT|CANCEL)\b", re.IGNORECASE)
+_RETURNS = re.compile(r"\s*RETURN\b", re.IGNORECASE)
 
 
 class _RunsQueries(Protocol):
@@ -68,6 +73,14 @@ class _BatchState:
         text = query.strip().rstrip(";").rstrip()
         if not text:
             raise ValueError("batch().query() needs a statement to add")
+        for statement in _statements(text):
+            match = _ENDS_TRANSACTION.match(statement)
+            if match is not None:
+                raise ValueError(
+                    f"batch().query() cannot run {match.group(1).upper()}: the "
+                    "batch is already one transaction, and this would end it "
+                    "early; use begin_transaction() to manage one yourself"
+                )
         bindings = dict(vars or {})
         for name, value in bindings.items():
             if name in self._variables and not _same(self._variables[name], value):
@@ -83,10 +96,68 @@ class _BatchState:
     def _sql(self) -> str:
         if not self._statements:
             raise ValueError("an empty batch has nothing to run; add a query()")
-        # Each `;` on a line of its own, so a statement's trailing `--`
-        # comment cannot swallow it.
+        statements = [
+            statement
+            for text in self._statements
+            for statement in _statements(text)
+            if statement.strip()
+        ]
+        if any(_RETURNS.match(statement) for statement in statements[:-1]):
+            raise ValueError(
+                "only the last statement of a batch can be a RETURN: SurrealDB "
+                "2 and 3.3 end the transaction at a RETURN, skipping the "
+                "statements after it; bind the value with LET instead"
+            )
         body = "".join(f"{statement}\n;\n" for statement in self._statements)
         return f"BEGIN TRANSACTION;\n{body}COMMIT TRANSACTION;"
+
+
+def _statements(text: str) -> Iterator[str]:
+    """The top-level statements in *text*, without comments.
+
+    A ``;`` inside quotes, a comment or a ``{}``, ``[]`` or ``()`` block does
+    not end a statement.
+    """
+    kept: list[str] = []
+    closer: str | None = None
+    escaped = False
+    depth = 0
+    index = 0
+    while index < len(text):
+        char = text[index]
+        pair = text[index : index + 2]
+        index += 1
+        if closer is not None:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == closer:
+                closer = None
+            continue
+        if pair in ("--", "//") or char == "#":
+            end = text.find("\n", index)
+            index = len(text) if end < 0 else end
+            kept.append(" ")
+        elif pair == "/*":
+            end = text.find("*/", index + 1)
+            index = len(text) if end < 0 else end + 2
+            kept.append(" ")
+        elif char in _QUOTE_CLOSERS:
+            closer = _QUOTE_CLOSERS[char]
+            kept.append(" ")
+        elif char in "{[(":
+            depth += 1
+            kept.append(char)
+        elif char in "}])":
+            depth = max(depth - 1, 0)
+            kept.append(char)
+        elif char == ";" and depth == 0:
+            yield "".join(kept)
+            kept = []
+        else:
+            kept.append(char)
+    yield "".join(kept)
 
 
 def _same(bound: object, value: object) -> bool:
