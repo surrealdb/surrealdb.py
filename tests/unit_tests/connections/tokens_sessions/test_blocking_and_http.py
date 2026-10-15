@@ -318,3 +318,18 @@ def test_blocking_ws_cannot_fork_a_closed_session(
     with pytest.raises(ValueError, match="not attached"):
         ws.fork_session(session.id)
     assert session.id not in ws._registry.sessions
+
+
+def test_blocking_ws_token_methods_on_a_closed_session_do_not_reopen_it(
+    ws: BlockingWsSurrealConnection,
+    connection_params: dict[str, Any],
+    needs_v3: None,
+) -> None:
+    ws.signin(connection_params["vars_params"])
+    session = ws.new_session()
+    session.close_session()
+    with pytest.raises(ValueError, match="does not hold"):
+        session.refresh()
+    with pytest.raises(ValueError, match="does not hold"):
+        session.revoke()
+    assert session.id not in ws._registry.sessions

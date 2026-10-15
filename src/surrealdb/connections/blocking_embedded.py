@@ -211,6 +211,11 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
+    def sessions(self) -> list[UUID]:
+        raise UnsupportedFeatureError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
     # Live queries -----------------------------------------------------------
     #
     # Refused up front rather than inherited. ``live`` and ``kill`` reached the
