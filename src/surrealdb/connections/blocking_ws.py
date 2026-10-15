@@ -29,6 +29,7 @@ from surrealdb.connections.builders import (
     _Executor,
 )
 from surrealdb.connections.files import BlockingFiles
+from surrealdb.connections.server_version import ServerVersionMixin
 from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.timeouts import (
     DEFAULT_TIMEOUT,
@@ -48,14 +49,17 @@ from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     ConnectionUnavailableError,
     NotAllowedError,
+    ServerError,
     TransportTimeoutError,
     UnexpectedResponseError,
     parse_query_error,
     parse_rpc_error,
 )
+from surrealdb.features import Features
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 from surrealdb.streaming import (
+    UNSUPPORTED_BY_SERVER,
     QueryStream,
     SyncStreamOps,
     buffered_statements,
@@ -101,7 +105,7 @@ def _release_live_queue(
         live_queues.pop(suid, None)
 
 
-class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
+class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin):
     """
     A single blocking connection to a SurrealDB instance. To be used once and discarded.
 
@@ -122,6 +126,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         ping_interval: float | None = 30.0,
         ping_timeout: float | None = 10.0,
         timeout: float | None = DEFAULT_TIMEOUT,
+        version_check: bool = True,
     ) -> None:
         """
         The constructor for the BlockingWsSurrealConnection class.
@@ -140,8 +145,11 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         :param timeout: Seconds to wait for each reply, or ``None`` to wait
             indefinitely. Defaults to 30. Override it for a block of requests
             with :meth:`timeout`.
+        :param version_check: Refuse to talk to a server outside the versions
+            this SDK supports - see :mod:`surrealdb.features`. On by default.
         """
         self.url: Url = Url(url)
+        self._version_check = version_check
         self.raw_url: str = f"{self.url.raw_url}/rpc"
         self.host: str | None = self.url.hostname
         self.port: int | None = self.url.port
@@ -272,7 +280,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             # reader, so the socket's own state is what says so.
             self.close()
 
-        self.socket = self._connect_socket()
+        self._open_locked()
 
     def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
@@ -280,69 +288,100 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         # Use a lock to ensure thread-safe send/recv operations
         # This prevents race conditions when multiple threads share the same connection
         with self._lock:
-            if self.socket is None:
-                self.socket = self._connect_socket()
+            return self._send_locked(message, process, bypass)
 
-            # Correlate the reply to this request. Live-query notifications
-            # carry no top-level "id" and may be delivered between our send and
-            # our reply; route those to their live queue (if a subscriber is
-            # registered, else drop) and keep reading, so a notification is
-            # never returned as an RPC result.
-            budget = self._request_timeout()
-            try:
-                self.socket.send(message.WS_CBOR_DESCRIPTOR)
-                deadline = None if budget is None else time.monotonic() + budget
-                while True:
-                    remaining = (
-                        None if deadline is None else deadline - time.monotonic()
-                    )
-                    if remaining is not None and remaining <= 0:
-                        # The request was sent, so a reply is still coming.
-                        # Remember it, or the next call reads this reply,
-                        # mismatches the id and fails - and so does every call
-                        # after it, permanently out of step by one.
-                        self._abandoned.add(message.id)
-                        raise TransportTimeoutError(
-                            f"timed out while {process} on {self.raw_url}: no "
-                            f"reply {describe(budget)}"
-                        )
-                    data = self.socket.recv(timeout=remaining)
-                    response = self.decode_response(
-                        data if isinstance(data, bytes) else data.encode(), process
-                    )
-                    response_id = response.get("id")
-                    if response_id == message.id:
-                        break
-                    if response_id is None and response.get("error") is not None:
-                        # A frame with no `id` is normally a live-query
-                        # notification. A protocol-level error - a request the
-                        # server could not parse or correlate - also arrives
-                        # without one, and routing that to the notification
-                        # path discarded the only reply this call would ever
-                        # get, leaving the loop blocked on recv() forever.
-                        self.check_response_for_error(response, process)
-                    # Anything else belongs to a live subscription, to a
-                    # streaming query, or to a request that timed out and was
-                    # abandoned. Hand it over and keep reading for our own.
-                    self._route_foreign(response)
-            except TimeoutError as exc:
-                # `recv(timeout=...)` expiring is the path that actually fires;
-                # the deadline check above only catches the next iteration.
-                # Both have to record the id, or the abandoned reply is still
-                # waiting in the socket for the next caller to trip over.
-                self._abandoned.add(message.id)
-                raise TransportTimeoutError(
-                    f"timed out while {process} on {self.raw_url}: no reply "
-                    f"{describe(budget)}"
-                ) from exc
-            except (WebSocketException, OSError) as exc:
-                raise ConnectionUnavailableError(
-                    f"the connection to {self.raw_url} failed while {process}: {exc}"
-                ) from exc
+    def _open_locked(self) -> None:
+        """Open the socket and check the server version, with the lock held."""
+        self.socket = self._connect_socket()
+        try:
+            self._handshake_locked()
+        except BaseException:
+            self.close()
+            raise
 
-            if bypass is False:
-                self.check_response_for_error(response, process)
-            return response
+    def _handshake_locked(self) -> None:
+        """Ask a freshly opened socket's server for its version."""
+        self._forget_server_version()
+        try:
+            response = self._send_locked(
+                RequestMessage(RequestMethod.VERSION), "checking the server version"
+            )
+        except ServerError:
+            # A server whose capabilities deny `version` still serves
+            # everything else; nothing can be gated, but nothing is refused.
+            self._adopt_server_version(None)
+            return
+        self._adopt_server_version(response.get("result"))
+        if not self._version_allows_streaming():
+            self._streaming_supported = False
+            self._streaming_refusal = UNSUPPORTED_BY_SERVER
+
+    def _send_locked(
+        self, message: RequestMessage, process: str, bypass: bool = False
+    ) -> dict[str, Any]:
+        """The body of :meth:`_send`, called with ``self._lock`` held."""
+        if self.socket is None:
+            self._open_locked()
+        assert self.socket is not None
+
+        # Correlate the reply to this request. Live-query notifications
+        # carry no top-level "id" and may be delivered between our send and
+        # our reply; route those to their live queue (if a subscriber is
+        # registered, else drop) and keep reading, so a notification is
+        # never returned as an RPC result.
+        budget = self._request_timeout()
+        try:
+            self.socket.send(message.WS_CBOR_DESCRIPTOR)
+            deadline = None if budget is None else time.monotonic() + budget
+            while True:
+                remaining = None if deadline is None else deadline - time.monotonic()
+                if remaining is not None and remaining <= 0:
+                    # The request was sent, so a reply is still coming.
+                    # Remember it, or the next call reads this reply,
+                    # mismatches the id and fails - and so does every call
+                    # after it, permanently out of step by one.
+                    self._abandoned.add(message.id)
+                    raise TransportTimeoutError(
+                        f"timed out while {process} on {self.raw_url}: no "
+                        f"reply {describe(budget)}"
+                    )
+                data = self.socket.recv(timeout=remaining)
+                response = self.decode_response(
+                    data if isinstance(data, bytes) else data.encode(), process
+                )
+                response_id = response.get("id")
+                if response_id == message.id:
+                    break
+                if response_id is None and response.get("error") is not None:
+                    # A frame with no `id` is normally a live-query
+                    # notification. A protocol-level error - a request the
+                    # server could not parse or correlate - also arrives
+                    # without one, and routing that to the notification
+                    # path discarded the only reply this call would ever
+                    # get, leaving the loop blocked on recv() forever.
+                    self.check_response_for_error(response, process)
+                # Anything else belongs to a live subscription, to a
+                # streaming query, or to a request that timed out and was
+                # abandoned. Hand it over and keep reading for our own.
+                self._route_foreign(response)
+        except TimeoutError as exc:
+            # `recv(timeout=...)` expiring is the path that actually fires;
+            # the deadline check above only catches the next iteration.
+            # Both have to record the id, or the abandoned reply is still
+            # waiting in the socket for the next caller to trip over.
+            self._abandoned.add(message.id)
+            raise TransportTimeoutError(
+                f"timed out while {process} on {self.raw_url}: no reply "
+                f"{describe(budget)}"
+            ) from exc
+        except (WebSocketException, OSError) as exc:
+            raise ConnectionUnavailableError(
+                f"the connection to {self.raw_url} failed while {process}: {exc}"
+            ) from exc
+
+        if bypass is False:
+            self.check_response_for_error(response, process)
+        return response
 
     def _route_foreign(self, response: dict[str, Any]) -> None:
         """Hand a response this reader was not waiting for to whoever wants it.
@@ -621,7 +660,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 # server-side session, unauthenticated - so a query on a stale
                 # connection would have failed differently than it used to for
                 # no reason the caller asked for.
-                self.socket = self._connect_socket()
+                self._open_locked()
         frames: queue.Queue[Any] = queue.Queue()
         self._streams[request_id] = frames
         return frames
@@ -638,7 +677,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         """
         with self._lock:
             if self.socket is None:
-                self.socket = self._connect_socket()
+                self._open_locked()
             assert self.socket is not None
             try:
                 self.socket.send(message.WS_CBOR_DESCRIPTOR)
@@ -1595,6 +1634,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 self.live_queues.pop(suid, None)
 
     def attach(self) -> UUID:
+        self.connect()
+        self._require(Features.SESSIONS)
         session_id = UUID(str(uuid.uuid4()))
         message = RequestMessage(RequestMethod.ATTACH, session=session_id)
         self.id = message.id
@@ -1607,6 +1648,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self._send(message, "detach")
 
     def begin(self, session_id: UUID | None = None) -> UUID:
+        self.connect()
+        self._require(Features.TRANSACTIONS)
         kwargs: dict[str, Any] = {}
         if session_id is not None:
             kwargs["session"] = session_id
