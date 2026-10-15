@@ -20,6 +20,7 @@ as :class:`~surrealdb.errors.ImportFailedError`.
 import asyncio
 import json
 import os
+import time
 from collections.abc import Awaitable, Callable, Generator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -28,6 +29,7 @@ from typing import IO, Any, TypeVar
 import aiohttp
 import requests
 
+from surrealdb.connections.http_body import iter_body, read_body
 from surrealdb.connections.timeouts import describe
 from surrealdb.connections.url import Url, UrlScheme
 from surrealdb.errors import (
@@ -238,9 +240,14 @@ def export_sql(
     database: str | None,
 ) -> str:
     """Export from the server behind *url*, as SurrealQL."""
+    deadline = _deadline(timeout)
     headers = _headers(token, namespace, database)
     with _export_response(url, options, timeout, headers) as response:
-        return _read(response, lambda: response.text)
+        return _read(
+            response,
+            timeout,
+            lambda: read_body(response, deadline).decode(errors="replace"),
+        )
 
 
 def export_sql_to(
@@ -253,24 +260,31 @@ def export_sql_to(
     database: str | None,
 ) -> None:
     """Export from the server behind *url* into *target*, chunk by chunk."""
+    deadline = _deadline(timeout)
     headers = _headers(token, namespace, database)
     with _export_response(url, options, timeout, headers) as response:
 
         def copy() -> None:
             with _sink(target) as sink:
-                for chunk in response.iter_content(_CHUNK):
+                for chunk in iter_body(response, deadline):
                     sink.write(chunk)
 
-        _read(response, copy)
+        _read(response, timeout, copy)
 
 
-def _read(response: requests.Response, read: Callable[[], _T]) -> _T:
+def _deadline(timeout: float | None) -> float | None:
+    return None if timeout is None else time.monotonic() + timeout
+
+
+def _read(
+    response: requests.Response, timeout: float | None, read: Callable[[], _T]
+) -> _T:
     """Run *read* on a streamed export, mapping a stalled or broken body."""
     endpoint = response.url
     try:
         return read()
-    except requests.Timeout as exc:
-        raise _timed_out("exporting from", endpoint, None) from exc
+    except (requests.Timeout, TimeoutError) as exc:
+        raise _timed_out("exporting from", endpoint, timeout) from exc
     except requests.RequestException as exc:
         raise ConnectionUnavailableError(
             f"the export from {endpoint} broke off: {exc}"
@@ -287,6 +301,7 @@ def import_sql(
 ) -> None:
     """Import SurrealQL into the server behind *url*."""
     endpoint = f"{_base(url)}/import"
+    deadline = _deadline(timeout)
     try:
         with _payload(data) as payload:
             response = requests.post(
@@ -294,14 +309,17 @@ def import_sql(
                 headers=_headers(token, namespace, database),
                 data=payload,
                 timeout=timeout,
+                stream=True,
             )
-    except requests.Timeout as exc:
+        with response:
+            body = read_body(response, deadline)
+    except (requests.Timeout, TimeoutError) as exc:
         raise _timed_out("importing into", endpoint, timeout) from exc
     except requests.RequestException as exc:
         raise ConnectionUnavailableError(
             f"could not import into {endpoint}: {exc}"
         ) from exc
-    _check_import(response.status_code, response.text, endpoint)
+    _check_import(response.status_code, body.decode(errors="replace"), endpoint)
 
 
 async def aexport_sql(
