@@ -7,6 +7,7 @@ across ``await`` and into tasks started inside the block - and never leaks into
 a concurrent task or thread using the same connection.
 """
 
+import itertools
 import math
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -40,10 +41,27 @@ def check_timeout(name: str, value: Any) -> float | None:
     return float(value)
 
 
+_KEYS = itertools.count()
+
+
+def _key(owner: object) -> int:
+    """A key for *owner* that no other object will ever have.
+
+    Not ``id(owner)``: a task started inside a ``timeout()`` block keeps the
+    overrides after the block ends, and an id can be reused by a connection
+    created later, which would then inherit an override that was never its.
+    """
+    key: int | None = getattr(owner, "_timeout_key", None)
+    if key is None:
+        key = next(_KEYS)
+        vars(owner)["_timeout_key"] = key
+    return key
+
+
 def effective_timeout(owner: object, default: float | None) -> float | None:
     """The timeout for a request on *owner* made from the current context."""
     overrides = _OVERRIDES.get()
-    key = id(owner)
+    key = _key(owner)
     if key in overrides:
         return overrides[key]
     return default
@@ -54,7 +72,7 @@ def scoped_timeout(owner: object, seconds: float | None) -> Generator[None, None
     """Apply *seconds* to every request *owner* makes inside the block."""
     value = check_timeout("timeout", seconds)
     current = _OVERRIDES.get()
-    token = _OVERRIDES.set(MappingProxyType({**current, id(owner): value}))
+    token = _OVERRIDES.set(MappingProxyType({**current, _key(owner): value}))
     try:
         yield
     finally:
