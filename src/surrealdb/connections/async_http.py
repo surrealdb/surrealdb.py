@@ -123,6 +123,10 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         self._auth_provider: AuthProvider | None = auth
         self._renew_access = renew_access
         self._auth_lock = asyncio.Lock()
+        # Whether this connection's identity has been chosen - by ``auth=`` or
+        # by the caller signing in or out - so that ``auth=`` is applied once,
+        # not again after an explicit sign-out.
+        self._auth_settled = False
         self._timeout: float | None = check_timeout("timeout", timeout)
         self.raw_url: str = self.url.raw_url
         self.host: str | None = self.url.hostname
@@ -254,6 +258,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         if self.token != token:
             self._refresh_token = None
         self.token = token
+        self._auth_settled = True
 
     async def invalidate(self) -> None:
         message = RequestMessage(RequestMethod.INVALIDATE)
@@ -261,6 +266,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         await self._send(message, "invalidating")
         self.token = None
         self._refresh_token = None
+        self._auth_settled = True
 
     async def signup(self, vars: dict[str, Value]) -> Tokens:
         message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
@@ -270,6 +276,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         tokens = parse_auth_result(response["result"])
         self.token = tokens.access
         self._refresh_token = tokens.refresh
+        self._auth_settled = True
         return tokens
 
     async def signin(self, vars: dict[str, Value]) -> Tokens:
@@ -280,6 +287,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         tokens = parse_auth_result(response["result"])
         self.token = tokens.access
         self._refresh_token = tokens.refresh
+        self._auth_settled = True
         return tokens
 
     async def info(self) -> Value:
@@ -326,7 +334,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
             self.database = None if isinstance(database, NullType) else database
 
     def _authorisation_due(self) -> bool:
-        first = self._auth_provider is not None and self.token is None
+        first = self._auth_provider is not None and not self._auth_settled
         return first or (self._renew_access and renewal_due(self.token))
 
     async def _authorise(self) -> None:
@@ -428,6 +436,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         self.vars.clear()
         self.token = None
         self._refresh_token = None
+        self._auth_settled = True
 
     async def sessions(self) -> list[UUID]:
         raise UnsupportedFeatureError(
@@ -882,6 +891,11 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         """
         if url is not None:
             self._forget_server_version()
+            # Credentials belong to the server that issued them: none is sent
+            # to the new one, and ``auth=`` is applied there afresh.
+            self.token = None
+            self._refresh_token = None
+            self._auth_settled = False
             self.url = Url(url)
             self.raw_url = self.url.raw_url
             self.host = self.url.hostname

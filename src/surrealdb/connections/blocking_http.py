@@ -133,6 +133,10 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         self._renew_access = renew_access
         self._authorising = False
         self._auth_lock = threading.RLock()
+        # Whether this connection's identity has been chosen - by ``auth=`` or
+        # by the caller signing in or out - so that ``auth=`` is applied once,
+        # not again after an explicit sign-out.
+        self._auth_settled = False
         self._timeout: float | None = check_timeout("timeout", timeout)
         self.raw_url: str = url.rstrip("/")
         self.host: str | None = self.url.hostname
@@ -256,6 +260,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         if self.token != token:
             self._refresh_token = None
         self.token = token
+        self._auth_settled = True
 
     def invalidate(self) -> None:
         message = RequestMessage(RequestMethod.INVALIDATE)
@@ -263,6 +268,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         self._send(message, "invalidating")
         self.token = None
         self._refresh_token = None
+        self._auth_settled = True
 
     def signup(self, vars: dict[str, Value]) -> Tokens:
         message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
@@ -272,6 +278,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         tokens = parse_auth_result(response["result"])
         self.token = tokens.access
         self._refresh_token = tokens.refresh
+        self._auth_settled = True
         return tokens
 
     def signin(self, vars: dict[str, Value]) -> Tokens:
@@ -282,6 +289,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         tokens = parse_auth_result(response["result"])
         self.token = tokens.access
         self._refresh_token = tokens.refresh
+        self._auth_settled = True
         return tokens
 
     def info(self) -> Value:
@@ -326,7 +334,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
             self.database = None if isinstance(database, NullType) else database
 
     def _authorisation_due(self) -> bool:
-        first = self._auth_provider is not None and self.token is None
+        first = self._auth_provider is not None and not self._auth_settled
         return first or (self._renew_access and renewal_due(self.token))
 
     def _authorise(self) -> None:
@@ -432,6 +440,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         self.vars.clear()
         self.token = None
         self._refresh_token = None
+        self._auth_settled = True
 
     def sessions(self) -> list[UUID]:
         raise UnsupportedFeatureError(
@@ -881,6 +890,11 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         """
         if url is not None:
             self._forget_server_version()
+            # Credentials belong to the server that issued them: none is sent
+            # to the new one, and ``auth=`` is applied there afresh.
+            self.token = None
+            self._refresh_token = None
+            self._auth_settled = False
             self.url = Url(url)
             self.raw_url = url.rstrip("/")
             self.host = self.url.hostname
