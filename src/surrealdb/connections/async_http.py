@@ -29,6 +29,14 @@ from surrealdb.connections.builders import (
 )
 from surrealdb.connections.files import AsyncFiles
 from surrealdb.connections.health import acheck_health
+from surrealdb.connections.import_export import (
+    ExportOptions,
+    ExportTarget,
+    ImportData,
+    aexport_sql,
+    aexport_sql_to,
+    aimport_sql,
+)
 from surrealdb.connections.server_version import ServerVersionMixin, asks_for_refresh
 from surrealdb.connections.timeouts import (
     DEFAULT_TIMEOUT,
@@ -450,6 +458,84 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
     async def fork_session(self, session_id: UUID | None = None) -> None:
         raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def export(self, options: ExportOptions | None = None) -> str:
+        """Export the selected database as SurrealQL.
+
+        Args:
+            options: What to include; the server's default without it.
+                SurrealDB 2.0 takes no options.
+
+        Example:
+            sql = await db.export(ExportOptions(tables=["person"], records=False))
+        """
+        options = options or ExportOptions()
+        await self._authorise()
+        if not self._version_learned:
+            await self._handshake()
+        options.check(self._server_version)
+        return await aexport_sql(
+            self.url,
+            options,
+            effective_timeout(self, self._timeout),
+            self.token,
+            self.namespace,
+            self.database,
+        )
+
+    async def export_to(
+        self, target: ExportTarget, options: ExportOptions | None = None
+    ) -> None:
+        """Export the selected database as SurrealQL into *target*.
+
+        Writes the export as it arrives, so one too large to hold in memory
+        can still be saved.
+
+        Args:
+            target: The path of a file to write, or a binary file object.
+            options: What to include, as for :meth:`export`.
+
+        Example:
+            await db.export_to("backup.surql")
+        """
+        options = options or ExportOptions()
+        await self._authorise()
+        if not self._version_learned:
+            await self._handshake()
+        options.check(self._server_version)
+        await aexport_sql_to(
+            self.url,
+            options,
+            target,
+            effective_timeout(self, self._timeout),
+            self.token,
+            self.namespace,
+            self.database,
+        )
+
+    async def import_(self, data: ImportData) -> None:
+        """Import SurrealQL into the selected database.
+
+        Args:
+            data: The SurrealQL, as ``str`` or ``bytes``, or the path of a
+                file holding it - such as one ``export()`` wrote. SurrealDB 3
+                requires it to start with ``OPTION IMPORT;``, as exports do.
+
+        Raises:
+            ImportFailedError: if any statement failed, with each failure in
+                ``failures``. The other statements were still applied.
+        """
+        await self._authorise()
+        if not self._version_learned:
+            await self._handshake()
+        await aimport_sql(
+            self.url,
+            data,
+            effective_timeout(self, self._timeout),
+            self.token,
+            self.namespace,
+            self.database,
         )
 
     async def health(self) -> None:

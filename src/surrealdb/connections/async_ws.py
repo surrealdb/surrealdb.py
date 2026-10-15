@@ -39,6 +39,14 @@ from surrealdb.connections.builders import (
 )
 from surrealdb.connections.files import AsyncFiles
 from surrealdb.connections.health import acheck_health
+from surrealdb.connections.import_export import (
+    ExportOptions,
+    ExportTarget,
+    ImportData,
+    aexport_sql,
+    aexport_sql_to,
+    aimport_sql,
+)
 from surrealdb.connections.reconnect import (
     LiveQuery,
     ReconnectOptions,
@@ -1215,6 +1223,78 @@ class AsyncWsSurrealConnection(
         )
         self.check_response_for_result(response, "listing the sessions")
         return [UUID(str(session)) for session in response["result"] or []]
+
+    async def export(self, options: ExportOptions | None = None) -> str:
+        """Export the selected database as SurrealQL.
+
+        Args:
+            options: What to include; the server's default without it.
+                SurrealDB 2.0 takes no options.
+
+        Example:
+            sql = await db.export(ExportOptions(tables=["person"], records=False))
+        """
+        options = options or ExportOptions()
+        await self.connect()
+        options.check(self._server_version)
+        return await aexport_sql(
+            self.url,
+            options,
+            self._request_timeout(),
+            self.token,
+            self.namespace,
+            self.database,
+        )
+
+    async def export_to(
+        self, target: ExportTarget, options: ExportOptions | None = None
+    ) -> None:
+        """Export the selected database as SurrealQL into *target*.
+
+        Writes the export as it arrives, so one too large to hold in memory
+        can still be saved.
+
+        Args:
+            target: The path of a file to write, or a binary file object.
+            options: What to include, as for :meth:`export`.
+
+        Example:
+            await db.export_to("backup.surql")
+        """
+        options = options or ExportOptions()
+        await self.connect()
+        options.check(self._server_version)
+        await aexport_sql_to(
+            self.url,
+            options,
+            target,
+            self._request_timeout(),
+            self.token,
+            self.namespace,
+            self.database,
+        )
+
+    async def import_(self, data: ImportData) -> None:
+        """Import SurrealQL into the selected database.
+
+        Args:
+            data: The SurrealQL, as ``str`` or ``bytes``, or the path of a
+                file holding it - such as one ``export()`` wrote. SurrealDB 3
+                requires it to start with ``OPTION IMPORT;``, as exports do.
+
+        Raises:
+            ImportFailedError: if any statement failed, with each failure in
+                ``failures``. The other statements were still applied.
+        """
+        await self.connect()
+        await aimport_sql(
+            self.url,
+            data,
+            self._request_timeout(),
+            self.token,
+            self.namespace,
+            self.database,
+        )
 
     async def health(self) -> None:
         """Ask the server's ``/health`` endpoint whether it is healthy.

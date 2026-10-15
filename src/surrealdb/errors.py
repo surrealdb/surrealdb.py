@@ -429,6 +429,24 @@ class InternalError(ServerError):
 # ------------------------------------------------------------------ #
 
 
+class ImportFailedError(SurrealError):
+    """Statements in an import failed; the rest were applied.
+
+    Attributes:
+        failures: The error each failed statement gave, in order.
+    """
+
+    def __init__(self, failures: list[ServerError]) -> None:
+        shown = "; ".join(str(failure) for failure in failures[:3])
+        more = f" (and {len(failures) - 3} more)" if len(failures) > 3 else ""
+        super().__init__(
+            f"{len(failures)} statement(s) in the import failed: {shown}{more}"
+            if failures
+            else "the import failed, and the server did not say which statements"
+        )
+        self.failures: list[ServerError] = failures
+
+
 class TransportError(SurrealError):
     """Transport-level failure that produced no structured server response.
 

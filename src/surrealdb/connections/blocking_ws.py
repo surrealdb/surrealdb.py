@@ -39,6 +39,14 @@ from surrealdb.connections.builders import (
 )
 from surrealdb.connections.files import BlockingFiles
 from surrealdb.connections.health import check_health
+from surrealdb.connections.import_export import (
+    ExportOptions,
+    ExportTarget,
+    ImportData,
+    export_sql,
+    export_sql_to,
+    import_sql,
+)
 from surrealdb.connections.reconnect import (
     LiveQuery,
     ReconnectOptions,
@@ -851,6 +859,81 @@ class BlockingWsSurrealConnection(
         )
         self.check_response_for_result(response, "listing the sessions")
         return [UUID(str(session)) for session in response["result"] or []]
+
+    def export(self, options: ExportOptions | None = None) -> str:
+        """Export the selected database as SurrealQL.
+
+        Args:
+            options: What to include; the server's default without it.
+                SurrealDB 2.0 takes no options.
+
+        Example:
+            sql = db.export(ExportOptions(tables=["person"], records=False))
+        """
+        options = options or ExportOptions()
+        with self._lock:
+            self._ready_locked()
+        options.check(self._server_version)
+        return export_sql(
+            self.url,
+            options,
+            self._request_timeout(),
+            self.token,
+            self.namespace,
+            self.database,
+        )
+
+    def export_to(
+        self, target: ExportTarget, options: ExportOptions | None = None
+    ) -> None:
+        """Export the selected database as SurrealQL into *target*.
+
+        Writes the export as it arrives, so one too large to hold in memory
+        can still be saved.
+
+        Args:
+            target: The path of a file to write, or a binary file object.
+            options: What to include, as for :meth:`export`.
+
+        Example:
+            db.export_to("backup.surql")
+        """
+        options = options or ExportOptions()
+        with self._lock:
+            self._ready_locked()
+        options.check(self._server_version)
+        export_sql_to(
+            self.url,
+            options,
+            target,
+            self._request_timeout(),
+            self.token,
+            self.namespace,
+            self.database,
+        )
+
+    def import_(self, data: ImportData) -> None:
+        """Import SurrealQL into the selected database.
+
+        Args:
+            data: The SurrealQL, as ``str`` or ``bytes``, or the path of a
+                file holding it - such as one ``export()`` wrote. SurrealDB 3
+                requires it to start with ``OPTION IMPORT;``, as exports do.
+
+        Raises:
+            ImportFailedError: if any statement failed, with each failure in
+                ``failures``. The other statements were still applied.
+        """
+        with self._lock:
+            self._ready_locked()
+        import_sql(
+            self.url,
+            data,
+            self._request_timeout(),
+            self.token,
+            self.namespace,
+            self.database,
+        )
 
     def health(self) -> None:
         """Ask the server's ``/health`` endpoint whether it is healthy.

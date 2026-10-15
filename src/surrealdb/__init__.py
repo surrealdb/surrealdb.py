@@ -27,6 +27,7 @@ from surrealdb.connections.builders import (
     SyncRows,
 )
 from surrealdb.connections.files import AsyncFiles, BlockingFiles, FileMetadata
+from surrealdb.connections.import_export import ExportOptions
 from surrealdb.connections.reconnect import ReconnectOptions
 from surrealdb.connections.url import Url, UrlScheme
 from surrealdb.data.types.datetime import Datetime, PreciseDatetime
@@ -61,6 +62,7 @@ from surrealdb.errors import (
     ConnectionUnavailableError,
     ErrorKind,
     HttpStatusError,
+    ImportFailedError,
     InternalError,
     InvalidDurationError,
     InvalidGeometryError,
@@ -199,6 +201,7 @@ __all__ = [
     "Bound",
     "BoundIncluded",
     "BoundExcluded",
+    "ExportOptions",
     "ReconnectOptions",
     "RecordID",
     # The id types SurrealDB accepts. `RecordID.id` is deliberately wider
@@ -247,6 +250,7 @@ __all__ = [
     "ConnectionUnavailableError",
     "TransportTimeoutError",
     "HttpStatusError",
+    "ImportFailedError",
     # Errors – SDK-side
     "UnsupportedEngineError",
     "UnsupportedFeatureError",
