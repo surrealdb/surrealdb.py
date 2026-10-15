@@ -18,6 +18,7 @@ from surrealdb.connections.api import (
 )
 from surrealdb.connections.async_template import AsyncTemplate
 from surrealdb.connections.auth_provider import (
+    SENT_WITHOUT_RENEWAL,
     AuthCredentials,
     AuthProvider,
     check_auth_provider,
@@ -194,7 +195,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         connection's identity - see :meth:`authenticate`. An empty *token*
         sends the request anonymously.
         """
-        if message.method is not RequestMethod.VERSION:
+        if message.method not in SENT_WITHOUT_RENEWAL:
             await self._authorise()
         if not self._version_learned and message.method is not RequestMethod.VERSION:
             await self._handshake()
