@@ -401,3 +401,47 @@ def test_blocking_a_provider_failure_while_reconnecting_is_one_failed_attempt(
         assert any(isinstance(error, RuntimeError) for error in errors)
     finally:
         db.close()
+
+
+def test_http_stays_signed_out_after_invalidate(
+    connection_params: dict[str, Any],
+) -> None:
+    calls = 0
+
+    def credentials() -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        return dict(connection_params["vars_params"])
+
+    db = BlockingHttpSurrealConnection(connection_params["url"], auth=credentials)
+    try:
+        assert isinstance(db.query("INFO FOR ROOT;").first(), dict)
+        db.invalidate()
+        db.query("RETURN 1;").execute()
+        assert db.token is None
+        assert calls == 1
+    finally:
+        db.close()
+
+
+async def test_async_http_repointing_applies_auth_afresh(
+    connection_params: dict[str, Any],
+) -> None:
+    calls = 0
+
+    def credentials() -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        return dict(connection_params["vars_params"])
+
+    db = AsyncHttpSurrealConnection(connection_params["url"], auth=credentials)
+    try:
+        await db.query("RETURN 1;")
+        first = db.token
+        assert first is not None
+        await db.connect(connection_params["url"])
+        assert db.token is None
+        assert isinstance(await db.query("INFO FOR ROOT;").first(), dict)
+        assert calls == 2
+    finally:
+        await db.close()

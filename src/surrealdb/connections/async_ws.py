@@ -2381,6 +2381,11 @@ class AsyncWsSurrealConnection(
         default - into a newly attached session. The two are independent from
         then on. Needs SurrealDB 3.0 or later.
         """
+        if session_id is not None and session_id not in self._registry.sessions:
+            raise ValueError(
+                f"session {session_id} is not attached to this connection, so "
+                "there is nothing to fork; fork a session that is still open"
+            )
         source = self._registry.state(session_id).fork()
         forked = await self.attach()
         try:
