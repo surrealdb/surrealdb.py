@@ -1107,6 +1107,16 @@ class AsyncQueryStream(_StreamBase):
         request_id = message.id
         self._open_timeout = ops.request_timeout()
         frames = await ops.open(request_id)
+        if ops.supported() is False:
+            # Opening connected, and the handshake found a server that
+            # predates streaming; the check above ran before it knew.
+            _release_stream(ops.registry, request_id)
+            if self._require_streaming:
+                raise self._unsupported(ops.refusal())
+            for event in await self._buffered(retain_rows=retain_rows):
+                self._apply(event)
+                yield event
+            return
         # The finaliser only deregisters. Telling the server to stop needs the
         # socket, which is what `aclose` is for; this is the backstop that
         # keeps a stream abandoned without closing from leaving an entry - and
@@ -1183,6 +1193,9 @@ class AsyncQueryStream(_StreamBase):
         request_id = message.id
         self._open_timeout = ops.request_timeout()
         frames = await ops.open(request_id)
+        if ops.supported() is False:
+            _release_stream(ops.registry, request_id)
+            return None
         finalizer = weakref.finalize(self, _release_stream, ops.registry, request_id)
         # The whole exchange is bounded by the deadline a buffered call had, not
         # just its opening frame - see `_next_payload`.
@@ -1456,6 +1469,14 @@ class QueryStream(_StreamBase):
         request_id = message.id
         self._open_timeout = ops.request_timeout()
         frames = ops.open(request_id)
+        if ops.supported() is False:
+            # Opening connected, and the handshake found a server that
+            # predates streaming; the check above ran before it knew.
+            _release_stream(ops.registry, request_id)
+            if self._require_streaming:
+                raise self._unsupported(ops.refusal())
+            yield from self._replay(self._buffered(retain_rows=retain_rows))
+            return
         finalizer = weakref.finalize(self, _release_stream, ops.registry, request_id)
         try:
             ops.send(message)
@@ -1512,6 +1533,9 @@ class QueryStream(_StreamBase):
         request_id = message.id
         self._open_timeout = ops.request_timeout()
         frames = ops.open(request_id)
+        if ops.supported() is False:
+            _release_stream(ops.registry, request_id)
+            return None
         finalizer = weakref.finalize(self, _release_stream, ops.registry, request_id)
         # Bounded by the deadline a buffered call had - see `_next_payload`.
         deadline = (
