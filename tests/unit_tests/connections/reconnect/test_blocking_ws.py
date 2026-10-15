@@ -290,3 +290,21 @@ def test_a_reconnect_ends_an_attached_subscription(
     assert len(outcome) == 1
     assert isinstance(outcome[0], ConnectionUnavailableError)
     assert not subscription.is_alive
+
+
+def test_a_subscription_that_loses_its_socket_is_no_longer_alive(
+    proxy: DroppableProxy,
+    connection_params: dict[str, Any],
+    blocking_ws_connection: BlockingWsSurrealConnection,
+) -> None:
+    blocking_ws_connection.query("DEFINE TABLE IF NOT EXISTS reconnect_live;").execute()
+    db = _connected(proxy, connection_params, reconnect=False)
+    try:
+        subscription = db.live("reconnect_live")
+        _drop(proxy, db)
+        with pytest.raises(ConnectionUnavailableError):
+            for _ in subscription:
+                pass
+        assert not subscription.is_alive
+    finally:
+        db.close()

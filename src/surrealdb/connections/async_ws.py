@@ -13,7 +13,7 @@ from asyncio import AbstractEventLoop, Future, Queue, Task
 from collections.abc import AsyncGenerator, Mapping, Sequence
 from contextlib import AbstractContextManager
 from types import TracebackType
-from typing import Any, overload
+from typing import Any, cast, overload
 from uuid import UUID
 
 import websockets
@@ -2293,7 +2293,14 @@ class AsyncWsSurrealConnection(
             subscription is active. That is not a clean end of stream - some
             changes to the table went undelivered - so it is raised rather than
             ending the iteration, matching the blocking transport.
+
+        A subscription from :meth:`live` already holds a registered generator,
+        which is handed over rather than registering a second one.
         """
+        if isinstance(query_uuid, AsyncLiveSubscription):
+            held = query_uuid._take()  # pyright: ignore[reportPrivateUsage]
+            if held is not None:
+                return cast(AsyncGenerator[dict[str, Value], None], held)
         return self._open_live(query_uuid)
 
     def _open_live(

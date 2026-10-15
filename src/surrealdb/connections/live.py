@@ -24,6 +24,7 @@ from types import TracebackType
 from typing import Any
 from uuid import UUID
 
+from surrealdb.errors import ConnectionUnavailableError
 from surrealdb.types import Value
 
 
@@ -99,8 +100,12 @@ class AsyncLiveSubscription(_Subscription):
         notifications = self._take()
         if notifications is None:
             notifications = await self._connection.subscribe_live(self)
-        async for notification in notifications:
-            yield notification
+        try:
+            async for notification in notifications:
+                yield notification
+        except ConnectionUnavailableError:
+            self._ended()
+            raise
         self._ended()
 
     async def kill(self) -> None:
@@ -142,7 +147,11 @@ class LiveSubscription(_Subscription):
     def _follow(
         self, notifications: Iterator[dict[str, Value]]
     ) -> Iterator[dict[str, Value]]:
-        yield from notifications
+        try:
+            yield from notifications
+        except ConnectionUnavailableError:
+            self._ended()
+            raise
         self._ended()
 
     def kill(self) -> None:

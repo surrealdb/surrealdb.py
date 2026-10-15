@@ -12,7 +12,7 @@ import weakref
 from collections.abc import Generator, Mapping, Sequence
 from contextlib import AbstractContextManager
 from types import TracebackType
-from typing import Any, overload
+from typing import Any, cast, overload
 from uuid import UUID
 
 import websockets
@@ -2158,9 +2158,16 @@ class BlockingWsSurrealConnection(
         notification whose ``result`` was ``None``, and the generator then ran
         on forever waiting for a query that no longer existed.
 
+        A subscription from :meth:`live` already holds a registered generator,
+        which is handed over rather than registering a second one.
+
         :raises ConnectionUnavailableError: if the socket is not established or
             is closed while the subscription is active.
         """
+        if isinstance(query_uuid, LiveSubscription):
+            held = query_uuid._take()  # pyright: ignore[reportPrivateUsage]
+            if held is not None:
+                return cast(Generator[dict[str, Value], None, None], held)
         suid = str(query_uuid)
         notifications: queue.Queue[dict[str, Any]] = queue.Queue()
         self.live_queues.setdefault(suid, []).append(notifications)

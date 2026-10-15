@@ -257,3 +257,27 @@ def test_blocking_changes_before_iterating_are_kept(
     db.query("RETURN 1;").execute()
     assert next(iter(sub))["action"] == "CREATE"
     sub.kill()
+
+
+async def test_subscribe_live_on_a_subscription_reuses_its_queue(
+    adb: AsyncWsSurrealConnection, table: str
+) -> None:
+    sub = await adb.live(table)
+    notifications = await adb.subscribe_live(sub)
+    assert len(adb.live_queues[str(sub)]) == 1
+    await adb.create(RecordID(table, 1), {"n": 1})
+    change = await asyncio.wait_for(anext(notifications), 10)
+    assert change["action"] == "CREATE"
+    await sub.kill()
+
+
+def test_blocking_subscribe_live_on_a_subscription_reuses_its_queue(
+    blocking_ws_connection: BlockingWsSurrealConnection, table: str
+) -> None:
+    db = blocking_ws_connection
+    sub = db.live(table)
+    notifications = db.subscribe_live(sub)
+    assert len(db.live_queues[str(sub)]) == 1
+    db.create(RecordID(table, 1), {"n": 1})
+    assert next(notifications)["action"] == "CREATE"
+    sub.kill()
