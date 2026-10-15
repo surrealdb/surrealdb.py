@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `live()` returns a subscription, as in the JS SDK: an `AsyncLiveSubscription`
+  or `LiveSubscription` that is also the live query's UUID, so passing it to
+  `subscribe_live()` or `kill()` works as before. Iterate it (`async for` on
+  async connections) for notifications; `kill()` it, or use it with
+  `async with`/`with`, to stop the query. Iteration ends cleanly when the
+  query is killed, by this client or another, or the connection closes.
+  `sub.id`, `sub.is_alive` and `sub.managed` describe it.
+
+- `live_of(live_id)` attaches to a live query started some other way, such as
+  a `LIVE SELECT` sent with `query()`. It is not restarted after a reconnect,
+  since the connection does not know its definition.
+
 - `db.batch()` sends several statements as one transaction, in one request:
   `db.batch().query(sql, vars).query(sql, vars).execute()` returns each
   statement's result, or raises the statement that failed, with none of them

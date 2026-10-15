@@ -42,6 +42,7 @@ from surrealdb.connections.import_export import (
     aexport_sql,
     aimport_sql,
 )
+from surrealdb.connections.live import AsyncLiveSubscription
 from surrealdb.connections.server_version import ServerVersionMixin
 from surrealdb.connections.timeouts import (
     DEFAULT_TIMEOUT,
@@ -1047,6 +1048,9 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         raise UnsupportedFeatureError(_NO_LIVE_QUERIES)
 
     async def kill(self, query_uuid: str | UUID) -> None:
+        raise UnsupportedFeatureError(_NO_LIVE_QUERIES)
+
+    def live_of(self, live_id: str | UUID) -> AsyncLiveSubscription:
         raise UnsupportedFeatureError(_NO_LIVE_QUERIES)
 
     async def subscribe_live(

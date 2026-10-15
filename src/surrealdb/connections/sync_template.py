@@ -13,6 +13,7 @@ from surrealdb.connections.builders import (
     SyncQueryBuilder,
 )
 from surrealdb.connections.import_export import ExportOptions, ImportData
+from surrealdb.connections.live import LiveSubscription
 from surrealdb.connections.timeouts import check_timeout
 from surrealdb.data.types.null import NullType
 from surrealdb.data.types.record_id import RecordID, RecordIdType, StringRecordId
@@ -409,6 +410,10 @@ class SyncTemplate:
     ) -> Generator[dict[str, Value], None, None]:
         """Iterate live notifications for the given live query id."""
         raise NotImplementedError(f"subscribe_live not implemented for: {self}")
+
+    def live_of(self, live_id: str | UUID) -> LiveSubscription:
+        """Attach to a live query started some other way, by its id."""
+        raise NotImplementedError(f"live_of not implemented for: {self}")
 
     def kill(self, query_uuid: str | UUID) -> None:
         """Kill a running live query by its UUID."""

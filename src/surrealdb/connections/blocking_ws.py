@@ -53,6 +53,7 @@ from surrealdb.connections.import_export import (
     export_sql,
     import_sql,
 )
+from surrealdb.connections.live import LiveSubscription
 from surrealdb.connections.reconnect import (
     LiveQuery,
     ReconnectOptions,
@@ -1990,8 +1991,12 @@ class BlockingWsSurrealConnection(
         table: str | Table,
         diff: bool = False,
         session_id: UUID | None = None,
-    ) -> UUID:
-        """Start a live query on *table* and return its UUID.
+    ) -> LiveSubscription:
+        """Start a live query on *table* and return its subscription.
+
+        The subscription is also the query's UUID. Iterate it for
+        notifications, and ``kill()`` it, or use it with ``with``, to stop the
+        query.
 
         Pass ``diff=True`` for JSON-Patch notifications. Consume notifications
         with :meth:`subscribe_live` and stop the query with :meth:`kill`.
@@ -2005,7 +2010,20 @@ class BlockingWsSurrealConnection(
         self.check_response_for_result(response, "live")
         live_id = UUID(str(response["result"]))
         self._registry.add_live(LiveQuery(live_id, live_id, table, diff, session_id))
-        return response["result"]
+        return LiveSubscription(live_id, self, session_id, managed=True)
+
+    def live_of(
+        self, live_id: str | UUID, session_id: UUID | None = None
+    ) -> LiveSubscription:
+        """Attach to a live query started some other way, by its id.
+
+        For example one started with ``LIVE SELECT`` through :meth:`query`.
+        Its notifications are delivered from now on; the query is not
+        restarted after a reconnect, since the connection does not know it.
+        """
+        subscription = LiveSubscription(live_id, self, session_id, managed=False)
+        self.live_queues.setdefault(str(subscription), [])
+        return subscription
 
     def kill(
         self,
@@ -2758,8 +2776,11 @@ class BlockingSurrealSession:
         self,
         table: str | Table,
         diff: bool = False,
-    ) -> UUID:
+    ) -> LiveSubscription:
         return self._connection.live(table, diff, session_id=self._session_id)
+
+    def live_of(self, live_id: str | UUID) -> LiveSubscription:
+        return self._connection.live_of(live_id, session_id=self._session_id)
 
     def kill(self, query_uuid: str | UUID) -> None:
         self._connection.kill(query_uuid, session_id=self._session_id)

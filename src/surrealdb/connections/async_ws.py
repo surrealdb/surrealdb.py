@@ -52,6 +52,7 @@ from surrealdb.connections.import_export import (
     aexport_sql,
     aimport_sql,
 )
+from surrealdb.connections.live import AsyncLiveSubscription
 from surrealdb.connections.reconnect import (
     LiveQuery,
     ReconnectOptions,
@@ -2153,8 +2154,12 @@ class AsyncWsSurrealConnection(
         table: str | Table,
         diff: bool = False,
         session_id: UUID | None = None,
-    ) -> UUID:
-        """Start a live query on *table* and return its UUID.
+    ) -> AsyncLiveSubscription:
+        """Start a live query on *table* and return its subscription.
+
+        The subscription is also the query's UUID. Iterate it with
+        ``async for`` for notifications, and ``kill()`` it, or use it with
+        ``async with``, to stop the query.
 
         Pass ``diff=True`` for JSON-Patch notifications. Consume notifications
         with :meth:`subscribe_live` and stop the query with :meth:`kill`.
@@ -2170,7 +2175,20 @@ class AsyncWsSurrealConnection(
         self.live_queues[str(uuid)] = []
         live_id = UUID(str(uuid))
         self._registry.add_live(LiveQuery(live_id, live_id, table, diff, session_id))
-        return uuid
+        return AsyncLiveSubscription(live_id, self, session_id, managed=True)
+
+    def live_of(
+        self, live_id: str | UUID, session_id: UUID | None = None
+    ) -> AsyncLiveSubscription:
+        """Attach to a live query started some other way, by its id.
+
+        For example one started with ``LIVE SELECT`` through :meth:`query`.
+        Its notifications are delivered from now on; the query is not
+        restarted after a reconnect, since the connection does not know it.
+        """
+        subscription = AsyncLiveSubscription(live_id, self, session_id, managed=False)
+        self.live_queues.setdefault(str(subscription), [])
+        return subscription
 
     async def subscribe_live(
         self, query_uuid: str | UUID
@@ -2869,8 +2887,11 @@ class AsyncSurrealSession:
         self,
         table: str | Table,
         diff: bool = False,
-    ) -> UUID:
+    ) -> AsyncLiveSubscription:
         return await self._connection.live(table, diff, session_id=self._session_id)
+
+    def live_of(self, live_id: str | UUID) -> AsyncLiveSubscription:
+        return self._connection.live_of(live_id, session_id=self._session_id)
 
     async def kill(self, query_uuid: str | UUID) -> None:
         await self._connection.kill(query_uuid, session_id=self._session_id)
