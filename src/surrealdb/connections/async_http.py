@@ -588,7 +588,9 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         Returns each statement's result, and raises the first statement that
         failed. Needs a server with the ``gql`` RPC method.
         """
-        params: list[Value] = [query] if vars is None else [query, dict(vars)]
+        # `let()` bindings live here, not on the server, so they go with it.
+        bindings = merge_query_vars(self.vars, vars)
+        params: list[Value] = [query, bindings] if bindings else [query]
         message = RequestMessage(RequestMethod.GQL, params=params)
         self.id = message.id
         response = await self._send(message, "gql")
