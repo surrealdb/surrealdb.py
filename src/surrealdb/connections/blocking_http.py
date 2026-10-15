@@ -527,6 +527,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
                 ``failures``. The other statements were still applied.
         """
         self._authorise()
+        if not self._version_learned:
+            self._handshake()
         import_sql(
             self.url,
             data,

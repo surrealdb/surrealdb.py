@@ -523,6 +523,8 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
                 ``failures``. The other statements were still applied.
         """
         await self._authorise()
+        if not self._version_learned:
+            await self._handshake()
         await aimport_sql(
             self.url,
             data,

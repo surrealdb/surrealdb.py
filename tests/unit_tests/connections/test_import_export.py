@@ -11,11 +11,18 @@ from typing import Any
 import pytest
 
 from surrealdb import AsyncSurreal, ExportOptions, ImportFailedError, Surreal
+from surrealdb.connections import server_version
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
-from surrealdb.errors import AlreadyExistsError, ThrownError, UnsupportedFeatureError
+from surrealdb.errors import (
+    AlreadyExistsError,
+    SurrealError,
+    ThrownError,
+    UnsupportedFeatureError,
+    UnsupportedVersionError,
+)
 from surrealdb.features import Features, parse_version
 
 Blocking = BlockingWsSurrealConnection | BlockingHttpSurrealConnection
@@ -203,3 +210,38 @@ def test_blocking_ws_export_renews_a_due_token_first(
         blocking_ws_connection.query(
             "REMOVE USER IF EXISTS ie_short ON ROOT;"
         ).execute()
+
+
+async def test_a_failed_async_export_leaves_the_file_alone(
+    adb: Async, tmp_path: Path
+) -> None:
+    path = tmp_path / "backup.surql"
+    path.write_text("the last good backup")
+    good = adb.token
+    adb.token = "not.a.token"
+    try:
+        with pytest.raises(SurrealError):
+            await adb.export_to(path)
+    finally:
+        adb.token = good
+    assert path.read_text() == "the last good backup"
+
+
+@pytest.mark.parametrize("blocking", [True, False])
+async def test_http_import_checks_the_server_version_first(
+    connection_params: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    blocking: bool,
+) -> None:
+    monkeypatch.setattr(
+        server_version, "is_version_supported", lambda *_args, **_kw: False
+    )
+    with pytest.raises(UnsupportedVersionError):
+        if blocking:
+            BlockingHttpSurrealConnection(connection_params["url"]).import_(
+                "OPTION IMPORT;"
+            )
+        else:
+            await AsyncHttpSurrealConnection(connection_params["url"]).import_(
+                "OPTION IMPORT;"
+            )
