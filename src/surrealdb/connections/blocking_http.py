@@ -108,7 +108,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         """Ask the server for its version, once, before the first request."""
         try:
             response = self._send(
-                RequestMessage(RequestMethod.VERSION), "checking the server version"
+                RequestMessage(RequestMethod.VERSION),
+                "checking the server version",
+                token="",
             )
         except ServerError:
             self._adopt_server_version(None)
@@ -125,7 +127,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         """Send one RPC over HTTP.
 
         *token* authorises this request alone, without adopting it as the
-        connection's identity - see :meth:`authenticate`.
+        connection's identity - see :meth:`authenticate`. An empty *token*
+        sends the request anonymously.
         """
         if not self._version_learned and message.method is not RequestMethod.VERSION:
             self._handshake()
@@ -644,8 +647,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
     def version(self) -> str:
         message = RequestMessage(RequestMethod.VERSION)
         self.id = message.id
-        response = self._send(message, "getting database version")
+        response = self._send(message, "getting database version", token="")
         self.check_response_for_result(response, "getting database version")
+        self._adopt_server_version(response["result"])
         return response["result"]
 
     def connect(self, url: str | None = None) -> None:
