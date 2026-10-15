@@ -197,6 +197,12 @@ def test_gql_and_graphql(db: Blocking) -> None:
     except NotFoundError:
         pytest.skip("this server has no gql method")
 
+    db.query("CREATE person:bob SET name = 'Bob';").execute()
+    db.let("who", "Bob")
+    assert db.gql("MATCH (p:person) WHERE p.name = $who RETURN p.name") == [
+        [{"p.name": "Bob"}]
+    ]
+
     db.query("DEFINE CONFIG OVERWRITE GRAPHQL AUTO;").execute()
     assert db.graphql("{ __typename }") == {"data": {"__typename": "Query"}}
     answer = db.graphql("query Q { __typename }", {}, "Q")

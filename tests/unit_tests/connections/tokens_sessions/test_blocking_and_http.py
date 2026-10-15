@@ -269,3 +269,52 @@ def test_blocking_ws_fork_keeps_no_rejected_credentials(
     fork = ws.fork_session()
     assert ws._registry.state(fork.id).access is None
     fork.close_session()
+
+
+def test_http_revoke_sends_no_stale_bearer(
+    http: BlockingHttpSurrealConnection, record_user: dict[str, Any]
+) -> None:
+    tokens = http.signup(record_user)
+    http.token = "stale.access.token"
+    http.revoke(tokens)
+
+
+def test_http_authenticate_drops_a_refresh_token_from_another_identity(
+    http: BlockingHttpSurrealConnection,
+    record_user: dict[str, Any],
+    connection_params: dict[str, Any],
+) -> None:
+    root = BlockingHttpSurrealConnection(connection_params["url"])
+    root_token = root.signin(connection_params["vars_params"]).access
+    assert root_token is not None
+    http.signup(record_user)
+    http.authenticate(root_token)
+    with pytest.raises(ValueError, match="refresh token"):
+        http.refresh()
+
+
+def test_blocking_ws_authenticate_drops_a_refresh_token_from_another_identity(
+    ws: BlockingWsSurrealConnection,
+    record_user: dict[str, Any],
+    connection_params: dict[str, Any],
+) -> None:
+    root = BlockingHttpSurrealConnection(connection_params["url"])
+    root_token = root.signin(connection_params["vars_params"]).access
+    assert root_token is not None
+    ws.signup(record_user)
+    ws.authenticate(root_token)
+    with pytest.raises(ValueError, match="refresh token"):
+        ws.refresh()
+
+
+def test_blocking_ws_cannot_fork_a_closed_session(
+    ws: BlockingWsSurrealConnection,
+    connection_params: dict[str, Any],
+    needs_v3: None,
+) -> None:
+    ws.signin(connection_params["vars_params"])
+    session = ws.new_session()
+    session.close_session()
+    with pytest.raises(ValueError, match="not attached"):
+        ws.fork_session(session.id)
+    assert session.id not in ws._registry.sessions
