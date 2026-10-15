@@ -131,7 +131,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         """Ask the server for its version, once, before the first request."""
         try:
             response = self._send(
-                RequestMessage(RequestMethod.VERSION), "checking the server version"
+                RequestMessage(RequestMethod.VERSION),
+                "checking the server version",
+                token="",
             )
         except ServerError:
             self._adopt_server_version(None)
@@ -148,7 +150,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         """Send one RPC over HTTP.
 
         *token* authorises this request alone, without adopting it as the
-        connection's identity - see :meth:`authenticate`.
+        connection's identity - see :meth:`authenticate`. An empty *token*
+        sends the request anonymously.
         """
         if not self._authorising and message.method is not RequestMethod.VERSION:
             self._authorise()
@@ -220,6 +223,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         self.id = message.id
         self._send(message, "invalidating")
         self.token = None
+        self._refresh_token = None
 
     def signup(self, vars: dict[str, Value]) -> Tokens:
         message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
@@ -334,13 +338,13 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         given, and sends the new access token from then on. The old refresh
         token is spent. Needs SurrealDB 3.0 or later.
         """
-        pair = self._token_pair(tokens, "refresh()")
         if not self._version_learned:
             self._handshake()
         self._require(Features.REFRESH_TOKENS)
+        pair = self._token_pair(tokens, "refresh()")
         message = RequestMessage(RequestMethod.REFRESH, params=[pair])
         self.id = message.id
-        response = self._send(message, "refreshing the tokens")
+        response = self._send(message, "refreshing the tokens", token="")
         self.check_response_for_result(response, "refreshing the tokens")
         renewed = parse_auth_result(response["result"])
         self.token = renewed.access
@@ -352,10 +356,10 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
 
         Needs SurrealDB 3.0 or later.
         """
-        pair = self._token_pair(tokens, "revoke()")
         if not self._version_learned:
             self._handshake()
         self._require(Features.REFRESH_TOKENS)
+        pair = self._token_pair(tokens, "revoke()")
         message = RequestMessage(RequestMethod.REVOKE, params=[pair])
         self.id = message.id
         self._send(message, "revoking a refresh token")
@@ -366,8 +370,12 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         """Forget the namespace, database, variables and authentication.
 
         Over HTTP these live on the client and are sent with each request, so
-        there is nothing to tell the server.
+        there is nothing to tell the server. Needs SurrealDB 3.0 or later,
+        like ``reset`` on the other transports.
         """
+        if not self._version_learned:
+            self._handshake()
+        self._require(Features.SESSIONS)
         self.namespace = None
         self.database = None
         self.vars.clear()
@@ -802,8 +810,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
     def version(self) -> str:
         message = RequestMessage(RequestMethod.VERSION)
         self.id = message.id
-        response = self._send(message, "getting database version")
+        response = self._send(message, "getting database version", token="")
         self.check_response_for_result(response, "getting database version")
+        self._adopt_server_version(response["result"])
         return response["result"]
 
     def connect(self, url: str | None = None) -> None:

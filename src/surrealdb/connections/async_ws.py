@@ -847,7 +847,7 @@ class AsyncWsSurrealConnection(
 
     async def _restore_session(
         self, session_id: UUID | None, state: SessionState, authenticate: bool = True
-    ) -> None:
+    ) -> bool:
         scope: dict[str, Any] = {} if session_id is None else {"session": session_id}
         if state.namespace is not None or state.database is not None:
             await self._request(
@@ -877,6 +877,8 @@ class AsyncWsSurrealConnection(
                 # down. The session carries on unauthenticated, and says so.
                 self._emit("error", exc)
                 self._note_signed_out(session_id)
+                return False
+        return True
 
     async def _restore_live(self, live: LiveQuery) -> None:
         kwargs: dict[str, Any] = {"table": live.table, "diff": live.diff}
@@ -893,6 +895,12 @@ class AsyncWsSurrealConnection(
             return
         self._registry.move_live(live, UUID(str(response["result"])))
 
+    def _end_session_live(self, session_id: UUID | None) -> None:
+        """End the live queries the server dropped with *session_id*'s state."""
+        for logical, live in list(self._registry.live.items()):
+            if live.session_id == session_id:
+                self._end_live(logical, _LIVE_QUEUE_CLOSED)
+
     def _end_live(self, logical: str, sentinel: object) -> None:
         """Stop tracking a live query and end its subscriptions with *sentinel*."""
         self._registry.drop_live(logical)
@@ -908,6 +916,8 @@ class AsyncWsSurrealConnection(
     async def _handshake(self) -> None:
         """Ask a freshly opened socket's server for its version."""
         self._forget_server_version()
+        self._streaming_supported = None
+        self._streaming_refusal = None
         try:
             response = await self._request(
                 RequestMessage(RequestMethod.VERSION), "checking the server version"
@@ -1162,6 +1172,7 @@ class AsyncWsSurrealConnection(
         message = RequestMessage(RequestMethod.RESET, **_scope(session_id))
         await self._send(message, "resetting the session")
         self._note_reset(session_id)
+        self._end_session_live(session_id)
 
     async def sessions(self) -> list[UUID]:
         """The ids of the sessions attached to this connection on the server,
@@ -2120,9 +2131,7 @@ class AsyncWsSurrealConnection(
     async def detach(self, session_id: UUID) -> None:
         message = RequestMessage(RequestMethod.DETACH, session=session_id)
         await self._send(message, "detach")
-        for logical, live in list(self._registry.live.items()):
-            if live.session_id == session_id:
-                self._end_live(logical, _LIVE_QUEUE_CLOSED)
+        self._end_session_live(session_id)
         self._registry.forget_session(session_id)
 
     async def begin(self, session_id: UUID | None = None) -> UUID:
@@ -2178,14 +2187,14 @@ class AsyncWsSurrealConnection(
         source = self._registry.state(session_id).fork()
         forked = await self.attach()
         try:
-            await self._restore_session(forked, source)
+            authenticated = await self._restore_session(forked, source)
         except BaseException:
             await self.detach(forked)
             raise
         state = self._registry.state(forked)
         state.namespace, state.database = source.namespace, source.database
         state.variables = source.variables
-        if state.access is None and source.access is not None:
+        if authenticated and source.access is not None:
             state.access, state.refresh = source.access, source.refresh
         return AsyncSurrealSession(self, forked)
 

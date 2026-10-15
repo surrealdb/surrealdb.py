@@ -8,6 +8,7 @@ transport - and that an unsupported answer stops the connection.
 from typing import Any
 
 import pytest
+import requests
 
 from surrealdb import AsyncSurreal, Features, Surreal
 from surrealdb.connections import server_version
@@ -169,3 +170,116 @@ async def test_streaming_is_not_attempted_on_a_server_that_predates_it(
     else:
         assert async_ws_connection._streaming_supported is False
         assert "v3.3.0" in (async_ws_connection._streaming_refusal or "")
+
+
+async def test_async_http_version_as_the_first_call_learns_the_version(
+    connection_params: dict[str, Any],
+) -> None:
+    connection = AsyncHttpSurrealConnection(connection_params["url"])
+    reported = await connection.version()
+    assert connection.server_version is not None
+    assert _reported(connection.server_version) == _reported(reported)
+    assert connection.is_feature_supported(Features.LIVE_QUERIES)
+
+
+def test_blocking_http_version_as_the_first_call_learns_the_version(
+    connection_params: dict[str, Any],
+) -> None:
+    connection = BlockingHttpSurrealConnection(connection_params["url"])
+    reported = connection.version()
+    assert connection.server_version is not None
+    assert _reported(connection.server_version) == _reported(reported)
+
+
+@pytest.mark.usefixtures("refuse_every_version")
+async def test_async_http_version_refuses_an_unsupported_server(
+    connection_params: dict[str, Any],
+) -> None:
+    connection = AsyncHttpSurrealConnection(connection_params["url"])
+    with pytest.raises(UnsupportedVersionError):
+        await connection.version()
+
+
+@pytest.mark.usefixtures("refuse_every_version")
+def test_blocking_http_version_refuses_an_unsupported_server(
+    connection_params: dict[str, Any],
+) -> None:
+    connection = BlockingHttpSurrealConnection(connection_params["url"])
+    with pytest.raises(UnsupportedVersionError):
+        connection.version()
+
+
+async def test_async_http_repoint_handshake_sends_no_old_token(
+    connection_params: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connection = AsyncHttpSurrealConnection(connection_params["url"])
+    await connection.signin(connection_params["vars_params"])
+    assert connection.token
+    sent: list[dict[str, str]] = []
+    original = connection._request
+
+    async def record(
+        session: Any, url: str, headers: dict[str, str], *rest: Any
+    ) -> Any:
+        sent.append(dict(headers))
+        return await original(session, url, headers, *rest)
+
+    monkeypatch.setattr(connection, "_request", record)
+    await connection.connect(connection_params["url"])
+    assert sent and all("Authorization" not in headers for headers in sent)
+
+
+def test_blocking_http_repoint_handshake_sends_no_old_token(
+    connection_params: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connection = BlockingHttpSurrealConnection(connection_params["url"])
+    connection.signin(connection_params["vars_params"])
+    assert connection.token
+    sent: list[dict[str, str]] = []
+    original = requests.post
+
+    def record(url: str, headers: dict[str, str], **kwargs: Any) -> Any:
+        sent.append(dict(headers))
+        return original(url, headers=headers, **kwargs)
+
+    monkeypatch.setattr(requests, "post", record)
+    connection.connect(connection_params["url"])
+    assert sent and all("Authorization" not in headers for headers in sent)
+
+
+async def test_async_ws_streaming_state_is_reset_by_a_new_socket(
+    connection_params: dict[str, Any],
+) -> None:
+    connection = AsyncWsSurrealConnection(connection_params["ws_url"])
+    try:
+        await connection.connect()
+        connection._streaming_supported = False
+        connection._streaming_refusal = "stale"
+        await connection.close()
+        await connection.connect()
+        version = connection.server_version
+        assert version is not None
+        assert connection._streaming_refusal != "stale"
+        if Features.QUERY_STREAMING.supports(version):
+            assert connection._streaming_supported is None
+    finally:
+        await connection.close()
+
+
+def test_blocking_ws_streaming_state_is_reset_by_a_new_socket(
+    connection_params: dict[str, Any],
+) -> None:
+    connection = BlockingWsSurrealConnection(connection_params["ws_url"])
+    try:
+        connection.connect()
+        connection._streaming_supported = False
+        connection._streaming_refusal = "stale"
+        connection.close()
+        connection.connect()
+        version = connection.server_version
+        assert version is not None
+        assert connection._streaming_refusal != "stale"
+        if Features.QUERY_STREAMING.supports(version):
+            assert connection._streaming_supported is None
+    finally:
+        connection.close()
