@@ -288,9 +288,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             # our reply; route those to their live queue (if a subscriber is
             # registered, else drop) and keep reading, so a notification is
             # never returned as an RPC result.
+            budget = self._request_timeout()
             try:
                 self.socket.send(message.WS_CBOR_DESCRIPTOR)
-                budget = self._request_timeout()
                 deadline = None if budget is None else time.monotonic() + budget
                 while True:
                     remaining = (
@@ -332,7 +332,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 # waiting in the socket for the next caller to trip over.
                 self._abandoned.add(message.id)
                 raise TransportTimeoutError(
-                    f"timed out while {process} on {self.raw_url}: {exc}"
+                    f"timed out while {process} on {self.raw_url}: no reply "
+                    f"{describe(budget)}"
                 ) from exc
             except (WebSocketException, OSError) as exc:
                 raise ConnectionUnavailableError(

@@ -6,6 +6,7 @@ time to answer, so a short deadline must fail and a longer one must not.
 """
 
 import asyncio
+import re
 from typing import Any
 
 import pytest
@@ -19,6 +20,12 @@ from surrealdb.errors import TransportTimeoutError
 
 _SLOW = "RETURN sleep(1500ms); RETURN 1"
 _SHORT = 0.3
+
+
+def _skip_without_sessions(version: str) -> None:
+    major = re.search(r"(\d+)\.\d+\.\d+", version)
+    if major is None or int(major.group(1)) < 3:
+        pytest.skip(f"sessions need SurrealDB 3.0.0 or later (server: {version})")
 
 
 def _sync_connection(
@@ -171,6 +178,7 @@ async def test_async_session_and_transaction_share_the_connection_override(
     connection = await _async_connection("ws", connection_params, _SHORT)
     try:
         with connection.timeout(30):
+            _skip_without_sessions(await connection.version())
             session = await connection.new_session()
         await session.use(
             connection_params["namespace"], connection_params["database_name"]
@@ -194,6 +202,7 @@ def test_blocking_session_shares_the_connection_override(
     connection = _sync_connection("ws", connection_params, _SHORT)
     try:
         with connection.timeout(30):
+            _skip_without_sessions(connection.version())
             session = connection.new_session()
         session.use(connection_params["namespace"], connection_params["database_name"])
         with pytest.raises(TransportTimeoutError):
