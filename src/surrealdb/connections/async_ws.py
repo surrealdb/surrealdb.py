@@ -63,7 +63,7 @@ from surrealdb.connections.reconnect import (
     SessionState,
     SessionTrackingMixin,
 )
-from surrealdb.connections.server_version import ServerVersionMixin
+from surrealdb.connections.server_version import ServerVersionMixin, asks_for_refresh
 from surrealdb.connections.timeouts import (
     DEFAULT_TIMEOUT,
     check_timeout,
@@ -1406,7 +1406,7 @@ class AsyncWsSurrealConnection(
     async def signin(
         self, vars: dict[str, Value], session_id: UUID | None = None
     ) -> Tokens:
-        if not self._version_learned:
+        if not self._version_learned and asks_for_refresh(vars):
             await self.connect()
         self._require_signin(vars)
         kwargs: dict[str, Any] = {"params": vars}
