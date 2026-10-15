@@ -223,6 +223,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         return tokens
 
     def signin(self, vars: dict[str, Value]) -> Tokens:
+        if not self._version_learned:
+            self._handshake()
+        self._require_signin(vars)
         message = RequestMessage(RequestMethod.SIGN_IN, params=vars)
         self.id = message.id
         response = self._send(message, "signing in")
