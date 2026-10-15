@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `db.export(options=None)` and `db.import_(data)` on every remote transport,
+  over the server's `/export` and `/import` endpoints with the connection's
+  token, namespace and database. `export()` returns the SurrealQL.
+  `ExportOptions(users=..., accesses=..., params=..., functions=...,
+  analyzers=..., tables=..., versions=..., records=..., sequences=...)`
+  chooses what it includes; `tables` takes `True`/`False`, a list of names or
+  `{"exclude": [...]}`. SurrealDB 2.0 takes no options and says so with
+  `UnsupportedFeatureError`.
+
+  `import_()` takes SurrealQL as `str` or `bytes`, or the path of a file. A
+  failed statement does not stop the rest, so `import_()` reads the server's
+  answer and raises `ImportFailedError` with every failure in `failures`.
+  SurrealDB 3.1 and later reports only the failures, with their error kinds;
+  older servers report every statement, and the failures are picked out.
+  SurrealDB 3 requires an import to start with `OPTION IMPORT;`, as exports
+  do.
+
 - `auth=` on the connections and on `Surreal`/`AsyncSurreal`, like the JS
   SDK's `authentication` option, lets a connection sign itself in. It takes
   signin credentials, an access token, `Tokens`, or a function returning one

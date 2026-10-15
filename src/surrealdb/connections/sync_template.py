@@ -10,6 +10,7 @@ from surrealdb.connections.builders import (
     SyncInsertBuilder,
     SyncQueryBuilder,
 )
+from surrealdb.connections.import_export import ExportOptions, ImportData
 from surrealdb.connections.timeouts import check_timeout
 from surrealdb.data.types.null import NullType
 from surrealdb.data.types.record_id import RecordID, RecordIdType
@@ -81,6 +82,14 @@ class SyncTemplate:
     def reset(self) -> None:
         """Clear the namespace, database, variables and authentication."""
         raise NotImplementedError(f"reset not implemented for: {self}")
+
+    def export(self, options: ExportOptions | None = None) -> str:
+        """Export the selected database as SurrealQL."""
+        raise NotImplementedError(f"export not implemented for: {self}")
+
+    def import_(self, data: ImportData) -> None:
+        """Import SurrealQL into the selected database."""
+        raise NotImplementedError(f"import_ not implemented for: {self}")
 
     def health(self) -> None:
         """Raise unless the server reports itself healthy."""

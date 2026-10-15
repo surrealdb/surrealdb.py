@@ -25,6 +25,12 @@ from surrealdb.connections.builders import (
 )
 from surrealdb.connections.files import BlockingFiles
 from surrealdb.connections.health import check_health
+from surrealdb.connections.import_export import (
+    ExportOptions,
+    ImportData,
+    export_sql,
+    import_sql,
+)
 from surrealdb.connections.server_version import ServerVersionMixin
 from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.timeouts import (
@@ -382,6 +388,48 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
     def fork_session(self, session_id: UUID | None = None) -> None:
         raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    def export(self, options: ExportOptions | None = None) -> str:
+        """Export the selected database as SurrealQL.
+
+        Args:
+            options: What to include; the server's default without it.
+                SurrealDB 2.0 takes no options.
+
+        Example:
+            sql = db.export(ExportOptions(tables=["person"], records=False))
+        """
+        self._authorise()
+        return export_sql(
+            self.url,
+            options or ExportOptions(),
+            effective_timeout(self, self._timeout),
+            self.token,
+            self.namespace,
+            self.database,
+        )
+
+    def import_(self, data: ImportData) -> None:
+        """Import SurrealQL into the selected database.
+
+        Args:
+            data: The SurrealQL, as ``str`` or ``bytes``, or the path of a
+                file holding it - such as one ``export()`` wrote. SurrealDB 3
+                requires it to start with ``OPTION IMPORT;``, as exports do.
+
+        Raises:
+            ImportFailedError: if any statement failed, with each failure in
+                ``failures``. The other statements were still applied.
+        """
+        self._authorise()
+        import_sql(
+            self.url,
+            data,
+            effective_timeout(self, self._timeout),
+            self.token,
+            self.namespace,
+            self.database,
         )
 
     def health(self) -> None:

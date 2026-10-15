@@ -37,6 +37,12 @@ from surrealdb.connections.builders import (
 )
 from surrealdb.connections.files import AsyncFiles
 from surrealdb.connections.health import acheck_health
+from surrealdb.connections.import_export import (
+    ExportOptions,
+    ImportData,
+    aexport_sql,
+    aimport_sql,
+)
 from surrealdb.connections.reconnect import (
     LiveQuery,
     ReconnectOptions,
@@ -1173,6 +1179,48 @@ class AsyncWsSurrealConnection(
         )
         self.check_response_for_result(response, "listing the sessions")
         return [UUID(str(session)) for session in response["result"] or []]
+
+    async def export(self, options: ExportOptions | None = None) -> str:
+        """Export the selected database as SurrealQL.
+
+        Args:
+            options: What to include; the server's default without it.
+                SurrealDB 2.0 takes no options.
+
+        Example:
+            sql = await db.export(ExportOptions(tables=["person"], records=False))
+        """
+        await self.connect()
+        return await aexport_sql(
+            self.url,
+            options or ExportOptions(),
+            self._request_timeout(),
+            self.token,
+            self.namespace,
+            self.database,
+        )
+
+    async def import_(self, data: ImportData) -> None:
+        """Import SurrealQL into the selected database.
+
+        Args:
+            data: The SurrealQL, as ``str`` or ``bytes``, or the path of a
+                file holding it - such as one ``export()`` wrote. SurrealDB 3
+                requires it to start with ``OPTION IMPORT;``, as exports do.
+
+        Raises:
+            ImportFailedError: if any statement failed, with each failure in
+                ``failures``. The other statements were still applied.
+        """
+        await self.connect()
+        await aimport_sql(
+            self.url,
+            data,
+            self._request_timeout(),
+            self.token,
+            self.namespace,
+            self.database,
+        )
 
     async def health(self) -> None:
         """Ask the server's ``/health`` endpoint whether it is healthy.
