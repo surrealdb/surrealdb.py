@@ -2,7 +2,7 @@ import inspect
 import threading
 import time
 import uuid
-from collections.abc import Generator, Sequence
+from collections.abc import Generator, Mapping, Sequence
 from contextlib import AbstractContextManager
 from types import TracebackType
 from typing import Any, overload
@@ -10,6 +10,12 @@ from uuid import UUID
 
 import requests
 
+from surrealdb.connections.api import (
+    ApiResponse,
+    build_api_query,
+    graphql_params,
+    statement_results,
+)
 from surrealdb.connections.auth_provider import (
     SENT_WITHOUT_RENEWAL,
     AuthCredentials,
@@ -21,10 +27,12 @@ from surrealdb.connections.auth_provider import (
 from surrealdb.connections.builders import (
     _UNSET,
     M,
+    RelateEnd,
     SyncCrudBuilder,
     SyncInsertBuilder,
     SyncQueryBuilder,
     _Executor,
+    relate_builder,
 )
 from surrealdb.connections.files import BlockingFiles
 from surrealdb.connections.health import check_health
@@ -521,6 +529,72 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         :raises ConnectionUnavailableError: if it is not, or cannot be reached.
         """
         check_health(self.url, effective_timeout(self, self._timeout))
+
+    def api(
+        self,
+        path: str,
+        *,
+        method: str = "get",
+        body: Value = None,
+        headers: Mapping[str, str] | None = None,
+        query: Mapping[str, str] | None = None,
+    ) -> ApiResponse:
+        """Call an endpoint defined with ``DEFINE API``.
+
+        Sent as ``RETURN api::invoke(path, request)``. Needs SurrealDB 3.0 or
+        later, started with the ``define_api`` experimental capability.
+
+        Args:
+            path: The endpoint's path, starting with ``/``.
+            method: The HTTP method to invoke it with.
+            body: The request body.
+            headers: Request headers.
+            query: Query-string parameters.
+
+        Example:
+            response = db.api("/greet", method="post", body={"name": "Ada"})
+            assert response.ok
+        """
+        if not self._version_learned:
+            self._handshake()
+        self._require(Features.API)
+        sql, variables = build_api_query(path, method, body, headers, query)
+        return ApiResponse.from_result(self.query(sql, variables).first())
+
+    def gql(self, query: str, vars: Mapping[str, Value] | None = None) -> list[Value]:
+        """Run an ISO GQL query, such as ``MATCH (p:person) RETURN p.name``.
+
+        Returns each statement's result, and raises the first statement that
+        failed. Needs a server with the ``gql`` RPC method.
+        """
+        bindings = merge_query_vars(self.vars, vars)
+        params: list[Value] = [query, bindings] if bindings else [query]
+        message = RequestMessage(RequestMethod.GQL, params=params)
+        self.id = message.id
+        response = self._send(message, "gql")
+        self.check_response_for_result(response, "gql")
+        return statement_results(response["result"], "gql")
+
+    def graphql(
+        self,
+        query: str,
+        variables: Mapping[str, Value] | None = None,
+        operation_name: str | None = None,
+    ) -> dict[str, Value]:
+        """Run a GraphQL query and return the server's ``{data, errors}``.
+
+        Needs a server with the ``graphql`` RPC method and GraphQL enabled for
+        the database, for example with ``DEFINE CONFIG GRAPHQL AUTO``.
+        """
+        message = RequestMessage(
+            RequestMethod.GRAPHQL,
+            params=graphql_params(query, variables, operation_name),
+        )
+        self.id = message.id
+        response = self._send(message, "graphql")
+        self.check_response_for_result(response, "graphql")
+        result = response["result"]
+        return dict(result) if isinstance(result, dict) else {"data": result}
 
     def _token_pair(self, tokens: Tokens | None, purpose: str) -> dict[str, str]:
         access, refresh = (
@@ -1056,3 +1130,26 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
     def files(self) -> BlockingFiles:
         """Typed helpers over the ``file::*`` functions - see `surrealdb.connections.files`."""
         return BlockingFiles(self)
+
+    def relate(
+        self,
+        from_: RelateEnd,
+        edge: str | Table | RecordID,
+        to: RelateEnd,
+        data: Value = _UNSET,
+    ) -> Any:
+        """Relate *from_* to *to* through *edge*: ``RELATE from->edge->to``.
+
+        *edge* is the edge table (a name or ``Table``), or a ``RecordID`` for
+        an edge with a chosen id. *from_* and *to* are records, or lists of
+        records to relate every pair. Pass *data* to set the edge's content.
+        With *data* the edge is created at once and returned; without it, a
+        builder is returned, taking ``.output()`` and ``.timeout()``, to
+        finish with ``.execute()`` or ``.content(data)``.
+        """
+        builder: SyncCrudBuilder[Any] = relate_builder(
+            SyncCrudBuilder, self._make_executor(), from_, edge, to
+        )
+        if data is _UNSET:
+            return builder
+        return builder.content(data)

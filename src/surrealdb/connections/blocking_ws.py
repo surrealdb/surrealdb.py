@@ -9,7 +9,7 @@ import threading
 import time
 import uuid
 import weakref
-from collections.abc import Generator, Sequence
+from collections.abc import Generator, Mapping, Sequence
 from contextlib import AbstractContextManager
 from types import TracebackType
 from typing import Any, overload
@@ -21,6 +21,12 @@ from websockets.exceptions import ConnectionClosed, WebSocketException
 from websockets.protocol import State
 from websockets.sync.client import ClientConnection
 
+from surrealdb.connections.api import (
+    ApiResponse,
+    build_api_query,
+    graphql_params,
+    statement_results,
+)
 from surrealdb.connections.auth_provider import (
     SENT_WITHOUT_RENEWAL,
     AuthCredentials,
@@ -32,10 +38,12 @@ from surrealdb.connections.auth_provider import (
 from surrealdb.connections.builders import (
     _UNSET,
     M,
+    RelateEnd,
     SyncCrudBuilder,
     SyncInsertBuilder,
     SyncQueryBuilder,
     _Executor,
+    relate_builder,
 )
 from surrealdb.connections.files import BlockingFiles
 from surrealdb.connections.health import check_health
@@ -941,6 +949,84 @@ class BlockingWsSurrealConnection(
         :raises ConnectionUnavailableError: if it is not, or cannot be reached.
         """
         check_health(self.url, self._request_timeout())
+
+    def api(
+        self,
+        path: str,
+        *,
+        method: str = "get",
+        body: Value = None,
+        headers: Mapping[str, str] | None = None,
+        query: Mapping[str, str] | None = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> ApiResponse:
+        """Call an endpoint defined with ``DEFINE API``.
+
+        Sent as ``RETURN api::invoke(path, request)``. Needs SurrealDB 3.0 or
+        later, started with the ``define_api`` experimental capability.
+
+        Args:
+            path: The endpoint's path, starting with ``/``.
+            method: The HTTP method to invoke it with.
+            body: The request body.
+            headers: Request headers.
+            query: Query-string parameters.
+
+        Example:
+            response = db.api("/greet", method="post", body={"name": "Ada"})
+            assert response.ok
+        """
+        self._ensure_open()
+        self._require(Features.API)
+        sql, variables = build_api_query(path, method, body, headers, query)
+        result = self.query(
+            sql, variables, session_id=session_id, txn_id=txn_id
+        ).first()
+        return ApiResponse.from_result(result)
+
+    def gql(
+        self,
+        query: str,
+        vars: Mapping[str, Value] | None = None,
+        *,
+        session_id: UUID | None = None,
+    ) -> list[Value]:
+        """Run an ISO GQL query, such as ``MATCH (p:person) RETURN p.name``.
+
+        Returns each statement's result, and raises the first statement that
+        failed. Needs a server with the ``gql`` RPC method.
+        """
+        self._ensure_open()
+        params: list[Value] = [query] if vars is None else [query, dict(vars)]
+        message = RequestMessage(RequestMethod.GQL, params=params, **_scope(session_id))
+        response = self._send(message, "gql")
+        self.check_response_for_result(response, "gql")
+        return statement_results(response["result"], "gql")
+
+    def graphql(
+        self,
+        query: str,
+        variables: Mapping[str, Value] | None = None,
+        operation_name: str | None = None,
+        *,
+        session_id: UUID | None = None,
+    ) -> dict[str, Value]:
+        """Run a GraphQL query and return the server's ``{data, errors}``.
+
+        Needs a server with the ``graphql`` RPC method and GraphQL enabled for
+        the database, for example with ``DEFINE CONFIG GRAPHQL AUTO``.
+        """
+        self._ensure_open()
+        message = RequestMessage(
+            RequestMethod.GRAPHQL,
+            params=graphql_params(query, variables, operation_name),
+            **_scope(session_id),
+        )
+        response = self._send(message, "graphql")
+        self.check_response_for_result(response, "graphql")
+        result = response["result"]
+        return dict(result) if isinstance(result, dict) else {"data": result}
 
     def signup(self, vars: dict[str, Value], session_id: UUID | None = None) -> Tokens:
         kwargs: dict[str, Any] = {"data": vars}
@@ -2334,6 +2420,32 @@ class BlockingWsSurrealConnection(
         """Typed helpers over the ``file::*`` functions - see `surrealdb.connections.files`."""
         return BlockingFiles(self)
 
+    def relate(
+        self,
+        from_: RelateEnd,
+        edge: str | Table | RecordID,
+        to: RelateEnd,
+        data: Value = _UNSET,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> Any:
+        """Relate *from_* to *to* through *edge*: ``RELATE from->edge->to``.
+
+        *edge* is the edge table (a name or ``Table``), or a ``RecordID`` for
+        an edge with a chosen id. *from_* and *to* are records, or lists of
+        records to relate every pair. Pass *data* to set the edge's content.
+        With *data* the edge is created at once and returned; without it, a
+        builder is returned, taking ``.output()`` and ``.timeout()``, to
+        finish with ``.execute()`` or ``.content(data)``.
+        """
+        builder: SyncCrudBuilder[Any] = relate_builder(
+            SyncCrudBuilder, self._make_executor(session_id, txn_id), from_, edge, to
+        )
+        if data is _UNSET:
+            return builder
+        return builder.content(data)
+
 
 class BlockingSurrealSession:
     def __init__(
@@ -2592,6 +2704,37 @@ class BlockingSurrealSession:
             table, data, into=into, relation=relation, session_id=self._session_id
         )
 
+    def api(
+        self,
+        path: str,
+        *,
+        method: str = "get",
+        body: Value = None,
+        headers: Mapping[str, str] | None = None,
+        query: Mapping[str, str] | None = None,
+    ) -> ApiResponse:
+        return self._connection.api(
+            path,
+            method=method,
+            body=body,
+            headers=headers,
+            query=query,
+            session_id=self._session_id,
+        )
+
+    def gql(self, query: str, vars: Mapping[str, Value] | None = None) -> list[Value]:
+        return self._connection.gql(query, vars, session_id=self._session_id)
+
+    def graphql(
+        self,
+        query: str,
+        variables: Mapping[str, Value] | None = None,
+        operation_name: str | None = None,
+    ) -> dict[str, Value]:
+        return self._connection.graphql(
+            query, variables, operation_name, session_id=self._session_id
+        )
+
     def run(
         self,
         name: str,
@@ -2634,6 +2777,17 @@ class BlockingSurrealSession:
     def files(self) -> BlockingFiles:
         """Typed helpers over the ``file::*`` functions - see `surrealdb.connections.files`."""
         return BlockingFiles(self)
+
+    def relate(
+        self,
+        from_: RelateEnd,
+        edge: str | Table | RecordID,
+        to: RelateEnd,
+        data: Value = _UNSET,
+    ) -> Any:
+        return self._connection.relate(
+            from_, edge, to, data, session_id=self._session_id
+        )
 
 
 class BlockingSurrealTransaction:
@@ -2886,6 +3040,25 @@ class BlockingSurrealTransaction:
             txn_id=self._txn_id,
         )
 
+    def api(
+        self,
+        path: str,
+        *,
+        method: str = "get",
+        body: Value = None,
+        headers: Mapping[str, str] | None = None,
+        query: Mapping[str, str] | None = None,
+    ) -> ApiResponse:
+        return self._connection.api(
+            path,
+            method=method,
+            body=body,
+            headers=headers,
+            query=query,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+        )
+
     def run(
         self,
         name: str,
@@ -2918,3 +3091,14 @@ class BlockingSurrealTransaction:
     def files(self) -> BlockingFiles:
         """Typed helpers over the ``file::*`` functions - see `surrealdb.connections.files`."""
         return BlockingFiles(self)
+
+    def relate(
+        self,
+        from_: RelateEnd,
+        edge: str | Table | RecordID,
+        to: RelateEnd,
+        data: Value = _UNSET,
+    ) -> Any:
+        return self._connection.relate(
+            from_, edge, to, data, session_id=self._session_id, txn_id=self._txn_id
+        )

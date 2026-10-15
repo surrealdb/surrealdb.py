@@ -1,7 +1,7 @@
 import asyncio
 import inspect
 import uuid
-from collections.abc import AsyncGenerator, Sequence
+from collections.abc import AsyncGenerator, Mapping, Sequence
 from contextlib import AbstractContextManager
 from contextvars import ContextVar
 from types import TracebackType
@@ -10,6 +10,12 @@ from uuid import UUID
 
 import aiohttp
 
+from surrealdb.connections.api import (
+    ApiResponse,
+    build_api_query,
+    graphql_params,
+    statement_results,
+)
 from surrealdb.connections.async_template import AsyncTemplate
 from surrealdb.connections.auth_provider import (
     SENT_WITHOUT_RENEWAL,
@@ -25,7 +31,9 @@ from surrealdb.connections.builders import (
     AsyncInsertBuilder,
     AsyncQueryBuilder,
     M,
+    RelateEnd,
     _Executor,
+    relate_builder,
 )
 from surrealdb.connections.files import AsyncFiles
 from surrealdb.connections.health import acheck_health
@@ -544,6 +552,74 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         :raises ConnectionUnavailableError: if it is not, or cannot be reached.
         """
         await acheck_health(self.url, effective_timeout(self, self._timeout))
+
+    async def api(
+        self,
+        path: str,
+        *,
+        method: str = "get",
+        body: Value = None,
+        headers: Mapping[str, str] | None = None,
+        query: Mapping[str, str] | None = None,
+    ) -> ApiResponse:
+        """Call an endpoint defined with ``DEFINE API``.
+
+        Sent as ``RETURN api::invoke(path, request)``. Needs SurrealDB 3.0 or
+        later, started with the ``define_api`` experimental capability.
+
+        Args:
+            path: The endpoint's path, starting with ``/``.
+            method: The HTTP method to invoke it with.
+            body: The request body.
+            headers: Request headers.
+            query: Query-string parameters.
+
+        Example:
+            response = await db.api("/greet", method="post", body={"name": "Ada"})
+            assert response.ok
+        """
+        if not self._version_learned:
+            await self._handshake()
+        self._require(Features.API)
+        sql, variables = build_api_query(path, method, body, headers, query)
+        return ApiResponse.from_result(await self.query(sql, variables).first())
+
+    async def gql(
+        self, query: str, vars: Mapping[str, Value] | None = None
+    ) -> list[Value]:
+        """Run an ISO GQL query, such as ``MATCH (p:person) RETURN p.name``.
+
+        Returns each statement's result, and raises the first statement that
+        failed. Needs a server with the ``gql`` RPC method.
+        """
+        bindings = merge_query_vars(self.vars, vars)
+        params: list[Value] = [query, bindings] if bindings else [query]
+        message = RequestMessage(RequestMethod.GQL, params=params)
+        self.id = message.id
+        response = await self._send(message, "gql")
+        self.check_response_for_result(response, "gql")
+        return statement_results(response["result"], "gql")
+
+    async def graphql(
+        self,
+        query: str,
+        variables: Mapping[str, Value] | None = None,
+        operation_name: str | None = None,
+    ) -> dict[str, Value]:
+        """Run a GraphQL query and return the server's ``{data, errors}``.
+
+        Needs a server with the ``graphql`` RPC method and GraphQL enabled for
+        the database, for example with ``DEFINE CONFIG GRAPHQL AUTO``.
+        """
+        message = RequestMessage(
+            RequestMethod.GRAPHQL,
+            params=graphql_params(query, variables, operation_name),
+        )
+        self.id = message.id
+        response = await self._send(message, "graphql")
+        self.check_response_for_result(response, "graphql")
+        result = response["result"]
+        return dict(result) if isinstance(result, dict) else {"data": result}
 
     def _token_pair(self, tokens: Tokens | None, purpose: str) -> dict[str, str]:
         access, refresh = (
@@ -1081,3 +1157,24 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
     def files(self) -> AsyncFiles:
         """Typed helpers over the ``file::*`` functions - see `surrealdb.connections.files`."""
         return AsyncFiles(self)
+
+    def relate(
+        self,
+        from_: RelateEnd,
+        edge: str | Table | RecordID,
+        to: RelateEnd,
+        data: Value = _UNSET,
+    ) -> AsyncCrudBuilder[Any]:
+        """Relate *from_* to *to* through *edge*: ``RELATE from->edge->to``.
+
+        *edge* is the edge table (a name or ``Table``), or a ``RecordID`` for
+        an edge with a chosen id. *from_* and *to* are records, or lists of
+        records to relate every pair. Pass *data* to set the edge's content.
+        Returns an awaitable builder taking ``.output()`` and ``.timeout()``.
+        """
+        builder: AsyncCrudBuilder[Any] = relate_builder(
+            AsyncCrudBuilder, self._make_executor(), from_, edge, to
+        )
+        if data is not _UNSET:
+            builder.content(data)
+        return builder

@@ -172,6 +172,8 @@ _PLAIN_METHODS = frozenset(
         RequestMethod.REVOKE,
         RequestMethod.RESET,
         RequestMethod.SESSIONS,
+        RequestMethod.GQL,
+        RequestMethod.GRAPHQL,
     }
 )
 

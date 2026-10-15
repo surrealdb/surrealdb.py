@@ -1,13 +1,16 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Mapping
 from contextlib import AbstractContextManager, nullcontext
 from typing import Any, overload
 from uuid import UUID
 
+from surrealdb.connections.api import ApiResponse
 from surrealdb.connections.builders import (
+    _UNSET,
     AsyncCrudBuilder,
     AsyncInsertBuilder,
     AsyncQueryBuilder,
     M,
+    RelateEnd,
 )
 from surrealdb.connections.import_export import (
     ExportOptions,
@@ -108,6 +111,33 @@ class AsyncTemplate:
     async def health(self) -> None:
         """Raise unless the server reports itself healthy."""
         raise NotImplementedError(f"health not implemented for: {self}")
+
+    async def api(
+        self,
+        path: str,
+        *,
+        method: str = "get",
+        body: Value = None,
+        headers: Mapping[str, str] | None = None,
+        query: Mapping[str, str] | None = None,
+    ) -> ApiResponse:
+        """Call an endpoint defined with ``DEFINE API``."""
+        raise NotImplementedError(f"api not implemented for: {self}")
+
+    async def gql(
+        self, query: str, vars: Mapping[str, Value] | None = None
+    ) -> list[Value]:
+        """Run an ISO GQL query and return each statement's result."""
+        raise NotImplementedError(f"gql not implemented for: {self}")
+
+    async def graphql(
+        self,
+        query: str,
+        variables: Mapping[str, Value] | None = None,
+        operation_name: str | None = None,
+    ) -> dict[str, Value]:
+        """Run a GraphQL query and return the server's ``{data, errors}``."""
+        raise NotImplementedError(f"graphql not implemented for: {self}")
 
     async def authenticate(self, token: str) -> None:
         """Authenticate the current connection with a JWT token.
@@ -472,3 +502,13 @@ class AsyncTemplate:
     async def kill(self, query_uuid: str | UUID) -> None:
         """Kill a running live query by its UUID."""
         raise NotImplementedError(f"kill not implemented for: {self}")
+
+    def relate(
+        self,
+        from_: RelateEnd,
+        edge: str | Table | RecordID,
+        to: RelateEnd,
+        data: Value = _UNSET,
+    ) -> AsyncCrudBuilder[Any]:
+        """Relate *from_* to *to* through *edge*: ``RELATE from->edge->to``."""
+        raise NotImplementedError(f"relate not implemented for: {self}")
