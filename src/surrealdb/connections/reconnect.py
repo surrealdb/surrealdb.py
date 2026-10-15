@@ -22,6 +22,7 @@ from typing import Any
 from uuid import UUID
 
 from surrealdb.connections.events import EventsMixin
+from surrealdb.data.types.null import NullType
 from surrealdb.types import Tokens, Value
 
 
@@ -143,6 +144,12 @@ class SessionRegistry:
             state = self.sessions[session_id] = SessionState()
         return state
 
+    def find(self, session_id: UUID | None) -> SessionState | None:
+        """The state held for *session_id*, without registering a new one."""
+        if session_id is None:
+            return self.root
+        return self.sessions.get(session_id)
+
     def forget_session(self, session_id: UUID) -> None:
         self.sessions.pop(session_id, None)
         for key, live in list(self.live.items()):
@@ -210,14 +217,61 @@ class SessionTrackingMixin(EventsMixin):
         return self._registry.root.database
 
     def _note_use(
-        self, session_id: UUID | None, namespace: str | None, database: str | None
+        self,
+        session_id: UUID | None,
+        namespace: str | NullType | None,
+        database: str | NullType | None,
     ) -> None:
+        """Record a ``use``: a string selects, ``Null`` clears, ``None`` keeps."""
         state = self._registry.state(session_id)
         if namespace is not None:
-            state.namespace = namespace
+            state.namespace = None if isinstance(namespace, NullType) else namespace
         if database is not None:
-            state.database = database
+            state.database = None if isinstance(database, NullType) else database
         self._emit("using", state.namespace, state.database, session_id)
+
+    def _note_reset(self, session_id: UUID | None) -> None:
+        """The server cleared the session: selection, variables and auth."""
+        state = self._registry.state(session_id)
+        had_auth = state.access is not None or state.refresh is not None
+        had_selection = state.namespace is not None or state.database is not None
+        state.namespace = state.database = state.access = state.refresh = None
+        state.variables.clear()
+        if had_selection:
+            self._emit("using", None, None, session_id)
+        if had_auth:
+            self._emit("auth", None, session_id)
+
+    def _note_revoked(self, session_id: UUID | None, refresh: str) -> None:
+        """A revoked refresh token cannot be used again, so stop holding it."""
+        state = self._registry.find(session_id)
+        if state is not None and state.refresh == refresh:
+            state.refresh = None
+
+    def _token_pair(
+        self, tokens: Tokens | None, session_id: UUID | None, purpose: str
+    ) -> dict[str, str]:
+        """The ``{access, refresh}`` object the server takes for *purpose*."""
+        held = tokens
+        if held is None:
+            state = self._registry.find(session_id)
+            if state is None:
+                raise ValueError(
+                    f"{purpose} names session {session_id}, which this "
+                    "connection does not hold: pass its Tokens explicitly, or "
+                    "use a session from new_session() that is still open"
+                )
+            held = state.tokens()
+        if held is None or held.refresh is None:
+            raise ValueError(
+                f"{purpose} needs a refresh token: pass the Tokens that signin() "
+                "or signup() returned for an access method defined WITH "
+                "REFRESH, or sign in with one on this session first"
+            )
+        pair = {"refresh": held.refresh}
+        if held.access is not None:
+            pair["access"] = held.access
+        return pair
 
     def _note_let(self, session_id: UUID | None, key: str, value: Value) -> None:
         self._registry.state(session_id).variables[key] = value
@@ -232,7 +286,14 @@ class SessionTrackingMixin(EventsMixin):
         self._emit("auth", tokens, session_id)
 
     def _note_authenticated(self, session_id: UUID | None, token: str) -> None:
+        """Record an access token given on its own.
+
+        A refresh token belongs to the access token it came with, so one held
+        for a different access token is dropped rather than paired with this.
+        """
         state = self._registry.state(session_id)
+        if state.access != token:
+            state.refresh = None
         state.access = token
         self._emit("auth", Tokens(access=token, refresh=state.refresh), session_id)
 

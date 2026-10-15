@@ -10,6 +10,7 @@ from surrealdb.connections.builders import (
     M,
 )
 from surrealdb.connections.timeouts import check_timeout
+from surrealdb.data.types.null import NullType
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.types import Tokens, Value
@@ -45,17 +46,49 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"close not implemented for: {self}")
 
-    async def use(self, namespace: str, database: str) -> None:
+    async def use(
+        self,
+        namespace: str | NullType | None = None,
+        database: str | NullType | None = None,
+    ) -> None:
         """Switch to a specific namespace and database.
 
         Args:
-            namespace: Switches to a specific namespace.
-            database: Switches to a specific database.
+            namespace: The namespace to select; ``None`` keeps the current
+                one and ``Null`` clears it.
+            database: The database to select; ``None`` keeps the current one
+                and ``Null`` clears it.
 
         Example:
             await db.use('test', 'test')
         """
         raise NotImplementedError(f"use not implemented for: {self}")
+
+    async def refresh(self, tokens: Tokens | None = None) -> Tokens:
+        """Exchange a refresh token for a new access and refresh token.
+
+        Args:
+            tokens: The tokens to exchange; by default the ones this
+                connection signed in with.
+        """
+        raise NotImplementedError(f"refresh not implemented for: {self}")
+
+    async def revoke(self, tokens: Tokens | None = None) -> None:
+        """Revoke a refresh token so it can never be exchanged again.
+
+        Args:
+            tokens: The tokens whose refresh token to revoke; by default the
+                ones this connection signed in with.
+        """
+        raise NotImplementedError(f"revoke not implemented for: {self}")
+
+    async def reset(self) -> None:
+        """Clear the namespace, database, variables and authentication."""
+        raise NotImplementedError(f"reset not implemented for: {self}")
+
+    async def health(self) -> None:
+        """Raise unless the server reports itself healthy."""
+        raise NotImplementedError(f"health not implemented for: {self}")
 
     async def authenticate(self, token: str) -> None:
         """Authenticate the current connection with a JWT token.

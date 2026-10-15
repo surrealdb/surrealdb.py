@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Token and session management to match the JS SDK:
+  - `db.refresh(tokens=None)` exchanges a refresh token for a new pair over
+    the `refresh` RPC, authenticates with the new access token and returns
+    both. It defaults to the tokens the connection signed in with.
+  - `db.revoke(tokens=None)` revokes a refresh token so it can never be
+    exchanged again.
+  - `db.reset()` returns a session to how it started, with no namespace,
+    database, variables or authentication.
+  - `db.sessions()` lists the ids of the sessions attached on the server.
+  - `db.fork_session()` and `session.fork()` start a new session as a copy of
+    an existing one. `session.id` is the session's id.
+  - `use()` takes either argument alone: `use(database="other")` changes only
+    the database. `None` keeps the current value and `Null` clears it.
+  - `db.health()` asks the server's `/health` endpoint, raising
+    `ConnectionUnavailableError` if the server is unhealthy or unreachable.
+    There is no health RPC, so websocket connections ask over HTTP.
+
+  `refresh`, `revoke`, `reset`, `sessions` and `fork_session` need SurrealDB
+  3.0 and raise `UnavailableFeatureError` on 2.x. Over HTTP, `refresh`,
+  `revoke`, `reset`, `health` and partial `use` work; sessions do not.
+
 - Websocket connections reconnect on their own. When the socket drops, the
   connection opens a new one, with backoff, and replays what the server forgot
   with the old one: the namespace and database, the variables from `let`, the

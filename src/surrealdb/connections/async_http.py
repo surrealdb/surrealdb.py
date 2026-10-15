@@ -18,6 +18,7 @@ from surrealdb.connections.builders import (
     _Executor,
 )
 from surrealdb.connections.files import AsyncFiles
+from surrealdb.connections.health import acheck_health
 from surrealdb.connections.server_version import ServerVersionMixin, asks_for_refresh
 from surrealdb.connections.timeouts import (
     DEFAULT_TIMEOUT,
@@ -33,6 +34,7 @@ from surrealdb.connections.utils_mixin import (
     build_run_query,
     merge_query_vars,
 )
+from surrealdb.data.types.null import NullType
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
@@ -42,6 +44,7 @@ from surrealdb.errors import (
     UnsupportedFeatureError,
     parse_rpc_error,
 )
+from surrealdb.features import Features
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 from surrealdb.streaming import (
@@ -100,6 +103,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         self.host: str | None = self.url.hostname
         self.port: int | None = self.url.port
         self.token: str | None = None
+        self._refresh_token: str | None = None
         self.id: str = str(uuid.uuid4())
         self.namespace: str | None = None
         self.database: str | None = None
@@ -220,6 +224,8 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         message = RequestMessage(RequestMethod.AUTHENTICATE, token=token)
         self.id = message.id
         await self._send(message, "authenticating", token=token)
+        if self.token != token:
+            self._refresh_token = None
         self.token = token
 
     async def invalidate(self) -> None:
@@ -227,6 +233,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         self.id = message.id
         await self._send(message, "invalidating")
         self.token = None
+        self._refresh_token = None
 
     async def signup(self, vars: dict[str, Value]) -> Tokens:
         message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
@@ -235,6 +242,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         self.check_response_for_result(response, "signup")
         tokens = parse_auth_result(response["result"])
         self.token = tokens.access
+        self._refresh_token = tokens.refresh
         return tokens
 
     async def signin(self, vars: dict[str, Value]) -> Tokens:
@@ -247,6 +255,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         self.check_response_for_result(response, "signing in")
         tokens = parse_auth_result(response["result"])
         self.token = tokens.access
+        self._refresh_token = tokens.refresh
         return tokens
 
     async def info(self) -> Value:
@@ -270,7 +279,16 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         self.check_response_for_result(response, "getting database information")
         return cast(dict[str, Value], response["result"])
 
-    async def use(self, namespace: str, database: str) -> None:
+    async def use(
+        self,
+        namespace: str | NullType | None = None,
+        database: str | NullType | None = None,
+    ) -> None:
+        """Select a namespace and database.
+
+        Either may be left out, or ``None``, to keep the current one, or
+        ``Null`` to clear it.
+        """
         message = RequestMessage(
             RequestMethod.USE,
             namespace=namespace,
@@ -278,8 +296,95 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         )
         self.id = message.id
         _ = await self._send(message, "use")
-        self.namespace = namespace
-        self.database = database
+        if namespace is not None:
+            self.namespace = None if isinstance(namespace, NullType) else namespace
+        if database is not None:
+            self.database = None if isinstance(database, NullType) else database
+
+    async def refresh(self, tokens: Tokens | None = None) -> Tokens:
+        """Exchange a refresh token for a new access and refresh token.
+
+        Uses the tokens this connection signed in with unless *tokens* is
+        given, and sends the new access token from then on. The old refresh
+        token is spent. Needs SurrealDB 3.0 or later.
+        """
+        if not self._version_learned:
+            await self._handshake()
+        self._require(Features.REFRESH_TOKENS)
+        pair = self._token_pair(tokens, "refresh()")
+        message = RequestMessage(RequestMethod.REFRESH, params=[pair])
+        self.id = message.id
+        response = await self._send(message, "refreshing the tokens", token="")
+        self.check_response_for_result(response, "refreshing the tokens")
+        renewed = parse_auth_result(response["result"])
+        self.token = renewed.access
+        self._refresh_token = renewed.refresh
+        return renewed
+
+    async def revoke(self, tokens: Tokens | None = None) -> None:
+        """Revoke a refresh token, so it can never be exchanged again.
+
+        Needs SurrealDB 3.0 or later.
+        """
+        if not self._version_learned:
+            await self._handshake()
+        self._require(Features.REFRESH_TOKENS)
+        pair = self._token_pair(tokens, "revoke()")
+        message = RequestMessage(RequestMethod.REVOKE, params=[pair])
+        self.id = message.id
+        await self._send(message, "revoking a refresh token", token="")
+        if self._refresh_token == pair["refresh"]:
+            self._refresh_token = None
+
+    async def reset(self) -> None:
+        """Forget the namespace, database, variables and authentication.
+
+        Over HTTP these live on the client and are sent with each request, so
+        there is nothing to tell the server. Needs SurrealDB 3.0 or later,
+        like ``reset`` on the other transports.
+        """
+        if not self._version_learned:
+            await self._handshake()
+        self._require(Features.SESSIONS)
+        self.namespace = None
+        self.database = None
+        self.vars.clear()
+        self.token = None
+        self._refresh_token = None
+
+    async def sessions(self) -> list[UUID]:
+        raise UnsupportedFeatureError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def fork_session(self, session_id: UUID | None = None) -> None:
+        raise UnsupportedFeatureError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
+    async def health(self) -> None:
+        """Ask the server's ``/health`` endpoint whether it is healthy.
+
+        :raises ConnectionUnavailableError: if it is not, or cannot be reached.
+        """
+        await acheck_health(self.url, effective_timeout(self, self._timeout))
+
+    def _token_pair(self, tokens: Tokens | None, purpose: str) -> dict[str, str]:
+        access, refresh = (
+            (tokens.access, tokens.refresh)
+            if tokens is not None
+            else (self.token, self._refresh_token)
+        )
+        if refresh is None:
+            raise ValueError(
+                f"{purpose} needs a refresh token: pass the Tokens that signin() "
+                "or signup() returned for an access method defined WITH "
+                "REFRESH, or sign in with one on this connection first"
+            )
+        pair = {"refresh": refresh}
+        if access is not None:
+            pair["access"] = access
+        return pair
 
     def query(
         self, query: str, vars: dict[str, Value] | None = None
