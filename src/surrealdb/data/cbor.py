@@ -25,7 +25,7 @@ from surrealdb.data.types.geometry import (
 )
 from surrealdb.data.types.null import Null, NullType
 from surrealdb.data.types.range import BoundExcluded, BoundIncluded, Range
-from surrealdb.data.types.record_id import RecordID
+from surrealdb.data.types.record_id import RecordID, StringRecordId
 from surrealdb.data.types.set import SurrealSet
 from surrealdb.data.types.table import Table
 from surrealdb.errors import UnexpectedResponseError
@@ -59,6 +59,9 @@ def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
 
     elif isinstance(obj, RecordID):
         tagged = CBORTag(constants.TAG_RECORD_ID, [obj.table_name, obj.id])
+
+    elif isinstance(obj, StringRecordId):
+        tagged = CBORTag(constants.TAG_RECORD_ID, obj.value)
 
     elif isinstance(obj, Table):
         tagged = CBORTag(constants.TAG_TABLE_NAME, obj.table_name)

@@ -95,7 +95,12 @@ from typing import (
 from surrealdb.data.types.datetime import Datetime
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.range import Range
-from surrealdb.data.types.record_id import RecordID, RecordIdType, escape_identifier
+from surrealdb.data.types.record_id import (
+    RecordID,
+    RecordIdType,
+    StringRecordId,
+    escape_identifier,
+)
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     SurrealError,
@@ -212,6 +217,18 @@ def _string_to_record_id(s: str, var_name: str) -> RecordID:
     return RecordID(table, ident)
 
 
+def _implicit_record_id(s: str, var_name: str) -> RecordID:
+    """Parse a plain ``"table:id"`` string, warning that this is deprecated."""
+    warnings.warn(
+        f"Passing the plain string {s!r} as a record id is deprecated: the SDK "
+        "parses it itself, which cannot read every id the server can. Pass "
+        f"StringRecordId({s!r}) to have the server parse it, or a RecordID.",
+        DeprecationWarning,
+        stacklevel=_caller_stacklevel(),
+    )
+    return _string_to_record_id(s, var_name)
+
+
 def _resource_to_variable(
     resource: RecordIdType, variables: dict[str, Any], var_name: str
 ) -> str:
@@ -233,7 +250,7 @@ def _resource_to_variable(
     Anything that matches none of the above is rejected with
     :class:`SurrealError` rather than being concatenated into the SQL.
     """
-    if isinstance(resource, RecordID):
+    if isinstance(resource, (RecordID, StringRecordId)):
         variables[var_name] = resource
         return f"${var_name}"
 
@@ -257,7 +274,7 @@ def _resource_to_variable(
         )
 
     if ":" in resource and ".." not in resource:
-        variables[var_name] = _string_to_record_id(resource, var_name)
+        variables[var_name] = _implicit_record_id(resource, var_name)
         return f"${var_name}"
 
     if _TABLE_ID_PATTERN.match(resource):
@@ -284,7 +301,7 @@ def _relate_end(resource: Any, variables: dict[str, Any], var_name: str) -> str:
     """One end of a RELATE: a record, or a list of records to relate each."""
     if _is_many(resource):
         variables[var_name] = [
-            _string_to_record_id(item, var_name) if isinstance(item, str) else item
+            _implicit_record_id(item, var_name) if isinstance(item, str) else item
             for item in resource
         ]
         return f"${var_name}"
@@ -306,6 +323,8 @@ def _is_single_record_operation(resource: RecordIdType) -> bool:
     """
     if isinstance(resource, RecordID):
         return not isinstance(resource.id, Range)
+    if isinstance(resource, StringRecordId):
+        return ".." not in resource.value
     if isinstance(resource, Table):
         return False
     if isinstance(resource, Range):
@@ -370,6 +389,17 @@ def _caller_location() -> str:
     if frame is None:
         return "an unknown location"
     return f"{frame.f_code.co_filename}:{frame.f_lineno}"
+
+
+def _caller_stacklevel() -> int:
+    """The ``stacklevel`` that points a warning at the caller's own code."""
+    level = 2
+    current = inspect.currentframe()
+    frame = current.f_back.f_back if current and current.f_back else None
+    while frame is not None and frame.f_code.co_filename.startswith(_PACKAGE_DIR):
+        level += 1
+        frame = frame.f_back
+    return level
 
 
 class _WarnIfDropped:

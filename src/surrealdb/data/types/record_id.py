@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from pydantic import GetJsonSchemaHandler
     from pydantic.json_schema import JsonSchemaValue
 
-RecordIdType = Union[str, "RecordID", Table]
+RecordIdType = Union[str, "RecordID", "StringRecordId", Table]
 
 #: What SurrealDB accepts as a record id. Exported so callers have a name to
 #: annotate or cast against - ``RecordID.id`` is deliberately wider (see the
@@ -366,3 +366,44 @@ class RecordID:
         cls, _core_schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
     ) -> JsonSchemaValue:
         return handler(core_schema.str_schema())
+
+
+class StringRecordId:
+    """A record id written as SurrealQL, such as ``"person:tobie"`` or
+    ``"person:⟨a:b⟩"``, for the server to parse.
+
+    Unlike a plain string, it is never parsed by the SDK, so every id the
+    server can read works, and its meaning cannot shift with the SDK's own
+    parsing rules. Use :class:`RecordID` to build an id from its parts.
+    """
+
+    __slots__ = ("_value",)
+
+    def __init__(self, value: str) -> None:
+        if not isinstance(value, str):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise TypeError(
+                f"StringRecordId takes a string such as 'person:tobie'; got "
+                f"{type(value).__name__}"
+            )
+        if ":" not in value:
+            raise InvalidRecordIdError(
+                f"StringRecordId takes a 'table:id' string; {value!r} has no ':'"
+            )
+        self._value = value
+
+    @property
+    def value(self) -> str:
+        """The record id as SurrealQL."""
+        return self._value
+
+    def __str__(self) -> str:
+        return self._value
+
+    def __repr__(self) -> str:
+        return f"StringRecordId({self._value!r})"
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, StringRecordId) and other._value == self._value
+
+    def __hash__(self) -> int:
+        return hash(("StringRecordId", self._value))

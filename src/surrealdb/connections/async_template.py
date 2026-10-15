@@ -15,7 +15,7 @@ from surrealdb.connections.builders import (
 from surrealdb.connections.import_export import ExportOptions, ImportData
 from surrealdb.connections.timeouts import check_timeout
 from surrealdb.data.types.null import NullType
-from surrealdb.data.types.record_id import RecordID, RecordIdType
+from surrealdb.data.types.record_id import RecordID, RecordIdType, StringRecordId
 from surrealdb.data.types.table import Table
 from surrealdb.types import Tokens, Value
 
@@ -228,7 +228,7 @@ class AsyncTemplate:
 
     @overload
     def select(
-        self, record: RecordID, *, into: type[M]
+        self, record: RecordID | StringRecordId, *, into: type[M]
     ) -> AsyncCrudBuilder[M | None]: ...
     @overload
     def select(self, record: Table, *, into: type[M]) -> AsyncCrudBuilder[list[M]]: ...
@@ -237,7 +237,9 @@ class AsyncTemplate:
         self, record: str, *, into: type[M]
     ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    def select(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
+    def select(
+        self, record: RecordID | StringRecordId
+    ) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def select(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
@@ -267,7 +269,7 @@ class AsyncTemplate:
     ) -> AsyncCrudBuilder[M]: ...
     @overload
     def create(
-        self, record: RecordID, data: Value | None = None
+        self, record: RecordID | StringRecordId, data: Value | None = None
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def create(
@@ -306,7 +308,11 @@ class AsyncTemplate:
 
     @overload
     def update(
-        self, record: RecordID, data: Value | None = None, *, into: type[M]
+        self,
+        record: RecordID | StringRecordId,
+        data: Value | None = None,
+        *,
+        into: type[M],
     ) -> AsyncCrudBuilder[M]: ...
     @overload
     def update(
@@ -318,7 +324,7 @@ class AsyncTemplate:
     ) -> AsyncCrudBuilder[M | list[M]]: ...
     @overload
     def update(
-        self, record: RecordID, data: Value | None = None
+        self, record: RecordID | StringRecordId, data: Value | None = None
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def update(
@@ -346,7 +352,11 @@ class AsyncTemplate:
 
     @overload
     def upsert(
-        self, record: RecordID, data: Value | None = None, *, into: type[M]
+        self,
+        record: RecordID | StringRecordId,
+        data: Value | None = None,
+        *,
+        into: type[M],
     ) -> AsyncCrudBuilder[M]: ...
     @overload
     def upsert(
@@ -358,7 +368,7 @@ class AsyncTemplate:
     ) -> AsyncCrudBuilder[M | list[M]]: ...
     @overload
     def upsert(
-        self, record: RecordID, data: Value | None = None
+        self, record: RecordID | StringRecordId, data: Value | None = None
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def upsert(
@@ -386,7 +396,7 @@ class AsyncTemplate:
 
     @overload
     def delete(
-        self, record: RecordID, *, into: type[M]
+        self, record: RecordID | StringRecordId, *, into: type[M]
     ) -> AsyncCrudBuilder[M | None]: ...
     @overload
     def delete(self, record: Table, *, into: type[M]) -> AsyncCrudBuilder[list[M]]: ...
@@ -395,7 +405,9 @@ class AsyncTemplate:
         self, record: str, *, into: type[M]
     ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
+    def delete(
+        self, record: RecordID | StringRecordId
+    ) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def delete(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
