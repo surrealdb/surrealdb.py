@@ -18,6 +18,8 @@ from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.errors import TransportTimeoutError
 
+pytestmark = pytest.mark.slow
+
 _SLOW = "RETURN sleep(1500ms); RETURN 1"
 _SHORT = 0.3
 
@@ -253,7 +255,13 @@ _CONNECTIONS = (
 @pytest.mark.parametrize("connection", _CONNECTIONS, ids=lambda c: c.__name__)
 @pytest.mark.parametrize(
     ("value", "error"),
-    [(0, ValueError), (-1, ValueError), (float("nan"), ValueError), ("5", TypeError)],
+    [
+        (0, ValueError),
+        (-1, ValueError),
+        (float("nan"), ValueError),
+        (float("inf"), ValueError),
+        ("5", TypeError),
+    ],
 )
 def test_an_invalid_timeout_is_rejected(
     connection: type, value: Any, error: type[Exception]
