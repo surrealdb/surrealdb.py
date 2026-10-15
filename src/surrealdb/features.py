@@ -48,11 +48,16 @@ def _require_version(version: str) -> tuple[int, int, int]:
 def is_version_supported(
     version: str,
     minimum: str = MINIMUM_VERSION,
-    until: str = MAXIMUM_VERSION,
+    until: str | None = MAXIMUM_VERSION,
 ) -> bool:
-    """Whether *version* is at least *minimum* and below *until*."""
+    """Whether *version* is at least *minimum* and below *until*.
+
+    ``until=None`` sets no upper bound.
+    """
     parsed = _require_version(version)
-    return _require_version(minimum) <= parsed < _require_version(until)
+    if parsed < _require_version(minimum):
+        return False
+    return until is None or parsed < _require_version(until)
 
 
 @dataclass(frozen=True)
@@ -64,10 +69,12 @@ class Feature:
     until: str | None = None
 
     def supports(self, version: str) -> bool:
-        """Whether a server reporting *version* offers this feature."""
-        return is_version_supported(
-            version, self.since or MINIMUM_VERSION, self.until or MAXIMUM_VERSION
-        )
+        """Whether a server reporting *version* offers this feature.
+
+        A feature with no ``until`` has no upper bound, so it stays available
+        on a server newer than the SDK knows when ``version_check=False``.
+        """
+        return is_version_supported(version, self.since or MINIMUM_VERSION, self.until)
 
     def __str__(self) -> str:
         return self.name

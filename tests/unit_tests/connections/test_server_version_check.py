@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 import requests
 
-from surrealdb import AsyncSurreal, Features, Surreal
+from surrealdb import AsyncSurreal, Features, Surreal, streaming
 from surrealdb.connections import server_version
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
@@ -281,5 +281,49 @@ def test_blocking_ws_streaming_state_is_reset_by_a_new_socket(
         assert connection._streaming_refusal != "stale"
         if Features.QUERY_STREAMING.supports(version):
             assert connection._streaming_supported is None
+    finally:
+        connection.close()
+
+
+@pytest.fixture
+def stream_refusals(monkeypatch: pytest.MonkeyPatch) -> list[Exception]:
+    """Every refusal of a ``query_stream`` request the server sent."""
+    seen: list[Exception] = []
+    original = streaming.streaming_refused
+
+    def record(exc: Exception) -> str | None:
+        seen.append(exc)
+        return original(exc)
+
+    monkeypatch.setattr(streaming, "streaming_refused", record)
+    return seen
+
+
+async def test_a_first_query_on_an_old_server_never_tries_to_stream(
+    connection_params: dict[str, Any], stream_refusals: list[Exception]
+) -> None:
+    connection = AsyncWsSurrealConnection(connection_params["ws_url"])
+    try:
+        assert await connection.query("RETURN 1").first() == 1
+        version = connection.server_version
+        assert version is not None
+        if Features.QUERY_STREAMING.supports(version):
+            pytest.skip("needs a server older than 3.3")
+        assert stream_refusals == []
+    finally:
+        await connection.close()
+
+
+def test_blocking_a_first_query_on_an_old_server_never_tries_to_stream(
+    connection_params: dict[str, Any], stream_refusals: list[Exception]
+) -> None:
+    connection = BlockingWsSurrealConnection(connection_params["ws_url"])
+    try:
+        assert connection.query("RETURN 1").first() == 1
+        version = connection.server_version
+        assert version is not None
+        if Features.QUERY_STREAMING.supports(version):
+            pytest.skip("needs a server older than 3.3")
+        assert stream_refusals == []
     finally:
         connection.close()
