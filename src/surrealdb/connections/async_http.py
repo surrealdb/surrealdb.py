@@ -1,6 +1,7 @@
 import asyncio
 import uuid
 from collections.abc import AsyncGenerator, Sequence
+from contextlib import AbstractContextManager
 from types import TracebackType
 from typing import Any, cast, overload
 from uuid import UUID
@@ -17,6 +18,13 @@ from surrealdb.connections.builders import (
     _Executor,
 )
 from surrealdb.connections.files import AsyncFiles
+from surrealdb.connections.timeouts import (
+    DEFAULT_TIMEOUT,
+    check_timeout,
+    describe,
+    effective_timeout,
+    scoped_timeout,
+)
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import (
     AUTH_FALLBACK_QUERY,
@@ -68,13 +76,19 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
     def __init__(
         self,
         url: str,
+        *,
+        timeout: float | None = DEFAULT_TIMEOUT,
     ) -> None:
         """
         Constructor for the AsyncHttpSurrealConnection class.
 
         :param url: (str) The URL of the database to process queries for.
+        :param timeout: Seconds to wait for each request to complete, or
+            ``None`` to wait indefinitely. Defaults to 30. Override it for a
+            block of requests with :meth:`timeout`.
         """
         self.url: Url = Url(url)
+        self._timeout: float | None = check_timeout("timeout", timeout)
         self.raw_url: str = self.url.raw_url
         self.host: str | None = self.url.hostname
         self.port: int | None = self.url.port
@@ -84,6 +98,19 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         self.database: str | None = None
         self.vars: dict[str, Value] = {}
         self._session: aiohttp.ClientSession | None = None
+
+    def timeout(self, seconds: float | None) -> AbstractContextManager[None]:
+        """Wait *seconds* for each reply to a request made inside the block.
+
+        Overrides the connection's ``timeout`` for the code inside the ``with``
+        block only, so a slow import or a long report can wait longer without
+        changing the default for everything else on the connection. ``None``
+        waits indefinitely::
+
+            with db.timeout(300):
+                await db.query("SELECT * FROM big_table")
+        """
+        return scoped_timeout(self, seconds)
 
     async def _send(
         self,
@@ -128,19 +155,21 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin):
         operation: str,
         bypass: bool,
     ) -> dict[str, Any]:
+        timeout = effective_timeout(self, self._timeout)
         try:
             async with session.request(
                 method="POST",
                 url=url,
                 headers=headers,
                 data=data,
-                timeout=aiohttp.ClientTimeout(total=30),
+                timeout=aiohttp.ClientTimeout(total=timeout),
             ) as response:
                 status = response.status
                 raw_cbor = await response.read()
         except asyncio.TimeoutError as exc:
             raise TransportTimeoutError(
-                f"timed out while {operation} against {url}: {exc}"
+                f"timed out while {operation} against {url}: no reply "
+                f"{describe(timeout)}"
             ) from exc
         except aiohttp.ClientError as exc:
             raise ConnectionUnavailableError(
