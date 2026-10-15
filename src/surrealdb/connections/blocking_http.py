@@ -2,14 +2,13 @@ import inspect
 import threading
 import time
 import uuid
-from collections.abc import Generator, Iterator, Mapping, Sequence
+from collections.abc import Generator, Mapping, Sequence
 from contextlib import AbstractContextManager
 from types import TracebackType
 from typing import Any, overload
 from uuid import UUID
 
 import requests
-import urllib3
 
 from surrealdb.connections.api import (
     ApiResponse,
@@ -38,6 +37,7 @@ from surrealdb.connections.builders import (
 )
 from surrealdb.connections.files import BlockingFiles
 from surrealdb.connections.health import check_health
+from surrealdb.connections.http_body import read_body
 from surrealdb.connections.import_export import (
     ExportOptions,
     ExportTarget,
@@ -89,33 +89,6 @@ _NO_LIVE_QUERIES = (
     "Live queries are only supported for WebSocket connections; HTTP has no "
     "persistent connection for notifications to arrive on"
 )
-
-
-def _read_body(response: requests.Response, deadline: float | None) -> bytes:
-    """The whole body of *response*, unless *deadline* passes first.
-
-    Read with ``read1`` where urllib3 has it, which returns what has arrived
-    rather than waiting to fill the chunk, so the deadline is checked as the
-    body comes in.
-    """
-    if deadline is None:
-        return response.content
-    read1 = getattr(response.raw, "read1", None)
-    chunks: list[bytes] = []
-    try:
-        if read1 is None:
-            pieces: Iterator[bytes] = response.iter_content(1 << 12)
-        else:
-            pieces = iter(lambda: read1(1 << 16, decode_content=True), b"")
-        for chunk in pieces:
-            chunks.append(chunk)
-            if time.monotonic() > deadline:
-                raise TimeoutError("the reply was still arriving at the deadline")
-    except urllib3.exceptions.ReadTimeoutError as exc:
-        raise TimeoutError(str(exc)) from exc
-    except urllib3.exceptions.HTTPError as exc:
-        raise requests.exceptions.ConnectionError(str(exc)) from exc
-    return b"".join(chunks)
 
 
 class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin):
@@ -241,7 +214,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
                     url, headers=headers, data=data, timeout=timeout, stream=True
                 )
             with response:
-                content = _read_body(response, deadline)
+                content = read_body(response, deadline)
         except (requests.exceptions.Timeout, TimeoutError) as exc:
             raise TransportTimeoutError(
                 f"timed out while {operation} against {url}: no reply "
