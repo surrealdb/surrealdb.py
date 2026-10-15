@@ -21,6 +21,8 @@ from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from surrealdb.connections.async_template import AsyncTemplate
 from surrealdb.connections.auth_provider import (
+    RENEW_RETRY,
+    RENEW_RETRY_MAX,
     AuthCredentials,
     AuthProvider,
     check_auth_provider,
@@ -341,6 +343,8 @@ class AsyncWsSurrealConnection(
         self._auth_provider: AuthProvider | None = auth
         self._renew_access = renew_access
         self._renewal: asyncio.TimerHandle | None = None
+        self._renewing = False
+        self._renew_retry = RENEW_RETRY
         self._renewal_task: Task[None] | None = None
         self._registry = SessionRegistry()
         self._init_events()
@@ -777,10 +781,13 @@ class AsyncWsSurrealConnection(
             self._note_authenticated(None, token)
 
     def _root_auth_changed(self) -> None:
-        """Re-arm the renewal timer for the root session's new access token."""
-        if self._renewal is not None:
-            self._renewal.cancel()
-            self._renewal = None
+        """Re-arm the renewal timer for the root session's new access token.
+
+        A token that is already due when a renewal hands it over is not
+        renewed again straight away: renewing produced nothing newer, so
+        another attempt at once would only repeat it, without end.
+        """
+        self._cancel_renewal()
         root = self._registry.root
         if not self._renew_access or (
             root.refresh is None and self._auth_provider is None
@@ -789,6 +796,17 @@ class AsyncWsSurrealConnection(
         when = renew_at(root.access)
         if when is None:
             return
+        delay = when - time.time()
+        if delay <= 0 and self._renewing:
+            return
+        self._arm_renewal(max(0.0, delay))
+
+    def _cancel_renewal(self) -> None:
+        if self._renewal is not None:
+            self._renewal.cancel()
+            self._renewal = None
+
+    def _arm_renewal(self, delay: float) -> None:
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -800,7 +818,7 @@ class AsyncWsSurrealConnection(
             if connection is not None:
                 connection._start_renewal()
 
-        self._renewal = loop.call_later(max(0.0, when - time.time()), fire)
+        self._renewal = loop.call_later(delay, fire)
 
     def _start_renewal(self) -> None:
         self._renewal = None
@@ -809,8 +827,13 @@ class AsyncWsSurrealConnection(
         self._renewal_task = asyncio.get_running_loop().create_task(self._renew())
 
     async def _renew(self) -> None:
-        """Replace the access token before it expires."""
+        """Replace the access token before it expires.
+
+        A failed attempt is tried again after a delay that doubles each time,
+        up to a bound, so one transient failure does not let the token lapse.
+        """
         root = self._registry.root
+        self._renewing = True
         try:
             if root.refresh is not None and self.is_feature_supported(
                 Features.REFRESH_TOKENS
@@ -825,6 +848,13 @@ class AsyncWsSurrealConnection(
         except Exception as exc:
             logger.debug("renewing the access token failed: %s", exc)
             self._emit("error", exc)
+            if self._renewal is None and not self._closing:
+                self._arm_renewal(self._renew_retry)
+                self._renew_retry = min(self._renew_retry * 2, RENEW_RETRY_MAX)
+            return
+        finally:
+            self._renewing = False
+        self._renew_retry = RENEW_RETRY
 
     async def _restore(self) -> None:
         """Replay every session, then every live query, on the new socket."""
@@ -844,6 +874,7 @@ class AsyncWsSurrealConnection(
             await self._restore_session(session_id, state)
         for live in list(registry.live.values()):
             await self._restore_live(live)
+        self._root_auth_changed()
 
     async def _restore_session(
         self, session_id: UUID | None, state: SessionState, authenticate: bool = True
@@ -2227,9 +2258,7 @@ class AsyncWsSurrealConnection(
         left the old one with no way to release its socket.
         """
         self._closing = True
-        if self._renewal is not None:
-            self._renewal.cancel()
-            self._renewal = None
+        self._cancel_renewal()
         renewal = self._renewal_task
         self._renewal_task = None
         if (

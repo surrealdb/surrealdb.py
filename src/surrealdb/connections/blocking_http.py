@@ -1,4 +1,5 @@
 import inspect
+import threading
 import uuid
 from collections.abc import Generator, Sequence
 from contextlib import AbstractContextManager
@@ -102,6 +103,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         self._auth_provider: AuthProvider | None = auth
         self._renew_access = renew_access
         self._authorising = False
+        self._auth_lock = threading.RLock()
         self._timeout: float | None = check_timeout("timeout", timeout)
         self.raw_url: str = url.rstrip("/")
         self.host: str | None = self.url.hostname
@@ -153,7 +155,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         connection's identity - see :meth:`authenticate`. An empty *token*
         sends the request anonymously.
         """
-        if not self._authorising and message.method is not RequestMethod.VERSION:
+        if message.method is not RequestMethod.VERSION:
             self._authorise()
         if not self._version_learned and message.method is not RequestMethod.VERSION:
             self._handshake()
@@ -228,7 +230,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
     def signup(self, vars: dict[str, Value]) -> Tokens:
         message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
         self.id = message.id
-        response = self._send(message, "signup")
+        response = self._send(message, "signup", token="")
         self.check_response_for_result(response, "signup")
         tokens = parse_auth_result(response["result"])
         self.token = tokens.access
@@ -238,7 +240,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
     def signin(self, vars: dict[str, Value]) -> Tokens:
         message = RequestMessage(RequestMethod.SIGN_IN, params=vars)
         self.id = message.id
-        response = self._send(message, "signing in")
+        response = self._send(message, "signing in", token="")
         self.check_response_for_result(response, "signing in")
         tokens = parse_auth_result(response["result"])
         self.token = tokens.access
@@ -286,36 +288,48 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         if database is not None:
             self.database = None if isinstance(database, NullType) else database
 
-    def _authorise(self) -> None:
-        """Apply ``auth=`` before the first request, and renew when due."""
-        due = self._renew_access and renewal_due(self.token)
+    def _authorisation_due(self) -> bool:
         first = self._auth_provider is not None and self.token is None
-        if not (first or due):
+        return first or (self._renew_access and renewal_due(self.token))
+
+    def _authorise(self) -> None:
+        """Apply ``auth=`` before the first request, and renew when due.
+
+        One thread authorises at a time; the others wait for it and then find
+        nothing left to do. The requests authorising makes come back here on
+        the same thread and pass straight through.
+        """
+        if not self._authorisation_due():
             return
-        self._authorising = True
-        try:
-            if due and self._refresh_token is not None:
-                if not self._version_learned:
-                    self._handshake()
-                if self.is_feature_supported(Features.REFRESH_TOKENS):
-                    self.refresh()
-                    return
-            if self._auth_provider is None:
+        with self._auth_lock:
+            if self._authorising or not self._authorisation_due():
                 return
-            provided = self._provided_credentials()
-            if isinstance(provided, dict):
-                self.signin(provided)
-            elif isinstance(provided, str):
-                self.authenticate(provided)
-            elif provided.access is None:
-                raise ValueError(
-                    "auth gave Tokens with no access token to sign in with"
-                )
-            else:
-                self.authenticate(provided.access)
-                self._refresh_token = provided.refresh
-        finally:
-            self._authorising = False
+            self._authorising = True
+            try:
+                self._apply_auth()
+            finally:
+                self._authorising = False
+
+    def _apply_auth(self) -> None:
+        due = self._renew_access and renewal_due(self.token)
+        if due and self._refresh_token is not None:
+            if not self._version_learned:
+                self._handshake()
+            if self.is_feature_supported(Features.REFRESH_TOKENS):
+                self.refresh()
+                return
+        if self._auth_provider is None:
+            return
+        provided = self._provided_credentials()
+        if isinstance(provided, dict):
+            self.signin(provided)
+        elif isinstance(provided, str):
+            self.authenticate(provided)
+        elif provided.access is None:
+            raise ValueError("auth gave Tokens with no access token to sign in with")
+        else:
+            self.authenticate(provided.access)
+            self._refresh_token = provided.refresh
 
     def _provided_credentials(self) -> AuthCredentials:
         provider = self._auth_provider

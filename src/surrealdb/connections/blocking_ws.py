@@ -67,7 +67,6 @@ from surrealdb.errors import (
     ConnectionUnavailableError,
     NotAllowedError,
     ServerError,
-    SurrealError,
     TransportTimeoutError,
     UnexpectedResponseError,
     parse_query_error,
@@ -464,7 +463,7 @@ class BlockingWsSurrealConnection(
                 self._note_tokens(None, parse_auth_result(response["result"]))
             elif self._auth_provider is not None:
                 self._apply_auth_provider_locked()
-        except SurrealError as exc:
+        except Exception as exc:
             logger.debug("renewing the access token failed: %s", exc)
             self._emit("error", exc)
         finally:
@@ -502,7 +501,7 @@ class BlockingWsSurrealConnection(
                     self.socket = self._connect_socket()
                     self._handshake_locked()
                     self._restore_locked()
-                except (SurrealError, OSError, WebSocketException) as exc:
+                except Exception as exc:
                     logger.debug("reconnect attempt %d failed: %s", attempt, exc)
                     self._emit("error", exc)
                     continue
