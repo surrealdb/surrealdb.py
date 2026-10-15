@@ -30,12 +30,13 @@ from surrealdb.types import Value
 class _Subscription(UUID):
     """The shared part: a UUID that also knows its connection and session."""
 
-    __slots__ = ("_connection", "_killed", "_managed", "_session_id")
+    __slots__ = ("_connection", "_killed", "_managed", "_pending", "_session_id")
 
     _connection: Any  # pyright: ignore[reportUninitializedInstanceVariable]
     _session_id: UUID | None  # pyright: ignore[reportUninitializedInstanceVariable]
     _managed: bool  # pyright: ignore[reportUninitializedInstanceVariable]
     _killed: bool  # pyright: ignore[reportUninitializedInstanceVariable]
+    _pending: Any  # pyright: ignore[reportUninitializedInstanceVariable]
 
     def __init__(
         self,
@@ -49,6 +50,7 @@ class _Subscription(UUID):
         object.__setattr__(self, "_session_id", session_id)
         object.__setattr__(self, "_managed", managed)
         object.__setattr__(self, "_killed", False)
+        object.__setattr__(self, "_pending", None)
 
     @property
     def id(self) -> UUID:
@@ -71,6 +73,16 @@ class _Subscription(UUID):
     def _ended(self) -> None:
         object.__setattr__(self, "_killed", True)
 
+    def _hold(self, notifications: Any) -> None:
+        """Keep the notifications that arrive before anyone iterates."""
+        object.__setattr__(self, "_pending", notifications)
+
+    def _take(self) -> Any:
+        """The held notifications, for the first iteration to read."""
+        pending = self._pending
+        object.__setattr__(self, "_pending", None)
+        return pending
+
     def __reduce__(self) -> tuple[type[UUID], tuple[str]]:
         return (UUID, (str(self),))
 
@@ -84,7 +96,9 @@ class AsyncLiveSubscription(_Subscription):
     async def __aiter__(self) -> AsyncIterator[dict[str, Value]]:
         if self._killed:
             return
-        notifications = await self._connection.subscribe_live(self)
+        notifications = self._take()
+        if notifications is None:
+            notifications = await self._connection.subscribe_live(self)
         async for notification in notifications:
             yield notification
         self._ended()
@@ -118,9 +132,12 @@ class LiveSubscription(_Subscription):
     def __iter__(self) -> Iterator[dict[str, Value]]:
         if self._killed:
             return iter(())
-        # Subscribed here rather than on the first next(), so notifications
-        # from changes made after iter() but before reading are kept.
-        return self._follow(self._connection.subscribe_live(self))
+        notifications = self._take()
+        if notifications is None:
+            # Subscribed here rather than on the first next(), so notifications
+            # from changes made after iter() but before reading are kept.
+            notifications = self._connection.subscribe_live(self)
+        return self._follow(notifications)
 
     def _follow(
         self, notifications: Iterator[dict[str, Value]]

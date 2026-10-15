@@ -2257,6 +2257,9 @@ class AsyncWsSurrealConnection(
         self._registry.add_live(LiveQuery(live_id, live_id, table, diff, session_id))
         subscription = AsyncLiveSubscription(live_id, self, session_id, managed=True)
         self._live_tracker.add(subscription)
+        # Listening from now, so nothing that changes before the caller starts
+        # iterating is lost.
+        subscription._hold(self._open_live(subscription))  # pyright: ignore[reportPrivateUsage]
         return subscription
 
     def live_of(
@@ -2269,8 +2272,8 @@ class AsyncWsSurrealConnection(
         restarted after a reconnect, since the connection does not know it.
         """
         subscription = AsyncLiveSubscription(live_id, self, session_id, managed=False)
-        self.live_queues.setdefault(str(subscription), [])
         self._live_tracker.add(subscription)
+        subscription._hold(self._open_live(subscription))  # pyright: ignore[reportPrivateUsage]
         return subscription
 
     async def subscribe_live(
@@ -2288,6 +2291,12 @@ class AsyncWsSurrealConnection(
             changes to the table went undelivered - so it is raised rather than
             ending the iteration, matching the blocking transport.
         """
+        return self._open_live(query_uuid)
+
+    def _open_live(
+        self, query_uuid: str | UUID
+    ) -> AsyncGenerator[dict[str, Value], None]:
+        """The body of :meth:`subscribe_live`: registers at once, awaits nothing."""
         result_queue: Queue[Any] = Queue()
         suid = str(query_uuid)
 

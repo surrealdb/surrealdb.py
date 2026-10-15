@@ -235,3 +235,25 @@ def test_blocking_close_ends_a_subscription_cleanly(
     db.close()
     reader.join(10)
     assert outcome == [[]]
+
+
+async def test_changes_before_iterating_are_kept(
+    adb: AsyncWsSurrealConnection, table: str
+) -> None:
+    sub = await adb.live(table)
+    await adb.create(RecordID(table, 1), {"n": 1})
+    await asyncio.sleep(0.2)
+    change = await asyncio.wait_for(_first(sub), 5)
+    assert change["action"] == "CREATE"
+    await sub.kill()
+
+
+def test_blocking_changes_before_iterating_are_kept(
+    blocking_ws_connection: BlockingWsSurrealConnection, table: str
+) -> None:
+    db = blocking_ws_connection
+    sub = db.live(table)
+    db.create(RecordID(table, 1), {"n": 1})
+    db.query("RETURN 1;").execute()
+    assert next(iter(sub))["action"] == "CREATE"
+    sub.kill()

@@ -2056,6 +2056,9 @@ class BlockingWsSurrealConnection(
         self._registry.add_live(LiveQuery(live_id, live_id, table, diff, session_id))
         subscription = LiveSubscription(live_id, self, session_id, managed=True)
         self._live_tracker.add(subscription)
+        # Listening from now, so nothing that changes before the caller starts
+        # iterating is lost.
+        subscription._hold(self.subscribe_live(subscription))  # pyright: ignore[reportPrivateUsage]
         return subscription
 
     def live_of(
@@ -2068,8 +2071,8 @@ class BlockingWsSurrealConnection(
         restarted after a reconnect, since the connection does not know it.
         """
         subscription = LiveSubscription(live_id, self, session_id, managed=False)
-        self.live_queues.setdefault(str(subscription), [])
         self._live_tracker.add(subscription)
+        subscription._hold(self.subscribe_live(subscription))  # pyright: ignore[reportPrivateUsage]
         return subscription
 
     def kill(
