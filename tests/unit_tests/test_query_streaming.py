@@ -171,7 +171,7 @@ class _AsyncChannel:
     def ops(self) -> AsyncStreamOps:
         return AsyncStreamOps(
             registry=self.registry,
-            open_timeout=self.open_timeout,
+            request_timeout=lambda: self.open_timeout,
             open=self._open,
             release=self._release,
             send=self._send,
@@ -227,7 +227,7 @@ class _SyncChannel(_AsyncChannel):
     def ops(self) -> SyncStreamOps:  # type: ignore[override]
         return SyncStreamOps(
             registry=self.sync_registry,
-            open_timeout=self.open_timeout,
+            request_timeout=lambda: self.open_timeout,
             open=self._sync_open,
             release=self._release,
             send=self._sync_send,
@@ -2193,3 +2193,40 @@ async def test_the_frame_view_is_read_once_like_the_others() -> None:
     assert [f async for f in stream]
     with pytest.raises(SurrealError, match="already been consumed"):
         [f async for f in stream]
+
+
+def test_sync_a_stream_takes_the_timeout_in_force_when_it_starts() -> None:
+    """A stream built under one deadline and read under another uses the second.
+
+    The deadline is asked for when the request is sent, so wrapping only the
+    iteration in ``timeout()`` applies to it.
+    """
+    channel = _SyncChannel([], open_timeout=30.0)
+    stream = QueryStream(channel.ops(), "SELECT 1")
+    channel.open_timeout = 0.3
+    outcome: dict[str, BaseException] = {}
+
+    def drive() -> None:
+        try:
+            list(stream)
+        except BaseException as exc:
+            outcome["error"] = exc
+
+    thread = threading.Thread(target=drive, daemon=True)
+    thread.start()
+    thread.join(timeout=5)
+    assert not thread.is_alive(), "the deadline from construction was used"
+    assert isinstance(outcome.get("error"), TransportTimeoutError)
+
+
+async def test_async_a_stream_takes_the_timeout_in_force_when_it_starts() -> None:
+    channel = _AsyncChannel([], open_timeout=30.0)
+    stream = AsyncQueryStream(channel.ops(), "SELECT 1")
+    channel.open_timeout = 0.25
+
+    async def drive() -> None:
+        async for _ in stream:
+            pass
+
+    with pytest.raises(TransportTimeoutError):
+        await asyncio.wait_for(drive(), 3.0)
