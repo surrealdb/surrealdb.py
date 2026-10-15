@@ -1,6 +1,7 @@
 """The server version a remote connection learns when it connects."""
 
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 from surrealdb.errors import (
@@ -94,3 +95,8 @@ class ServerVersionMixin:
         if version is None or feature.supports(version):
             return
         raise UnavailableFeatureError(feature.name, version, feature.since)
+
+    def _require_signin(self, vars: Mapping[str, Any]) -> None:
+        """Refuse a refresh-token sign-in before sending it to a 2.x server."""
+        if vars.get("refresh") is not None:
+            self._require(Features.REFRESH_TOKENS)
