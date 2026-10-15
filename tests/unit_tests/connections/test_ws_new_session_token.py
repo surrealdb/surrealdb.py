@@ -1,9 +1,11 @@
+from typing import TypeVar
 from uuid import UUID, uuid4
 
 import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+from surrealdb.connections.reconnect import SessionRegistry
 from surrealdb.errors import NotAllowedError
 
 EXPIRED = NotAllowedError(
@@ -13,10 +15,20 @@ EXPIRED = NotAllowedError(
 )
 DENIED = NotAllowedError("NotAllowed", "Anonymous access not allowed")
 
+C = TypeVar("C", AsyncWsSurrealConnection, BlockingWsSurrealConnection)
+
+
+def _bare(cls: type[C]) -> C:
+    """A connection with no socket, holding only the session state."""
+    conn = object.__new__(cls)
+    conn._registry = SessionRegistry()
+    conn._init_events()
+    return conn
+
 
 @pytest.mark.asyncio
 async def test_async_new_session_survives_expired_token() -> None:
-    conn = object.__new__(AsyncWsSurrealConnection)
+    conn = _bare(AsyncWsSurrealConnection)
     conn.token = "expired"
     sid = uuid4()
 
@@ -35,7 +47,7 @@ async def test_async_new_session_survives_expired_token() -> None:
 
 @pytest.mark.asyncio
 async def test_async_new_session_detaches_on_other_errors() -> None:
-    conn = object.__new__(AsyncWsSurrealConnection)
+    conn = _bare(AsyncWsSurrealConnection)
     conn.token = "bad"
     detached: list[UUID] = []
     sid = uuid4()
@@ -58,7 +70,7 @@ async def test_async_new_session_detaches_on_other_errors() -> None:
 
 
 def test_blocking_new_session_survives_expired_token() -> None:
-    conn = object.__new__(BlockingWsSurrealConnection)
+    conn = _bare(BlockingWsSurrealConnection)
     conn.token = "expired"
     sid = uuid4()
 
@@ -72,7 +84,7 @@ def test_blocking_new_session_survives_expired_token() -> None:
 
 
 def test_blocking_session_signin_keeps_connection_token() -> None:
-    conn = object.__new__(BlockingWsSurrealConnection)
+    conn = _bare(BlockingWsSurrealConnection)
     conn.token = "connection-jwt"
     conn._send = lambda message, action: {"result": "session-jwt"}  # type: ignore
     conn.check_response_for_result = lambda response, action: None  # type: ignore

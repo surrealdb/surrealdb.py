@@ -25,7 +25,6 @@ from surrealdb.connections.builders import (
     SyncQueryBuilder,
     SyncRows,
 )
-from surrealdb.connections.events import ConnectionEvent, ConnectionStatus
 from surrealdb.connections.files import AsyncFiles, BlockingFiles, FileMetadata
 from surrealdb.connections.reconnect import ReconnectOptions
 from surrealdb.connections.url import Url, UrlScheme
@@ -215,8 +214,6 @@ __all__ = [
     "escape_identifier",
     # Server versions and the features gated on them
     "Feature",
-    "ConnectionEvent",
-    "ConnectionStatus",
     "Features",
     "MAXIMUM_VERSION",
     "MINIMUM_VERSION",

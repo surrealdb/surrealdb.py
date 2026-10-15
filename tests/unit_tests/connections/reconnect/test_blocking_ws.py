@@ -18,7 +18,7 @@ from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.connections.events import EVENTS
 from surrealdb.errors import ConnectionUnavailableError
 from surrealdb.features import Features
-from tests.unit_tests.connections.reconnect.conftest import DroppableProxy
+from tests.unit_tests.connections.reconnect.proxy import DroppableProxy
 
 _FAST = ReconnectOptions(retry_delay=0.05, retry_delay_max=0.2)
 
