@@ -1319,6 +1319,9 @@ class AsyncWsSurrealConnection(
     async def signin(
         self, vars: dict[str, Value], session_id: UUID | None = None
     ) -> Tokens:
+        if not self._version_learned:
+            await self.connect()
+        self._require_signin(vars)
         kwargs: dict[str, Any] = {"params": vars}
         if session_id is not None:
             kwargs["session"] = session_id
