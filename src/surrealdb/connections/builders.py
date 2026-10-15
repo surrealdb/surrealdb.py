@@ -65,6 +65,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import re
 import threading
 import warnings
@@ -78,7 +79,7 @@ from collections.abc import (
     Sequence,
 )
 from dataclasses import fields, is_dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -92,7 +93,7 @@ from typing import (
     overload,
 )
 
-from surrealdb.data.types.datetime import Datetime
+from surrealdb.data.types.datetime import Datetime, PreciseDatetime
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.range import Range
 from surrealdb.data.types.record_id import RecordID, RecordIdType, escape_identifier
@@ -454,7 +455,39 @@ Output = Literal["none", "null", "diff", "before", "after"]
 _OUTPUTS = ("none", "null", "diff", "before", "after")
 
 # One end of a RELATE: a record, or several to relate each of.
-RelateEnd: TypeAlias = RecordIdType | Sequence[RecordID]
+RelateEnd: TypeAlias = RecordID | str | Sequence[RecordID]
+
+
+def _datetime_literal(at: datetime | Datetime) -> str:
+    """*at* as a SurrealQL datetime literal.
+
+    ``VERSION`` takes a literal, not a parameter, on SurrealDB 2.0; later
+    servers take both. The text is JSON-quoted, so it cannot break out of the
+    literal. A naive ``datetime`` is read as UTC, as when it is sent as a value.
+    """
+    if isinstance(at, Datetime):
+        return str(at)
+    if isinstance(at, PreciseDatetime):
+        text = at.isoformat_with_nanoseconds()
+    else:
+        text = (at if at.tzinfo else at.replace(tzinfo=timezone.utc)).isoformat()
+    return f"d{json.dumps(text)}"
+
+
+def _check_relate_end(end: object, side: str) -> None:
+    """Refuse a RELATE end that is not a record, or a list of records."""
+    items: Sequence[object] = (
+        end if isinstance(end, Sequence) and not isinstance(end, str) else [end]
+    )
+    for item in items:
+        if isinstance(item, RecordID) or (isinstance(item, str) and ":" in item):
+            continue
+        raise TypeError(
+            f"relate() relates records, so {side} must be a RecordID, a "
+            f"'table:id' string, or a list of RecordIDs; got {item!r}. To "
+            "relate every record of a table, select them and pass the list"
+        )
+
 
 _S = TypeVar("_S", bound="_CrudState")
 
@@ -653,8 +686,7 @@ class _CrudState(_WarnIfDropped):
         if self._fetch:
             parts.append(f"FETCH {', '.join(self._fetch)}")
         if self._version is not None:
-            variables["_version"] = self._version
-            parts.append("VERSION $_version")
+            parts.append(f"VERSION {_datetime_literal(self._version)}")
         if self._timeout is not None:
             parts.append(f"TIMEOUT {self._timeout}")
         return "".join(f" {part}" for part in parts)
@@ -780,7 +812,15 @@ def relate_builder(
             "relate() takes the edge as a table name, a Table or a RecordID; "
             f"got {type(edge).__name__}"
         )
-    single = not _is_many(from_) and not _is_many(to)
+    _check_relate_end(from_, "from_")
+    _check_relate_end(to, "to")
+    many = _is_many(from_) or _is_many(to)
+    if many and isinstance(edge, RecordID):
+        raise ValueError(
+            "relate() cannot give one edge id to several relations; pass the "
+            "edge table name, so that each relation gets its own id"
+        )
+    single = not many
     single = (
         single
         and _is_single_record_operation(cast(RecordIdType, from_))
