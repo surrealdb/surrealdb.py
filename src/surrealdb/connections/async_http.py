@@ -1106,7 +1106,9 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
     # is not a ``SurrealError``, so ``except SurrealError`` missed it even
     # though ``attach()`` beside it was covered.
 
-    async def live(self, table: str | Table, diff: bool = False) -> UUID:
+    async def live(
+        self, table: str | Table, diff: bool = False
+    ) -> AsyncLiveSubscription:
         raise UnsupportedFeatureError(_NO_LIVE_QUERIES)
 
     async def kill(self, query_uuid: str | UUID) -> None:

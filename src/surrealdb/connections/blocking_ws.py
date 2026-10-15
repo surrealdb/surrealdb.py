@@ -56,7 +56,7 @@ from surrealdb.connections.import_export import (
     export_sql_to,
     import_sql,
 )
-from surrealdb.connections.live import LiveSubscription
+from surrealdb.connections.live import LiveSubscription, SubscriptionTracker
 from surrealdb.connections.reconnect import (
     LiveQuery,
     ReconnectOptions,
@@ -236,6 +236,7 @@ class BlockingWsSurrealConnection(
         # notifications ``_send`` reads while correlating an RPC reply are
         # handed off instead of being lost.
         self.live_queues: dict[str, list[queue.Queue[dict[str, Any]]]] = {}
+        self._live_tracker = SubscriptionTracker()
         # Ids of requests abandoned by a timeout. The server still answers
         # them, and that reply arrives while some later request is waiting, so
         # it has to be recognised and dropped rather than mistaken for the
@@ -327,7 +328,7 @@ class BlockingWsSurrealConnection(
             target = Url(url)
             target_raw = f"{target.raw_url}/rpc"
             if self.socket is not None and target_raw != self.raw_url:
-                self.close()
+                self._shut()
             # Applied whether or not the socket had to go: skipping this when
             # the endpoint compares equal means any part of the URL the
             # comparison does not look at gets silently dropped.
@@ -350,7 +351,7 @@ class BlockingWsSurrealConnection(
             if self._reconnect.enabled:
                 self._reconnect_locked()
                 return
-            self.close()
+            self._shut()
 
         self._open_locked()
 
@@ -375,7 +376,7 @@ class BlockingWsSurrealConnection(
             if self._reconnect.enabled:
                 self._reconnect_locked()
             else:
-                self.close()
+                self._shut()
                 self._open_locked()
         if not self._reconnecting:
             self._renew_locked()
@@ -424,7 +425,7 @@ class BlockingWsSurrealConnection(
             if self._auth_provider is not None:
                 self._apply_auth_provider_locked()
         except BaseException:
-            self.close()
+            self._shut()
             raise
         self._set_status("connected", self._server_version)
 
@@ -530,6 +531,7 @@ class BlockingWsSurrealConnection(
             self._reconnecting = False
         self._drop_socket()
         self._registry.clear()
+        self._live_tracker.ended()
         error = ConnectionUnavailableError(
             f"the connection to {self.raw_url} dropped and could not be "
             f"re-established after {attempt - 1} attempt(s)"
@@ -611,6 +613,7 @@ class BlockingWsSurrealConnection(
             self._emit("error", exc)
             logical = str(live.logical)
             self._registry.drop_live(logical)
+            self._live_tracker.ended(logical)
             for notifications in self.live_queues.get(logical, []):
                 notifications.put(_LIVE_BROKEN_SENTINEL)
             return
@@ -787,6 +790,7 @@ class BlockingWsSurrealConnection(
             result["id"] = UUID(logical)
         if result.get("action") == _LIVE_KILLED:
             self._registry.drop_live(logical)
+            self._live_tracker.ended(logical)
         return logical
 
     def authenticate(self, token: str, session_id: UUID | None = None) -> None:
@@ -2050,7 +2054,9 @@ class BlockingWsSurrealConnection(
         self.check_response_for_result(response, "live")
         live_id = UUID(str(response["result"]))
         self._registry.add_live(LiveQuery(live_id, live_id, table, diff, session_id))
-        return LiveSubscription(live_id, self, session_id, managed=True)
+        subscription = LiveSubscription(live_id, self, session_id, managed=True)
+        self._live_tracker.add(subscription)
+        return subscription
 
     def live_of(
         self, live_id: str | UUID, session_id: UUID | None = None
@@ -2063,6 +2069,7 @@ class BlockingWsSurrealConnection(
         """
         subscription = LiveSubscription(live_id, self, session_id, managed=False)
         self.live_queues.setdefault(str(subscription), [])
+        self._live_tracker.add(subscription)
         return subscription
 
     def kill(
@@ -2094,6 +2101,7 @@ class BlockingWsSurrealConnection(
         self._send(message, "kill")
 
         self._registry.drop_live(suid)
+        self._live_tracker.ended(suid)
         for notifications in self.live_queues.get(suid, []):
             notifications.put(_LIVE_KILLED_SENTINEL)
 
@@ -2188,6 +2196,9 @@ class BlockingWsSurrealConnection(
                     except TimeoutError:
                         data = None
                     except (ConnectionClosed, WebSocketException, OSError) as exc:
+                        if not notifications.empty():
+                            # close() left the end-of-subscription marker.
+                            continue
                         if self._reconnect.enabled and suid in self._registry.live:
                             # Replays this query under a new server-side id
                             # that still routes to `suid`; carry on reading.
@@ -2264,6 +2275,7 @@ class BlockingWsSurrealConnection(
         for logical, live in list(self._registry.live.items()):
             if live.session_id == session_id:
                 self._registry.drop_live(logical)
+                self._live_tracker.ended(logical)
                 for notifications in self.live_queues.get(logical, []):
                     notifications.put(_LIVE_KILLED_SENTINEL)
 
@@ -2377,16 +2389,29 @@ class BlockingWsSurrealConnection(
         unauthenticated and with no namespace or database selected; sign in and
         ``use()`` again after reconnecting.
         """
+        # Live subscriptions end cleanly, as on the async transport: the
+        # caller closed the connection, so nothing was lost to a failure.
+        for queues in self.live_queues.values():
+            for notifications in queues:
+                notifications.put(_LIVE_KILLED_SENTINEL)
+        self._shut()
+
+    def _shut(self) -> None:
+        """Drop the socket and the session state behind it.
+
+        What :meth:`close` does, less ending live subscriptions cleanly: used
+        when a dead socket is found, so a subscriber hears of the failure.
+        """
         # Streams get an error rather than a clean end: a caller iterating rows
         # asked for all of them, and a socket taken away mid-stream means it
-        # will not get them. `_connect_locked` calls `close()` itself when it
-        # finds a dead socket, so this is reachable without the caller closing
-        # anything.
+        # will not get them. `_connect_locked` shuts a dead socket itself, so
+        # this is reachable without the caller closing anything.
         self._break_streams(
             ConnectionUnavailableError(
                 "the connection was closed while a streaming query was open."
             )
         )
+        self._live_tracker.ended()
         if self.socket is not None:
             try:
                 self.socket.close()

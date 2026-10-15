@@ -2,6 +2,7 @@
 
 import asyncio
 import copy
+import threading
 import uuid
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
@@ -148,3 +149,89 @@ def test_http_has_no_live_queries(connection_params: dict[str, Any]) -> None:
     db = Surreal(connection_params["url"])
     with pytest.raises(UnsupportedFeatureError):
         db.live_of(uuid.uuid4())
+
+
+async def test_iterating_a_killed_subscription_ends_at_once(
+    adb: AsyncWsSurrealConnection, table: str
+) -> None:
+    sub = await adb.live(table)
+    await sub.kill()
+    assert await asyncio.wait_for(_first(sub), 5) is None
+
+
+def test_blocking_iterating_a_killed_subscription_ends_at_once(
+    blocking_ws_connection: BlockingWsSurrealConnection, table: str
+) -> None:
+    sub = blocking_ws_connection.live(table)
+    sub.kill()
+    assert list(sub) == []
+
+
+async def test_a_failed_kill_leaves_the_subscription_alive(
+    adb: AsyncWsSurrealConnection, table: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sub = await adb.live(table)
+    real_kill = adb.kill
+
+    async def failing_kill(*_args: Any, **_kwargs: Any) -> None:
+        raise ConnectionError("the socket dropped")
+
+    monkeypatch.setattr(adb, "kill", failing_kill)
+    with pytest.raises(ConnectionError):
+        await sub.kill()
+    assert sub.is_alive
+    monkeypatch.setattr(adb, "kill", real_kill)
+    await sub.kill()
+    assert not sub.is_alive
+
+
+async def test_is_alive_follows_the_connection(
+    connection_params: dict[str, Any], table: str
+) -> None:
+    db = AsyncWsSurrealConnection(connection_params["ws_url"])
+    await db.signin(connection_params["vars_params"])
+    await db.use(connection_params["namespace"], connection_params["database_name"])
+    killed = await db.live(table)
+    await db.kill(killed)
+    assert not killed.is_alive
+    left = await db.live(table)
+    attached = db.live_of(await db.live(table))
+    await db.close()
+    assert not left.is_alive and not attached.is_alive
+
+
+def test_blocking_is_alive_follows_the_connection(
+    connection_params: dict[str, Any], table: str
+) -> None:
+    db = BlockingWsSurrealConnection(connection_params["ws_url"])
+    db.signin(connection_params["vars_params"])
+    db.use(connection_params["namespace"], connection_params["database_name"])
+    killed = db.live(table)
+    db.kill(killed)
+    assert not killed.is_alive
+    left = db.live(table)
+    db.close()
+    assert not left.is_alive
+
+
+def test_blocking_close_ends_a_subscription_cleanly(
+    connection_params: dict[str, Any], table: str
+) -> None:
+    db = BlockingWsSurrealConnection(connection_params["ws_url"])
+    db.signin(connection_params["vars_params"])
+    db.use(connection_params["namespace"], connection_params["database_name"])
+    sub = db.live(table)
+    outcome: list[Any] = []
+    notifications = iter(sub)
+
+    def consume() -> None:
+        try:
+            outcome.append(list(notifications))
+        except Exception as exc:
+            outcome.append(exc)
+
+    reader = threading.Thread(target=consume)
+    reader.start()
+    db.close()
+    reader.join(10)
+    assert outcome == [[]]

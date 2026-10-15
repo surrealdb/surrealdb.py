@@ -1084,7 +1084,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
     # is not a ``SurrealError``, so ``except SurrealError`` missed it even
     # though ``attach()`` beside it was covered.
 
-    def live(self, table: str | Table, diff: bool = False) -> UUID:
+    def live(self, table: str | Table, diff: bool = False) -> LiveSubscription:
         raise UnsupportedFeatureError(_NO_LIVE_QUERIES)
 
     def kill(self, query_uuid: str | UUID) -> None:

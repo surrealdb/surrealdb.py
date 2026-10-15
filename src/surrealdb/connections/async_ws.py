@@ -57,7 +57,7 @@ from surrealdb.connections.import_export import (
     aexport_sql_to,
     aimport_sql,
 )
-from surrealdb.connections.live import AsyncLiveSubscription
+from surrealdb.connections.live import AsyncLiveSubscription, SubscriptionTracker
 from surrealdb.connections.reconnect import (
     LiveQuery,
     ReconnectOptions,
@@ -390,6 +390,7 @@ class AsyncWsSurrealConnection(
         # Queues hold live-notification dicts plus the ``_LIVE_QUEUE_CLOSED``
         # sentinel, so the value type is ``Any``.
         self.live_queues: dict[str, list[Queue[Any]]] = {}
+        self._live_tracker = SubscriptionTracker()
         # Guards socket creation - see `_connect_guard`. Built on first use
         # rather than here: an `asyncio.Lock` binds to the loop that first
         # awaits it, and these connections are routinely constructed outside
@@ -603,6 +604,7 @@ class AsyncWsSurrealConnection(
                     response_result["id"] = UUID(live_id)
                 if response_result.get("action") == _LIVE_KILLED:
                     self._registry.drop_live(live_id)
+                    self._live_tracker.ended(live_id)
                 for queue in self.live_queues.get(live_id, []):
                     queue.put_nowait(response_result)
             else:
@@ -677,6 +679,7 @@ class AsyncWsSurrealConnection(
                 continue
             for queue in queues:
                 queue.put_nowait(_LIVE_QUEUE_BROKEN)
+        self._live_tracker.ended(keep=self._registry.live.keys() if replaying else ())
         if not unexpected:
             return
         if not replaying:
@@ -741,6 +744,7 @@ class AsyncWsSurrealConnection(
         for queues in self.live_queues.values():
             for queue in queues:
                 queue.put_nowait(_LIVE_QUEUE_BROKEN)
+        self._live_tracker.ended()
         self._registry.clear()
         self._set_status("disconnected")
         self._emit("error", error)
@@ -954,6 +958,7 @@ class AsyncWsSurrealConnection(
     def _end_live(self, logical: str, sentinel: object) -> None:
         """Stop tracking a live query and end its subscriptions with *sentinel*."""
         self._registry.drop_live(logical)
+        self._live_tracker.ended(logical)
         for queue in self.live_queues.pop(logical, []):
             queue.put_nowait(sentinel)
 
@@ -2250,7 +2255,9 @@ class AsyncWsSurrealConnection(
         self.live_queues[str(uuid)] = []
         live_id = UUID(str(uuid))
         self._registry.add_live(LiveQuery(live_id, live_id, table, diff, session_id))
-        return AsyncLiveSubscription(live_id, self, session_id, managed=True)
+        subscription = AsyncLiveSubscription(live_id, self, session_id, managed=True)
+        self._live_tracker.add(subscription)
+        return subscription
 
     def live_of(
         self, live_id: str | UUID, session_id: UUID | None = None
@@ -2263,6 +2270,7 @@ class AsyncWsSurrealConnection(
         """
         subscription = AsyncLiveSubscription(live_id, self, session_id, managed=False)
         self.live_queues.setdefault(str(subscription), [])
+        self._live_tracker.add(subscription)
         return subscription
 
     async def subscribe_live(
@@ -2492,6 +2500,7 @@ class AsyncWsSurrealConnection(
         for queues in self.live_queues.values():
             for queue in queues:
                 queue.put_nowait(_LIVE_QUEUE_CLOSED)
+        self._live_tracker.ended()
         await self._teardown()
         # A new socket is a new server-side session, so nothing about this one
         # is replayed into it.

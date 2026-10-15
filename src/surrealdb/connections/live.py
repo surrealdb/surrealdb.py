@@ -18,7 +18,8 @@ A subscription ends cleanly when the query is killed, by this client or any
 other, and when the connection closes.
 """
 
-from collections.abc import AsyncIterator, Iterator
+import weakref
+from collections.abc import AsyncIterator, Container, Iterator
 from types import TracebackType
 from typing import Any
 from uuid import UUID
@@ -63,7 +64,8 @@ class _Subscription(UUID):
     @property
     def is_alive(self) -> bool:
         """Whether the query is still running, as far as this client knows:
-        ``False`` once it is killed or its notifications have ended."""
+        ``False`` once it is killed - through the subscription or the
+        connection - its notifications have ended, or the connection closed."""
         return not self._killed
 
     def _ended(self) -> None:
@@ -80,17 +82,23 @@ class AsyncLiveSubscription(_Subscription):
     """A live query on an async connection."""
 
     async def __aiter__(self) -> AsyncIterator[dict[str, Value]]:
+        if self._killed:
+            return
         notifications = await self._connection.subscribe_live(self)
         async for notification in notifications:
             yield notification
         self._ended()
 
     async def kill(self) -> None:
-        """Stop the live query. Iterators over it end."""
+        """Stop the live query. Iterators over it end.
+
+        Does nothing if the query has already ended. If the request fails the
+        subscription stays alive, so the kill can be tried again.
+        """
         if self._killed:
             return
-        object.__setattr__(self, "_killed", True)
         await self._connection.kill(self, session_id=self._session_id)
+        self._ended()
 
     async def __aenter__(self) -> "AsyncLiveSubscription":
         return self
@@ -108,6 +116,8 @@ class LiveSubscription(_Subscription):
     """A live query on a blocking connection."""
 
     def __iter__(self) -> Iterator[dict[str, Value]]:
+        if self._killed:
+            return iter(())
         # Subscribed here rather than on the first next(), so notifications
         # from changes made after iter() but before reading are kept.
         return self._follow(self._connection.subscribe_live(self))
@@ -119,11 +129,15 @@ class LiveSubscription(_Subscription):
         self._ended()
 
     def kill(self) -> None:
-        """Stop the live query. Iterators over it end."""
+        """Stop the live query. Iterators over it end.
+
+        Does nothing if the query has already ended. If the request fails the
+        subscription stays alive, so the kill can be tried again.
+        """
         if self._killed:
             return
-        object.__setattr__(self, "_killed", True)
         self._connection.kill(self, session_id=self._session_id)
+        self._ended()
 
     def __enter__(self) -> "LiveSubscription":
         return self
@@ -135,3 +149,27 @@ class LiveSubscription(_Subscription):
         traceback: TracebackType | None,
     ) -> None:
         self.kill()
+
+
+class SubscriptionTracker:
+    """The subscriptions a connection handed out, held weakly, so that it can
+    tell them when their query ends some other way: ``db.kill(id)``, a
+    ``KILLED`` notification, a reset or detached session, or a closed
+    connection."""
+
+    def __init__(self) -> None:
+        self._subscriptions: weakref.WeakValueDictionary[int, _Subscription] = (
+            weakref.WeakValueDictionary()
+        )
+
+    def add(self, subscription: _Subscription) -> None:
+        self._subscriptions[id(subscription)] = subscription
+
+    def ended(self, live_id: str | None = None, keep: Container[str] = ()) -> None:
+        """Mark the subscriptions to *live_id*, or to every query but those in
+        *keep*, ended."""
+        for key, subscription in list(self._subscriptions.items()):
+            name = str(subscription)
+            if (live_id is None and name not in keep) or name == live_id:
+                self._subscriptions.pop(key, None)
+                subscription._ended()  # pyright: ignore[reportPrivateUsage]

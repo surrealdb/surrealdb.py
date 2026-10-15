@@ -416,7 +416,7 @@ class SyncTemplate:
         """Run a SurrealDB function and return its result."""
         raise NotImplementedError(f"run not implemented for: {self}")
 
-    def live(self, table: str | Table, diff: bool = False) -> UUID:
+    def live(self, table: str | Table, diff: bool = False) -> LiveSubscription:
         """Initiate a live query on the given table."""
         raise NotImplementedError(f"live not implemented for: {self}")
 

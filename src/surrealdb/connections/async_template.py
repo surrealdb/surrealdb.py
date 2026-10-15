@@ -498,7 +498,9 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"run not implemented for: {self}")
 
-    async def live(self, table: str | Table, diff: bool = False) -> UUID:
+    async def live(
+        self, table: str | Table, diff: bool = False
+    ) -> AsyncLiveSubscription:
         """Initiate a live query on the given table.
 
         Args:
