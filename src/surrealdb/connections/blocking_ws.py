@@ -290,6 +290,12 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin):
         with self._lock:
             return self._send_locked(message, process, bypass)
 
+    def _ensure_open(self) -> None:
+        """Open the socket if there is none, as the next request would."""
+        with self._lock:
+            if self.socket is None:
+                self._open_locked()
+
     def _open_locked(self) -> None:
         """Open the socket and check the server version, with the lock held."""
         self.socket = self._connect_socket()
@@ -1634,7 +1640,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin):
                 self.live_queues.pop(suid, None)
 
     def attach(self) -> UUID:
-        self.connect()
+        self._ensure_open()
         self._require(Features.SESSIONS)
         session_id = UUID(str(uuid.uuid4()))
         message = RequestMessage(RequestMethod.ATTACH, session=session_id)
@@ -1648,7 +1654,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin):
         self._send(message, "detach")
 
     def begin(self, session_id: UUID | None = None) -> UUID:
-        self.connect()
+        self._ensure_open()
         self._require(Features.TRANSACTIONS)
         kwargs: dict[str, Any] = {}
         if session_id is not None:
