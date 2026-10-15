@@ -120,6 +120,12 @@ def test_a_quoted_dot_dot_is_one_record(db: Blocking) -> None:
     assert isinstance(db.select(StringRecordId("person:1..=1")).execute(), list)
 
 
+def test_a_bracketed_dot_dot_is_one_record(db: Blocking) -> None:
+    assert db.select(StringRecordId("person:[1..2]")).execute() is None
+    assert db.select(StringRecordId("person:{a: 1..2}")).execute() is None
+    assert isinstance(db.select(StringRecordId("person:[1]..[3]")).execute(), list)
+
+
 def test_relate_takes_string_record_ids(db: Blocking) -> None:
     edge: Any = db.relate(
         StringRecordId("person:⟨a:b⟩"),

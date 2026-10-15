@@ -146,8 +146,6 @@ def tag_decoder(
 
     elif tag.tag == constants.TAG_RECORD_ID:
         if isinstance(tag.value, str):
-            # The form a StringRecordId is sent in: SurrealQL for the server
-            # to parse. Kept as written, so it encodes back the same.
             return StringRecordId._unchecked(tag.value)  # pyright: ignore[reportPrivateUsage]
         # `_unchecked`, not the constructor: the constructor validates the id
         # type, and applying that to a value the *server* chose would turn a

@@ -445,7 +445,4 @@ class StringRecordId:
         return handler(core_schema.str_schema())
 
 
-# Defined after both classes, so it holds them rather than names of them: a
-# string member would be a ForwardRef, resolved in whichever module reads the
-# annotation, where ``StringRecordId`` may not be imported.
 RecordIdType = str | RecordID | StringRecordId | Table
