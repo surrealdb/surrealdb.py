@@ -28,8 +28,10 @@ from surrealdb.connections.files import BlockingFiles
 from surrealdb.connections.health import check_health
 from surrealdb.connections.import_export import (
     ExportOptions,
+    ExportTarget,
     ImportData,
     export_sql,
+    export_sql_to,
     import_sql,
 )
 from surrealdb.connections.server_version import ServerVersionMixin
@@ -422,10 +424,44 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         Example:
             sql = db.export(ExportOptions(tables=["person"], records=False))
         """
+        options = options or ExportOptions()
         self._authorise()
+        if not self._version_learned:
+            self._handshake()
+        options.check(self._server_version)
         return export_sql(
             self.url,
-            options or ExportOptions(),
+            options,
+            effective_timeout(self, self._timeout),
+            self.token,
+            self.namespace,
+            self.database,
+        )
+
+    def export_to(
+        self, target: ExportTarget, options: ExportOptions | None = None
+    ) -> None:
+        """Export the selected database as SurrealQL into *target*.
+
+        Writes the export as it arrives, so one too large to hold in memory
+        can still be saved.
+
+        Args:
+            target: The path of a file to write, or a binary file object.
+            options: What to include, as for :meth:`export`.
+
+        Example:
+            db.export_to("backup.surql")
+        """
+        options = options or ExportOptions()
+        self._authorise()
+        if not self._version_learned:
+            self._handshake()
+        options.check(self._server_version)
+        export_sql_to(
+            self.url,
+            options,
+            target,
             effective_timeout(self, self._timeout),
             self.token,
             self.namespace,
