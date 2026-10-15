@@ -200,6 +200,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         self.id = message.id
         self._send(message, "invalidating")
         self.token = None
+        self._refresh_token = None
 
     def signup(self, vars: dict[str, Value]) -> Tokens:
         message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
@@ -269,13 +270,13 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         given, and sends the new access token from then on. The old refresh
         token is spent. Needs SurrealDB 3.0 or later.
         """
-        pair = self._token_pair(tokens, "refresh()")
         if not self._version_learned:
             self._handshake()
         self._require(Features.REFRESH_TOKENS)
+        pair = self._token_pair(tokens, "refresh()")
         message = RequestMessage(RequestMethod.REFRESH, params=[pair])
         self.id = message.id
-        response = self._send(message, "refreshing the tokens")
+        response = self._send(message, "refreshing the tokens", token="")
         self.check_response_for_result(response, "refreshing the tokens")
         renewed = parse_auth_result(response["result"])
         self.token = renewed.access
@@ -287,10 +288,10 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
 
         Needs SurrealDB 3.0 or later.
         """
-        pair = self._token_pair(tokens, "revoke()")
         if not self._version_learned:
             self._handshake()
         self._require(Features.REFRESH_TOKENS)
+        pair = self._token_pair(tokens, "revoke()")
         message = RequestMessage(RequestMethod.REVOKE, params=[pair])
         self.id = message.id
         self._send(message, "revoking a refresh token")
@@ -301,8 +302,12 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         """Forget the namespace, database, variables and authentication.
 
         Over HTTP these live on the client and are sent with each request, so
-        there is nothing to tell the server.
+        there is nothing to tell the server. Needs SurrealDB 3.0 or later,
+        like ``reset`` on the other transports.
         """
+        if not self._version_learned:
+            self._handshake()
+        self._require(Features.SESSIONS)
         self.namespace = None
         self.database = None
         self.vars.clear()

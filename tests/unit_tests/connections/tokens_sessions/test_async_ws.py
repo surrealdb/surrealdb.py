@@ -194,3 +194,29 @@ async def test_v2_refuses_before_sending(
     for call in (db.refresh, db.revoke, db.reset, db.sessions, db.fork_session):
         with pytest.raises(UnavailableFeatureError):
             await call()
+
+
+async def test_reset_ends_the_session_live_queries(
+    db: AsyncWsSurrealConnection,
+    connection_params: dict[str, Any],
+    needs_v3: None,
+) -> None:
+    await _root(db, connection_params)
+    await db.query("DEFINE TABLE IF NOT EXISTS reset_live;").execute()
+    live_id = await db.live("reset_live")
+    notifications = await db.subscribe_live(live_id)
+    await db.reset()
+    assert str(live_id) not in db._registry.live
+    assert [n async for n in notifications] == []
+
+
+async def test_fork_keeps_no_rejected_credentials(
+    db: AsyncWsSurrealConnection,
+    connection_params: dict[str, Any],
+    needs_v3: None,
+) -> None:
+    await _root(db, connection_params)
+    db._registry.root.access = "not.a.token"
+    fork = await db.fork_session()
+    assert db._registry.state(fork.id).access is None
+    await fork.close_session()
