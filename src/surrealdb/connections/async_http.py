@@ -45,7 +45,7 @@ from surrealdb.connections.import_export import (
     aexport_sql_to,
     aimport_sql,
 )
-from surrealdb.connections.server_version import ServerVersionMixin
+from surrealdb.connections.server_version import ServerVersionMixin, asks_for_refresh
 from surrealdb.connections.timeouts import (
     DEFAULT_TIMEOUT,
     check_timeout,
@@ -297,7 +297,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         return tokens
 
     async def signin(self, vars: dict[str, Value]) -> Tokens:
-        if not self._version_learned:
+        if not self._version_learned and asks_for_refresh(vars):
             await self._handshake()
         self._require_signin(vars)
         message = RequestMessage(RequestMethod.SIGN_IN, params=vars)
