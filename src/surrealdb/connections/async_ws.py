@@ -3010,6 +3010,9 @@ class AsyncSurrealTransaction:
         self._connection = connection
         self._session_id = session_id
         self._txn_id = txn_id
+        # Set once commit() or cancel() succeeds: the transaction is gone, so
+        # leaving a `with` block must not try to finish it again.
+        self._finished = False
 
     def timeout(self, seconds: float | None) -> AbstractContextManager[None]:
         """Wait *seconds* for each reply inside the block - see the connection's."""
@@ -3302,9 +3305,11 @@ class AsyncSurrealTransaction:
 
     async def commit(self) -> None:
         await self._connection.commit(self._txn_id, session_id=self._session_id)
+        self._finished = True
 
     async def cancel(self) -> None:
         await self._connection.cancel(self._txn_id, session_id=self._session_id)
+        self._finished = True
 
     async def set(self, key: str, value: Value) -> None:
         """Set a variable for the rest of the transaction; ``let`` by its JS name."""
@@ -3319,6 +3324,8 @@ class AsyncSurrealTransaction:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        if self._finished:
+            return
         if exc_type is None:
             await self.commit()
         else:

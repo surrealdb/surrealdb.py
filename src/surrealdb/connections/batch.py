@@ -17,10 +17,15 @@ Example::
     )
 """
 
-from collections.abc import Awaitable, Mapping, Sequence
+from collections.abc import Awaitable, Collection, Mapping, Sequence
 from typing import Any, Protocol, TypeVar, cast
 
-from surrealdb.errors import ServerError, UnexpectedResponseError, parse_query_error
+from surrealdb.errors import (
+    ServerError,
+    UnexpectedResponseError,
+    parse_query_error,
+    parse_rpc_error,
+)
 from surrealdb.features import parse_version
 from surrealdb.types import Value
 
@@ -94,6 +99,12 @@ def _same(bound: object, value: object) -> bool:
         return bound_map.keys() == other.keys() and all(
             _same(bound_map[key], other[key]) for key in bound_map
         )
+    if isinstance(bound, (set, frozenset)):
+        members = list(cast(Collection[object], value))
+        return len(members) == len(cast(Collection[object], bound)) and all(
+            any(_same(member, other) for other in members)
+            for member in cast(Collection[object], bound)
+        )
     if isinstance(bound, (list, tuple)):
         items = cast(Sequence[object], value)
         bound_items = cast(Sequence[object], bound)
@@ -121,7 +132,7 @@ def _results(response: dict[str, Any], envelope: bool) -> list[Value]:
     """
     error = response.get("error")
     if error is not None:
-        raise UnexpectedResponseError(f"batch failed: {error}")
+        raise parse_rpc_error(error)
     statements = response.get("result")
     if not isinstance(statements, list):
         raise UnexpectedResponseError(
