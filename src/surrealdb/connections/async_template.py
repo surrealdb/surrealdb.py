@@ -200,6 +200,10 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"let not implemented for: {self}")
 
+    async def set(self, key: str, value: Value) -> None:
+        """Assign a value as a variable for this connection; ``let`` by its JS name."""
+        await self.let(key, value)
+
     async def unset(self, key: str) -> None:
         """Removes a variable for this connection.
 

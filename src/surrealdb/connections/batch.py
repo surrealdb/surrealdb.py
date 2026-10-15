@@ -17,22 +17,29 @@ Example::
     )
 """
 
-from collections.abc import Awaitable, Mapping
-from typing import Any, Protocol, TypeVar
+from collections.abc import Awaitable, Mapping, Sequence
+from typing import Any, Protocol, TypeVar, cast
 
 from surrealdb.errors import ServerError, UnexpectedResponseError, parse_query_error
+from surrealdb.features import parse_version
 from surrealdb.types import Value
 
 _NOT_EXECUTED = "not executed due to a failed transaction"
 
 
 class _RunsQueries(Protocol):
+    @property
+    def server_version(self) -> str | None: ...
+
     def query_raw(
         self, query: str, vars: dict[str, Value] | None = None
     ) -> dict[str, Any]: ...
 
 
 class _RunsQueriesAsync(Protocol):
+    @property
+    def server_version(self) -> str | None: ...
+
     def query_raw(
         self, query: str, vars: dict[str, Value] | None = None
     ) -> Awaitable[dict[str, Any]]: ...
@@ -50,34 +57,67 @@ class _BatchState:
         """Add *query* to the batch, with its variables.
 
         Variables are shared by every statement in the batch, so a name bound
-        twice must be bound to the same value.
+        twice must be bound to the same value, of the same type. *query* may
+        hold several statements; each gets its own result.
         """
         text = query.strip().rstrip(";").rstrip()
         if not text:
             raise ValueError("batch().query() needs a statement to add")
-        for name, value in (vars or {}).items():
-            if name in self._variables and self._variables[name] != value:
+        bindings = dict(vars or {})
+        for name, value in bindings.items():
+            if name in self._variables and not _same(self._variables[name], value):
                 raise ValueError(
                     f"${name} is already bound to a different value in this "
                     "batch; the statements share their variables, so give "
                     "this one another name"
                 )
-            self._variables[name] = value
+        self._variables.update(bindings)
         self._statements.append(text)
         return self
 
     def _sql(self) -> str:
         if not self._statements:
             raise ValueError("an empty batch has nothing to run; add a query()")
-        body = "".join(f"{statement};\n" for statement in self._statements)
+        # Each `;` on a line of its own, so a statement's trailing `--`
+        # comment cannot swallow it.
+        body = "".join(f"{statement}\n;\n" for statement in self._statements)
         return f"BEGIN TRANSACTION;\n{body}COMMIT TRANSACTION;"
 
 
-def _results(response: dict[str, Any], count: int) -> list[Value]:
+def _same(bound: object, value: object) -> bool:
+    """Equal and of the same types throughout, so ``True`` is not ``1``."""
+    if type(bound) is not type(value):
+        return False
+    if isinstance(bound, Mapping):
+        other = cast(Mapping[object, object], value)
+        bound_map = cast(Mapping[object, object], bound)
+        return bound_map.keys() == other.keys() and all(
+            _same(bound_map[key], other[key]) for key in bound_map
+        )
+    if isinstance(bound, (list, tuple)):
+        items = cast(Sequence[object], value)
+        bound_items = cast(Sequence[object], bound)
+        return len(bound_items) == len(items) and all(
+            _same(a, b) for a, b in zip(bound_items, items, strict=True)
+        )
+    return bound == value
+
+
+def _answers_envelope(server_version: str | None) -> bool:
+    """Whether the server answers for ``BEGIN`` and ``COMMIT``: 3.0 onward.
+
+    An unknown version is taken as a current server, as the embedded engine
+    is one.
+    """
+    parsed = parse_version(server_version) if server_version else None
+    return parsed is None or parsed >= (3, 0, 0)
+
+
+def _results(response: dict[str, Any], envelope: bool) -> list[Value]:
     """Each statement's result, or the error that failed the transaction.
 
-    SurrealDB 3 answers for ``BEGIN`` and ``COMMIT`` as well; SurrealDB 2
-    does not. *count* is how many statements the caller added.
+    SurrealDB 3 answers for ``BEGIN`` and ``COMMIT`` as well, which
+    *envelope* says to drop; SurrealDB 2 does not.
     """
     error = response.get("error")
     if error is not None:
@@ -99,7 +139,7 @@ def _results(response: dict[str, Any], count: int) -> list[Value]:
             failures[0],
         )
         raise cause
-    if len(statements) == count + 2:
+    if envelope and len(statements) >= 2:
         statements = statements[1:-1]
     return [
         statement.get("result") if isinstance(statement, dict) else statement
@@ -120,7 +160,7 @@ class Batch(_BatchState):
         :raises ServerError: the statement that failed; none of them applied.
         """
         response = self._runner.query_raw(self._sql(), dict(self._variables))
-        return _results(response, len(self._statements))
+        return _results(response, _answers_envelope(self._runner.server_version))
 
 
 class AsyncBatch(_BatchState):
@@ -136,4 +176,4 @@ class AsyncBatch(_BatchState):
         :raises ServerError: the statement that failed; none of them applied.
         """
         response = await self._runner.query_raw(self._sql(), dict(self._variables))
-        return _results(response, len(self._statements))
+        return _results(response, _answers_envelope(self._runner.server_version))

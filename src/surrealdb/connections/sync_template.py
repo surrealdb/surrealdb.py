@@ -153,6 +153,10 @@ class SyncTemplate:
         """Assign a value as a variable for this connection."""
         raise NotImplementedError(f"let not implemented for: {self}")
 
+    def set(self, key: str, value: Value) -> None:
+        """Assign a value as a variable for this connection; ``let`` by its JS name."""
+        self.let(key, value)
+
     def unset(self, key: str) -> None:
         """Removes a variable for this connection."""
         raise NotImplementedError(f"unset not implemented for: {self}")

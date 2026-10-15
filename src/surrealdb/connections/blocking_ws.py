@@ -2488,6 +2488,11 @@ class BlockingSurrealSession:
         """The session's id on the server."""
         return self._session_id
 
+    @property
+    def server_version(self) -> str | None:
+        """The version the connected server reported."""
+        return self._connection.server_version
+
     def use(
         self,
         namespace: str | NullType | None = None,
