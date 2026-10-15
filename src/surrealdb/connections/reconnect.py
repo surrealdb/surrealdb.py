@@ -144,6 +144,12 @@ class SessionRegistry:
             state = self.sessions[session_id] = SessionState()
         return state
 
+    def find(self, session_id: UUID | None) -> SessionState | None:
+        """The state held for *session_id*, without registering a new one."""
+        if session_id is None:
+            return self.root
+        return self.sessions.get(session_id)
+
     def forget_session(self, session_id: UUID) -> None:
         self.sessions.pop(session_id, None)
         for key, live in list(self.live.items()):
@@ -240,17 +246,24 @@ class SessionTrackingMixin(EventsMixin):
 
     def _note_revoked(self, session_id: UUID | None, refresh: str) -> None:
         """A revoked refresh token cannot be used again, so stop holding it."""
-        state = self._registry.state(session_id)
-        if state.refresh == refresh:
+        state = self._registry.find(session_id)
+        if state is not None and state.refresh == refresh:
             state.refresh = None
 
     def _token_pair(
         self, tokens: Tokens | None, session_id: UUID | None, purpose: str
     ) -> dict[str, str]:
         """The ``{access, refresh}`` object the server takes for *purpose*."""
-        held = (
-            tokens if tokens is not None else self._registry.state(session_id).tokens()
-        )
+        held = tokens
+        if held is None:
+            state = self._registry.find(session_id)
+            if state is None:
+                raise ValueError(
+                    f"{purpose} names session {session_id}, which this "
+                    "connection does not hold: pass its Tokens explicitly, or "
+                    "use a session from new_session() that is still open"
+                )
+            held = state.tokens()
         if held is None or held.refresh is None:
             raise ValueError(
                 f"{purpose} needs a refresh token: pass the Tokens that signin() "
