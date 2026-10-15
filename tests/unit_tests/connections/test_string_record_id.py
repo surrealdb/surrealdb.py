@@ -1,6 +1,7 @@
 """`StringRecordId`: a record id the server parses, and the deprecation of
 plain "table:id" strings, which the SDK parses itself."""
 
+import typing
 import uuid
 import warnings
 from collections.abc import Iterator
@@ -12,6 +13,7 @@ from surrealdb import AsyncSurreal, RecordID, StringRecordId, Surreal
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.cbor import decode, encode
+from surrealdb.data.types.record_id import RecordIdType
 from surrealdb.errors import InvalidRecordIdError
 
 Blocking = BlockingWsSurrealConnection | BlockingHttpSurrealConnection
@@ -146,3 +148,17 @@ def test_pydantic_takes_and_gives_a_string() -> None:
     assert Model(id=StringRecordId("person:1")).id == StringRecordId("person:1")
     assert model.model_dump_json() == '{"id":"person:⟨a:b⟩"}'
     assert Model.model_json_schema()["properties"]["id"]["type"] == "string"
+
+
+def test_record_id_type_resolves_where_it_is_used() -> None:
+    def target(record: RecordIdType) -> None:
+        pass
+
+    hints = typing.get_type_hints(target)
+    assert StringRecordId in typing.get_args(hints["record"])
+
+
+def test_relate_ends_type_check_as_string_record_id_lists(db: Blocking) -> None:
+    ends: list[StringRecordId] = [StringRecordId("person:1")]
+    edge: Any = db.relate(ends, "likes", ends, {})
+    assert len(edge) == 1

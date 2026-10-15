@@ -10,6 +10,7 @@ import pytest
 from surrealdb import AsyncSurreal, RecordID, Surreal
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
+from surrealdb.connections.batch import Batch
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.errors import AlreadyExistsError, ServerError, ThrownError
@@ -198,3 +199,55 @@ def test_set_is_let_on_every_transport(db: Blocking) -> None:
 async def test_async_set_is_let_on_every_transport(adb: Async) -> None:
     await adb.set("answer", 42)
     assert await adb.query("RETURN $answer;").first() == 42
+
+
+def test_a_finished_transaction_is_not_finished_again_on_exit(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+) -> None:
+    db = blocking_ws_connection
+    if not db.is_feature_supported(Features.TRANSACTIONS):
+        pytest.skip("interactive transactions need SurrealDB 3.0 or later")
+    with db.begin_transaction() as txn:
+        txn.commit()
+    with pytest.raises(RuntimeError, match="kept"), db.begin_transaction() as txn:
+        txn.cancel()
+        raise RuntimeError("kept, not masked")
+
+
+async def test_async_a_finished_transaction_is_not_finished_again_on_exit(
+    connection_params: dict[str, Any],
+) -> None:
+    db = AsyncWsSurrealConnection(connection_params["ws_url"])
+    await db.signin(connection_params["vars_params"])
+    try:
+        if not db.is_feature_supported(Features.TRANSACTIONS):
+            pytest.skip("interactive transactions need SurrealDB 3.0 or later")
+        async with await db.begin_transaction() as txn:
+            await txn.commit()
+    finally:
+        await db.close()
+
+
+def test_set_bindings_must_match_in_type_too(db: Blocking) -> None:
+    with pytest.raises(ValueError, match=r"\$x is already bound"):
+        db.batch().query("RETURN $x", {"x": {True}}).query("RETURN $x", {"x": {1}})
+
+
+def test_an_rpc_error_keeps_its_type() -> None:
+    class Refusing:
+        server_version = "3.0.0"
+
+        def query_raw(
+            self, query: str, vars: dict[str, Any] | None = None
+        ) -> dict[str, Any]:
+            return {
+                "error": {
+                    "code": -32602,
+                    "message": "Invalid params",
+                    "kind": "Validation",
+                }
+            }
+
+    with pytest.raises(ServerError) as caught:
+        Batch(Refusing()).query("RETURN 1").execute()
+    assert "Invalid params" in str(caught.value)

@@ -64,6 +64,9 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
         # Embedded URLs address a local engine, not an HTTP endpoint, so they
         # keep their original form instead of the parent's ``/rpc`` suffix.
         self.raw_url = url
+        # The engine is compiled in, and has no handshake to report its
+        # version: an unknown version, so nothing is gated.
+        self._version_learned = True
 
         # Embedded database handle
         with mapped_engine_errors("opening the database"):

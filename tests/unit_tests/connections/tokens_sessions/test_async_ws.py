@@ -220,3 +220,16 @@ async def test_fork_keeps_no_rejected_credentials(
     fork = await db.fork_session()
     assert db._registry.state(fork.id).access is None
     await fork.close_session()
+
+
+async def test_cannot_fork_a_closed_session(
+    db: AsyncWsSurrealConnection,
+    connection_params: dict[str, Any],
+    needs_v3: None,
+) -> None:
+    await _root(db, connection_params)
+    session = await db.new_session()
+    await session.close_session()
+    with pytest.raises(ValueError, match="not attached"):
+        await session.fork()
+    assert session.id not in db._registry.sessions

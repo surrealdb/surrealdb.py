@@ -1,13 +1,15 @@
 import inspect
 import threading
+import time
 import uuid
-from collections.abc import Generator, Mapping, Sequence
+from collections.abc import Generator, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager
 from types import TracebackType
 from typing import Any, overload
 from uuid import UUID
 
 import requests
+import urllib3
 
 from surrealdb.connections.api import (
     ApiResponse,
@@ -90,6 +92,33 @@ _NO_LIVE_QUERIES = (
 )
 
 
+def _read_body(response: requests.Response, deadline: float | None) -> bytes:
+    """The whole body of *response*, unless *deadline* passes first.
+
+    Read with ``read1`` where urllib3 has it, which returns what has arrived
+    rather than waiting to fill the chunk, so the deadline is checked as the
+    body comes in.
+    """
+    if deadline is None:
+        return response.content
+    read1 = getattr(response.raw, "read1", None)
+    chunks: list[bytes] = []
+    try:
+        if read1 is None:
+            pieces: Iterator[bytes] = response.iter_content(1 << 12)
+        else:
+            pieces = iter(lambda: read1(1 << 16, decode_content=True), b"")
+        for chunk in pieces:
+            chunks.append(chunk)
+            if time.monotonic() > deadline:
+                raise TimeoutError("the reply was still arriving at the deadline")
+    except urllib3.exceptions.ReadTimeoutError as exc:
+        raise TimeoutError(str(exc)) from exc
+    except urllib3.exceptions.HTTPError as exc:
+        raise requests.exceptions.ConnectionError(str(exc)) from exc
+    return b"".join(chunks)
+
+
 class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin):
     def __init__(
         self,
@@ -123,6 +152,10 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         self._renew_access = renew_access
         self._authorising = False
         self._auth_lock = threading.RLock()
+        # Whether this connection's identity has been chosen - by ``auth=`` or
+        # by the caller signing in or out - so that ``auth=`` is applied once,
+        # not again after an explicit sign-out.
+        self._auth_settled = False
         self._timeout: float | None = check_timeout("timeout", timeout)
         self.raw_url: str = url.rstrip("/")
         self.host: str | None = self.url.hostname
@@ -195,16 +228,22 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         # Reuse the pooled session when running inside a context manager,
         # otherwise fall back to a fresh per-request request.
         timeout = effective_timeout(self, self._timeout)
+        # requests' own timeout bounds each wait for the socket, not the
+        # whole exchange, so a reply trickling in could run on without end.
+        # The body is read here against the deadline instead.
+        deadline = None if timeout is None else time.monotonic() + timeout
         try:
             if self.session is not None:
                 response = self.session.post(
-                    url, headers=headers, data=data, timeout=timeout
+                    url, headers=headers, data=data, timeout=timeout, stream=True
                 )
             else:
                 response = requests.post(
-                    url, headers=headers, data=data, timeout=timeout
+                    url, headers=headers, data=data, timeout=timeout, stream=True
                 )
-        except requests.exceptions.Timeout as exc:
+            with response:
+                content = _read_body(response, deadline)
+        except (requests.exceptions.Timeout, TimeoutError) as exc:
             raise TransportTimeoutError(
                 f"timed out while {operation} against {url}: no reply "
                 f"{describe(timeout)} ({exc})"
@@ -214,9 +253,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
                 f"could not reach {url} while {operation}: {exc}"
             ) from exc
 
-        self.check_status_for_error(response.status_code, response.content, url)
+        self.check_status_for_error(response.status_code, content, url)
 
-        data_dict = self.decode_response(response.content, operation)
+        data_dict = self.decode_response(content, operation)
 
         if not bypass:
             self.check_response_for_error(data_dict, operation)
@@ -237,7 +276,10 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         message = RequestMessage(RequestMethod.AUTHENTICATE, token=token)
         self.id = message.id
         self._send(message, "authenticating", token=token)
+        if self.token != token:
+            self._refresh_token = None
         self.token = token
+        self._auth_settled = True
 
     def invalidate(self) -> None:
         message = RequestMessage(RequestMethod.INVALIDATE)
@@ -245,6 +287,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         self._send(message, "invalidating")
         self.token = None
         self._refresh_token = None
+        self._auth_settled = True
 
     def signup(self, vars: dict[str, Value]) -> Tokens:
         message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
@@ -254,6 +297,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         tokens = parse_auth_result(response["result"])
         self.token = tokens.access
         self._refresh_token = tokens.refresh
+        self._auth_settled = True
         return tokens
 
     def signin(self, vars: dict[str, Value]) -> Tokens:
@@ -264,6 +308,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         tokens = parse_auth_result(response["result"])
         self.token = tokens.access
         self._refresh_token = tokens.refresh
+        self._auth_settled = True
         return tokens
 
     def info(self) -> Value:
@@ -308,7 +353,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
             self.database = None if isinstance(database, NullType) else database
 
     def _authorisation_due(self) -> bool:
-        first = self._auth_provider is not None and self.token is None
+        first = self._auth_provider is not None and not self._auth_settled
         return first or (self._renew_access and renewal_due(self.token))
 
     def _authorise(self) -> None:
@@ -395,7 +440,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         pair = self._token_pair(tokens, "revoke()")
         message = RequestMessage(RequestMethod.REVOKE, params=[pair])
         self.id = message.id
-        self._send(message, "revoking a refresh token")
+        self._send(message, "revoking a refresh token", token="")
         if self._refresh_token == pair["refresh"]:
             self._refresh_token = None
 
@@ -414,6 +459,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         self.vars.clear()
         self.token = None
         self._refresh_token = None
+        self._auth_settled = True
 
     def sessions(self) -> list[UUID]:
         raise UnsupportedFeatureError(
@@ -492,6 +538,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
                 ``failures``. The other statements were still applied.
         """
         self._authorise()
+        if not self._version_learned:
+            self._handshake()
         import_sql(
             self.url,
             data,
@@ -545,7 +593,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         Returns each statement's result, and raises the first statement that
         failed. Needs a server with the ``gql`` RPC method.
         """
-        params: list[Value] = [query] if vars is None else [query, dict(vars)]
+        # `let()` bindings live here, not on the server, so they go with it.
+        bindings = merge_query_vars(self.vars, vars)
+        params: list[Value] = [query, bindings] if bindings else [query]
         message = RequestMessage(RequestMethod.GQL, params=params)
         self.id = message.id
         response = self._send(message, "gql")
@@ -1034,6 +1084,11 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         """
         if url is not None:
             self._forget_server_version()
+            # Credentials belong to the server that issued them: none is sent
+            # to the new one, and ``auth=`` is applied there afresh.
+            self.token = None
+            self._refresh_token = None
+            self._auth_settled = False
             self.url = Url(url)
             self.raw_url = url.rstrip("/")
             self.host = self.url.hostname

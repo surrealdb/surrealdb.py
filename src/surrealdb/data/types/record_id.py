@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import uuid as uuid_module
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Union, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from pydantic_core import core_schema
 from pydantic_core.core_schema import ValidationInfo
@@ -19,8 +19,6 @@ from surrealdb.errors import InvalidRecordIdError
 if TYPE_CHECKING:
     from pydantic import GetJsonSchemaHandler
     from pydantic.json_schema import JsonSchemaValue
-
-RecordIdType = Union[str, "RecordID", "StringRecordId", Table]
 
 #: What SurrealDB accepts as a record id. Exported so callers have a name to
 #: annotate or cast against - ``RecordID.id`` is deliberately wider (see the
@@ -445,3 +443,9 @@ class StringRecordId:
         cls, _core_schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
     ) -> JsonSchemaValue:
         return handler(core_schema.str_schema())
+
+
+# Defined after both classes, so it holds them rather than names of them: a
+# string member would be a ForwardRef, resolved in whichever module reads the
+# annotation, where ``StringRecordId`` may not be imported.
+RecordIdType = str | RecordID | StringRecordId | Table
