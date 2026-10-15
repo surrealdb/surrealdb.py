@@ -1,6 +1,6 @@
 """Tests that embedded connections report the SurrealDB engine version."""
 
-from surrealdb import AsyncSurreal, Surreal
+from surrealdb import AsyncSurreal, Features, Surreal
 
 # The engine floor is the `surrealdb-core = "3"` requirement in
 # embedded/Cargo.toml narrowed to the minor series currently resolved. It is
@@ -31,3 +31,13 @@ async def test_async_version_reports_engine() -> None:
         await db.use("test", "test")
 
         _assert_engine_version(await db.version())
+
+
+def test_blocking_features_are_known_once_connected() -> None:
+    with Surreal("mem://") as db:
+        assert db.is_feature_supported(Features.SESSIONS)
+
+
+async def test_async_features_are_known_once_connected() -> None:
+    async with AsyncSurreal("mem://") as db:
+        assert db.is_feature_supported(Features.SESSIONS)

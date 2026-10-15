@@ -62,6 +62,9 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         # Embedded URLs address a local engine, not an HTTP endpoint, so they
         # keep their original form instead of the parent's ``/rpc`` suffix.
         self.raw_url = url
+        # The engine is compiled in, and has no handshake to report its
+        # version: an unknown version, so nothing is gated.
+        self._version_learned = True
         self.id: str = str(uuid.uuid4())
         self.namespace: str | None = None
         self.database: str | None = None

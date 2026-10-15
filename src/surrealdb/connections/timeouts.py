@@ -13,7 +13,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from types import MappingProxyType
-from typing import Any
+from typing import Any, cast
 
 DEFAULT_TIMEOUT = 30.0
 
@@ -53,8 +53,8 @@ def _key(owner: object) -> int:
     """
     key: int | None = getattr(owner, "_timeout_key", None)
     if key is None:
-        key = next(_KEYS)
-        vars(owner)["_timeout_key"] = key
+        # setdefault, so threads racing to key the same owner agree on one.
+        key = cast(int, vars(owner).setdefault("_timeout_key", next(_KEYS)))
     return key
 
 

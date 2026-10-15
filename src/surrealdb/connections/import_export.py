@@ -336,29 +336,24 @@ async def aexport_sql_to(
     The file is opened and written on a worker thread, so a slow disk does
     not hold up the event loop.
     """
-    if not isinstance(target, (str, os.PathLike)):
-        await _aexport_into(url, options, target, timeout, token, namespace, database)
-        return
-    sink = await asyncio.to_thread(open, target, "wb")
-    try:
-        await _aexport_into(url, options, sink, timeout, token, namespace, database)
-    finally:
-        await asyncio.to_thread(sink.close)
+    opened: list[IO[bytes]] = []
 
+    async def start() -> None:
+        # Only once the server has said yes, so a failed export leaves an
+        # existing file - perhaps the last good backup - as it was.
+        if isinstance(target, (str, os.PathLike)):
+            opened.append(await asyncio.to_thread(open, target, "wb"))
+        else:
+            opened.append(target)
 
-async def _aexport_into(
-    url: Url,
-    options: ExportOptions,
-    sink: IO[bytes],
-    timeout: float | None,
-    token: str | None,
-    namespace: str | None,
-    database: str | None,
-) -> None:
     async def write(chunk: bytes) -> None:
-        await asyncio.to_thread(sink.write, chunk)
+        await asyncio.to_thread(opened[0].write, chunk)
 
-    await _aexport(url, options, timeout, token, namespace, database, write)
+    try:
+        await _aexport(url, options, timeout, token, namespace, database, write, start)
+    finally:
+        if opened and opened[0] is not target:
+            await asyncio.to_thread(opened[0].close)
 
 
 async def _aexport(
@@ -369,6 +364,7 @@ async def _aexport(
     namespace: str | None,
     database: str | None,
     take: Callable[[bytes], Awaitable[None]],
+    start: Callable[[], Awaitable[None]] | None = None,
 ) -> None:
     endpoint = f"{_base(url)}/export"
     headers = _headers(token, namespace, database)
@@ -389,6 +385,8 @@ async def _aexport(
                         endpoint,
                         body is not None,
                     )
+                if start is not None:
+                    await start()
                 async for chunk in response.content.iter_chunked(_CHUNK):
                     await take(chunk)
     except TimeoutError as exc:
