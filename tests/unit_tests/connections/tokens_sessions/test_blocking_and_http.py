@@ -4,12 +4,18 @@ from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 import pytest
+import requests
 
 from surrealdb import Null
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
-from surrealdb.errors import ServerError, UnsupportedFeatureError
+from surrealdb.errors import (
+    ServerError,
+    UnavailableFeatureError,
+    UnsupportedFeatureError,
+)
+from surrealdb.features import Features
 
 
 @pytest.fixture
@@ -125,7 +131,9 @@ async def test_async_http_refresh(
 
 
 def test_http_reset_and_partial_use(
-    http: BlockingHttpSurrealConnection, connection_params: dict[str, Any]
+    http: BlockingHttpSurrealConnection,
+    connection_params: dict[str, Any],
+    needs_v3: None,
 ) -> None:
     http.signin(connection_params["vars_params"])
     http.use(connection_params["namespace"], connection_params["database_name"])
@@ -149,3 +157,115 @@ async def test_http_health(
 ) -> None:
     http.health()
     await ahttp.health()
+
+
+def test_http_refresh_sends_no_bearer(
+    http: BlockingHttpSurrealConnection,
+    record_user: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The held access token may have expired, which is why it is refreshed."""
+    http.signup(record_user)
+    sent: list[dict[str, str]] = []
+    original = requests.post
+
+    def record(url: str, headers: dict[str, str], **kwargs: Any) -> Any:
+        sent.append(dict(headers))
+        return original(url, headers=headers, **kwargs)
+
+    monkeypatch.setattr(requests, "post", record)
+    http.refresh()
+    assert sent and "Authorization" not in sent[-1]
+
+
+async def test_async_http_refresh_sends_no_bearer(
+    ahttp: AsyncHttpSurrealConnection,
+    record_user: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await ahttp.signup(record_user)
+    sent: list[dict[str, str]] = []
+    original = ahttp._request
+
+    async def record(
+        session: Any, url: str, headers: dict[str, str], *rest: Any
+    ) -> Any:
+        sent.append(dict(headers))
+        return await original(session, url, headers, *rest)
+
+    monkeypatch.setattr(ahttp, "_request", record)
+    await ahttp.refresh()
+    assert sent and "Authorization" not in sent[-1]
+
+
+def test_http_invalidate_forgets_the_refresh_token(
+    http: BlockingHttpSurrealConnection, record_user: dict[str, Any]
+) -> None:
+    http.signup(record_user)
+    http.invalidate()
+    with pytest.raises(ValueError, match="refresh token"):
+        http.refresh()
+
+
+async def test_async_http_invalidate_forgets_the_refresh_token(
+    ahttp: AsyncHttpSurrealConnection, record_user: dict[str, Any]
+) -> None:
+    await ahttp.signup(record_user)
+    await ahttp.invalidate()
+    with pytest.raises(ValueError, match="refresh token"):
+        await ahttp.refresh()
+
+
+def test_http_v2_refuses_before_checking_tokens(
+    http: BlockingHttpSurrealConnection,
+) -> None:
+    http.connect()
+    if http.is_feature_supported(Features.REFRESH_TOKENS):
+        pytest.skip("needs a SurrealDB 2.x server")
+    with pytest.raises(UnavailableFeatureError):
+        http.refresh()
+    with pytest.raises(UnavailableFeatureError):
+        http.revoke()
+    with pytest.raises(UnavailableFeatureError):
+        http.reset()
+
+
+async def test_async_http_v2_refuses_before_checking_tokens(
+    ahttp: AsyncHttpSurrealConnection,
+) -> None:
+    await ahttp.connect()
+    if ahttp.is_feature_supported(Features.REFRESH_TOKENS):
+        pytest.skip("needs a SurrealDB 2.x server")
+    with pytest.raises(UnavailableFeatureError):
+        await ahttp.refresh()
+    with pytest.raises(UnavailableFeatureError):
+        await ahttp.revoke()
+    with pytest.raises(UnavailableFeatureError):
+        await ahttp.reset()
+
+
+def test_blocking_ws_reset_ends_the_session_live_queries(
+    ws: BlockingWsSurrealConnection,
+    connection_params: dict[str, Any],
+    needs_v3: None,
+) -> None:
+    ws.signin(connection_params["vars_params"])
+    ws.use(connection_params["namespace"], connection_params["database_name"])
+    ws.query("DEFINE TABLE IF NOT EXISTS reset_live;").execute()
+    live_id = ws.live("reset_live")
+    notifications = ws.subscribe_live(live_id)
+    ws.reset()
+    assert str(live_id) not in ws._registry.live
+    assert list(notifications) == []
+
+
+def test_blocking_ws_fork_keeps_no_rejected_credentials(
+    ws: BlockingWsSurrealConnection,
+    connection_params: dict[str, Any],
+    needs_v3: None,
+) -> None:
+    ws.signin(connection_params["vars_params"])
+    ws._registry.root.access = "not.a.token"
+    fork = ws.fork_session()
+    assert ws._registry.state(fork.id).access is None
+    fork.close_session()
