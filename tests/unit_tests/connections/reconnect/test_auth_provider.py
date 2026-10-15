@@ -2,6 +2,7 @@
 renews its access token before it expires."""
 
 import asyncio
+import threading
 import time
 import uuid
 from collections.abc import Iterator
@@ -10,6 +11,7 @@ from typing import Any
 import pytest
 
 from surrealdb import AsyncSurreal, ReconnectOptions, Surreal
+from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
@@ -224,3 +226,178 @@ def test_an_unusable_auth_is_refused_up_front(
     db = BlockingWsSurrealConnection(connection_params["ws_url"], auth=credentials)
     with pytest.raises(TypeError, match="coroutine"):
         db.connect()
+
+
+async def test_async_http_requests_wait_for_the_first_sign_in(
+    connection_params: dict[str, Any],
+) -> None:
+    calls = 0
+
+    async def credentials() -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0.2)
+        return dict(connection_params["vars_params"])
+
+    db = AsyncHttpSurrealConnection(connection_params["url"], auth=credentials)
+    try:
+        first, second = await asyncio.gather(
+            db.query("INFO FOR ROOT;").first(), db.query("INFO FOR ROOT;").first()
+        )
+        assert isinstance(first, dict) and isinstance(second, dict)
+        assert calls == 1
+    finally:
+        await db.close()
+
+
+def test_blocking_http_threads_wait_for_the_first_sign_in(
+    connection_params: dict[str, Any],
+) -> None:
+    calls = 0
+
+    def credentials() -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        time.sleep(0.2)
+        return dict(connection_params["vars_params"])
+
+    db = BlockingHttpSurrealConnection(connection_params["url"], auth=credentials)
+    results: list[Any] = []
+
+    def run() -> None:
+        results.append(db.query("INFO FOR ROOT;").first())
+
+    threads = [threading.Thread(target=run) for _ in range(2)]
+    try:
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(10)
+        assert len(results) == 2 and all(isinstance(r, dict) for r in results)
+        assert calls == 1
+    finally:
+        db.close()
+
+
+async def test_async_a_static_due_token_is_not_renewed_in_a_loop(
+    connection_params: dict[str, Any],
+    short_lived_root: dict[str, Any],
+    blocking_ws_connection: BlockingWsSurrealConnection,
+) -> None:
+    signer = AsyncWsSurrealConnection(connection_params["ws_url"])
+    try:
+        await signer.signin(short_lived_root)
+        token = signer.token
+    finally:
+        await signer.close()
+    calls = 0
+
+    def credentials() -> str | None:
+        nonlocal calls
+        calls += 1
+        return token
+
+    db = AsyncWsSurrealConnection(connection_params["ws_url"], auth=credentials)
+    try:
+        await db.connect()
+        await asyncio.sleep(2.5)
+        assert calls <= 3
+    finally:
+        await db.close()
+
+
+async def test_async_a_failed_renewal_is_tried_again(
+    connection_params: dict[str, Any], short_lived_root: dict[str, Any]
+) -> None:
+    calls = 0
+
+    def credentials() -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("the credential store is briefly unavailable")
+        return dict(short_lived_root)
+
+    db = AsyncWsSurrealConnection(connection_params["ws_url"], auth=credentials)
+    errors: list[BaseException] = []
+    db.subscribe("error", errors.append)
+    try:
+        await db.connect()
+        await _await_until(lambda: calls >= 3, seconds=12.0)
+        assert calls >= 3
+        assert any(isinstance(error, RuntimeError) for error in errors)
+    finally:
+        await db.close()
+
+
+async def test_async_renewal_is_armed_again_after_a_reconnect(
+    proxy: DroppableProxy, connection_params: dict[str, Any]
+) -> None:
+    db = AsyncWsSurrealConnection(
+        proxy.ws_url, reconnect=_FAST, auth=connection_params["vars_params"]
+    )
+    reconnected = asyncio.Event()
+    db.subscribe("reconnecting", lambda: reconnected.clear())
+    db.subscribe("connected", lambda _version: reconnected.set())
+    try:
+        await db.connect()
+        assert db._renewal is not None
+        db._cancel_renewal()
+        reconnected.clear()
+        proxy.drop()
+        await asyncio.wait_for(reconnected.wait(), 10)
+        await _await_until(lambda: db._renewal is not None)
+        assert db._renewal is not None
+    finally:
+        await db.close()
+
+
+def test_blocking_a_failed_provider_renewal_is_reported(
+    connection_params: dict[str, Any], short_lived_root: dict[str, Any]
+) -> None:
+    calls = 0
+
+    def credentials() -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("the credential store is briefly unavailable")
+        return dict(short_lived_root)
+
+    db = BlockingWsSurrealConnection(connection_params["ws_url"], auth=credentials)
+    errors: list[BaseException] = []
+    db.subscribe("error", errors.append)
+    try:
+        db.connect()
+        time.sleep(2.1)
+        assert db.query("RETURN 1;").first() == 1
+        assert calls >= 2
+        assert any(isinstance(error, RuntimeError) for error in errors)
+    finally:
+        db.close()
+
+
+def test_blocking_a_provider_failure_while_reconnecting_is_one_failed_attempt(
+    proxy: DroppableProxy, connection_params: dict[str, Any]
+) -> None:
+    calls = 0
+
+    def credentials() -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("the credential store is briefly unavailable")
+        return dict(connection_params["vars_params"])
+
+    db = BlockingWsSurrealConnection(proxy.ws_url, reconnect=_FAST, auth=credentials)
+    errors: list[BaseException] = []
+    db.subscribe("error", errors.append)
+    try:
+        db.connect()
+        proxy.drop()
+        _wait_until(lambda: False, seconds=0.2)
+        assert isinstance(db.query("INFO FOR ROOT;").first(), dict)
+        assert calls == 3
+        assert any(isinstance(error, RuntimeError) for error in errors)
+    finally:
+        db.close()

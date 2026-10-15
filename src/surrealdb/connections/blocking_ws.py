@@ -73,7 +73,6 @@ from surrealdb.errors import (
     ConnectionUnavailableError,
     NotAllowedError,
     ServerError,
-    SurrealError,
     TransportTimeoutError,
     UnexpectedResponseError,
     parse_query_error,
@@ -470,7 +469,7 @@ class BlockingWsSurrealConnection(
                 self._note_tokens(None, parse_auth_result(response["result"]))
             elif self._auth_provider is not None:
                 self._apply_auth_provider_locked()
-        except SurrealError as exc:
+        except Exception as exc:
             logger.debug("renewing the access token failed: %s", exc)
             self._emit("error", exc)
         finally:
@@ -508,7 +507,7 @@ class BlockingWsSurrealConnection(
                     self.socket = self._connect_socket()
                     self._handshake_locked()
                     self._restore_locked()
-                except (SurrealError, OSError, WebSocketException) as exc:
+                except Exception as exc:
                     logger.debug("reconnect attempt %d failed: %s", attempt, exc)
                     self._emit("error", exc)
                     continue
@@ -555,7 +554,7 @@ class BlockingWsSurrealConnection(
 
     def _restore_session_locked(
         self, session_id: UUID | None, state: SessionState, authenticate: bool = True
-    ) -> None:
+    ) -> bool:
         scope: dict[str, Any] = {} if session_id is None else {"session": session_id}
         if state.namespace is not None or state.database is not None:
             self._send_locked(
@@ -583,6 +582,8 @@ class BlockingWsSurrealConnection(
             except ServerError as exc:
                 self._emit("error", exc)
                 self._note_signed_out(session_id)
+                return False
+        return True
 
     def _restore_live_locked(self, live: LiveQuery) -> None:
         kwargs: dict[str, Any] = {"table": live.table, "diff": live.diff}
@@ -605,6 +606,8 @@ class BlockingWsSurrealConnection(
     def _handshake_locked(self) -> None:
         """Ask a freshly opened socket's server for its version."""
         self._forget_server_version()
+        self._streaming_supported = None
+        self._streaming_refusal = None
         try:
             response = self._send_locked(
                 RequestMessage(RequestMethod.VERSION), "checking the server version"
@@ -841,6 +844,7 @@ class BlockingWsSurrealConnection(
         message = RequestMessage(RequestMethod.RESET, **_scope(session_id))
         self._send(message, "resetting the session")
         self._note_reset(session_id)
+        self._end_session_live(session_id)
 
     def sessions(self) -> list[UUID]:
         """The ids of the sessions attached to this connection on the server,
@@ -2093,12 +2097,16 @@ class BlockingWsSurrealConnection(
         message = RequestMessage(RequestMethod.DETACH, session=session_id)
         self.id = message.id
         self._send(message, "detach")
+        self._end_session_live(session_id)
+        self._registry.forget_session(session_id)
+
+    def _end_session_live(self, session_id: UUID | None) -> None:
+        """End the live queries the server dropped with *session_id*'s state."""
         for logical, live in list(self._registry.live.items()):
             if live.session_id == session_id:
                 self._registry.drop_live(logical)
                 for notifications in self.live_queues.get(logical, []):
                     notifications.put(_LIVE_KILLED_SENTINEL)
-        self._registry.forget_session(session_id)
 
     def begin(self, session_id: UUID | None = None) -> UUID:
         self._ensure_open()
@@ -2155,14 +2163,14 @@ class BlockingWsSurrealConnection(
         forked = self.attach()
         try:
             with self._lock:
-                self._restore_session_locked(forked, source)
+                authenticated = self._restore_session_locked(forked, source)
         except BaseException:
             self.detach(forked)
             raise
         state = self._registry.state(forked)
         state.namespace, state.database = source.namespace, source.database
         state.variables = source.variables
-        if state.access is None and source.access is not None:
+        if authenticated and source.access is not None:
             state.access, state.refresh = source.access, source.refresh
         return BlockingSurrealSession(self, forked)
 

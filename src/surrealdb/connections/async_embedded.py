@@ -170,6 +170,12 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
 
         return response
 
+    async def health(self) -> None:
+        raise UnsupportedFeatureError(
+            "health() asks a server's /health endpoint; an embedded database has "
+            "none, so a request that succeeds is the check that it is up"
+        )
+
     async def attach(self) -> UUID:
         raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"

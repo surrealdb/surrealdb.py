@@ -130,6 +130,10 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
         self._closed = True
         self.socket = None
 
+    def _ensure_open(self) -> None:
+        """Open the engine if it is closed, in place of opening a socket."""
+        self.connect()
+
     def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
     ) -> dict[str, Any]:
@@ -167,6 +171,12 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
             return {}
 
         return response
+
+    def health(self) -> None:
+        raise UnsupportedFeatureError(
+            "health() asks a server's /health endpoint; an embedded database has "
+            "none, so a request that succeeds is the check that it is up"
+        )
 
     def attach(self) -> UUID:
         raise UnsupportedFeatureError(
