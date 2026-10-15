@@ -22,6 +22,7 @@ from websockets.protocol import State
 from websockets.sync.client import ClientConnection
 
 from surrealdb.connections.auth_provider import (
+    SENT_WITHOUT_RENEWAL,
     AuthCredentials,
     AuthProvider,
     check_auth_provider,
@@ -343,7 +344,7 @@ class BlockingWsSurrealConnection(
         with self._lock:
             return self._send_locked(message, process, bypass)
 
-    def _ready_locked(self) -> None:
+    def _ready_locked(self, renew: bool = True) -> None:
         """Make sure there is an open socket to send on, with the lock held.
 
         A socket the peer dropped is replaced: by reconnecting, which replays
@@ -358,7 +359,7 @@ class BlockingWsSurrealConnection(
             else:
                 self.close()
                 self._open_locked()
-        if not self._reconnecting:
+        if renew and not self._reconnecting:
             self._renew_locked()
 
     def _send_frame_locked(self, message: RequestMessage) -> None:
@@ -620,7 +621,7 @@ class BlockingWsSurrealConnection(
         self, message: RequestMessage, process: str, bypass: bool = False
     ) -> dict[str, Any]:
         """The body of :meth:`_send`, called with ``self._lock`` held."""
-        self._ready_locked()
+        self._ready_locked(renew=message.method not in SENT_WITHOUT_RENEWAL)
         assert self.socket is not None
 
         # Correlate the reply to this request. Live-query notifications
