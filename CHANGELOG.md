@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Websocket connections reconnect on their own. When the socket drops, the
+  connection opens a new one, with backoff, and replays what the server forgot
+  with the old one: the namespace and database, the variables from `let`, the
+  authentication, every session from `new_session()`, and every live query.
+  A live query is started again under a new server-side id, and its
+  notifications keep arriving on the subscription the caller already holds,
+  with the original id. A request in flight when the socket dropped fails with
+  `ConnectionUnavailableError` rather than being sent twice; one made while the
+  async connection is reconnecting waits for the replay. The blocking
+  connection has no background reader, so it reconnects when the next request
+  or live subscription uses the socket.
+
+  On by default. `reconnect=False` turns it off, on the connection classes and
+  on `Surreal`/`AsyncSurreal`; `reconnect=ReconnectOptions(attempts=...,
+  retry_delay=..., retry_delay_max=..., retry_delay_multiplier=...,
+  retry_delay_jitter=...)` tunes it, with the JS SDK's defaults. Once the
+  attempts run out the session state is forgotten, live subscriptions end with
+  `ConnectionUnavailableError`, and the next request starts afresh.
+
+- Connection status and events. `db.status` is `"disconnected"`,
+  `"connecting"`, `"reconnecting"` or `"connected"`, and
+  `db.subscribe(event, listener)` calls *listener* on `"connecting"`,
+  `"connected"` (with the server version), `"reconnecting"`, `"disconnected"`,
+  `"error"` (with the exception), `"auth"` (with the new tokens, or `None` once
+  signed out) and `"using"` (with the namespace and database), returning the
+  function that unsubscribes it. `db.namespace` and `db.database` say what is
+  selected.
+
 - A declared server range, checked on connect. Every remote connection now asks
   the server for its version as the first thing it does - on websocket
   connections when the socket opens, and over HTTP before the first request -
