@@ -26,6 +26,7 @@ from surrealdb.connections.builders import (
     SyncRows,
 )
 from surrealdb.connections.files import AsyncFiles, BlockingFiles, FileMetadata
+from surrealdb.connections.reconnect import ReconnectOptions
 from surrealdb.connections.url import Url, UrlScheme
 from surrealdb.data.types.datetime import Datetime, PreciseDatetime
 from surrealdb.data.types.duration import Duration
@@ -197,6 +198,7 @@ __all__ = [
     "Bound",
     "BoundIncluded",
     "BoundExcluded",
+    "ReconnectOptions",
     "RecordID",
     # The id types SurrealDB accepts. `RecordID.id` is deliberately wider
     # (a decoded value can be anything a server sends), so this is the name to
@@ -312,6 +314,7 @@ def Surreal(
     ping_timeout: float | None = 10.0,
     timeout: float | None = 30.0,
     version_check: bool = True,
+    reconnect: bool | ReconnectOptions = True,
 ) -> BlockingSurrealConnection:
     """Open a connection to *url*, picking the transport from its scheme.
 
@@ -341,6 +344,12 @@ def Surreal(
             (``MINIMUM_VERSION`` up to, but not including, ``MAXIMUM_VERSION``
             in :mod:`surrealdb.features`). On by default; ``False`` connects
             anyway. Ignored by the embedded engine.
+        reconnect: Whether a websocket connection reconnects on its own when
+            the socket drops, replaying the namespace and database, variables,
+            authentication, sessions and live queries. ``True`` (the default)
+            uses the default :class:`ReconnectOptions`; pass options to tune the
+            attempts and backoff, or ``False`` to turn it off. Ignored by the
+            transports that have no websocket.
     """
     constructed_url = Url(url)
     if constructed_url.scheme in _EMBEDDED_SCHEMES:
@@ -365,6 +374,7 @@ def Surreal(
             ping_timeout=ping_timeout,
             timeout=timeout,
             version_check=version_check,
+            reconnect=reconnect,
         )
     else:
         raise UnsupportedEngineError(url)
@@ -378,6 +388,7 @@ def AsyncSurreal(
     ping_timeout: float | None = 10.0,
     timeout: float | None = 30.0,
     version_check: bool = True,
+    reconnect: bool | ReconnectOptions = True,
 ) -> AsyncSurrealConnection:
     """Open a connection to *url*, picking the transport from its scheme.
 
@@ -407,6 +418,12 @@ def AsyncSurreal(
             (``MINIMUM_VERSION`` up to, but not including, ``MAXIMUM_VERSION``
             in :mod:`surrealdb.features`). On by default; ``False`` connects
             anyway. Ignored by the embedded engine.
+        reconnect: Whether a websocket connection reconnects on its own when
+            the socket drops, replaying the namespace and database, variables,
+            authentication, sessions and live queries. ``True`` (the default)
+            uses the default :class:`ReconnectOptions`; pass options to tune the
+            attempts and backoff, or ``False`` to turn it off. Ignored by the
+            transports that have no websocket.
     """
     constructed_url = Url(url)
     if constructed_url.scheme in _EMBEDDED_SCHEMES:
@@ -431,6 +448,7 @@ def AsyncSurreal(
             ping_timeout=ping_timeout,
             timeout=timeout,
             version_check=version_check,
+            reconnect=reconnect,
         )
     else:
         raise UnsupportedEngineError(url)

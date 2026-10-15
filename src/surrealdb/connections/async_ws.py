@@ -27,6 +27,13 @@ from surrealdb.connections.builders import (
     _Executor,
 )
 from surrealdb.connections.files import AsyncFiles
+from surrealdb.connections.reconnect import (
+    LiveQuery,
+    ReconnectOptions,
+    SessionRegistry,
+    SessionState,
+    SessionTrackingMixin,
+)
 from surrealdb.connections.server_version import ServerVersionMixin, asks_for_refresh
 from surrealdb.connections.timeouts import (
     DEFAULT_TIMEOUT,
@@ -89,6 +96,14 @@ _LIVE_QUEUE_BROKEN = object()
 _LIVE_KILLED = "KILLED"
 
 
+def _current_task() -> "Task[Any] | None":
+    """The running task, or ``None`` outside one."""
+    try:
+        return asyncio.current_task()
+    except RuntimeError:
+        return None
+
+
 def _release_live_queue(
     live_queues: dict[str, list["Queue[Any]"]],
     suid: str,
@@ -122,6 +137,7 @@ async def _read_frames(
     between frames - which is where a suspended reader spends essentially all
     of its time - nothing here refers to the connection.
     """
+    cancelled = False
     try:
         async for data in socket:
             connection = ref()
@@ -138,15 +154,20 @@ async def _read_frames(
             # nothing, so waiting here keeps no connection alive.
             if not gate.is_set():
                 await gate.wait()
-    except (ConnectionClosed, WebSocketException, asyncio.CancelledError):
-        # Connection was closed or cancelled, this is expected
+    except asyncio.CancelledError:
+        # Cancelled by `close()`, or by the loop shutting down: either way the
+        # connection is going away on purpose, so nothing reconnects.
+        cancelled = True
+    except (ConnectionClosed, WebSocketException):
         pass
     except Exception as e:
         logger.debug(f"Unexpected error in _read_frames: {e}")
     finally:
         connection = ref()
         if connection is not None:
-            connection._reader_stopped()  # pyright: ignore[reportPrivateUsage]
+            connection._reader_stopped(  # pyright: ignore[reportPrivateUsage]
+                unexpected=not cancelled
+            )
 
 
 # A stream's frames are held in memory between arriving and being read, so a
@@ -241,7 +262,9 @@ def _abandon_connection(
             pass
 
 
-class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
+class AsyncWsSurrealConnection(
+    AsyncTemplate, UtilsMixin, ServerVersionMixin, SessionTrackingMixin
+):
     """
     A single async connection to a SurrealDB instance. To be used once and discarded.
 
@@ -258,6 +281,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         ping_timeout: float | None = 10.0,
         timeout: float | None = DEFAULT_TIMEOUT,
         version_check: bool = True,
+        reconnect: bool | ReconnectOptions = True,
     ) -> None:
         """
         The constructor for the AsyncSurrealConnection class.
@@ -280,13 +304,28 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
             with :meth:`timeout`.
         :param version_check: Refuse to talk to a server outside the versions
             this SDK supports - see :mod:`surrealdb.features`. On by default.
+        :param reconnect: Reconnect when the socket drops, replaying the
+            session state and live queries - see
+            :mod:`surrealdb.connections.reconnect`. ``True`` (the default) uses
+            the default backoff, ``False`` leaves the connection disconnected,
+            and :class:`ReconnectOptions` tunes it.
         """
         self.url: Url = Url(url)
         self._version_check = version_check
+        self._reconnect: ReconnectOptions = ReconnectOptions.coerce(reconnect)
+        self._registry = SessionRegistry()
+        self._init_events()
+        # Set by `close()` so that the reader stopping is not mistaken for the
+        # socket dropping; cleared when a new socket opens.
+        self._closing = False
+        # True while the reconnect loop is re-opening and replaying, so that a
+        # socket dying mid-replay fails that attempt rather than starting a
+        # second loop.
+        self._reconnecting = False
+        self._reconnect_task: Task[None] | None = None
         self.raw_url: str = f"{self.url.raw_url}/rpc"
         self.host: str | None = self.url.hostname
         self.port: int | None = self.url.port
-        self.token: str | None = None
         self.socket: Any = None  # WebSocket connection
         self._timeout: float | None = check_timeout("timeout", timeout)
         self._ping_interval: float | None = check_keepalive(
@@ -507,7 +546,11 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
                 elif (fut := self.qry.get(response_id)) and not fut.done():
                     fut.set_result(response)
             elif response_result := response.get("result"):
-                live_id = str(response_result["id"])
+                live_id = self._registry.logical_of(str(response_result["id"]))
+                if live_id != str(response_result["id"]):
+                    response_result["id"] = UUID(live_id)
+                if response_result.get("action") == _LIVE_KILLED:
+                    self._registry.drop_live(live_id)
                 for queue in self.live_queues.get(live_id, []):
                     queue.put_nowait(response_result)
             else:
@@ -550,8 +593,14 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         """Let the reader go, because something other than a stream needs it."""
         self._reader_gate.set()
 
-    def _reader_stopped(self) -> None:
-        """Tell everyone still waiting that no more frames are coming."""
+    def _reader_stopped(self, unexpected: bool = True) -> None:
+        """Tell everyone still waiting that no more frames are coming.
+
+        When the socket dropped on its own (*unexpected*) and reconnecting is
+        on, this also starts the reconnect loop. Live subscriptions it can
+        replay are left waiting rather than broken; their notifications resume
+        under the same id once the loop has replayed them.
+        """
         # Fail any pending futures with a typed error so awaiting callers
         # surface ``ConnectionUnavailableError`` instead of a raw
         # ``CancelledError`` when the socket closes mid-request.
@@ -560,14 +609,175 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
                 "WebSocket connection closed before a response was received."
             )
         )
+        if self._closing or self._reconnecting:
+            # `close()` ends the subscriptions itself, and a socket lost while
+            # the reconnect loop is replaying just fails that attempt.
+            return
+        replaying = unexpected and self._reconnect.enabled
         # Live subscribers wait on a queue, not on `self.qry`, so failing the
         # pending futures left them untouched: nothing would ever be put in
         # their queue again and `async for` waited forever, with no timeout on
         # the path. The blocking transport has always raised
-        # `ConnectionUnavailableError` here.
+        # `ConnectionUnavailableError` here. A subscription the reconnect loop
+        # will replay is the exception: it is still live, just quiet.
+        for logical, queues in self.live_queues.items():
+            if replaying and logical in self._registry.live:
+                continue
+            for queue in queues:
+                queue.put_nowait(_LIVE_QUEUE_BROKEN)
+        if not unexpected:
+            return
+        if not replaying:
+            # The server forgot everything along with the socket, and nothing
+            # will replay it, so the next request starts afresh.
+            self._registry.clear()
+            self._set_status("disconnected")
+            return
+        self._set_status("reconnecting")
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        self._reconnect_task = loop.create_task(self._run_reconnect())
+
+    async def _run_reconnect(self) -> None:
+        """Re-open the socket with backoff, then replay what the server forgot."""
+        attempt = 0
+        while True:
+            attempt += 1
+            if not self._reconnect.allows(attempt):
+                break
+            await asyncio.sleep(self._reconnect.delay(attempt))
+            if self._closing:
+                return
+            try:
+                async with self._connect_guard():
+                    if self._closing:
+                        return
+                    await self._reopen()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.debug("reconnect attempt %d failed: %s", attempt, exc)
+                self._emit("error", exc)
+                continue
+            self._set_status("connected", self._server_version)
+            return
+        self._give_up(
+            ConnectionUnavailableError(
+                f"the connection to {self.raw_url} dropped and could not be "
+                f"re-established after {attempt - 1} attempt(s)"
+            )
+        )
+
+    async def _reopen(self) -> None:
+        """One reconnect attempt: a new socket, the handshake, then the replay."""
+        self._reconnecting = True
+        try:
+            await self._teardown()
+            await self._open_socket()
+            await self._handshake()
+            await self._restore()
+        except BaseException:
+            await self._teardown()
+            raise
+        finally:
+            self._reconnecting = False
+
+    def _give_up(self, error: SurrealError) -> None:
+        """Stop reconnecting: end every subscription and forget the state."""
         for queues in self.live_queues.values():
             for queue in queues:
                 queue.put_nowait(_LIVE_QUEUE_BROKEN)
+        self._registry.clear()
+        self._set_status("disconnected")
+        self._emit("error", error)
+
+    async def _await_reconnect(self) -> None:
+        """Hold a request back until a reconnect in progress has finished."""
+        task = self._reconnect_task
+        if task is None or task.done() or task is asyncio.current_task():
+            return
+        budget = self._request_timeout()
+        try:
+            await asyncio.wait_for(asyncio.shield(task), budget)
+        except asyncio.TimeoutError as exc:
+            raise TransportTimeoutError(
+                f"timed out waiting for the connection to {self.raw_url} to be "
+                f"re-established: not back {describe(budget)}"
+            ) from exc
+        if self._status != "connected":
+            raise ConnectionUnavailableError(
+                f"the connection to {self.raw_url} dropped and could not be "
+                "re-established"
+            )
+
+    async def _restore(self) -> None:
+        """Replay every session, then every live query, on the new socket."""
+        registry = self._registry
+        await self._restore_session(None, registry.root)
+        for session_id, state in list(registry.sessions.items()):
+            await self._request(
+                RequestMessage(RequestMethod.ATTACH, session=session_id),
+                "re-attaching a session",
+            )
+            await self._restore_session(session_id, state)
+        for live in list(registry.live.values()):
+            await self._restore_live(live)
+
+    async def _restore_session(
+        self, session_id: UUID | None, state: SessionState
+    ) -> None:
+        scope: dict[str, Any] = {} if session_id is None else {"session": session_id}
+        if state.namespace is not None and state.database is not None:
+            await self._request(
+                RequestMessage(
+                    RequestMethod.USE,
+                    namespace=state.namespace,
+                    database=state.database,
+                    **scope,
+                ),
+                "re-selecting the namespace and database",
+            )
+        for key, value in list(state.variables.items()):
+            await self._request(
+                RequestMessage(RequestMethod.LET, key=key, value=value, **scope),
+                "re-setting a variable",
+            )
+        if state.access is not None:
+            try:
+                await self._request(
+                    RequestMessage(
+                        RequestMethod.AUTHENTICATE, token=state.access, **scope
+                    ),
+                    "re-authenticating",
+                )
+            except ServerError as exc:
+                # Most often an access token that expired while the socket was
+                # down. The session carries on unauthenticated, and says so.
+                self._emit("error", exc)
+                self._note_signed_out(session_id)
+
+    async def _restore_live(self, live: LiveQuery) -> None:
+        kwargs: dict[str, Any] = {"table": live.table, "diff": live.diff}
+        if live.session_id is not None:
+            kwargs["session"] = live.session_id
+        try:
+            response = await self._request(
+                RequestMessage(RequestMethod.LIVE, **kwargs), "restarting a live query"
+            )
+            self.check_response_for_result(response, "restarting a live query")
+        except ServerError as exc:
+            self._emit("error", exc)
+            self._end_live(str(live.logical), _LIVE_QUEUE_BROKEN)
+            return
+        self._registry.move_live(live, UUID(str(response["result"])))
+
+    def _end_live(self, logical: str, sentinel: object) -> None:
+        """Stop tracking a live query and end its subscriptions with *sentinel*."""
+        self._registry.drop_live(logical)
+        for queue in self.live_queues.pop(logical, []):
+            queue.put_nowait(sentinel)
 
     async def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
@@ -690,6 +900,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         # Serialised: `_send` calls this on every request, so the first few
         # requests of a gathered batch all arrive here at once.
         self._check_event_loop()
+        await self._await_reconnect()
         async with self._connect_guard():
             if not await self._connect_locked(url):
                 return
@@ -698,6 +909,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
             except BaseException:
                 await self.close()
                 raise
+            self._set_status("connected", self._server_version)
 
     async def _connect_locked(self, url: str | None = None) -> bool:
         """Open the socket if it is not open; whether a new one was opened."""
@@ -723,7 +935,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
             # resolve. Tear it down and reconnect. Deliberately narrow: a
             # socket with no reader at all is left alone, since that is not the
             # state this guards against.
-            await self.close()
+            await self._teardown()
 
         # overwrite params if passed in
         if url is not None:
@@ -732,6 +944,16 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
             self.host = self.url.hostname
             self.port = self.url.port
 
+        self._set_status("connecting")
+        try:
+            await self._open_socket()
+        except BaseException:
+            self._set_status("disconnected")
+            raise
+        return True
+
+    async def _open_socket(self) -> None:
+        """Open a socket on the current URL and start its reader."""
         try:
             self.socket = await websockets.connect(
                 self.raw_url,
@@ -749,10 +971,10 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
                 f"could not connect to {self.raw_url}: {exc}"
             ) from exc
         self.loop = asyncio.get_running_loop()
+        self._closing = False
         self.recv_task = asyncio.create_task(
             _read_frames(weakref.ref(self), self.socket)
         )
-        return True
 
     async def authenticate(self, token: str, session_id: UUID | None = None) -> None:
         kwargs: dict[str, Any] = {"token": token}
@@ -760,10 +982,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.AUTHENTICATE, **kwargs)
         await self._send(message, "authenticating")
-        # Record the token as the connection identity so new_session() can
-        # replay it — only when authenticating the connection, not a sub-session.
-        if session_id is None:
-            self.token = token
+        # Record the token as the session's identity so a reconnect - and, for
+        # the connection's own, new_session() - can replay it.
+        self._note_authenticated(session_id, token)
 
     async def invalidate(self, session_id: UUID | None = None) -> None:
         kwargs: dict[str, Any] = {}
@@ -771,8 +992,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.INVALIDATE, **kwargs)
         await self._send(message, "invalidating")
-        if session_id is None:
-            self.token = None
+        self._note_signed_out(session_id)
 
     async def signup(
         self, vars: dict[str, Value], session_id: UUID | None = None
@@ -784,8 +1004,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         response = await self._send(message, "signup")
         self.check_response_for_result(response, "signup")
         tokens = parse_auth_result(response["result"])
-        if session_id is None:
-            self.token = tokens.access
+        self._note_tokens(session_id, tokens)
         return tokens
 
     async def signin(
@@ -801,8 +1020,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         response = await self._send(message, "signing in")
         self.check_response_for_result(response, "signing in")
         tokens = parse_auth_result(response["result"])
-        if session_id is None:
-            self.token = tokens.access
+        self._note_tokens(session_id, tokens)
         return tokens
 
     async def info(self, session_id: UUID | None = None) -> Value:
@@ -842,6 +1060,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.USE, **kwargs)
         await self._send(message, "use")
+        self._note_use(session_id, namespace, database)
 
     def query(
         self,
@@ -1055,6 +1274,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
             kwargs["txn"] = txn_id
         message = RequestMessage(RequestMethod.LET, **kwargs)
         await self._send(message, "letting")
+        if txn_id is None:
+            self._note_let(session_id, key, value)
 
     async def unset(
         self,
@@ -1069,6 +1290,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
             kwargs["txn"] = txn_id
         message = RequestMessage(RequestMethod.UNSET, **kwargs)
         await self._send(message, "unsetting")
+        if txn_id is None:
+            self._note_unset(session_id, key)
 
     @overload
     def select(
@@ -1602,6 +1825,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         uuid = response["result"]
         assert uuid not in self.live_queues
         self.live_queues[str(uuid)] = []
+        live_id = UUID(str(uuid))
+        self._registry.add_live(LiveQuery(live_id, live_id, table, diff, session_id))
         return uuid
 
     async def subscribe_live(
@@ -1678,17 +1903,20 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         session_id: UUID | None = None,
     ) -> None:
         """Kill a running live query by its UUID."""
-        kwargs: dict[str, Any] = {"uuid": query_uuid}
+        suid = str(query_uuid)
+        # The caller holds the id the query was started under; after a
+        # reconnect the server knows it by another.
+        current = self._registry.resolve(suid)
+        kwargs: dict[str, Any] = {
+            "uuid": query_uuid if current == suid else UUID(current)
+        }
         if session_id is not None:
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.KILL, **kwargs)
         await self._send(message, "kill")
         # Wake any subscribers so their generators terminate, then drop the
         # registration. Each ``_iter`` removes its own queue in its ``finally``.
-        suid = str(query_uuid)
-        for queue in self.live_queues.get(suid, []):
-            queue.put_nowait(_LIVE_QUEUE_CLOSED)
-        self.live_queues.pop(suid, None)
+        self._end_live(suid, _LIVE_QUEUE_CLOSED)
 
     async def attach(self) -> UUID:
         await self.connect()
@@ -1696,11 +1924,16 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         session_id = UUID(str(uuid.uuid4()))
         message = RequestMessage(RequestMethod.ATTACH, session=session_id)
         await self._send(message, "attach")
+        self._registry.state(session_id)
         return session_id
 
     async def detach(self, session_id: UUID) -> None:
         message = RequestMessage(RequestMethod.DETACH, session=session_id)
         await self._send(message, "detach")
+        for logical, live in list(self._registry.live.items()):
+            if live.session_id == session_id:
+                self._end_live(logical, _LIVE_QUEUE_CLOSED)
+        self._registry.forget_session(session_id)
 
     async def begin(self, session_id: UUID | None = None) -> UUID:
         await self.connect()
@@ -1757,7 +1990,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
                 if not e.is_token_expired:
                     await self.detach(session_id)
                     raise
-                self.token = None
+                self._note_signed_out(None)
         return AsyncSurrealSession(self, session_id)
 
     async def close(self) -> None:
@@ -1770,12 +2003,24 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         :meth:`_check_event_loop` gives - build a new connection for this loop -
         left the old one with no way to release its socket.
         """
+        self._closing = True
+        task = self._reconnect_task
+        self._reconnect_task = None
+        if task is not None and not task.done() and task is not _current_task():
+            task.cancel()
         # Wake any live subscribers so their generators terminate instead of
         # waiting forever on a socket that is about to disappear.
         for queues in self.live_queues.values():
             for queue in queues:
                 queue.put_nowait(_LIVE_QUEUE_CLOSED)
+        await self._teardown()
+        # A new socket is a new server-side session, so nothing about this one
+        # is replayed into it.
+        self._registry.clear()
+        self._set_status("disconnected")
 
+    async def _teardown(self) -> None:
+        """Release the socket and its reader, keeping the session state."""
         # Streams get an error rather than a clean-end sentinel: a caller
         # iterating rows asked for all of them, and a socket taken away
         # mid-stream means it will not get them. `close()` does not go through

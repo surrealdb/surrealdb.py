@@ -29,7 +29,9 @@ _DEADLINE = 15.0
 async def test_async_subscriber_is_woken_when_the_socket_dies(
     connection_params: dict[str, Any],
 ) -> None:
-    connection = AsyncWsSurrealConnection(connection_params["ws_url"])
+    # With reconnecting on, the subscription waits for the live query to be
+    # replayed instead (see `reconnect/`); this is the case where nothing will.
+    connection = AsyncWsSurrealConnection(connection_params["ws_url"], reconnect=False)
     await connection.signin(connection_params["vars_params"])
     await connection.use(
         namespace=connection_params["namespace"],
