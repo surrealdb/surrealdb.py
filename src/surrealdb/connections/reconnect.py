@@ -22,6 +22,7 @@ from typing import Any
 from uuid import UUID
 
 from surrealdb.connections.events import EventsMixin
+from surrealdb.data.types.null import NullType
 from surrealdb.types import Tokens, Value
 
 
@@ -210,14 +211,54 @@ class SessionTrackingMixin(EventsMixin):
         return self._registry.root.database
 
     def _note_use(
-        self, session_id: UUID | None, namespace: str | None, database: str | None
+        self,
+        session_id: UUID | None,
+        namespace: str | NullType | None,
+        database: str | NullType | None,
     ) -> None:
+        """Record a ``use``: a string selects, ``Null`` clears, ``None`` keeps."""
         state = self._registry.state(session_id)
         if namespace is not None:
-            state.namespace = namespace
+            state.namespace = None if isinstance(namespace, NullType) else namespace
         if database is not None:
-            state.database = database
+            state.database = None if isinstance(database, NullType) else database
         self._emit("using", state.namespace, state.database, session_id)
+
+    def _note_reset(self, session_id: UUID | None) -> None:
+        """The server cleared the session: selection, variables and auth."""
+        state = self._registry.state(session_id)
+        had_auth = state.access is not None or state.refresh is not None
+        had_selection = state.namespace is not None or state.database is not None
+        state.namespace = state.database = state.access = state.refresh = None
+        state.variables.clear()
+        if had_selection:
+            self._emit("using", None, None, session_id)
+        if had_auth:
+            self._emit("auth", None, session_id)
+
+    def _note_revoked(self, session_id: UUID | None, refresh: str) -> None:
+        """A revoked refresh token cannot be used again, so stop holding it."""
+        state = self._registry.state(session_id)
+        if state.refresh == refresh:
+            state.refresh = None
+
+    def _token_pair(
+        self, tokens: Tokens | None, session_id: UUID | None, purpose: str
+    ) -> dict[str, str]:
+        """The ``{access, refresh}`` object the server takes for *purpose*."""
+        held = (
+            tokens if tokens is not None else self._registry.state(session_id).tokens()
+        )
+        if held is None or held.refresh is None:
+            raise ValueError(
+                f"{purpose} needs a refresh token: pass the Tokens that signin() "
+                "or signup() returned for an access method defined WITH "
+                "REFRESH, or sign in with one on this session first"
+            )
+        pair = {"refresh": held.refresh}
+        if held.access is not None:
+            pair["access"] = held.access
+        return pair
 
     def _note_let(self, session_id: UUID | None, key: str, value: Value) -> None:
         self._registry.state(session_id).variables[key] = value

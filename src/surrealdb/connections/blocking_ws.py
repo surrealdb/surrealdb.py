@@ -29,6 +29,7 @@ from surrealdb.connections.builders import (
     _Executor,
 )
 from surrealdb.connections.files import BlockingFiles
+from surrealdb.connections.health import check_health
 from surrealdb.connections.reconnect import (
     LiveQuery,
     ReconnectOptions,
@@ -51,6 +52,7 @@ from surrealdb.connections.utils_mixin import (
     UtilsMixin,
     check_keepalive,
 )
+from surrealdb.data.types.null import NullType
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
@@ -115,6 +117,10 @@ def _release_live_queue(
         queues.remove(notifications)
     if not queues:
         live_queues.pop(suid, None)
+
+
+def _scope(session_id: UUID | None) -> dict[str, Any]:
+    return {} if session_id is None else {"session": session_id}
 
 
 class BlockingWsSurrealConnection(
@@ -455,7 +461,7 @@ class BlockingWsSurrealConnection(
         self, session_id: UUID | None, state: SessionState
     ) -> None:
         scope: dict[str, Any] = {} if session_id is None else {"session": session_id}
-        if state.namespace is not None and state.database is not None:
+        if state.namespace is not None or state.database is not None:
             self._send_locked(
                 RequestMessage(
                     RequestMethod.USE,
@@ -691,6 +697,73 @@ class BlockingWsSurrealConnection(
         self._send(message, "invalidating")
         self._note_signed_out(session_id)
 
+    def refresh(
+        self, tokens: Tokens | None = None, session_id: UUID | None = None
+    ) -> Tokens:
+        """Exchange a refresh token for a new access and refresh token.
+
+        Uses the session's own tokens unless *tokens* is given, authenticates
+        the session with the new access token and returns the new pair. The
+        old refresh token is spent. Needs SurrealDB 3.0 or later and an access
+        method defined ``WITH REFRESH``.
+        """
+        self._ensure_open()
+        self._require(Features.REFRESH_TOKENS)
+        pair = self._token_pair(tokens, session_id, "refresh()")
+        message = RequestMessage(
+            RequestMethod.REFRESH, params=[pair], **_scope(session_id)
+        )
+        response = self._send(message, "refreshing the tokens")
+        self.check_response_for_result(response, "refreshing the tokens")
+        renewed = parse_auth_result(response["result"])
+        self._note_tokens(session_id, renewed)
+        return renewed
+
+    def revoke(
+        self, tokens: Tokens | None = None, session_id: UUID | None = None
+    ) -> None:
+        """Revoke a refresh token, so it can never be exchanged again.
+
+        Uses the session's own tokens unless *tokens* is given. The session
+        stays signed in with its access token until that expires or
+        :meth:`invalidate` is called. Needs SurrealDB 3.0 or later.
+        """
+        self._ensure_open()
+        self._require(Features.REFRESH_TOKENS)
+        pair = self._token_pair(tokens, session_id, "revoke()")
+        message = RequestMessage(
+            RequestMethod.REVOKE, params=[pair], **_scope(session_id)
+        )
+        self._send(message, "revoking a refresh token")
+        self._note_revoked(session_id, pair["refresh"])
+
+    def reset(self, session_id: UUID | None = None) -> None:
+        """Return the session to how it started: no namespace, database,
+        variables or authentication. Needs SurrealDB 3.0 or later."""
+        self._ensure_open()
+        self._require(Features.SESSIONS)
+        message = RequestMessage(RequestMethod.RESET, **_scope(session_id))
+        self._send(message, "resetting the session")
+        self._note_reset(session_id)
+
+    def sessions(self) -> list[UUID]:
+        """The ids of the sessions attached to this connection on the server,
+        not counting its own. Needs SurrealDB 3.0 or later."""
+        self._ensure_open()
+        self._require(Features.SESSIONS)
+        response = self._send(
+            RequestMessage(RequestMethod.SESSIONS), "listing the sessions"
+        )
+        self.check_response_for_result(response, "listing the sessions")
+        return [UUID(str(session)) for session in response["result"] or []]
+
+    def health(self) -> None:
+        """Ask the server's ``/health`` endpoint whether it is healthy.
+
+        :raises ConnectionUnavailableError: if it is not, or cannot be reached.
+        """
+        check_health(self.url, self._request_timeout())
+
     def signup(self, vars: dict[str, Value], session_id: UUID | None = None) -> Tokens:
         kwargs: dict[str, Any] = {"data": vars}
         if session_id is not None:
@@ -739,10 +812,16 @@ class BlockingWsSurrealConnection(
 
     def use(
         self,
-        namespace: str,
-        database: str,
+        namespace: str | NullType | None = None,
+        database: str | NullType | None = None,
         session_id: UUID | None = None,
     ) -> None:
+        """Select a namespace and database.
+
+        Either may be left out, or ``None``, to keep the current one, or
+        ``Null`` to clear it - ``use(database="other")`` changes only the
+        database, and ``use(Null, Null)`` selects neither.
+        """
         kwargs: dict[str, Any] = {
             "namespace": namespace,
             "database": database,
@@ -1926,6 +2005,29 @@ class BlockingWsSurrealConnection(
         self.id = message.id
         self._send(message, "cancel")
 
+    def fork_session(self, session_id: UUID | None = None) -> "BlockingSurrealSession":
+        """A new session that starts as a copy of another.
+
+        Copies the namespace and database, the variables and the
+        authentication of *session_id* - the connection's own session by
+        default - into a newly attached session. The two are independent from
+        then on. Needs SurrealDB 3.0 or later.
+        """
+        source = self._registry.state(session_id).fork()
+        forked = self.attach()
+        try:
+            with self._lock:
+                self._restore_session_locked(forked, source)
+        except BaseException:
+            self.detach(forked)
+            raise
+        state = self._registry.state(forked)
+        state.namespace, state.database = source.namespace, source.database
+        state.variables = source.variables
+        if state.access is None and source.access is not None:
+            state.access, state.refresh = source.access, source.refresh
+        return BlockingSurrealSession(self, forked)
+
     def new_session(self) -> "BlockingSurrealSession":
         session_id = self.attach()
         # A freshly attached session starts unauthenticated on the server -
@@ -2056,8 +2158,30 @@ class BlockingSurrealSession:
         """Wait *seconds* for each reply inside the block - see the connection's."""
         return self._connection.timeout(seconds)
 
-    def use(self, namespace: str, database: str) -> None:
+    @property
+    def id(self) -> UUID:
+        """The session's id on the server."""
+        return self._session_id
+
+    def use(
+        self,
+        namespace: str | NullType | None = None,
+        database: str | NullType | None = None,
+    ) -> None:
         self._connection.use(namespace, database, session_id=self._session_id)
+
+    def refresh(self, tokens: Tokens | None = None) -> Tokens:
+        return self._connection.refresh(tokens, session_id=self._session_id)
+
+    def revoke(self, tokens: Tokens | None = None) -> None:
+        self._connection.revoke(tokens, session_id=self._session_id)
+
+    def reset(self) -> None:
+        self._connection.reset(session_id=self._session_id)
+
+    def fork(self) -> "BlockingSurrealSession":
+        """A new session that starts as a copy of this one."""
+        return self._connection.fork_session(self._session_id)
 
     def query(
         self,

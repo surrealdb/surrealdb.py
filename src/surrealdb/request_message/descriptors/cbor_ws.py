@@ -7,6 +7,7 @@ from pydantic_core import SchemaValidator
 from pydantic_core import ValidationError as PydanticValidationError
 
 from surrealdb.data.cbor import encode
+from surrealdb.data.types.null import NullType
 from surrealdb.data.types.record_id import RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.data.utils import process_record
@@ -72,7 +73,18 @@ def _inject_session_txn(data: dict[str, Any], obj: RequestMessage) -> None:
 
 USE_VALIDATOR = _build_validator(
     RequestMethod.USE.value,
-    _list_schema({"type": "str", "strict": True}, min_length=2, max_length=2),
+    _list_schema(
+        {
+            "type": "union",
+            "choices": [
+                {"type": "str", "strict": True},
+                {"type": "none"},
+                {"type": "is-instance", "cls": NullType},
+            ],
+        },
+        min_length=2,
+        max_length=2,
+    ),
 )
 INFO_VALIDATOR = _build_validator(RequestMethod.INFO.value)
 VERSION_VALIDATOR = _build_validator(RequestMethod.VERSION.value)
@@ -151,6 +163,17 @@ _VALIDATORS: dict[RequestMethod, SchemaValidator] = {
     RequestMethod.INSERT_RELATION: INSERT_RELATION_VALIDATOR,
     RequestMethod.UPSERT: UPSERT_VALIDATOR,
 }
+
+
+# Methods with nothing to translate: the caller builds the params list.
+_PLAIN_METHODS = frozenset(
+    {
+        RequestMethod.REFRESH,
+        RequestMethod.REVOKE,
+        RequestMethod.RESET,
+        RequestMethod.SESSIONS,
+    }
+)
 
 
 def _validate_payload(data: dict[str, Any], method: RequestMethod) -> None:
@@ -265,6 +288,8 @@ class WsCborDescriptor:
             return self.prep_cancel(obj)
         elif obj.method == RequestMethod.RUN:
             return self.prep_run(obj)
+        elif obj.method in _PLAIN_METHODS:
+            return self.prep_plain(obj)
 
         raise ValueError(f"Invalid method for Cbor WS encoding: {obj.method}")
 
@@ -276,6 +301,15 @@ class WsCborDescriptor:
         }
         _inject_session_txn(data, obj)
         _validate_payload(data, obj.method)
+        return encode(data)
+
+    def prep_plain(self, obj: RequestMessage) -> bytes:
+        """A method whose ``params`` kwarg is already the wire's params list."""
+        data: dict[str, Any] = {"id": obj.id, "method": obj.method.value}
+        params = obj.kwargs.get("params")
+        if params is not None:
+            data["params"] = list(params)
+        _inject_session_txn(data, obj)
         return encode(data)
 
     def prep_info(self, obj: RequestMessage) -> bytes:
