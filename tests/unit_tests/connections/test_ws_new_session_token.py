@@ -23,6 +23,10 @@ def _bare(cls: type[C]) -> C:
     conn = object.__new__(cls)
     conn._registry = SessionRegistry()
     conn._init_events()
+    conn._auth_provider = None
+    conn._renew_access = True
+    if isinstance(conn, AsyncWsSurrealConnection):
+        conn._renewal = None
     return conn
 
 

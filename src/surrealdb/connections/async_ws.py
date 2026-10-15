@@ -781,18 +781,26 @@ class AsyncWsSurrealConnection(
         if self._renewal is not None:
             self._renewal.cancel()
             self._renewal = None
-        if not self._renew_access:
+        root = self._registry.root
+        if not self._renew_access or (
+            root.refresh is None and self._auth_provider is None
+        ):
             return
-        when = renew_at(self._registry.root.access)
+        when = renew_at(root.access)
         if when is None:
             return
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             return
-        self._renewal = loop.call_later(
-            max(0.0, when - time.time()), self._start_renewal
-        )
+        ref = weakref.ref(self)
+
+        def fire() -> None:
+            connection = ref()
+            if connection is not None:
+                connection._start_renewal()
+
+        self._renewal = loop.call_later(max(0.0, when - time.time()), fire)
 
     def _start_renewal(self) -> None:
         self._renewal = None
