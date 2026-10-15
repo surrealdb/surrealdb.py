@@ -79,11 +79,19 @@ from surrealdb.errors import (
     ThrownError,
     TransportError,
     TransportTimeoutError,
+    UnavailableFeatureError,
     UnexpectedResponseError,
     UnsupportedEngineError,
     UnsupportedFeatureError,
+    UnsupportedVersionError,
     ValidationDetailKind,
     ValidationError,
+)
+from surrealdb.features import (
+    MAXIMUM_VERSION,
+    MINIMUM_VERSION,
+    Feature,
+    Features,
 )
 from surrealdb.streaming import (
     AsyncQueryStream,
@@ -202,6 +210,11 @@ __all__ = [
     "Tokens",
     "Value",
     "escape_identifier",
+    # Server versions and the features gated on them
+    "Feature",
+    "Features",
+    "MAXIMUM_VERSION",
+    "MINIMUM_VERSION",
     # Errors – base
     "SurrealError",
     # Errors – server
@@ -234,6 +247,8 @@ __all__ = [
     # Errors – SDK-side
     "UnsupportedEngineError",
     "UnsupportedFeatureError",
+    "UnavailableFeatureError",
+    "UnsupportedVersionError",
     "UnexpectedResponseError",
     "InvalidRecordIdError",
     "InvalidDurationError",
@@ -296,6 +311,7 @@ def Surreal(
     ping_interval: float | None = 30.0,
     ping_timeout: float | None = 10.0,
     timeout: float | None = 30.0,
+    version_check: bool = True,
 ) -> BlockingSurrealConnection:
     """Open a connection to *url*, picking the transport from its scheme.
 
@@ -321,6 +337,10 @@ def Surreal(
             indefinitely. Defaults to 30. ``with db.timeout(seconds):`` overrides
             it for the requests made inside the block. Ignored by the embedded
             engine, whose requests never leave the process.
+        version_check: Refuse a server outside the versions this SDK supports
+            (``MINIMUM_VERSION`` up to, but not including, ``MAXIMUM_VERSION``
+            in :mod:`surrealdb.features`). On by default; ``False`` connects
+            anyway. Ignored by the embedded engine.
     """
     constructed_url = Url(url)
     if constructed_url.scheme in _EMBEDDED_SCHEMES:
@@ -331,7 +351,9 @@ def Surreal(
         constructed_url.scheme == UrlScheme.HTTP
         or constructed_url.scheme == UrlScheme.HTTPS
     ):
-        return BlockingHttpSurrealConnection(url=url, timeout=timeout)
+        return BlockingHttpSurrealConnection(
+            url=url, timeout=timeout, version_check=version_check
+        )
     elif (
         constructed_url.scheme == UrlScheme.WS
         or constructed_url.scheme == UrlScheme.WSS
@@ -342,6 +364,7 @@ def Surreal(
             ping_interval=ping_interval,
             ping_timeout=ping_timeout,
             timeout=timeout,
+            version_check=version_check,
         )
     else:
         raise UnsupportedEngineError(url)
@@ -354,6 +377,7 @@ def AsyncSurreal(
     ping_interval: float | None = 30.0,
     ping_timeout: float | None = 10.0,
     timeout: float | None = 30.0,
+    version_check: bool = True,
 ) -> AsyncSurrealConnection:
     """Open a connection to *url*, picking the transport from its scheme.
 
@@ -379,6 +403,10 @@ def AsyncSurreal(
             indefinitely. Defaults to 30. ``with db.timeout(seconds):`` overrides
             it for the requests made inside the block. Ignored by the embedded
             engine, whose requests never leave the process.
+        version_check: Refuse a server outside the versions this SDK supports
+            (``MINIMUM_VERSION`` up to, but not including, ``MAXIMUM_VERSION``
+            in :mod:`surrealdb.features`). On by default; ``False`` connects
+            anyway. Ignored by the embedded engine.
     """
     constructed_url = Url(url)
     if constructed_url.scheme in _EMBEDDED_SCHEMES:
@@ -389,7 +417,9 @@ def AsyncSurreal(
         constructed_url.scheme == UrlScheme.HTTP
         or constructed_url.scheme == UrlScheme.HTTPS
     ):
-        return AsyncHttpSurrealConnection(url=url, timeout=timeout)
+        return AsyncHttpSurrealConnection(
+            url=url, timeout=timeout, version_check=version_check
+        )
     elif (
         constructed_url.scheme == UrlScheme.WS
         or constructed_url.scheme == UrlScheme.WSS
@@ -400,6 +430,7 @@ def AsyncSurreal(
             ping_interval=ping_interval,
             ping_timeout=ping_timeout,
             timeout=timeout,
+            version_check=version_check,
         )
     else:
         raise UnsupportedEngineError(url)

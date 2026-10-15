@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A declared server range, checked on connect. Every remote connection now asks
+  the server for its version as the first thing it does - on websocket
+  connections when the socket opens, and over HTTP before the first request -
+  and refuses a server outside `MINIMUM_VERSION` (2.0.0) up to, but not
+  including, `MAXIMUM_VERSION` (5.0.0) with `UnsupportedVersionError`. Pass
+  `version_check=False` to a connection or to `Surreal`/`AsyncSurreal` to
+  connect anyway. 4.x servers are accepted. Pre-release and nightly builds
+  count as the release they lead up to.
+
+  The version is kept on the connection as `db.server_version`, and features
+  that need a newer server are gated on it the way the JS SDK gates them:
+  `Features.SESSIONS`, `API`, `REFRESH_TOKENS` and `TRANSACTIONS` need 3.0,
+  `IMPORT_FAILURE_REPORTING` 3.1 and `QUERY_STREAMING` 3.3.
+  `db.is_feature_supported(Features.SESSIONS)` asks, and using a feature the
+  server lacks raises `UnavailableFeatureError` (a subclass of
+  `UnsupportedFeatureError`) before anything is sent - so `new_session()` and
+  `begin()` on a 2.x server now say what they need instead of passing on the
+  server's "method not found". A server older than 3.3 is no longer sent a
+  `query_stream` request just to learn it does not stream.
+
 - Request timeouts are configurable. Every request waited at most 30 seconds
   for its reply, and that was hardcoded in all four remote transports, so a
   query that legitimately ran longer could not finish. `timeout=` on the

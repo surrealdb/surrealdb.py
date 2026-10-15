@@ -27,6 +27,7 @@ from surrealdb.connections.builders import (
     _Executor,
 )
 from surrealdb.connections.files import AsyncFiles
+from surrealdb.connections.server_version import ServerVersionMixin
 from surrealdb.connections.timeouts import (
     DEFAULT_TIMEOUT,
     check_timeout,
@@ -46,15 +47,18 @@ from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     ConnectionUnavailableError,
     NotAllowedError,
+    ServerError,
     SurrealError,
     TransportTimeoutError,
     UnexpectedResponseError,
     parse_query_error,
     parse_rpc_error,
 )
+from surrealdb.features import Features
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 from surrealdb.streaming import (
+    UNSUPPORTED_BY_SERVER,
     AsyncQueryStream,
     AsyncStreamOps,
     buffered_statements,
@@ -237,7 +241,7 @@ def _abandon_connection(
             pass
 
 
-class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
+class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
     """
     A single async connection to a SurrealDB instance. To be used once and discarded.
 
@@ -253,6 +257,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         ping_interval: float | None = 30.0,
         ping_timeout: float | None = 10.0,
         timeout: float | None = DEFAULT_TIMEOUT,
+        version_check: bool = True,
     ) -> None:
         """
         The constructor for the AsyncSurrealConnection class.
@@ -273,8 +278,11 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         :param timeout: Seconds to wait for each reply, or ``None`` to wait
             indefinitely. Defaults to 30. Override it for a block of requests
             with :meth:`timeout`.
+        :param version_check: Refuse to talk to a server outside the versions
+            this SDK supports - see :mod:`surrealdb.features`. On by default.
         """
         self.url: Url = Url(url)
+        self._version_check = version_check
         self.raw_url: str = f"{self.url.raw_url}/rpc"
         self.host: str | None = self.url.hostname
         self.port: int | None = self.url.port
@@ -565,6 +573,29 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self, message: RequestMessage, process: str, bypass: bool = False
     ) -> dict[str, Any]:
         await self.connect()
+        return await self._request(message, process, bypass)
+
+    async def _handshake(self) -> None:
+        """Ask a freshly opened socket's server for its version."""
+        self._forget_server_version()
+        try:
+            response = await self._request(
+                RequestMessage(RequestMethod.VERSION), "checking the server version"
+            )
+        except ServerError:
+            # A server whose capabilities deny `version` still serves
+            # everything else; nothing can be gated, but nothing is refused.
+            self._adopt_server_version(None)
+            return
+        self._adopt_server_version(response.get("result"))
+        if not self._version_allows_streaming():
+            self._streaming_supported = False
+            self._streaming_refusal = UNSUPPORTED_BY_SERVER
+
+    async def _request(
+        self, message: RequestMessage, process: str, bypass: bool = False
+    ) -> dict[str, Any]:
+        """Send *message* on the open socket and wait for its reply."""
         assert (
             self.socket is not None and self.loop is not None
         )  # will always not be None as the self.connect ensures there's a connection
@@ -658,9 +689,16 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         # requests of a gathered batch all arrive here at once.
         self._check_event_loop()
         async with self._connect_guard():
-            await self._connect_locked(url)
+            if not await self._connect_locked(url):
+                return
+            try:
+                await self._handshake()
+            except BaseException:
+                await self.close()
+                raise
 
-    async def _connect_locked(self, url: str | None = None) -> None:
+    async def _connect_locked(self, url: str | None = None) -> bool:
+        """Open the socket if it is not open; whether a new one was opened."""
         if (
             url is not None
             and self.socket is not None
@@ -676,7 +714,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
 
         if self.socket is not None:
             if self.recv_task is None or not self.recv_task.done():
-                return
+                return False
             # The reader ran and stopped while the socket stayed open, so this
             # used to be a silent no-op that left the connection permanently
             # unusable - every later request waited on a future nothing would
@@ -712,6 +750,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.recv_task = asyncio.create_task(
             _read_frames(weakref.ref(self), self.socket)
         )
+        return True
 
     async def authenticate(self, token: str, session_id: UUID | None = None) -> None:
         kwargs: dict[str, Any] = {"token": token}
@@ -1647,6 +1686,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.live_queues.pop(suid, None)
 
     async def attach(self) -> UUID:
+        await self.connect()
+        self._require(Features.SESSIONS)
         session_id = UUID(str(uuid.uuid4()))
         message = RequestMessage(RequestMethod.ATTACH, session=session_id)
         await self._send(message, "attach")
@@ -1657,6 +1698,8 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         await self._send(message, "detach")
 
     async def begin(self, session_id: UUID | None = None) -> UUID:
+        await self.connect()
+        self._require(Features.TRANSACTIONS)
         kwargs: dict[str, Any] = {}
         if session_id is not None:
             kwargs["session"] = session_id
