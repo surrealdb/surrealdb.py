@@ -234,3 +234,59 @@ def test_a_request_cut_off_mid_flight_fails_and_the_next_one_reconnects(
     finally:
         timer.join()
     assert db.query("RETURN $answer;").first() == 42
+
+
+def _iterate_in_background(subscription: Any) -> tuple[threading.Thread, list[object]]:
+    """Iterate *subscription* on a thread, recording how the iteration ended."""
+    outcome: list[object] = []
+
+    def run() -> None:
+        try:
+            for _ in subscription:
+                pass
+            outcome.append("ended")
+        except ConnectionUnavailableError as exc:
+            outcome.append(exc)
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    time.sleep(0.3)
+    return thread, outcome
+
+
+def test_a_reading_subscription_hears_when_a_dead_socket_is_replaced(
+    proxy: DroppableProxy,
+    connection_params: dict[str, Any],
+    blocking_ws_connection: BlockingWsSurrealConnection,
+) -> None:
+    blocking_ws_connection.query("DEFINE TABLE IF NOT EXISTS reconnect_live;").execute()
+    db = _connected(proxy, connection_params, reconnect=False)
+    try:
+        subscription = db.subscribe_live(db.live("reconnect_live"))
+        thread, outcome = _iterate_in_background(subscription)
+        with db._lock:
+            _drop(proxy, db)
+            db._ready_locked()
+        thread.join(5)
+        assert len(outcome) == 1
+        assert isinstance(outcome[0], ConnectionUnavailableError)
+    finally:
+        db.close()
+
+
+def test_a_reconnect_ends_an_attached_subscription(
+    db: BlockingWsSurrealConnection,
+    proxy: DroppableProxy,
+    blocking_ws_connection: BlockingWsSurrealConnection,
+) -> None:
+    blocking_ws_connection.query("DEFINE TABLE IF NOT EXISTS reconnect_live;").execute()
+    live_id = db.query("LIVE SELECT * FROM reconnect_live;").first()
+    subscription = db.live_of(str(live_id))
+    thread, outcome = _iterate_in_background(subscription)
+    with db._lock:
+        _drop(proxy, db)
+        db._ready_locked()
+    thread.join(5)
+    assert len(outcome) == 1
+    assert isinstance(outcome[0], ConnectionUnavailableError)
+    assert not subscription.is_alive

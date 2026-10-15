@@ -527,6 +527,7 @@ class BlockingWsSurrealConnection(
                     self._emit("error", exc)
                     continue
                 self._set_status("connected", self._server_version)
+                self._end_unmanaged_live()
                 return
         finally:
             self._reconnecting = False
@@ -540,6 +541,20 @@ class BlockingWsSurrealConnection(
         self._set_status("disconnected")
         self._emit("error", error)
         raise error
+
+    def _end_unmanaged_live(self) -> None:
+        """Break the subscriptions a reconnect did not restart.
+
+        A query attached with ``live_of()`` belongs to whoever started it, so
+        it is not replayed; its subscribers would otherwise wait on a socket
+        that will never carry it.
+        """
+        managed = self._registry.live.keys()
+        for logical, queues in self.live_queues.items():
+            if logical not in managed:
+                for notifications in queues:
+                    notifications.put(_LIVE_BROKEN_SENTINEL)
+        self._live_tracker.ended(keep=managed)
 
     def _drop_socket(self) -> None:
         """Close and forget the socket, if any, keeping the session state."""
@@ -2401,19 +2416,18 @@ class BlockingWsSurrealConnection(
         unauthenticated and with no namespace or database selected; sign in and
         ``use()`` again after reconnecting.
         """
-        # Live subscriptions end cleanly, as on the async transport: the
-        # caller closed the connection, so nothing was lost to a failure.
-        for queues in self.live_queues.values():
-            for notifications in queues:
-                notifications.put(_LIVE_KILLED_SENTINEL)
-        self._shut()
+        self._shut(_LIVE_KILLED_SENTINEL)
 
-    def _shut(self) -> None:
+    def _shut(self, live_end: dict[str, Any] = _LIVE_BROKEN_SENTINEL) -> None:
         """Drop the socket and the session state behind it.
 
-        What :meth:`close` does, less ending live subscriptions cleanly: used
-        when a dead socket is found, so a subscriber hears of the failure.
+        Live subscribers are sent *live_end*: :meth:`close` ends them cleanly,
+        as on the async transport, while a dead socket found elsewhere breaks
+        them, so a subscriber hears of the failure.
         """
+        for queues in self.live_queues.values():
+            for notifications in queues:
+                notifications.put(live_end)
         # Streams get an error rather than a clean end: a caller iterating rows
         # asked for all of them, and a socket taken away mid-stream means it
         # will not get them. `_connect_locked` shuts a dead socket itself, so
