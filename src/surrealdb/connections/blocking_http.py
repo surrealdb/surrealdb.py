@@ -18,6 +18,7 @@ from surrealdb.connections.builders import (
 )
 from surrealdb.connections.files import BlockingFiles
 from surrealdb.connections.http_body import read_body
+from surrealdb.connections.server_version import ServerVersionMixin, asks_for_refresh
 from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.timeouts import (
     DEFAULT_TIMEOUT,
@@ -37,6 +38,7 @@ from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     ConnectionUnavailableError,
+    ServerError,
     TransportTimeoutError,
     UnsupportedFeatureError,
     parse_rpc_error,
@@ -59,15 +61,25 @@ _NO_LIVE_QUERIES = (
 )
 
 
-class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
-    def __init__(self, url: str, *, timeout: float | None = DEFAULT_TIMEOUT) -> None:
+class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin):
+    def __init__(
+        self,
+        url: str,
+        *,
+        timeout: float | None = DEFAULT_TIMEOUT,
+        version_check: bool = True,
+    ) -> None:
         """
         :param url: The URL of the database to process queries for.
         :param timeout: Seconds to wait for each request to complete, or
             ``None`` to wait indefinitely. Defaults to 30. Override it for a
             block of requests with :meth:`timeout`.
+        :param version_check: Refuse to talk to a server outside the versions
+            this SDK supports - see :mod:`surrealdb.features`. On by default.
+            The version is asked for once, before the first request.
         """
         self.url: Url = Url(url)
+        self._version_check = version_check
         self._timeout: float | None = check_timeout("timeout", timeout)
         self.raw_url: str = url.rstrip("/")
         self.host: str | None = self.url.hostname
@@ -92,6 +104,19 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         """
         return scoped_timeout(self, seconds)
 
+    def _handshake(self) -> None:
+        """Ask the server for its version, once, before the first request."""
+        try:
+            response = self._send(
+                RequestMessage(RequestMethod.VERSION),
+                "checking the server version",
+                token="",
+            )
+        except ServerError:
+            self._adopt_server_version(None)
+            return
+        self._adopt_server_version(response.get("result"))
+
     def _send(
         self,
         message: RequestMessage,
@@ -102,8 +127,11 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         """Send one RPC over HTTP.
 
         *token* authorises this request alone, without adopting it as the
-        connection's identity - see :meth:`authenticate`.
+        connection's identity - see :meth:`authenticate`. An empty *token*
+        sends the request anonymously.
         """
+        if not self._version_learned and message.method is not RequestMethod.VERSION:
+            self._handshake()
         data = message.WS_CBOR_DESCRIPTOR
         url = f"{self.url.raw_url}/rpc"
         headers = {
@@ -187,6 +215,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         return tokens
 
     def signin(self, vars: dict[str, Value]) -> Tokens:
+        if not self._version_learned and asks_for_refresh(vars):
+            self._handshake()
+        self._require_signin(vars)
         message = RequestMessage(RequestMethod.SIGN_IN, params=vars)
         self.id = message.id
         response = self._send(message, "signing in")
@@ -619,14 +650,16 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
     def version(self) -> str:
         message = RequestMessage(RequestMethod.VERSION)
         self.id = message.id
-        response = self._send(message, "getting database version")
+        response = self._send(message, "getting database version", token="")
         self.check_response_for_result(response, "getting database version")
+        self._adopt_server_version(response["result"])
         return response["result"]
 
     def connect(self, url: str | None = None) -> None:
         """Accept the connect step; HTTP opens no persistent connection.
 
-        Requests are sent per call, so there is nothing to establish up front.
+        Requests are sent per call, so the only thing done up front is asking
+        the server for its version, which is checked and remembered.
         This exists so code written against the connection API works on every
         transport - previously the inherited default raised
         ``NotImplementedError`` here while the websocket transports connected,
@@ -636,10 +669,13 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         transports.
         """
         if url is not None:
+            self._forget_server_version()
             self.url = Url(url)
             self.raw_url = url.rstrip("/")
             self.host = self.url.hostname
             self.port = self.url.port
+        if not self._version_learned:
+            self._handshake()
 
     def close(self) -> None:
         """Close the pooled HTTP session if one is open.

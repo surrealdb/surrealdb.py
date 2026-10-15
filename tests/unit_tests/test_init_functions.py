@@ -140,6 +140,7 @@ def test_http_connections_implement_connect() -> None:
     assert connection.raw_url == "http://localhost:8000"
 
 
+@pytest.mark.usefixtures("no_version_handshake")
 def test_http_connect_repoints_the_url() -> None:
     """Passing a url to ``connect()`` re-points it, as websockets do."""
     connection = Surreal("http://localhost:8000")

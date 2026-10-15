@@ -79,7 +79,7 @@ def test_a_reply_that_trickles_in_still_times_out(trickling_url: str) -> None:
 
 def test_a_body_read_waits_only_for_the_time_left(stalling_url: str) -> None:
     """Headers late in the budget leave the body read only what remains."""
-    db = BlockingHttpSurrealConnection(stalling_url, timeout=1.0)
+    db = BlockingHttpSurrealConnection(stalling_url, timeout=1.0, version_check=False)
     started = time.monotonic()
     with pytest.raises(TransportTimeoutError):
         db.query("RETURN 1").execute()
