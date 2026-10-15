@@ -444,9 +444,7 @@ class _SyncBuilderGuards(_WarnIfDropped):
             return True
 
 
-# A field path for FETCH or RETURN: `author`, `author.friends`.
 _FIELD_PATH_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$")
-# Variable names the generated SurrealQL binds itself.
 _RESERVED_VARIABLES = frozenset(
     {"_resource", "_content", "_data", "_patches", "_version", "_from", "_to", "_edge"}
 )
@@ -454,7 +452,6 @@ _RESERVED_VARIABLES = frozenset(
 Output = Literal["none", "null", "diff", "before", "after"]
 _OUTPUTS = ("none", "null", "diff", "before", "after")
 
-# One end of a RELATE: a record, or several to relate each of.
 RelateEnd: TypeAlias = RecordID | str | Sequence[RecordID]
 
 
@@ -562,7 +559,6 @@ class _CrudState(_WarnIfDropped):
         # SELECT only: the projection, so the server sends just what was asked
         # for. Every other operation ignores it.
         self._fields: Sequence[str] | None = fields
-        # The modifiers, each compiled into its own clause.
         self._where: str | None = None
         self._where_vars: dict[str, Any] = {}
         self._fetch: list[str] = []
@@ -571,7 +567,6 @@ class _CrudState(_WarnIfDropped):
         self._version: Any = None
         self._timeout: str | None = None
         self._output: str | None = None
-        # RELATE only: the edge and its far end; `_record` is the near end.
         self._edge: str | RecordID | Table | None = None
         self._relate_to: RelateEnd | None = None
 
@@ -754,12 +749,9 @@ class _CrudState(_WarnIfDropped):
             variables["_edge"] = edge
             edge_ref = "$_edge"
         else:
-            # The edge table cannot be a parameter or `type::table()` in RELATE,
-            # so it is inlined - escaped, as a record id's table is.
             edge_ref = escape_identifier(
                 edge.table_name if isinstance(edge, Table) else edge
             )
-        # SurrealDB 2 refuses ONLY on a statement that returns nothing.
         only = "ONLY " if self._single and self._output != "NONE" else ""
         body = ""
         if self._mode == _Clause.CONTENT:
