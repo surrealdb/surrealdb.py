@@ -27,11 +27,27 @@ GOOD_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhIn0.Zm9vYmFyYmF6"
 OTHER_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJiIn0.cXV4cXV1eHF1dXg"
 
 
+class _FakeRaw:
+    def __init__(self, body: bytes) -> None:
+        self._body = body
+
+    def read1(self, size: int = -1, decode_content: bool = True) -> bytes:
+        body, self._body = self._body, b""
+        return body
+
+
 class _FakeResponse:
     status_code = 200
 
     def __init__(self) -> None:
         self.content = encode({"id": "1", "result": None})
+        self.raw = _FakeRaw(self.content)
+
+    def __enter__(self) -> "_FakeResponse":
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        pass
 
 
 @pytest.fixture
