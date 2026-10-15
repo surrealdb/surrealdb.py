@@ -7,6 +7,7 @@ across ``await`` and into tasks started inside the block - and never leaks into
 a concurrent task or thread using the same connection.
 """
 
+import math
 from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -31,10 +32,10 @@ def check_timeout(name: str, value: Any) -> float | None:
             f"{name} must be a number of seconds or None, not "
             f"{type(value).__name__}: {value!r}"
         )
-    if value != value or value <= 0:
+    if not math.isfinite(value) or value <= 0:
         raise ValueError(
-            f"{name} must be a positive number of seconds, or None to wait "
-            f"indefinitely; got {value!r}"
+            f"{name} must be a positive, finite number of seconds, or None to "
+            f"wait indefinitely; got {value!r}"
         )
     return float(value)
 
