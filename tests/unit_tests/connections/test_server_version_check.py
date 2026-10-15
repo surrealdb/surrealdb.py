@@ -327,3 +327,49 @@ def test_blocking_a_first_query_on_an_old_server_never_tries_to_stream(
         assert stream_refusals == []
     finally:
         connection.close()
+
+
+@pytest.fixture
+def report_v2(monkeypatch: pytest.MonkeyPatch) -> None:
+    adopt = server_version.ServerVersionMixin._adopt_server_version
+
+    def as_v2(self: server_version.ServerVersionMixin, _reported: Any) -> None:
+        adopt(self, "2.3.10")
+
+    monkeypatch.setattr(
+        server_version.ServerVersionMixin, "_adopt_server_version", as_v2
+    )
+
+
+@pytest.mark.usefixtures("report_v2")
+@pytest.mark.parametrize("kind", ["ws", "http"])
+async def test_async_refresh_signin_is_refused_on_v2(
+    kind: str, connection_params: dict[str, Any]
+) -> None:
+    url = connection_params["ws_url" if kind == "ws" else "url"]
+    connection = AsyncSurreal(url)
+    try:
+        with pytest.raises(UnavailableFeatureError, match="refresh-tokens"):
+            await connection.signin(
+                {**connection_params["vars_params"], "refresh": True}
+            )
+        assert connection.server_version == "2.3.10"
+        assert not connection.token
+    finally:
+        await connection.close()
+
+
+@pytest.mark.usefixtures("report_v2")
+@pytest.mark.parametrize("kind", ["ws", "http"])
+def test_blocking_refresh_signin_is_refused_on_v2(
+    kind: str, connection_params: dict[str, Any]
+) -> None:
+    url = connection_params["ws_url" if kind == "ws" else "url"]
+    connection = Surreal(url)
+    try:
+        with pytest.raises(UnavailableFeatureError, match="refresh-tokens"):
+            connection.signin({**connection_params["vars_params"], "refresh": True})
+        assert connection.server_version == "2.3.10"
+        assert not connection.token
+    finally:
+        connection.close()
