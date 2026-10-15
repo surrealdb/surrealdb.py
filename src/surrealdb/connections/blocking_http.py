@@ -21,6 +21,7 @@ from surrealdb.connections.auth_provider import (
     check_credentials,
     renewal_due,
 )
+from surrealdb.connections.batch import Batch
 from surrealdb.connections.builders import (
     _UNSET,
     M,
@@ -554,6 +555,14 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
     ) -> list[dict[str, Any]]:
         """Run *query* the buffered way, which is all this transport can do."""
         return buffered_statements(self.query_raw(query, variables))
+
+    def batch(self) -> Batch:
+        """Statements to send together as one transaction, in one request.
+
+        Add them with ``.query(sql, vars)`` and run them with ``.execute()``.
+        They all apply or none do. Works on every transport and version.
+        """
+        return Batch(self)
 
     def query_raw(
         self, query: str, vars: dict[str, Value] | None = None

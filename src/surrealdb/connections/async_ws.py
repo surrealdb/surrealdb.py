@@ -33,6 +33,7 @@ from surrealdb.connections.auth_provider import (
     check_credentials,
     renew_at,
 )
+from surrealdb.connections.batch import AsyncBatch
 from surrealdb.connections.builders import (
     _UNSET,
     AsyncCrudBuilder,
@@ -1406,6 +1407,14 @@ class AsyncWsSurrealConnection(
             variables=vars,
         )
 
+    def batch(self) -> AsyncBatch:
+        """Statements to send together as one transaction, in one request.
+
+        Add them with ``.query(sql, vars)`` and run them with ``.execute()``.
+        They all apply or none do. Works on every transport and version.
+        """
+        return AsyncBatch(self)
+
     async def query_raw(
         self,
         query: str,
@@ -1600,6 +1609,16 @@ class AsyncWsSurrealConnection(
         await self._send(message, "letting")
         if txn_id is None:
             self._note_let(session_id, key, value)
+
+    async def set(
+        self,
+        key: str,
+        value: Value,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> None:
+        """Set a variable for the session; ``let`` by its JS name."""
+        await self.let(key, value, session_id=session_id, txn_id=txn_id)
 
     async def unset(
         self,
@@ -2323,6 +2342,18 @@ class AsyncWsSurrealConnection(
             state.access, state.refresh = source.access, source.refresh
         return AsyncSurrealSession(self, forked)
 
+    async def begin_transaction(
+        self, session_id: UUID | None = None
+    ) -> "AsyncSurrealTransaction":
+        """Begin a transaction on a session - the connection's own by default.
+
+        Commit or cancel it, or use it as a context manager, which commits
+        when the block finishes and cancels if it raises. Needs SurrealDB 3.0
+        or later; :meth:`batch` works on every version.
+        """
+        txn_id = await self.begin(session_id=session_id)
+        return AsyncSurrealTransaction(self, session_id, txn_id)
+
     async def new_session(self) -> "AsyncSurrealSession":
         session_id = await self.attach()
         # A freshly attached session starts unauthenticated on the server -
@@ -2558,6 +2589,14 @@ class AsyncSurrealSession:
     ) -> AsyncQueryBuilder:
         return self._connection.query(query, vars, session_id=self._session_id)
 
+    def batch(self) -> AsyncBatch:
+        """Statements to send together as one transaction, in one request.
+
+        Add them with ``.query(sql, vars)`` and run them with ``.execute()``.
+        They all apply or none do. Works on every transport and version.
+        """
+        return AsyncBatch(self)
+
     async def query_raw(
         self,
         query: str,
@@ -2587,6 +2626,10 @@ class AsyncSurrealSession:
 
     async def let(self, key: str, value: Value) -> None:
         await self._connection.let(key, value, session_id=self._session_id)
+
+    async def set(self, key: str, value: Value) -> None:
+        """Set a session variable; ``let`` by its JS name."""
+        await self.let(key, value)
 
     async def unset(self, key: str) -> None:
         await self._connection.unset(key, session_id=self._session_id)
@@ -2880,7 +2923,7 @@ class AsyncSurrealTransaction:
     def __init__(
         self,
         connection: AsyncWsSurrealConnection,
-        session_id: UUID,
+        session_id: UUID | None,
         txn_id: UUID,
     ) -> None:
         self._connection = connection
@@ -3181,6 +3224,24 @@ class AsyncSurrealTransaction:
 
     async def cancel(self) -> None:
         await self._connection.cancel(self._txn_id, session_id=self._session_id)
+
+    async def set(self, key: str, value: Value) -> None:
+        """Set a variable for the rest of the transaction; ``let`` by its JS name."""
+        await self.let(key, value)
+
+    async def __aenter__(self) -> "AsyncSurrealTransaction":
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        if exc_type is None:
+            await self.commit()
+        else:
+            await self.cancel()
 
     @property
     def files(self) -> AsyncFiles:
