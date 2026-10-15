@@ -3,7 +3,9 @@ A basic async connection to a SurrealDB instance.
 """
 
 import asyncio
+import inspect
 import logging
+import time
 import uuid
 import warnings
 import weakref
@@ -18,6 +20,15 @@ import websockets
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from surrealdb.connections.async_template import AsyncTemplate
+from surrealdb.connections.auth_provider import (
+    RENEW_RETRY,
+    RENEW_RETRY_MAX,
+    AuthCredentials,
+    AuthProvider,
+    check_auth_provider,
+    check_credentials,
+    renew_at,
+)
 from surrealdb.connections.builders import (
     _UNSET,
     AsyncCrudBuilder,
@@ -288,6 +299,8 @@ class AsyncWsSurrealConnection(
         timeout: float | None = DEFAULT_TIMEOUT,
         version_check: bool = True,
         reconnect: bool | ReconnectOptions = True,
+        auth: AuthProvider | None = None,
+        renew_access: bool = True,
     ) -> None:
         """
         The constructor for the AsyncSurrealConnection class.
@@ -315,10 +328,24 @@ class AsyncWsSurrealConnection(
             :mod:`surrealdb.connections.reconnect`. ``True`` (the default) uses
             the default backoff, ``False`` leaves the connection disconnected,
             and :class:`ReconnectOptions` tunes it.
+        :param auth: How the connection signs itself in when the socket opens
+            and after every reconnect: signin credentials, an access token,
+            :class:`Tokens`, or a function or coroutine function returning one
+            of those - see :mod:`surrealdb.connections.auth_provider`.
+        :param renew_access: Renew the connection's access token shortly
+            before it expires, with its refresh token or else with *auth*. On
+            by default.
         """
+        check_auth_provider(auth)
         self.url: Url = Url(url)
         self._version_check = version_check
         self._reconnect: ReconnectOptions = ReconnectOptions.coerce(reconnect)
+        self._auth_provider: AuthProvider | None = auth
+        self._renew_access = renew_access
+        self._renewal: asyncio.TimerHandle | None = None
+        self._renewing = False
+        self._renew_retry = RENEW_RETRY
+        self._renewal_task: Task[None] | None = None
         self._registry = SessionRegistry()
         self._init_events()
         # Set by `close()` so that the reader stopping is not mistaken for the
@@ -718,10 +745,127 @@ class AsyncWsSurrealConnection(
                 "re-established"
             )
 
+    async def _provided_credentials(self) -> AuthCredentials:
+        provider = self._auth_provider
+        if callable(provider):
+            provided = provider()
+            if inspect.isawaitable(provided):
+                provided = await provided
+            return check_credentials(provided)
+        assert provider is not None
+        return provider
+
+    async def _apply_auth_provider(self) -> None:
+        """Sign the connection's own session in with ``auth=``.
+
+        Sends on the socket directly, so it can run while the connect guard
+        is held - from :meth:`connect` and from the reconnect replay.
+        """
+        provided = await self._provided_credentials()
+        if isinstance(provided, dict):
+            response = await self._request(
+                RequestMessage(RequestMethod.SIGN_IN, params=provided), "signing in"
+            )
+            self.check_response_for_result(response, "signing in")
+            self._note_tokens(None, parse_auth_result(response["result"]))
+            return
+        token = provided if isinstance(provided, str) else provided.access
+        if token is None:
+            raise ValueError("auth gave Tokens with no access token to sign in with")
+        await self._request(
+            RequestMessage(RequestMethod.AUTHENTICATE, token=token), "authenticating"
+        )
+        if isinstance(provided, Tokens):
+            self._note_tokens(None, provided)
+        else:
+            self._note_authenticated(None, token)
+
+    def _root_auth_changed(self) -> None:
+        """Re-arm the renewal timer for the root session's new access token.
+
+        A token that is already due when a renewal hands it over is not
+        renewed again straight away: renewing produced nothing newer, so
+        another attempt at once would only repeat it, without end.
+        """
+        self._cancel_renewal()
+        root = self._registry.root
+        if not self._renew_access or (
+            root.refresh is None and self._auth_provider is None
+        ):
+            return
+        when = renew_at(root.access)
+        if when is None:
+            return
+        delay = when - time.time()
+        if delay <= 0 and self._renewing:
+            return
+        self._arm_renewal(max(0.0, delay))
+
+    def _cancel_renewal(self) -> None:
+        if self._renewal is not None:
+            self._renewal.cancel()
+            self._renewal = None
+
+    def _arm_renewal(self, delay: float) -> None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        ref = weakref.ref(self)
+
+        def fire() -> None:
+            connection = ref()
+            if connection is not None:
+                connection._start_renewal()
+
+        self._renewal = loop.call_later(delay, fire)
+
+    def _start_renewal(self) -> None:
+        self._renewal = None
+        if self._closing or self.socket is None:
+            return
+        self._renewal_task = asyncio.get_running_loop().create_task(self._renew())
+
+    async def _renew(self) -> None:
+        """Replace the access token before it expires.
+
+        A failed attempt is tried again after a delay that doubles each time,
+        up to a bound, so one transient failure does not let the token lapse.
+        """
+        root = self._registry.root
+        self._renewing = True
+        try:
+            if root.refresh is not None and self.is_feature_supported(
+                Features.REFRESH_TOKENS
+            ):
+                await self.refresh()
+            elif self._auth_provider is not None:
+                await self.connect()
+                async with self._connect_guard():
+                    await self._apply_auth_provider()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.debug("renewing the access token failed: %s", exc)
+            self._emit("error", exc)
+            if self._renewal is None and not self._closing:
+                self._arm_renewal(self._renew_retry)
+                self._renew_retry = min(self._renew_retry * 2, RENEW_RETRY_MAX)
+            return
+        finally:
+            self._renewing = False
+        self._renew_retry = RENEW_RETRY
+
     async def _restore(self) -> None:
         """Replay every session, then every live query, on the new socket."""
         registry = self._registry
-        await self._restore_session(None, registry.root)
+        if self._auth_provider is None:
+            await self._restore_session(None, registry.root)
+        else:
+            # A fresh sign-in rather than a token that may have expired while
+            # the socket was down.
+            await self._restore_session(None, registry.root, authenticate=False)
+            await self._apply_auth_provider()
         for session_id, state in list(registry.sessions.items()):
             await self._request(
                 RequestMessage(RequestMethod.ATTACH, session=session_id),
@@ -730,9 +874,10 @@ class AsyncWsSurrealConnection(
             await self._restore_session(session_id, state)
         for live in list(registry.live.values()):
             await self._restore_live(live)
+        self._root_auth_changed()
 
     async def _restore_session(
-        self, session_id: UUID | None, state: SessionState
+        self, session_id: UUID | None, state: SessionState, authenticate: bool = True
     ) -> bool:
         scope: dict[str, Any] = {} if session_id is None else {"session": session_id}
         if state.namespace is not None or state.database is not None:
@@ -750,7 +895,7 @@ class AsyncWsSurrealConnection(
                 RequestMessage(RequestMethod.LET, key=key, value=value, **scope),
                 "re-setting a variable",
             )
-        if state.access is not None:
+        if authenticate and state.access is not None:
             try:
                 await self._request(
                     RequestMessage(
@@ -920,6 +1065,8 @@ class AsyncWsSurrealConnection(
                 return
             try:
                 await self._handshake()
+                if self._auth_provider is not None:
+                    await self._apply_auth_provider()
             except BaseException:
                 await self.close()
                 raise
@@ -2119,6 +2266,15 @@ class AsyncWsSurrealConnection(
         left the old one with no way to release its socket.
         """
         self._closing = True
+        self._cancel_renewal()
+        renewal = self._renewal_task
+        self._renewal_task = None
+        if (
+            renewal is not None
+            and not renewal.done()
+            and renewal is not _current_task()
+        ):
+            renewal.cancel()
         task = self._reconnect_task
         self._reconnect_task = None
         if task is not None and not task.done() and task is not _current_task():

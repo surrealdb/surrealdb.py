@@ -8,6 +8,7 @@ from surrealdb.connections.async_ws import (
     AsyncSurrealTransaction,
     AsyncWsSurrealConnection,
 )
+from surrealdb.connections.auth_provider import AuthProvider
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import (
     BlockingSurrealSession,
@@ -315,6 +316,8 @@ def Surreal(
     timeout: float | None = 30.0,
     version_check: bool = True,
     reconnect: bool | ReconnectOptions = True,
+    auth: AuthProvider | None = None,
+    renew_access: bool = True,
 ) -> BlockingSurrealConnection:
     """Open a connection to *url*, picking the transport from its scheme.
 
@@ -350,6 +353,14 @@ def Surreal(
             uses the default :class:`ReconnectOptions`; pass options to tune the
             attempts and backoff, or ``False`` to turn it off. Ignored by the
             transports that have no websocket.
+        auth: How the connection signs itself in: signin credentials, an
+            access token, ``Tokens``, or a function returning one of those
+            (a coroutine function too, for ``AsyncSurreal``). Applied when the
+            connection opens and after every reconnect - see
+            :mod:`surrealdb.connections.auth_provider`. Ignored by the
+            embedded engine.
+        renew_access: Renew the access token shortly before it expires, with
+            the refresh token or else with *auth*. On by default.
     """
     constructed_url = Url(url)
     if constructed_url.scheme in _EMBEDDED_SCHEMES:
@@ -361,7 +372,11 @@ def Surreal(
         or constructed_url.scheme == UrlScheme.HTTPS
     ):
         return BlockingHttpSurrealConnection(
-            url=url, timeout=timeout, version_check=version_check
+            url=url,
+            timeout=timeout,
+            version_check=version_check,
+            auth=auth,
+            renew_access=renew_access,
         )
     elif (
         constructed_url.scheme == UrlScheme.WS
@@ -375,6 +390,8 @@ def Surreal(
             timeout=timeout,
             version_check=version_check,
             reconnect=reconnect,
+            auth=auth,
+            renew_access=renew_access,
         )
     else:
         raise UnsupportedEngineError(url)
@@ -389,6 +406,8 @@ def AsyncSurreal(
     timeout: float | None = 30.0,
     version_check: bool = True,
     reconnect: bool | ReconnectOptions = True,
+    auth: AuthProvider | None = None,
+    renew_access: bool = True,
 ) -> AsyncSurrealConnection:
     """Open a connection to *url*, picking the transport from its scheme.
 
@@ -424,6 +443,14 @@ def AsyncSurreal(
             uses the default :class:`ReconnectOptions`; pass options to tune the
             attempts and backoff, or ``False`` to turn it off. Ignored by the
             transports that have no websocket.
+        auth: How the connection signs itself in: signin credentials, an
+            access token, ``Tokens``, or a function returning one of those
+            (a coroutine function too, for ``AsyncSurreal``). Applied when the
+            connection opens and after every reconnect - see
+            :mod:`surrealdb.connections.auth_provider`. Ignored by the
+            embedded engine.
+        renew_access: Renew the access token shortly before it expires, with
+            the refresh token or else with *auth*. On by default.
     """
     constructed_url = Url(url)
     if constructed_url.scheme in _EMBEDDED_SCHEMES:
@@ -435,7 +462,11 @@ def AsyncSurreal(
         or constructed_url.scheme == UrlScheme.HTTPS
     ):
         return AsyncHttpSurrealConnection(
-            url=url, timeout=timeout, version_check=version_check
+            url=url,
+            timeout=timeout,
+            version_check=version_check,
+            auth=auth,
+            renew_access=renew_access,
         )
     elif (
         constructed_url.scheme == UrlScheme.WS
@@ -449,6 +480,8 @@ def AsyncSurreal(
             timeout=timeout,
             version_check=version_check,
             reconnect=reconnect,
+            auth=auth,
+            renew_access=renew_access,
         )
     else:
         raise UnsupportedEngineError(url)
