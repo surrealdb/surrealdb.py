@@ -88,6 +88,12 @@ def test_a_feature_can_have_an_upper_bound() -> None:
     assert not retired.supports("3.0.0")
 
 
+def test_a_feature_without_an_upper_bound_has_none() -> None:
+    assert Features.SESSIONS.supports("5.2.0")
+    assert Feature("future", since="5.0.0").supports("5.0.0")
+    assert is_version_supported("6.0.0", "3.0.0", None)
+
+
 class _Gate(ServerVersionMixin):
     def __init__(self, version_check: bool = True) -> None:
         self._version_check = version_check
