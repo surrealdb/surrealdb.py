@@ -15,6 +15,8 @@ from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.errors import AlreadyExistsError, ServerError, ThrownError
 from surrealdb.features import Features
 
+pytestmark = pytest.mark.network
+
 Blocking = BlockingWsSurrealConnection | BlockingHttpSurrealConnection
 Async = AsyncWsSurrealConnection | AsyncHttpSurrealConnection
 
@@ -152,3 +154,47 @@ async def test_async_set_and_begin_transaction(
         await session.close_session()
     finally:
         await db.close()
+
+
+def test_a_query_may_hold_several_statements(db: Blocking) -> None:
+    results = (
+        db.batch()
+        .query("CREATE item:a; CREATE item:b")
+        .query("SELECT VALUE id FROM item")
+        .execute()
+    )
+    assert len(results) == 3
+    assert len(results[2]) == 2  # type: ignore[arg-type]
+
+
+def test_a_trailing_line_comment_keeps_its_statement_apart(db: Blocking) -> None:
+    results = (
+        db.batch().query("CREATE item:a -- the first").query("CREATE item:b").execute()
+    )
+    assert len(results) == 2
+    assert _count(db, "item") == 2
+
+
+def test_a_binding_must_match_in_type_too(db: Blocking) -> None:
+    with pytest.raises(ValueError, match=r"\$x is already bound"):
+        db.batch().query("RETURN $x", {"x": True}).query("RETURN $x", {"x": 1})
+    with pytest.raises(ValueError, match=r"\$x is already bound"):
+        db.batch().query("RETURN $x", {"x": [1]}).query("RETURN $x", {"x": [1.0]})
+
+
+def test_a_refused_query_leaves_the_batch_as_it_was(db: Blocking) -> None:
+    batch = db.batch().query("RETURN $x", {"x": 1})
+    with pytest.raises(ValueError):
+        batch.query("RETURN [$y, $x]", {"y": 2, "x": 3})
+    assert batch._variables == {"x": 1}
+    assert batch.execute() == [1]
+
+
+def test_set_is_let_on_every_transport(db: Blocking) -> None:
+    db.set("answer", 42)
+    assert db.query("RETURN $answer;").first() == 42
+
+
+async def test_async_set_is_let_on_every_transport(adb: Async) -> None:
+    await adb.set("answer", 42)
+    assert await adb.query("RETURN $answer;").first() == 42

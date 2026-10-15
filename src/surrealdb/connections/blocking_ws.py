@@ -38,6 +38,7 @@ from surrealdb.connections.batch import Batch
 from surrealdb.connections.builders import (
     _UNSET,
     M,
+    RelateEdge,
     RelateEnd,
     SyncCrudBuilder,
     SyncInsertBuilder,
@@ -49,8 +50,10 @@ from surrealdb.connections.files import BlockingFiles
 from surrealdb.connections.health import check_health
 from surrealdb.connections.import_export import (
     ExportOptions,
+    ExportTarget,
     ImportData,
     export_sql,
+    export_sql_to,
     import_sql,
 )
 from surrealdb.connections.live import LiveSubscription
@@ -83,7 +86,6 @@ from surrealdb.errors import (
     ConnectionUnavailableError,
     NotAllowedError,
     ServerError,
-    SurrealError,
     TransportTimeoutError,
     UnexpectedResponseError,
     parse_query_error,
@@ -480,7 +482,7 @@ class BlockingWsSurrealConnection(
                 self._note_tokens(None, parse_auth_result(response["result"]))
             elif self._auth_provider is not None:
                 self._apply_auth_provider_locked()
-        except SurrealError as exc:
+        except Exception as exc:
             logger.debug("renewing the access token failed: %s", exc)
             self._emit("error", exc)
         finally:
@@ -518,7 +520,7 @@ class BlockingWsSurrealConnection(
                     self.socket = self._connect_socket()
                     self._handshake_locked()
                     self._restore_locked()
-                except (SurrealError, OSError, WebSocketException) as exc:
+                except Exception as exc:
                     logger.debug("reconnect attempt %d failed: %s", attempt, exc)
                     self._emit("error", exc)
                     continue
@@ -565,7 +567,7 @@ class BlockingWsSurrealConnection(
 
     def _restore_session_locked(
         self, session_id: UUID | None, state: SessionState, authenticate: bool = True
-    ) -> None:
+    ) -> bool:
         scope: dict[str, Any] = {} if session_id is None else {"session": session_id}
         if state.namespace is not None or state.database is not None:
             self._send_locked(
@@ -593,6 +595,8 @@ class BlockingWsSurrealConnection(
             except ServerError as exc:
                 self._emit("error", exc)
                 self._note_signed_out(session_id)
+                return False
+        return True
 
     def _restore_live_locked(self, live: LiveQuery) -> None:
         kwargs: dict[str, Any] = {"table": live.table, "diff": live.diff}
@@ -615,6 +619,8 @@ class BlockingWsSurrealConnection(
     def _handshake_locked(self) -> None:
         """Ask a freshly opened socket's server for its version."""
         self._forget_server_version()
+        self._streaming_supported = None
+        self._streaming_refusal = None
         try:
             response = self._send_locked(
                 RequestMessage(RequestMethod.VERSION), "checking the server version"
@@ -851,6 +857,7 @@ class BlockingWsSurrealConnection(
         message = RequestMessage(RequestMethod.RESET, **_scope(session_id))
         self._send(message, "resetting the session")
         self._note_reset(session_id)
+        self._end_session_live(session_id)
 
     def sessions(self) -> list[UUID]:
         """The ids of the sessions attached to this connection on the server,
@@ -873,10 +880,42 @@ class BlockingWsSurrealConnection(
         Example:
             sql = db.export(ExportOptions(tables=["person"], records=False))
         """
-        self._ensure_open()
+        options = options or ExportOptions()
+        with self._lock:
+            self._ready_locked()
+        options.check(self._server_version)
         return export_sql(
             self.url,
-            options or ExportOptions(),
+            options,
+            self._request_timeout(),
+            self.token,
+            self.namespace,
+            self.database,
+        )
+
+    def export_to(
+        self, target: ExportTarget, options: ExportOptions | None = None
+    ) -> None:
+        """Export the selected database as SurrealQL into *target*.
+
+        Writes the export as it arrives, so one too large to hold in memory
+        can still be saved.
+
+        Args:
+            target: The path of a file to write, or a binary file object.
+            options: What to include, as for :meth:`export`.
+
+        Example:
+            db.export_to("backup.surql")
+        """
+        options = options or ExportOptions()
+        with self._lock:
+            self._ready_locked()
+        options.check(self._server_version)
+        export_sql_to(
+            self.url,
+            options,
+            target,
             self._request_timeout(),
             self.token,
             self.namespace,
@@ -895,7 +934,8 @@ class BlockingWsSurrealConnection(
             ImportFailedError: if any statement failed, with each failure in
                 ``failures``. The other statements were still applied.
         """
-        self._ensure_open()
+        with self._lock:
+            self._ready_locked()
         import_sql(
             self.url,
             data,
@@ -2216,12 +2256,16 @@ class BlockingWsSurrealConnection(
         message = RequestMessage(RequestMethod.DETACH, session=session_id)
         self.id = message.id
         self._send(message, "detach")
+        self._end_session_live(session_id)
+        self._registry.forget_session(session_id)
+
+    def _end_session_live(self, session_id: UUID | None) -> None:
+        """End the live queries the server dropped with *session_id*'s state."""
         for logical, live in list(self._registry.live.items()):
             if live.session_id == session_id:
                 self._registry.drop_live(logical)
                 for notifications in self.live_queues.get(logical, []):
                     notifications.put(_LIVE_KILLED_SENTINEL)
-        self._registry.forget_session(session_id)
 
     def begin(self, session_id: UUID | None = None) -> UUID:
         self._ensure_open()
@@ -2278,14 +2322,14 @@ class BlockingWsSurrealConnection(
         forked = self.attach()
         try:
             with self._lock:
-                self._restore_session_locked(forked, source)
+                authenticated = self._restore_session_locked(forked, source)
         except BaseException:
             self.detach(forked)
             raise
         state = self._registry.state(forked)
         state.namespace, state.database = source.namespace, source.database
         state.variables = source.variables
-        if state.access is None and source.access is not None:
+        if authenticated and source.access is not None:
             state.access, state.refresh = source.access, source.refresh
         return BlockingSurrealSession(self, forked)
 
@@ -2420,7 +2464,7 @@ class BlockingWsSurrealConnection(
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
         *,
@@ -2461,6 +2505,11 @@ class BlockingSurrealSession:
     def id(self) -> UUID:
         """The session's id on the server."""
         return self._session_id
+
+    @property
+    def server_version(self) -> str | None:
+        """The version the connected server reported."""
+        return self._connection.server_version
 
     def use(
         self,
@@ -2813,7 +2862,7 @@ class BlockingSurrealSession:
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
     ) -> Any:
@@ -3165,7 +3214,7 @@ class BlockingSurrealTransaction:
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
     ) -> Any:

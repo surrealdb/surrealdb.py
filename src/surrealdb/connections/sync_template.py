@@ -7,12 +7,17 @@ from surrealdb.connections.api import ApiResponse
 from surrealdb.connections.builders import (
     _UNSET,
     M,
+    RelateEdge,
     RelateEnd,
     SyncCrudBuilder,
     SyncInsertBuilder,
     SyncQueryBuilder,
 )
-from surrealdb.connections.import_export import ExportOptions, ImportData
+from surrealdb.connections.import_export import (
+    ExportOptions,
+    ExportTarget,
+    ImportData,
+)
 from surrealdb.connections.live import LiveSubscription
 from surrealdb.connections.timeouts import check_timeout
 from surrealdb.data.types.null import NullType
@@ -90,6 +95,12 @@ class SyncTemplate:
         """Export the selected database as SurrealQL."""
         raise NotImplementedError(f"export not implemented for: {self}")
 
+    def export_to(
+        self, target: ExportTarget, options: ExportOptions | None = None
+    ) -> None:
+        """Export the selected database as SurrealQL into a file, as it arrives."""
+        raise NotImplementedError(f"export_to not implemented for: {self}")
+
     def import_(self, data: ImportData) -> None:
         """Import SurrealQL into the selected database."""
         raise NotImplementedError(f"import_ not implemented for: {self}")
@@ -142,6 +153,10 @@ class SyncTemplate:
     def let(self, key: str, value: Value) -> None:
         """Assign a value as a variable for this connection."""
         raise NotImplementedError(f"let not implemented for: {self}")
+
+    def set(self, key: str, value: Value) -> None:
+        """Assign a value as a variable for this connection; ``let`` by its JS name."""
+        self.let(key, value)
 
     def unset(self, key: str) -> None:
         """Removes a variable for this connection."""
@@ -422,7 +437,7 @@ class SyncTemplate:
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
     ) -> Any:

@@ -104,3 +104,45 @@ def test_value_semantics() -> None:
         StringRecordId(1)  # type: ignore[arg-type]
     with pytest.raises(InvalidRecordIdError):
         StringRecordId("person")
+
+
+def test_decodes_what_it_encodes() -> None:
+    for value in ("person:abc", "person:⟨a:b⟩", "t:1"):
+        assert decode(encode(StringRecordId(value))) == StringRecordId(value)
+
+
+def test_a_quoted_dot_dot_is_one_record(db: Blocking) -> None:
+    db.query("CREATE person:⟨a..b⟩ SET n = 3;").execute()
+    one: Any = db.select(StringRecordId("person:⟨a..b⟩")).execute()
+    assert one["n"] == 3
+    assert isinstance(db.select(StringRecordId("person:1..=1")).execute(), list)
+
+
+def test_relate_takes_string_record_ids(db: Blocking) -> None:
+    edge: Any = db.relate(
+        StringRecordId("person:⟨a:b⟩"),
+        StringRecordId("likes:one"),
+        StringRecordId("person:1"),
+        {},
+    )
+    assert edge["id"] == RecordID("likes", "one")
+    assert edge["in"] == RecordID("person", "a:b")
+    many: Any = db.relate(
+        [StringRecordId("person:⟨a:b⟩")], "likes", [StringRecordId("person:1")], {}
+    )
+    assert len(many) == 1
+    with pytest.raises(ValueError, match="one edge id"):
+        db.relate([StringRecordId("person:1")], StringRecordId("likes:two"), "person:1")
+
+
+def test_pydantic_takes_and_gives_a_string() -> None:
+    pydantic = pytest.importorskip("pydantic")
+
+    class Model(pydantic.BaseModel):  # type: ignore[name-defined,misc]
+        id: StringRecordId
+
+    model = Model(id="person:⟨a:b⟩")
+    assert model.id == StringRecordId("person:⟨a:b⟩")
+    assert Model(id=StringRecordId("person:1")).id == StringRecordId("person:1")
+    assert model.model_dump_json() == '{"id":"person:⟨a:b⟩"}'
+    assert Model.model_json_schema()["properties"]["id"]["type"] == "string"

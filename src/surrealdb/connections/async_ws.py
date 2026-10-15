@@ -27,6 +27,8 @@ from surrealdb.connections.api import (
 )
 from surrealdb.connections.async_template import AsyncTemplate
 from surrealdb.connections.auth_provider import (
+    RENEW_RETRY,
+    RENEW_RETRY_MAX,
     AuthCredentials,
     AuthProvider,
     check_auth_provider,
@@ -40,6 +42,7 @@ from surrealdb.connections.builders import (
     AsyncInsertBuilder,
     AsyncQueryBuilder,
     M,
+    RelateEdge,
     RelateEnd,
     _Executor,
     relate_builder,
@@ -48,8 +51,10 @@ from surrealdb.connections.files import AsyncFiles
 from surrealdb.connections.health import acheck_health
 from surrealdb.connections.import_export import (
     ExportOptions,
+    ExportTarget,
     ImportData,
     aexport_sql,
+    aexport_sql_to,
     aimport_sql,
 )
 from surrealdb.connections.live import AsyncLiveSubscription
@@ -357,6 +362,8 @@ class AsyncWsSurrealConnection(
         self._auth_provider: AuthProvider | None = auth
         self._renew_access = renew_access
         self._renewal: asyncio.TimerHandle | None = None
+        self._renewing = False
+        self._renew_retry = RENEW_RETRY
         self._renewal_task: Task[None] | None = None
         self._registry = SessionRegistry()
         self._init_events()
@@ -793,10 +800,13 @@ class AsyncWsSurrealConnection(
             self._note_authenticated(None, token)
 
     def _root_auth_changed(self) -> None:
-        """Re-arm the renewal timer for the root session's new access token."""
-        if self._renewal is not None:
-            self._renewal.cancel()
-            self._renewal = None
+        """Re-arm the renewal timer for the root session's new access token.
+
+        A token that is already due when a renewal hands it over is not
+        renewed again straight away: renewing produced nothing newer, so
+        another attempt at once would only repeat it, without end.
+        """
+        self._cancel_renewal()
         root = self._registry.root
         if not self._renew_access or (
             root.refresh is None and self._auth_provider is None
@@ -805,6 +815,17 @@ class AsyncWsSurrealConnection(
         when = renew_at(root.access)
         if when is None:
             return
+        delay = when - time.time()
+        if delay <= 0 and self._renewing:
+            return
+        self._arm_renewal(max(0.0, delay))
+
+    def _cancel_renewal(self) -> None:
+        if self._renewal is not None:
+            self._renewal.cancel()
+            self._renewal = None
+
+    def _arm_renewal(self, delay: float) -> None:
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -816,7 +837,7 @@ class AsyncWsSurrealConnection(
             if connection is not None:
                 connection._start_renewal()
 
-        self._renewal = loop.call_later(max(0.0, when - time.time()), fire)
+        self._renewal = loop.call_later(delay, fire)
 
     def _start_renewal(self) -> None:
         self._renewal = None
@@ -825,8 +846,13 @@ class AsyncWsSurrealConnection(
         self._renewal_task = asyncio.get_running_loop().create_task(self._renew())
 
     async def _renew(self) -> None:
-        """Replace the access token before it expires."""
+        """Replace the access token before it expires.
+
+        A failed attempt is tried again after a delay that doubles each time,
+        up to a bound, so one transient failure does not let the token lapse.
+        """
         root = self._registry.root
+        self._renewing = True
         try:
             if root.refresh is not None and self.is_feature_supported(
                 Features.REFRESH_TOKENS
@@ -841,6 +867,13 @@ class AsyncWsSurrealConnection(
         except Exception as exc:
             logger.debug("renewing the access token failed: %s", exc)
             self._emit("error", exc)
+            if self._renewal is None and not self._closing:
+                self._arm_renewal(self._renew_retry)
+                self._renew_retry = min(self._renew_retry * 2, RENEW_RETRY_MAX)
+            return
+        finally:
+            self._renewing = False
+        self._renew_retry = RENEW_RETRY
 
     async def _restore(self) -> None:
         """Replay every session, then every live query, on the new socket."""
@@ -860,10 +893,11 @@ class AsyncWsSurrealConnection(
             await self._restore_session(session_id, state)
         for live in list(registry.live.values()):
             await self._restore_live(live)
+        self._root_auth_changed()
 
     async def _restore_session(
         self, session_id: UUID | None, state: SessionState, authenticate: bool = True
-    ) -> None:
+    ) -> bool:
         scope: dict[str, Any] = {} if session_id is None else {"session": session_id}
         if state.namespace is not None or state.database is not None:
             await self._request(
@@ -893,6 +927,8 @@ class AsyncWsSurrealConnection(
                 # down. The session carries on unauthenticated, and says so.
                 self._emit("error", exc)
                 self._note_signed_out(session_id)
+                return False
+        return True
 
     async def _restore_live(self, live: LiveQuery) -> None:
         kwargs: dict[str, Any] = {"table": live.table, "diff": live.diff}
@@ -909,6 +945,12 @@ class AsyncWsSurrealConnection(
             return
         self._registry.move_live(live, UUID(str(response["result"])))
 
+    def _end_session_live(self, session_id: UUID | None) -> None:
+        """End the live queries the server dropped with *session_id*'s state."""
+        for logical, live in list(self._registry.live.items()):
+            if live.session_id == session_id:
+                self._end_live(logical, _LIVE_QUEUE_CLOSED)
+
     def _end_live(self, logical: str, sentinel: object) -> None:
         """Stop tracking a live query and end its subscriptions with *sentinel*."""
         self._registry.drop_live(logical)
@@ -924,6 +966,8 @@ class AsyncWsSurrealConnection(
     async def _handshake(self) -> None:
         """Ask a freshly opened socket's server for its version."""
         self._forget_server_version()
+        self._streaming_supported = None
+        self._streaming_refusal = None
         try:
             response = await self._request(
                 RequestMessage(RequestMethod.VERSION), "checking the server version"
@@ -1178,6 +1222,7 @@ class AsyncWsSurrealConnection(
         message = RequestMessage(RequestMethod.RESET, **_scope(session_id))
         await self._send(message, "resetting the session")
         self._note_reset(session_id)
+        self._end_session_live(session_id)
 
     async def sessions(self) -> list[UUID]:
         """The ids of the sessions attached to this connection on the server,
@@ -1200,10 +1245,40 @@ class AsyncWsSurrealConnection(
         Example:
             sql = await db.export(ExportOptions(tables=["person"], records=False))
         """
+        options = options or ExportOptions()
         await self.connect()
+        options.check(self._server_version)
         return await aexport_sql(
             self.url,
-            options or ExportOptions(),
+            options,
+            self._request_timeout(),
+            self.token,
+            self.namespace,
+            self.database,
+        )
+
+    async def export_to(
+        self, target: ExportTarget, options: ExportOptions | None = None
+    ) -> None:
+        """Export the selected database as SurrealQL into *target*.
+
+        Writes the export as it arrives, so one too large to hold in memory
+        can still be saved.
+
+        Args:
+            target: The path of a file to write, or a binary file object.
+            options: What to include, as for :meth:`export`.
+
+        Example:
+            await db.export_to("backup.surql")
+        """
+        options = options or ExportOptions()
+        await self.connect()
+        options.check(self._server_version)
+        await aexport_sql_to(
+            self.url,
+            options,
+            target,
             self._request_timeout(),
             self.token,
             self.namespace,
@@ -2291,9 +2366,7 @@ class AsyncWsSurrealConnection(
     async def detach(self, session_id: UUID) -> None:
         message = RequestMessage(RequestMethod.DETACH, session=session_id)
         await self._send(message, "detach")
-        for logical, live in list(self._registry.live.items()):
-            if live.session_id == session_id:
-                self._end_live(logical, _LIVE_QUEUE_CLOSED)
+        self._end_session_live(session_id)
         self._registry.forget_session(session_id)
 
     async def begin(self, session_id: UUID | None = None) -> UUID:
@@ -2349,14 +2422,14 @@ class AsyncWsSurrealConnection(
         source = self._registry.state(session_id).fork()
         forked = await self.attach()
         try:
-            await self._restore_session(forked, source)
+            authenticated = await self._restore_session(forked, source)
         except BaseException:
             await self.detach(forked)
             raise
         state = self._registry.state(forked)
         state.namespace, state.database = source.namespace, source.database
         state.variables = source.variables
-        if state.access is None and source.access is not None:
+        if authenticated and source.access is not None:
             state.access, state.refresh = source.access, source.refresh
         return AsyncSurrealSession(self, forked)
 
@@ -2401,9 +2474,7 @@ class AsyncWsSurrealConnection(
         left the old one with no way to release its socket.
         """
         self._closing = True
-        if self._renewal is not None:
-            self._renewal.cancel()
-            self._renewal = None
+        self._cancel_renewal()
         renewal = self._renewal_task
         self._renewal_task = None
         if (
@@ -2540,7 +2611,7 @@ class AsyncWsSurrealConnection(
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
         *,
@@ -2579,6 +2650,11 @@ class AsyncSurrealSession:
     def id(self) -> UUID:
         """The session's id on the server."""
         return self._session_id
+
+    @property
+    def server_version(self) -> str | None:
+        """The version the connected server reported."""
+        return self._connection.server_version
 
     async def use(
         self,
@@ -2931,7 +3007,7 @@ class AsyncSurrealSession:
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
     ) -> AsyncCrudBuilder[Any]:
@@ -3272,7 +3348,7 @@ class AsyncSurrealTransaction:
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
     ) -> AsyncCrudBuilder[Any]:
