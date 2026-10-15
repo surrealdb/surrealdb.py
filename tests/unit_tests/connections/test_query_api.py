@@ -3,12 +3,12 @@
 
 import uuid
 from collections.abc import AsyncIterator, Iterator
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
 
-from surrealdb import AsyncSurreal, RecordID, Surreal, Table
+from surrealdb import AsyncSurreal, Datetime, RecordID, Surreal, Table
 from surrealdb.connections.api import ApiResponse, build_api_query, graphql_params
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
@@ -236,3 +236,29 @@ def test_compiled_queries() -> None:
     assert ApiResponse.from_result({"status": 204}) == ApiResponse(204)
     with pytest.raises(UnexpectedResponseError):
         ApiResponse.from_result("nope")
+
+
+def test_relate_refuses_ends_that_are_not_records(db: Blocking) -> None:
+    ada, bob = RecordID("person", "ada"), RecordID("person", "bob")
+    with pytest.raises(ValueError, match="one edge id"):
+        db.relate([ada, bob], RecordID("knows", "one"), ada)
+    with pytest.raises(ValueError, match="one edge id"):
+        db.relate(ada, RecordID("knows", "one"), [bob])
+    with pytest.raises(TypeError, match="relates records"):
+        db.relate(Table("person"), "knows", bob)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="relates records"):
+        db.relate(ada, "knows", "person")
+
+
+def test_version_is_sent_as_a_literal_every_server_parses(db: Blocking) -> None:
+    builder = db.select("person").version(datetime(2024, 1, 2, 3, 4, 5))
+    sql, variables = builder._build()
+    assert sql.endswith(' VERSION d"2024-01-02T03:04:05+00:00"')
+    assert "_version" not in variables
+    sql, _ = db.select("person").version(Datetime('2024-01-02T03:04:05Z"'))._build()
+    assert sql.endswith(' VERSION d"2024-01-02T03:04:05Z\\""')
+    try:
+        db.select("person").version(datetime(2024, 1, 2, tzinfo=timezone.utc)).execute()
+    except SurrealError as exc:
+        # A datastore without versions refuses the read, but it parsed.
+        assert "parse" not in str(exc).lower()

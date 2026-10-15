@@ -10,9 +10,14 @@ from surrealdb.connections.builders import (
     AsyncInsertBuilder,
     AsyncQueryBuilder,
     M,
+    RelateEdge,
     RelateEnd,
 )
-from surrealdb.connections.import_export import ExportOptions, ImportData
+from surrealdb.connections.import_export import (
+    ExportOptions,
+    ExportTarget,
+    ImportData,
+)
 from surrealdb.connections.timeouts import check_timeout
 from surrealdb.data.types.null import NullType
 from surrealdb.data.types.record_id import RecordID, RecordIdType, StringRecordId
@@ -93,6 +98,12 @@ class AsyncTemplate:
     async def export(self, options: ExportOptions | None = None) -> str:
         """Export the selected database as SurrealQL."""
         raise NotImplementedError(f"export not implemented for: {self}")
+
+    async def export_to(
+        self, target: ExportTarget, options: ExportOptions | None = None
+    ) -> None:
+        """Export the selected database as SurrealQL into a file, as it arrives."""
+        raise NotImplementedError(f"export_to not implemented for: {self}")
 
     async def import_(self, data: ImportData) -> None:
         """Import SurrealQL into the selected database."""
@@ -508,7 +519,7 @@ class AsyncTemplate:
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
     ) -> AsyncCrudBuilder[Any]:

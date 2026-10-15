@@ -27,6 +27,7 @@ def _bare(cls: type[C]) -> C:
     conn._renew_access = True
     if isinstance(conn, AsyncWsSurrealConnection):
         conn._renewal = None
+        conn._renewing = False
     return conn
 
 

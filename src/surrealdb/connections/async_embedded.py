@@ -11,6 +11,11 @@ from typing import Any
 from uuid import UUID
 
 from surrealdb.connections.async_ws import AsyncSurrealSession, AsyncWsSurrealConnection
+from surrealdb.connections.import_export import (
+    ExportOptions,
+    ExportTarget,
+    ImportData,
+)
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import mapped_engine_errors
 from surrealdb.data.cbor import decode
@@ -169,6 +174,32 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
             return {}
 
         return response
+
+    async def export(self, options: ExportOptions | None = None) -> str:
+        raise UnsupportedFeatureError(
+            "an embedded database has no /export or /import endpoint; run "
+            "the export and import statements through query() instead"
+        )
+
+    async def export_to(
+        self, target: ExportTarget, options: ExportOptions | None = None
+    ) -> None:
+        raise UnsupportedFeatureError(
+            "an embedded database has no /export or /import endpoint; run "
+            "the export and import statements through query() instead"
+        )
+
+    async def import_(self, data: ImportData) -> None:
+        raise UnsupportedFeatureError(
+            "an embedded database has no /export or /import endpoint; run "
+            "the export and import statements through query() instead"
+        )
+
+    async def health(self) -> None:
+        raise UnsupportedFeatureError(
+            "health() asks a server's /health endpoint; an embedded database has "
+            "none, so a request that succeeds is the check that it is up"
+        )
 
     async def attach(self) -> UUID:
         raise UnsupportedFeatureError(

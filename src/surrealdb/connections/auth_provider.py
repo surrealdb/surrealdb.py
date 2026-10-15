@@ -41,6 +41,11 @@ AuthProvider: TypeAlias = (
 # if that is shorter, so a short-lived token is not renewed straight away.
 RENEW_BEFORE = 60.0
 
+# After a failed renewal, try again after this long, doubling each time up to
+# RENEW_RETRY_MAX, while the token may still be renewed.
+RENEW_RETRY = 5.0
+RENEW_RETRY_MAX = 300.0
+
 
 def check_auth_provider(provider: object) -> None:
     """Refuse an ``auth=`` the connection would not know how to apply."""

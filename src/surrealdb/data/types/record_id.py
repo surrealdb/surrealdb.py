@@ -407,3 +407,41 @@ class StringRecordId:
 
     def __hash__(self) -> int:
         return hash(("StringRecordId", self._value))
+
+    @classmethod
+    def _unchecked(cls, value: str) -> StringRecordId:
+        """A StringRecordId for *value* as received, without validating it."""
+        instance = cls.__new__(cls)
+        instance._value = value
+        return instance
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls,
+        _source_type: Any,  # pyright: ignore[reportExplicitAny, reportAny]
+        _handler: Callable[[Any], core_schema.CoreSchema],  # pyright: ignore[reportExplicitAny]
+    ) -> core_schema.CoreSchema:
+        from_str_schema = core_schema.chain_schema(
+            [
+                core_schema.str_schema(),
+                core_schema.no_info_plain_validator_function(StringRecordId),
+            ]
+        )
+        return core_schema.json_or_python_schema(
+            json_schema=from_str_schema,
+            python_schema=core_schema.union_schema(
+                [core_schema.is_instance_schema(StringRecordId), from_str_schema]
+            ),
+            serialization=core_schema.wrap_serializer_function_ser_schema(
+                lambda value, _handler, info: (
+                    value if info.mode == "python" else str(value)
+                ),
+                info_arg=True,
+            ),
+        )
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls, _core_schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
+        return handler(core_schema.str_schema())
