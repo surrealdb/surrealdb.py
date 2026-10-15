@@ -325,7 +325,7 @@ def _is_single_record_operation(resource: RecordIdType) -> bool:
     if isinstance(resource, RecordID):
         return not isinstance(resource.id, Range)
     if isinstance(resource, StringRecordId):
-        return ".." not in _unquoted(resource.value)
+        return ".." not in _top_level(resource.value)
     if isinstance(resource, Table):
         return False
     if isinstance(resource, Range):
@@ -336,18 +336,29 @@ def _is_single_record_operation(resource: RecordIdType) -> bool:
 
 
 _QUOTE_CLOSERS = {"⟨": "⟩", "`": "`", '"': '"', "'": "'"}
+_OPENERS = frozenset("[{(")
+_CLOSERS = frozenset("]})")
 
 
-def _unquoted(text: str) -> str:
-    """*text* without its quoted parts, so ``person:⟨a..b⟩`` is no range."""
+def _top_level(text: str) -> str:
+    """*text* without its quoted or bracketed parts.
+
+    So neither ``person:⟨a..b⟩`` nor the array key ``person:[1..2]`` reads as
+    a range, while ``person:[1]..[3]`` still does.
+    """
     kept: list[str] = []
     closer: str | None = None
     escaped = False
+    depth = 0
     for char in text:
         if closer is None:
             if char in _QUOTE_CLOSERS:
                 closer = _QUOTE_CLOSERS[char]
-            else:
+            elif char in _OPENERS:
+                depth += 1
+            elif char in _CLOSERS:
+                depth = max(depth - 1, 0)
+            elif depth == 0:
                 kept.append(char)
         elif escaped:
             escaped = False
