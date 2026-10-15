@@ -788,6 +788,8 @@ class AsyncWsSurrealConnection(
     async def _handshake(self) -> None:
         """Ask a freshly opened socket's server for its version."""
         self._forget_server_version()
+        self._streaming_supported = None
+        self._streaming_refusal = None
         try:
             response = await self._request(
                 RequestMessage(RequestMethod.VERSION), "checking the server version"

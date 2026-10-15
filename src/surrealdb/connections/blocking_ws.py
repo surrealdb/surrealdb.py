@@ -503,6 +503,8 @@ class BlockingWsSurrealConnection(
     def _handshake_locked(self) -> None:
         """Ask a freshly opened socket's server for its version."""
         self._forget_server_version()
+        self._streaming_supported = None
+        self._streaming_refusal = None
         try:
             response = self._send_locked(
                 RequestMessage(RequestMethod.VERSION), "checking the server version"
