@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import uuid as uuid_module
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Union, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from pydantic_core import core_schema
 from pydantic_core.core_schema import ValidationInfo
@@ -19,8 +19,6 @@ from surrealdb.errors import InvalidRecordIdError
 if TYPE_CHECKING:
     from pydantic import GetJsonSchemaHandler
     from pydantic.json_schema import JsonSchemaValue
-
-RecordIdType = Union[str, "RecordID", Table]
 
 #: What SurrealDB accepts as a record id. Exported so callers have a name to
 #: annotate or cast against - ``RecordID.id`` is deliberately wider (see the
@@ -366,3 +364,85 @@ class RecordID:
         cls, _core_schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
     ) -> JsonSchemaValue:
         return handler(core_schema.str_schema())
+
+
+class StringRecordId:
+    """A record id written as SurrealQL, such as ``"person:tobie"`` or
+    ``"person:⟨a:b⟩"``, for the server to parse.
+
+    Unlike a plain string, it is never parsed by the SDK, so every id the
+    server can read works, and its meaning cannot shift with the SDK's own
+    parsing rules. Use :class:`RecordID` to build an id from its parts.
+    """
+
+    __slots__ = ("_value",)
+
+    def __init__(self, value: str) -> None:
+        if not isinstance(value, str):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise TypeError(
+                f"StringRecordId takes a string such as 'person:tobie'; got "
+                f"{type(value).__name__}"
+            )
+        if ":" not in value:
+            raise InvalidRecordIdError(
+                f"StringRecordId takes a 'table:id' string; {value!r} has no ':'"
+            )
+        self._value = value
+
+    @property
+    def value(self) -> str:
+        """The record id as SurrealQL."""
+        return self._value
+
+    def __str__(self) -> str:
+        return self._value
+
+    def __repr__(self) -> str:
+        return f"StringRecordId({self._value!r})"
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, StringRecordId) and other._value == self._value
+
+    def __hash__(self) -> int:
+        return hash(("StringRecordId", self._value))
+
+    @classmethod
+    def _unchecked(cls, value: str) -> StringRecordId:
+        """A StringRecordId for *value* as received, without validating it."""
+        instance = cls.__new__(cls)
+        instance._value = value
+        return instance
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls,
+        _source_type: Any,  # pyright: ignore[reportExplicitAny, reportAny]
+        _handler: Callable[[Any], core_schema.CoreSchema],  # pyright: ignore[reportExplicitAny]
+    ) -> core_schema.CoreSchema:
+        from_str_schema = core_schema.chain_schema(
+            [
+                core_schema.str_schema(),
+                core_schema.no_info_plain_validator_function(StringRecordId),
+            ]
+        )
+        return core_schema.json_or_python_schema(
+            json_schema=from_str_schema,
+            python_schema=core_schema.union_schema(
+                [core_schema.is_instance_schema(StringRecordId), from_str_schema]
+            ),
+            serialization=core_schema.wrap_serializer_function_ser_schema(
+                lambda value, _handler, info: (
+                    value if info.mode == "python" else str(value)
+                ),
+                info_arg=True,
+            ),
+        )
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls, _core_schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
+        return handler(core_schema.str_schema())
+
+
+RecordIdType = str | RecordID | StringRecordId | Table

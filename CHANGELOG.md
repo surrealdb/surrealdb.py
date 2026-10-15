@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `StringRecordId("person:⟨a:b⟩")`, as in the JS SDK: a record id written as
+  SurrealQL, sent for the server to parse. It works wherever a `RecordID`
+  does, including as a query variable, and reaches every id the server can
+  read, including ones the SDK's own parsing of plain strings refuses.
+
 - Builder modifiers, compiled into the SurrealQL statement:
   `.where(condition, variables)` on `select`, `update`, `upsert` and
   `delete`; `.fetch(*paths)`, `.limit(n)`, `.start(n)` and `.version(at)` on
@@ -153,6 +158,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   concurrent task or another thread. The default stays at 30 seconds. The
   embedded engine accepts `timeout()` and ignores it, since its requests never
   leave the process.
+
+### Deprecated
+
+- Passing a plain `"table:id"` string where a record is expected, as in
+  `db.select("person:1")`. It still works, parsed by the SDK as before, but
+  raises a `DeprecationWarning` naming the call site. Pass
+  `StringRecordId("person:1")` to have the server parse it, or a `RecordID`
+  (`RecordID("person", 1)` or `RecordID.parse("person:1")`). A bare table
+  name such as `"person"` is not affected.
 
 ## [3.0.0-beta.10] - 2026-10-08
 

@@ -49,6 +49,7 @@ from surrealdb.data.types.range import Bound, BoundExcluded, BoundIncluded, Rang
 from surrealdb.data.types.record_id import (
     RecordID,
     RecordIdValue,
+    StringRecordId,
     escape_identifier,
 )
 from surrealdb.data.types.set import SurrealSet
@@ -210,6 +211,7 @@ __all__ = [
     # (a decoded value can be anything a server sends), so this is the name to
     # annotate or cast a value you construct against.
     "RecordIdValue",
+    "StringRecordId",
     "Datetime",
     "PreciseDatetime",
     "Null",

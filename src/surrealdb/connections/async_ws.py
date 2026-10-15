@@ -41,6 +41,7 @@ from surrealdb.connections.builders import (
     AsyncInsertBuilder,
     AsyncQueryBuilder,
     M,
+    RelateEdge,
     RelateEnd,
     _Executor,
     relate_builder,
@@ -78,7 +79,7 @@ from surrealdb.connections.utils_mixin import (
 )
 from surrealdb.data.cbor import decode
 from surrealdb.data.types.null import NullType
-from surrealdb.data.types.record_id import RecordID, RecordIdType
+from surrealdb.data.types.record_id import RecordID, RecordIdType, StringRecordId
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     ConnectionUnavailableError,
@@ -1697,7 +1698,7 @@ class AsyncWsSurrealConnection(
     @overload
     def select(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         *,
         fields: Sequence[str] | None = None,
         into: type[M],
@@ -1727,7 +1728,7 @@ class AsyncWsSurrealConnection(
     @overload
     def select(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         *,
         fields: Sequence[str] | None = None,
         session_id: UUID | None = None,
@@ -1843,7 +1844,7 @@ class AsyncWsSurrealConnection(
     @overload
     def create(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         data: Value = _UNSET,
         *,
         session_id: UUID | None = None,
@@ -1899,7 +1900,7 @@ class AsyncWsSurrealConnection(
     @overload
     def update(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         data: Value = _UNSET,
         *,
         into: type[M],
@@ -1929,7 +1930,7 @@ class AsyncWsSurrealConnection(
     @overload
     def update(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         data: Value = _UNSET,
         *,
         session_id: UUID | None = None,
@@ -1982,7 +1983,7 @@ class AsyncWsSurrealConnection(
     @overload
     def upsert(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         data: Value = _UNSET,
         *,
         into: type[M],
@@ -2012,7 +2013,7 @@ class AsyncWsSurrealConnection(
     @overload
     def upsert(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         data: Value = _UNSET,
         *,
         session_id: UUID | None = None,
@@ -2065,7 +2066,7 @@ class AsyncWsSurrealConnection(
     @overload
     def delete(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         *,
         into: type[M],
         session_id: UUID | None = None,
@@ -2092,7 +2093,7 @@ class AsyncWsSurrealConnection(
     @overload
     def delete(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
@@ -2569,7 +2570,7 @@ class AsyncWsSurrealConnection(
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
         *,
@@ -2671,7 +2672,7 @@ class AsyncSurrealSession:
 
     @overload
     def select(
-        self, record: RecordID, *, into: type[M]
+        self, record: RecordID | StringRecordId, *, into: type[M]
     ) -> AsyncCrudBuilder[M | None]: ...
     @overload
     def select(self, record: Table, *, into: type[M]) -> AsyncCrudBuilder[list[M]]: ...
@@ -2680,7 +2681,9 @@ class AsyncSurrealSession:
         self, record: str, *, into: type[M]
     ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    def select(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
+    def select(
+        self, record: RecordID | StringRecordId
+    ) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def select(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
@@ -2708,7 +2711,7 @@ class AsyncSurrealSession:
     ) -> AsyncCrudBuilder[M]: ...
     @overload
     def create(
-        self, record: RecordID, data: Value = _UNSET
+        self, record: RecordID | StringRecordId, data: Value = _UNSET
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def create(
@@ -2733,7 +2736,7 @@ class AsyncSurrealSession:
 
     @overload
     def update(
-        self, record: RecordID, data: Value = _UNSET, *, into: type[M]
+        self, record: RecordID | StringRecordId, data: Value = _UNSET, *, into: type[M]
     ) -> AsyncCrudBuilder[M]: ...
     @overload
     def update(
@@ -2745,7 +2748,7 @@ class AsyncSurrealSession:
     ) -> AsyncCrudBuilder[M | list[M]]: ...
     @overload
     def update(
-        self, record: RecordID, data: Value = _UNSET
+        self, record: RecordID | StringRecordId, data: Value = _UNSET
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def update(
@@ -2768,7 +2771,7 @@ class AsyncSurrealSession:
 
     @overload
     def upsert(
-        self, record: RecordID, data: Value = _UNSET, *, into: type[M]
+        self, record: RecordID | StringRecordId, data: Value = _UNSET, *, into: type[M]
     ) -> AsyncCrudBuilder[M]: ...
     @overload
     def upsert(
@@ -2780,7 +2783,7 @@ class AsyncSurrealSession:
     ) -> AsyncCrudBuilder[M | list[M]]: ...
     @overload
     def upsert(
-        self, record: RecordID, data: Value = _UNSET
+        self, record: RecordID | StringRecordId, data: Value = _UNSET
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def upsert(
@@ -2803,7 +2806,7 @@ class AsyncSurrealSession:
 
     @overload
     def delete(
-        self, record: RecordID, *, into: type[M]
+        self, record: RecordID | StringRecordId, *, into: type[M]
     ) -> AsyncCrudBuilder[M | None]: ...
     @overload
     def delete(self, record: Table, *, into: type[M]) -> AsyncCrudBuilder[list[M]]: ...
@@ -2812,7 +2815,9 @@ class AsyncSurrealSession:
         self, record: str, *, into: type[M]
     ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
+    def delete(
+        self, record: RecordID | StringRecordId
+    ) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def delete(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
@@ -2941,7 +2946,7 @@ class AsyncSurrealSession:
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
     ) -> AsyncCrudBuilder[Any]:
@@ -2997,7 +3002,7 @@ class AsyncSurrealTransaction:
 
     @overload
     def select(
-        self, record: RecordID, *, into: type[M]
+        self, record: RecordID | StringRecordId, *, into: type[M]
     ) -> AsyncCrudBuilder[M | None]: ...
     @overload
     def select(self, record: Table, *, into: type[M]) -> AsyncCrudBuilder[list[M]]: ...
@@ -3006,7 +3011,9 @@ class AsyncSurrealTransaction:
         self, record: str, *, into: type[M]
     ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    def select(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
+    def select(
+        self, record: RecordID | StringRecordId
+    ) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def select(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
@@ -3039,7 +3046,7 @@ class AsyncSurrealTransaction:
     ) -> AsyncCrudBuilder[M]: ...
     @overload
     def create(
-        self, record: RecordID, data: Value = _UNSET
+        self, record: RecordID | StringRecordId, data: Value = _UNSET
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def create(
@@ -3066,7 +3073,7 @@ class AsyncSurrealTransaction:
 
     @overload
     def update(
-        self, record: RecordID, data: Value = _UNSET, *, into: type[M]
+        self, record: RecordID | StringRecordId, data: Value = _UNSET, *, into: type[M]
     ) -> AsyncCrudBuilder[M]: ...
     @overload
     def update(
@@ -3078,7 +3085,7 @@ class AsyncSurrealTransaction:
     ) -> AsyncCrudBuilder[M | list[M]]: ...
     @overload
     def update(
-        self, record: RecordID, data: Value = _UNSET
+        self, record: RecordID | StringRecordId, data: Value = _UNSET
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def update(
@@ -3103,7 +3110,7 @@ class AsyncSurrealTransaction:
 
     @overload
     def upsert(
-        self, record: RecordID, data: Value = _UNSET, *, into: type[M]
+        self, record: RecordID | StringRecordId, data: Value = _UNSET, *, into: type[M]
     ) -> AsyncCrudBuilder[M]: ...
     @overload
     def upsert(
@@ -3115,7 +3122,7 @@ class AsyncSurrealTransaction:
     ) -> AsyncCrudBuilder[M | list[M]]: ...
     @overload
     def upsert(
-        self, record: RecordID, data: Value = _UNSET
+        self, record: RecordID | StringRecordId, data: Value = _UNSET
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def upsert(
@@ -3140,7 +3147,7 @@ class AsyncSurrealTransaction:
 
     @overload
     def delete(
-        self, record: RecordID, *, into: type[M]
+        self, record: RecordID | StringRecordId, *, into: type[M]
     ) -> AsyncCrudBuilder[M | None]: ...
     @overload
     def delete(self, record: Table, *, into: type[M]) -> AsyncCrudBuilder[list[M]]: ...
@@ -3149,7 +3156,9 @@ class AsyncSurrealTransaction:
         self, record: str, *, into: type[M]
     ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
+    def delete(
+        self, record: RecordID | StringRecordId
+    ) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def delete(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
@@ -3260,7 +3269,7 @@ class AsyncSurrealTransaction:
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
     ) -> AsyncCrudBuilder[Any]:

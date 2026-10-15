@@ -96,7 +96,12 @@ from typing import (
 from surrealdb.data.types.datetime import Datetime, PreciseDatetime
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.range import Range
-from surrealdb.data.types.record_id import RecordID, RecordIdType, escape_identifier
+from surrealdb.data.types.record_id import (
+    RecordID,
+    RecordIdType,
+    StringRecordId,
+    escape_identifier,
+)
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     SurrealError,
@@ -213,6 +218,18 @@ def _string_to_record_id(s: str, var_name: str) -> RecordID:
     return RecordID(table, ident)
 
 
+def _implicit_record_id(s: str, var_name: str) -> RecordID:
+    """Parse a plain ``"table:id"`` string, warning that this is deprecated."""
+    warnings.warn(
+        f"Passing the plain string {s!r} as a record id is deprecated: the SDK "
+        "parses it itself, which cannot read every id the server can. Pass "
+        f"StringRecordId({s!r}) to have the server parse it, or a RecordID.",
+        DeprecationWarning,
+        stacklevel=_caller_stacklevel(),
+    )
+    return _string_to_record_id(s, var_name)
+
+
 def _resource_to_variable(
     resource: RecordIdType, variables: dict[str, Any], var_name: str
 ) -> str:
@@ -234,7 +251,7 @@ def _resource_to_variable(
     Anything that matches none of the above is rejected with
     :class:`SurrealError` rather than being concatenated into the SQL.
     """
-    if isinstance(resource, RecordID):
+    if isinstance(resource, (RecordID, StringRecordId)):
         variables[var_name] = resource
         return f"${var_name}"
 
@@ -258,7 +275,7 @@ def _resource_to_variable(
         )
 
     if ":" in resource and ".." not in resource:
-        variables[var_name] = _string_to_record_id(resource, var_name)
+        variables[var_name] = _implicit_record_id(resource, var_name)
         return f"${var_name}"
 
     if _TABLE_ID_PATTERN.match(resource):
@@ -285,7 +302,7 @@ def _relate_end(resource: Any, variables: dict[str, Any], var_name: str) -> str:
     """One end of a RELATE: a record, or a list of records to relate each."""
     if _is_many(resource):
         variables[var_name] = [
-            _string_to_record_id(item, var_name) if isinstance(item, str) else item
+            _implicit_record_id(item, var_name) if isinstance(item, str) else item
             for item in resource
         ]
         return f"${var_name}"
@@ -307,6 +324,8 @@ def _is_single_record_operation(resource: RecordIdType) -> bool:
     """
     if isinstance(resource, RecordID):
         return not isinstance(resource.id, Range)
+    if isinstance(resource, StringRecordId):
+        return ".." not in _top_level(resource.value)
     if isinstance(resource, Table):
         return False
     if isinstance(resource, Range):
@@ -314,6 +333,40 @@ def _is_single_record_operation(resource: RecordIdType) -> bool:
         # answer here only has to be defined, not meaningful.
         return False
     return bool(":" in resource and ".." not in resource)
+
+
+_QUOTE_CLOSERS = {"⟨": "⟩", "`": "`", '"': '"', "'": "'"}
+_OPENERS = frozenset("[{(")
+_CLOSERS = frozenset("]})")
+
+
+def _top_level(text: str) -> str:
+    """*text* without its quoted or bracketed parts.
+
+    So neither ``person:⟨a..b⟩`` nor the array key ``person:[1..2]`` reads as
+    a range, while ``person:[1]..[3]`` still does.
+    """
+    kept: list[str] = []
+    closer: str | None = None
+    escaped = False
+    depth = 0
+    for char in text:
+        if closer is None:
+            if char in _QUOTE_CLOSERS:
+                closer = _QUOTE_CLOSERS[char]
+            elif char in _OPENERS:
+                depth += 1
+            elif char in _CLOSERS:
+                depth = max(depth - 1, 0)
+            elif depth == 0:
+                kept.append(char)
+        elif escaped:
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == closer:
+            closer = None
+    return "".join(kept)
 
 
 def _check_response(response: dict[str, Any], op_name: str) -> list[dict[str, Any]]:
@@ -371,6 +424,17 @@ def _caller_location() -> str:
     if frame is None:
         return "an unknown location"
     return f"{frame.f_code.co_filename}:{frame.f_lineno}"
+
+
+def _caller_stacklevel() -> int:
+    """The ``stacklevel`` that points a warning at the caller's own code."""
+    level = 2
+    current = inspect.currentframe()
+    frame = current.f_back.f_back if current and current.f_back else None
+    while frame is not None and frame.f_code.co_filename.startswith(_PACKAGE_DIR):
+        level += 1
+        frame = frame.f_back
+    return level
 
 
 class _WarnIfDropped:
@@ -452,7 +516,10 @@ _RESERVED_VARIABLES = frozenset(
 Output = Literal["none", "null", "diff", "before", "after"]
 _OUTPUTS = ("none", "null", "diff", "before", "after")
 
-RelateEnd: TypeAlias = RecordID | str | Sequence[RecordID]
+RelateEnd: TypeAlias = (
+    RecordID | StringRecordId | str | Sequence[RecordID | StringRecordId]
+)
+RelateEdge: TypeAlias = str | Table | RecordID | StringRecordId
 
 
 def _datetime_literal(at: datetime | Datetime) -> str:
@@ -477,11 +544,14 @@ def _check_relate_end(end: object, side: str) -> None:
         end if isinstance(end, Sequence) and not isinstance(end, str) else [end]
     )
     for item in items:
-        if isinstance(item, RecordID) or (isinstance(item, str) and ":" in item):
+        if isinstance(item, (RecordID, StringRecordId)) or (
+            isinstance(item, str) and ":" in item
+        ):
             continue
         raise TypeError(
             f"relate() relates records, so {side} must be a RecordID, a "
-            f"'table:id' string, or a list of RecordIDs; got {item!r}. To "
+            "StringRecordId, a 'table:id' string, or a list of record ids; "
+            f"got {item!r}. To "
             "relate every record of a table, select them and pass the list"
         )
 
@@ -567,12 +637,10 @@ class _CrudState(_WarnIfDropped):
         self._version: Any = None
         self._timeout: str | None = None
         self._output: str | None = None
-        self._edge: str | RecordID | Table | None = None
+        self._edge: RelateEdge | None = None
         self._relate_to: RelateEnd | None = None
 
-    def relating(
-        self, edge: str | Table | RecordID, to: RelateEnd, single: bool
-    ) -> None:
+    def relating(self, edge: RelateEdge, to: RelateEnd, single: bool) -> None:
         """Set up a RELATE: the edge and the far end. Used by ``relate()``."""
         self._edge = edge
         self._relate_to = to
@@ -745,7 +813,7 @@ class _CrudState(_WarnIfDropped):
         from_ref = _relate_end(self._record, variables, "_resource")
         to_ref = _relate_end(self._relate_to, variables, "_to")
         edge = self._edge
-        if isinstance(edge, RecordID):
+        if isinstance(edge, (RecordID, StringRecordId)):
             variables["_edge"] = edge
             edge_ref = "$_edge"
         else:
@@ -792,22 +860,23 @@ def relate_builder(
     builder_cls: Callable[..., _B],
     executor: Any,
     from_: RelateEnd,
-    edge: str | Table | RecordID,
+    edge: RelateEdge,
     to: RelateEnd,
 ) -> _B:
     """A CRUD builder set up for ``RELATE from_->edge->to``."""
     if isinstance(edge, str):
         if not edge:
             raise ValueError("relate() needs an edge table name")
-    elif not isinstance(edge, (Table, RecordID)):  # pyright: ignore[reportUnnecessaryIsInstance]
+    elif not isinstance(edge, (Table, RecordID, StringRecordId)):  # pyright: ignore[reportUnnecessaryIsInstance]
         raise TypeError(
-            "relate() takes the edge as a table name, a Table or a RecordID; "
+            "relate() takes the edge as a table name, a Table, a RecordID or "
+            "a StringRecordId; "
             f"got {type(edge).__name__}"
         )
     _check_relate_end(from_, "from_")
     _check_relate_end(to, "to")
     many = _is_many(from_) or _is_many(to)
-    if many and isinstance(edge, RecordID):
+    if many and isinstance(edge, (RecordID, StringRecordId)):
         raise ValueError(
             "relate() cannot give one edge id to several relations; pass the "
             "edge table name, so that each relation gets its own id"

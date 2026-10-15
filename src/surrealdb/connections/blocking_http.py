@@ -27,6 +27,7 @@ from surrealdb.connections.auth_provider import (
 from surrealdb.connections.builders import (
     _UNSET,
     M,
+    RelateEdge,
     RelateEnd,
     SyncCrudBuilder,
     SyncInsertBuilder,
@@ -62,7 +63,7 @@ from surrealdb.connections.utils_mixin import (
     merge_query_vars,
 )
 from surrealdb.data.types.null import NullType
-from surrealdb.data.types.record_id import RecordID, RecordIdType
+from surrealdb.data.types.record_id import RecordID, RecordIdType, StringRecordId
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     ConnectionUnavailableError,
@@ -720,25 +721,33 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         return builder.content(data)
 
     @overload
-    def update(self, record: RecordID, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    def update(
+        self, record: RecordID | StringRecordId, *, into: type[M]
+    ) -> SyncCrudBuilder[M]: ...
     @overload
     def update(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
     @overload
     def update(self, record: str, *, into: type[M]) -> SyncCrudBuilder[M | list[M]]: ...
     @overload
-    def update(self, record: RecordID, data: Value, *, into: type[M]) -> M: ...
+    def update(
+        self, record: RecordID | StringRecordId, data: Value, *, into: type[M]
+    ) -> M: ...
     @overload
     def update(self, record: Table, data: Value, *, into: type[M]) -> list[M]: ...
     @overload
     def update(self, record: str, data: Value, *, into: type[M]) -> M | list[M]: ...
     @overload
-    def update(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def update(
+        self, record: RecordID | StringRecordId
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def update(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
     def update(self, record: str) -> SyncCrudBuilder[Value]: ...
     @overload
-    def update(self, record: RecordID, data: Value) -> dict[str, Value]: ...
+    def update(
+        self, record: RecordID | StringRecordId, data: Value
+    ) -> dict[str, Value]: ...
     @overload
     def update(self, record: Table, data: Value) -> list[Value]: ...
     @overload
@@ -766,25 +775,33 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         return builder.content(data)
 
     @overload
-    def upsert(self, record: RecordID, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    def upsert(
+        self, record: RecordID | StringRecordId, *, into: type[M]
+    ) -> SyncCrudBuilder[M]: ...
     @overload
     def upsert(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
     @overload
     def upsert(self, record: str, *, into: type[M]) -> SyncCrudBuilder[M | list[M]]: ...
     @overload
-    def upsert(self, record: RecordID, data: Value, *, into: type[M]) -> M: ...
+    def upsert(
+        self, record: RecordID | StringRecordId, data: Value, *, into: type[M]
+    ) -> M: ...
     @overload
     def upsert(self, record: Table, data: Value, *, into: type[M]) -> list[M]: ...
     @overload
     def upsert(self, record: str, data: Value, *, into: type[M]) -> M | list[M]: ...
     @overload
-    def upsert(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def upsert(
+        self, record: RecordID | StringRecordId
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def upsert(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
     def upsert(self, record: str) -> SyncCrudBuilder[Value]: ...
     @overload
-    def upsert(self, record: RecordID, data: Value) -> dict[str, Value]: ...
+    def upsert(
+        self, record: RecordID | StringRecordId, data: Value
+    ) -> dict[str, Value]: ...
     @overload
     def upsert(self, record: Table, data: Value) -> list[Value]: ...
     @overload
@@ -813,7 +830,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
 
     @overload
     def delete(
-        self, record: RecordID, *, into: type[M]
+        self, record: RecordID | StringRecordId, *, into: type[M]
     ) -> SyncCrudBuilder[M | None]: ...
     @overload
     def delete(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
@@ -822,7 +839,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         self, record: str, *, into: type[M]
     ) -> SyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    def delete(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value] | None]: ...
+    def delete(
+        self, record: RecordID | StringRecordId
+    ) -> SyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def delete(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
@@ -945,7 +964,11 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
 
     @overload
     def select(
-        self, record: RecordID, *, fields: Sequence[str] | None = None, into: type[M]
+        self,
+        record: RecordID | StringRecordId,
+        *,
+        fields: Sequence[str] | None = None,
+        into: type[M],
     ) -> SyncCrudBuilder[M | None]: ...
     @overload
     def select(
@@ -957,7 +980,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
     ) -> SyncCrudBuilder[M | list[M] | None]: ...
     @overload
     def select(
-        self, record: RecordID, *, fields: Sequence[str] | None = None
+        self, record: RecordID | StringRecordId, *, fields: Sequence[str] | None = None
     ) -> SyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def select(
@@ -1134,7 +1157,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
     ) -> Any:
