@@ -233,3 +233,18 @@ async def test_cannot_fork_a_closed_session(
     with pytest.raises(ValueError, match="not attached"):
         await session.fork()
     assert session.id not in db._registry.sessions
+
+
+async def test_token_methods_on_a_closed_session_do_not_reopen_it(
+    db: AsyncWsSurrealConnection,
+    connection_params: dict[str, Any],
+    needs_v3: None,
+) -> None:
+    await _root(db, connection_params)
+    session = await db.new_session()
+    await session.close_session()
+    with pytest.raises(ValueError, match="does not hold"):
+        await session.refresh()
+    with pytest.raises(ValueError, match="does not hold"):
+        await session.revoke()
+    assert session.id not in db._registry.sessions
