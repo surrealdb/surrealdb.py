@@ -25,6 +25,7 @@ from surrealdb.connections.auth_provider import (
     check_credentials,
     renewal_due,
 )
+from surrealdb.connections.batch import AsyncBatch
 from surrealdb.connections.builders import (
     _UNSET,
     AsyncCrudBuilder,
@@ -665,6 +666,14 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         """Run *query* the buffered way, which is all this transport can do."""
         response = await self.query_raw(query, variables)
         return buffered_statements(response)
+
+    def batch(self) -> AsyncBatch:
+        """Statements to send together as one transaction, in one request.
+
+        Add them with ``.query(sql, vars)`` and run them with ``.execute()``.
+        They all apply or none do. Works on every transport and version.
+        """
+        return AsyncBatch(self)
 
     async def query_raw(
         self, query: str, vars: dict[str, Value] | None = None

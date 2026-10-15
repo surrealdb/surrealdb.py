@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `db.batch()` sends several statements as one transaction, in one request:
+  `db.batch().query(sql, vars).query(sql, vars).execute()` returns each
+  statement's result, or raises the statement that failed, with none of them
+  applied. Nothing is held open on the server, so it works on every transport
+  and version, sessions included.
+
+- JS names for transactions and variables: `db.begin_transaction()` begins a
+  transaction on the connection's own session (or on `session_id`), and a
+  transaction works as a context manager, committing when the block finishes
+  and cancelling if it raises. `set(key, value)` is `let` by its JS name, on
+  connections, sessions and transactions.
+
 - `StringRecordId("person:⟨a:b⟩")`, as in the JS SDK: a record id written as
   SurrealQL, sent for the server to parse. It works wherever a `RecordID`
   does, including as a query variable, and reaches every id the server can

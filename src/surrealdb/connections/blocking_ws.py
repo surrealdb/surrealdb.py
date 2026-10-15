@@ -35,6 +35,7 @@ from surrealdb.connections.auth_provider import (
     check_credentials,
     renewal_due,
 )
+from surrealdb.connections.batch import Batch
 from surrealdb.connections.builders import (
     _UNSET,
     M,
@@ -1121,6 +1122,14 @@ class BlockingWsSurrealConnection(
             variables=vars,
         )
 
+    def batch(self) -> Batch:
+        """Statements to send together as one transaction, in one request.
+
+        Add them with ``.query(sql, vars)`` and run them with ``.execute()``.
+        They all apply or none do. Works on every transport and version.
+        """
+        return Batch(self)
+
     def query_raw(
         self,
         query: str,
@@ -1351,6 +1360,16 @@ class BlockingWsSurrealConnection(
         self._send(message, "letting")
         if txn_id is None:
             self._note_let(session_id, key, value)
+
+    def set(
+        self,
+        key: str,
+        value: Value,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> None:
+        """Set a variable for the session; ``let`` by its JS name."""
+        self.let(key, value, session_id=session_id, txn_id=txn_id)
 
     def unset(
         self,
@@ -2305,6 +2324,18 @@ class BlockingWsSurrealConnection(
             state.access, state.refresh = source.access, source.refresh
         return BlockingSurrealSession(self, forked)
 
+    def begin_transaction(
+        self, session_id: UUID | None = None
+    ) -> "BlockingSurrealTransaction":
+        """Begin a transaction on a session - the connection's own by default.
+
+        Commit or cancel it, or use it as a context manager, which commits
+        when the block finishes and cancels if it raises. Needs SurrealDB 3.0
+        or later; :meth:`batch` works on every version.
+        """
+        txn_id = self.begin(session_id=session_id)
+        return BlockingSurrealTransaction(self, session_id, txn_id)
+
     def new_session(self) -> "BlockingSurrealSession":
         session_id = self.attach()
         # A freshly attached session starts unauthenticated on the server -
@@ -2466,6 +2497,11 @@ class BlockingSurrealSession:
         """The session's id on the server."""
         return self._session_id
 
+    @property
+    def server_version(self) -> str | None:
+        """The version the connected server reported."""
+        return self._connection.server_version
+
     def use(
         self,
         namespace: str | NullType | None = None,
@@ -2492,6 +2528,14 @@ class BlockingSurrealSession:
         vars: dict[str, Value] | None = None,
     ) -> SyncQueryBuilder:
         return self._connection.query(query, vars, session_id=self._session_id)
+
+    def batch(self) -> Batch:
+        """Statements to send together as one transaction, in one request.
+
+        Add them with ``.query(sql, vars)`` and run them with ``.execute()``.
+        They all apply or none do. Works on every transport and version.
+        """
+        return Batch(self)
 
     def query_raw(
         self,
@@ -2520,6 +2564,10 @@ class BlockingSurrealSession:
 
     def let(self, key: str, value: Value) -> None:
         self._connection.let(key, value, session_id=self._session_id)
+
+    def set(self, key: str, value: Value) -> None:
+        """Set a session variable; ``let`` by its JS name."""
+        self.let(key, value)
 
     def unset(self, key: str) -> None:
         self._connection.unset(key, session_id=self._session_id)
@@ -2815,12 +2863,15 @@ class BlockingSurrealTransaction:
     def __init__(
         self,
         connection: BlockingWsSurrealConnection,
-        session_id: UUID,
+        session_id: UUID | None,
         txn_id: UUID,
     ) -> None:
         self._connection = connection
         self._session_id = session_id
         self._txn_id = txn_id
+        # Set once commit() or cancel() succeeds: the transaction is gone, so
+        # leaving a `with` block must not try to finish it again.
+        self._finished = False
 
     def timeout(self, seconds: float | None) -> AbstractContextManager[None]:
         """Wait *seconds* for each reply inside the block - see the connection's."""
@@ -3124,9 +3175,31 @@ class BlockingSurrealTransaction:
 
     def commit(self) -> None:
         self._connection.commit(self._txn_id, session_id=self._session_id)
+        self._finished = True
 
     def cancel(self) -> None:
         self._connection.cancel(self._txn_id, session_id=self._session_id)
+        self._finished = True
+
+    def set(self, key: str, value: Value) -> None:
+        """Set a variable for the rest of the transaction; ``let`` by its JS name."""
+        self.let(key, value)
+
+    def __enter__(self) -> "BlockingSurrealTransaction":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        if self._finished:
+            return
+        if exc_type is None:
+            self.commit()
+        else:
+            self.cancel()
 
     @property
     def files(self) -> BlockingFiles:
