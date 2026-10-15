@@ -273,7 +273,14 @@ class SessionTrackingMixin(EventsMixin):
         self._emit("auth", tokens, session_id)
 
     def _note_authenticated(self, session_id: UUID | None, token: str) -> None:
+        """Record an access token given on its own.
+
+        A refresh token belongs to the access token it came with, so one held
+        for a different access token is dropped rather than paired with this.
+        """
         state = self._registry.state(session_id)
+        if state.access != token:
+            state.refresh = None
         state.access = token
         self._emit("auth", Tokens(access=token, refresh=state.refresh), session_id)
 

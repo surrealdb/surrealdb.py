@@ -228,6 +228,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         message = RequestMessage(RequestMethod.AUTHENTICATE, token=token)
         self.id = message.id
         self._send(message, "authenticating", token=token)
+        if self.token != token:
+            self._refresh_token = None
         self.token = token
 
     def invalidate(self) -> None:
@@ -329,7 +331,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         pair = self._token_pair(tokens, "revoke()")
         message = RequestMessage(RequestMethod.REVOKE, params=[pair])
         self.id = message.id
-        self._send(message, "revoking a refresh token")
+        self._send(message, "revoking a refresh token", token="")
         if self._refresh_token == pair["refresh"]:
             self._refresh_token = None
 
