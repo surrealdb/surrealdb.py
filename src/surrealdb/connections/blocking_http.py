@@ -1,11 +1,13 @@
+import time
 import uuid
-from collections.abc import Generator, Sequence
+from collections.abc import Generator, Iterator, Sequence
 from contextlib import AbstractContextManager
 from types import TracebackType
 from typing import Any, overload
 from uuid import UUID
 
 import requests
+import urllib3
 
 from surrealdb.connections.builders import (
     _UNSET,
@@ -55,6 +57,33 @@ _NO_LIVE_QUERIES = (
     "Live queries are only supported for WebSocket connections; HTTP has no "
     "persistent connection for notifications to arrive on"
 )
+
+
+def _read_body(response: requests.Response, deadline: float | None) -> bytes:
+    """The whole body of *response*, unless *deadline* passes first.
+
+    Read with ``read1`` where urllib3 has it, which returns what has arrived
+    rather than waiting to fill the chunk, so the deadline is checked as the
+    body comes in.
+    """
+    if deadline is None:
+        return response.content
+    read1 = getattr(response.raw, "read1", None)
+    chunks: list[bytes] = []
+    try:
+        if read1 is None:
+            pieces: Iterator[bytes] = response.iter_content(1 << 12)
+        else:
+            pieces = iter(lambda: read1(1 << 16, decode_content=True), b"")
+        for chunk in pieces:
+            chunks.append(chunk)
+            if time.monotonic() > deadline:
+                raise TimeoutError("the reply was still arriving at the deadline")
+    except urllib3.exceptions.ReadTimeoutError as exc:
+        raise TimeoutError(str(exc)) from exc
+    except urllib3.exceptions.HTTPError as exc:
+        raise requests.exceptions.ConnectionError(str(exc)) from exc
+    return b"".join(chunks)
 
 
 class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
@@ -119,16 +148,22 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         # Reuse the pooled session when running inside a context manager,
         # otherwise fall back to a fresh per-request request.
         timeout = effective_timeout(self, self._timeout)
+        # requests' own timeout bounds each wait for the socket, not the
+        # whole exchange, so a reply trickling in could run on without end.
+        # The body is read here against the deadline instead.
+        deadline = None if timeout is None else time.monotonic() + timeout
         try:
             if self.session is not None:
                 response = self.session.post(
-                    url, headers=headers, data=data, timeout=timeout
+                    url, headers=headers, data=data, timeout=timeout, stream=True
                 )
             else:
                 response = requests.post(
-                    url, headers=headers, data=data, timeout=timeout
+                    url, headers=headers, data=data, timeout=timeout, stream=True
                 )
-        except requests.exceptions.Timeout as exc:
+            with response:
+                content = _read_body(response, deadline)
+        except (requests.exceptions.Timeout, TimeoutError) as exc:
             raise TransportTimeoutError(
                 f"timed out while {operation} against {url}: no reply "
                 f"{describe(timeout)} ({exc})"
@@ -138,9 +173,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
                 f"could not reach {url} while {operation}: {exc}"
             ) from exc
 
-        self.check_status_for_error(response.status_code, response.content, url)
+        self.check_status_for_error(response.status_code, content, url)
 
-        data_dict = self.decode_response(response.content, operation)
+        data_dict = self.decode_response(content, operation)
 
         if not bypass:
             self.check_response_for_error(data_dict, operation)
