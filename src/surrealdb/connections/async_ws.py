@@ -1492,7 +1492,7 @@ class AsyncWsSurrealConnection(
         """
         return AsyncStreamOps(
             registry=self._streams,
-            open_timeout=self._request_timeout(),
+            request_timeout=self._request_timeout,
             open=self._stream_open,
             release=self._stream_release,
             send=self._stream_send,
