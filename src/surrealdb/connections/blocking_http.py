@@ -1,5 +1,6 @@
 import uuid
 from collections.abc import Generator, Sequence
+from contextlib import AbstractContextManager
 from types import TracebackType
 from typing import Any, overload
 from uuid import UUID
@@ -16,6 +17,13 @@ from surrealdb.connections.builders import (
 )
 from surrealdb.connections.files import BlockingFiles
 from surrealdb.connections.sync_template import SyncTemplate
+from surrealdb.connections.timeouts import (
+    DEFAULT_TIMEOUT,
+    check_timeout,
+    describe,
+    effective_timeout,
+    scoped_timeout,
+)
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import (
     AUTH_FALLBACK_QUERY,
@@ -50,8 +58,15 @@ _NO_LIVE_QUERIES = (
 
 
 class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, *, timeout: float | None = DEFAULT_TIMEOUT) -> None:
+        """
+        :param url: The URL of the database to process queries for.
+        :param timeout: Seconds to wait for each request to complete, or
+            ``None`` to wait indefinitely. Defaults to 30. Override it for a
+            block of requests with :meth:`timeout`.
+        """
         self.url: Url = Url(url)
+        self._timeout: float | None = check_timeout("timeout", timeout)
         self.raw_url: str = url.rstrip("/")
         self.host: str | None = self.url.hostname
         self.port: int | None = self.url.port
@@ -61,6 +76,19 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
         self.database: str | None = None
         self.vars: dict[str, Value] = {}
         self.session: requests.Session | None = None
+
+    def timeout(self, seconds: float | None) -> AbstractContextManager[None]:
+        """Wait *seconds* for each reply to a request made inside the block.
+
+        Overrides the connection's ``timeout`` for the code inside the ``with``
+        block only, so a slow import or a long report can wait longer without
+        changing the default for everything else on the connection. ``None``
+        waits indefinitely::
+
+            with db.timeout(300):
+                db.query("SELECT * FROM big_table")
+        """
+        return scoped_timeout(self, seconds)
 
     def _send(
         self,
@@ -90,16 +118,20 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin):
 
         # Reuse the pooled session when running inside a context manager,
         # otherwise fall back to a fresh per-request request.
+        timeout = effective_timeout(self, self._timeout)
         try:
             if self.session is not None:
                 response = self.session.post(
-                    url, headers=headers, data=data, timeout=30
+                    url, headers=headers, data=data, timeout=timeout
                 )
             else:
-                response = requests.post(url, headers=headers, data=data, timeout=30)
+                response = requests.post(
+                    url, headers=headers, data=data, timeout=timeout
+                )
         except requests.exceptions.Timeout as exc:
             raise TransportTimeoutError(
-                f"timed out while {operation} against {url}: {exc}"
+                f"timed out while {operation} against {url}: no reply "
+                f"{describe(timeout)} ({exc})"
             ) from exc
         except requests.exceptions.RequestException as exc:
             raise ConnectionUnavailableError(

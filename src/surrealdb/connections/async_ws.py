@@ -9,6 +9,7 @@ import warnings
 import weakref
 from asyncio import AbstractEventLoop, Future, Queue, Task
 from collections.abc import AsyncGenerator, Sequence
+from contextlib import AbstractContextManager
 from types import TracebackType
 from typing import Any, overload
 from uuid import UUID
@@ -26,6 +27,13 @@ from surrealdb.connections.builders import (
     _Executor,
 )
 from surrealdb.connections.files import AsyncFiles
+from surrealdb.connections.timeouts import (
+    DEFAULT_TIMEOUT,
+    check_timeout,
+    describe,
+    effective_timeout,
+    scoped_timeout,
+)
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import (
     AUTH_FALLBACK_QUERY,
@@ -75,12 +83,6 @@ _LIVE_QUEUE_BROKEN = object()
 # table - it carries no record and its `result` is None - so it terminates the
 # generator instead of being handed to the consumer.
 _LIVE_KILLED = "KILLED"
-
-
-# Upper bound on how long a single RPC waits for its reply. The blocking
-# transport has had one since it was found hanging on a protocol error; without
-# the same bound here a caller can wait forever if the reply never arrives.
-_RPC_RECV_TIMEOUT = 30.0
 
 
 def _release_live_queue(
@@ -250,6 +252,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         streaming: bool = True,
         ping_interval: float | None = 30.0,
         ping_timeout: float | None = 10.0,
+        timeout: float | None = DEFAULT_TIMEOUT,
     ) -> None:
         """
         The constructor for the AsyncSurrealConnection class.
@@ -267,6 +270,9 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             connection is considered dead and closed, or ``None`` to wait
             indefinitely. Defaults to 10, so a gone peer is noticed within
             roughly ``ping_interval + ping_timeout``.
+        :param timeout: Seconds to wait for each reply, or ``None`` to wait
+            indefinitely. Defaults to 30. Override it for a block of requests
+            with :meth:`timeout`.
         """
         self.url: Url = Url(url)
         self.raw_url: str = f"{self.url.raw_url}/rpc"
@@ -274,6 +280,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         self.port: int | None = self.url.port
         self.token: str | None = None
         self.socket: Any = None  # WebSocket connection
+        self._timeout: float | None = check_timeout("timeout", timeout)
         self._ping_interval: float | None = check_keepalive(
             "ping_interval", ping_interval
         )
@@ -321,6 +328,23 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         # Whether this connection may stream at all - the driver-level switch,
         # distinct from what the server turned out to support.
         self._streaming_enabled: bool = streaming
+
+    def timeout(self, seconds: float | None) -> AbstractContextManager[None]:
+        """Wait *seconds* for each reply to a request made inside the block.
+
+        Overrides the connection's ``timeout`` for the code inside the ``with``
+        block only - including tasks it starts - so a slow import or a long
+        report can wait longer without changing the default for everything
+        else on the connection. ``None`` waits indefinitely::
+
+            with db.timeout(300):
+                await db.query("SELECT * FROM big_table")
+        """
+        return scoped_timeout(self, seconds)
+
+    def _request_timeout(self) -> float | None:
+        """The reply deadline for a request made from the current context."""
+        return effective_timeout(self, self._timeout)
 
     def _connect_guard(self) -> asyncio.Lock:
         """The lock serialising ``connect()``, bound to the running loop.
@@ -545,6 +569,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             self.socket is not None and self.loop is not None
         )  # will always not be None as the self.connect ensures there's a connection
 
+        deadline = self._request_timeout()
         # setup future to wait for response
         fut = self.loop.create_future()
         query_id = message.id
@@ -563,7 +588,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
             # wait for response, bounded so a reply that never arrives cannot
             # block the caller forever
             try:
-                response = await asyncio.wait_for(fut, _RPC_RECV_TIMEOUT)
+                response = await asyncio.wait_for(fut, deadline)
             except asyncio.TimeoutError as exc:
                 # The server may have rejected this request's frame outright,
                 # in which case it answered with an error carrying no `id` and
@@ -575,7 +600,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
                     raise uncorrelated from exc
                 raise TransportTimeoutError(
                     f"timed out while {process} on {self.raw_url}: no reply "
-                    f"within {_RPC_RECV_TIMEOUT}s"
+                    f"{describe(deadline)}"
                 ) from exc
         finally:
             # ``_recv_task`` clears ``self.qry`` when the socket closes, so the
@@ -870,7 +895,7 @@ class AsyncWsSurrealConnection(AsyncTemplate, UtilsMixin):
         """
         return AsyncStreamOps(
             registry=self._streams,
-            open_timeout=_RPC_RECV_TIMEOUT,
+            open_timeout=self._request_timeout(),
             open=self._stream_open,
             release=self._stream_release,
             send=self._stream_send,
@@ -1821,6 +1846,10 @@ class AsyncSurrealSession:
         self._connection = connection
         self._session_id = session_id
 
+    def timeout(self, seconds: float | None) -> AbstractContextManager[None]:
+        """Wait *seconds* for each reply inside the block - see the connection's."""
+        return self._connection.timeout(seconds)
+
     async def use(self, namespace: str, database: str) -> None:
         await self._connection.use(namespace, database, session_id=self._session_id)
 
@@ -2111,6 +2140,10 @@ class AsyncSurrealTransaction:
         self._connection = connection
         self._session_id = session_id
         self._txn_id = txn_id
+
+    def timeout(self, seconds: float | None) -> AbstractContextManager[None]:
+        """Wait *seconds* for each reply inside the block - see the connection's."""
+        return self._connection.timeout(seconds)
 
     def query(
         self,
