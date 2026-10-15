@@ -41,6 +41,7 @@ from surrealdb.connections.builders import (
     AsyncInsertBuilder,
     AsyncQueryBuilder,
     M,
+    RelateEdge,
     RelateEnd,
     _Executor,
     relate_builder,
@@ -2561,7 +2562,7 @@ class AsyncWsSurrealConnection(
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
         *,
@@ -2937,7 +2938,7 @@ class AsyncSurrealSession:
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
     ) -> AsyncCrudBuilder[Any]:
@@ -3260,7 +3261,7 @@ class AsyncSurrealTransaction:
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
     ) -> AsyncCrudBuilder[Any]:

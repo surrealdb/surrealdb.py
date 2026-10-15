@@ -325,7 +325,7 @@ def _is_single_record_operation(resource: RecordIdType) -> bool:
     if isinstance(resource, RecordID):
         return not isinstance(resource.id, Range)
     if isinstance(resource, StringRecordId):
-        return ".." not in resource.value
+        return ".." not in _unquoted(resource.value)
     if isinstance(resource, Table):
         return False
     if isinstance(resource, Range):
@@ -333,6 +333,29 @@ def _is_single_record_operation(resource: RecordIdType) -> bool:
         # answer here only has to be defined, not meaningful.
         return False
     return bool(":" in resource and ".." not in resource)
+
+
+_QUOTE_CLOSERS = {"⟨": "⟩", "`": "`", '"': '"', "'": "'"}
+
+
+def _unquoted(text: str) -> str:
+    """*text* without its quoted parts, so ``person:⟨a..b⟩`` is no range."""
+    kept: list[str] = []
+    closer: str | None = None
+    escaped = False
+    for char in text:
+        if closer is None:
+            if char in _QUOTE_CLOSERS:
+                closer = _QUOTE_CLOSERS[char]
+            else:
+                kept.append(char)
+        elif escaped:
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == closer:
+            closer = None
+    return "".join(kept)
 
 
 def _check_response(response: dict[str, Any], op_name: str) -> list[dict[str, Any]]:
@@ -485,7 +508,11 @@ Output = Literal["none", "null", "diff", "before", "after"]
 _OUTPUTS = ("none", "null", "diff", "before", "after")
 
 # One end of a RELATE: a record, or several to relate each of.
-RelateEnd: TypeAlias = RecordID | str | Sequence[RecordID]
+RelateEnd: TypeAlias = (
+    RecordID | StringRecordId | str | Sequence[RecordID | StringRecordId]
+)
+# The edge of a RELATE: a table, or one record to create as the edge.
+RelateEdge: TypeAlias = str | Table | RecordID | StringRecordId
 
 
 def _datetime_literal(at: datetime | Datetime) -> str:
@@ -510,11 +537,14 @@ def _check_relate_end(end: object, side: str) -> None:
         end if isinstance(end, Sequence) and not isinstance(end, str) else [end]
     )
     for item in items:
-        if isinstance(item, RecordID) or (isinstance(item, str) and ":" in item):
+        if isinstance(item, (RecordID, StringRecordId)) or (
+            isinstance(item, str) and ":" in item
+        ):
             continue
         raise TypeError(
             f"relate() relates records, so {side} must be a RecordID, a "
-            f"'table:id' string, or a list of RecordIDs; got {item!r}. To "
+            "StringRecordId, a 'table:id' string, or a list of record ids; "
+            f"got {item!r}. To "
             "relate every record of a table, select them and pass the list"
         )
 
@@ -602,12 +632,10 @@ class _CrudState(_WarnIfDropped):
         self._timeout: str | None = None
         self._output: str | None = None
         # RELATE only: the edge and its far end; `_record` is the near end.
-        self._edge: str | RecordID | Table | None = None
+        self._edge: RelateEdge | None = None
         self._relate_to: RelateEnd | None = None
 
-    def relating(
-        self, edge: str | Table | RecordID, to: RelateEnd, single: bool
-    ) -> None:
+    def relating(self, edge: RelateEdge, to: RelateEnd, single: bool) -> None:
         """Set up a RELATE: the edge and the far end. Used by ``relate()``."""
         self._edge = edge
         self._relate_to = to
@@ -780,7 +808,7 @@ class _CrudState(_WarnIfDropped):
         from_ref = _relate_end(self._record, variables, "_resource")
         to_ref = _relate_end(self._relate_to, variables, "_to")
         edge = self._edge
-        if isinstance(edge, RecordID):
+        if isinstance(edge, (RecordID, StringRecordId)):
             variables["_edge"] = edge
             edge_ref = "$_edge"
         else:
@@ -830,22 +858,23 @@ def relate_builder(
     builder_cls: Callable[..., _B],
     executor: Any,
     from_: RelateEnd,
-    edge: str | Table | RecordID,
+    edge: RelateEdge,
     to: RelateEnd,
 ) -> _B:
     """A CRUD builder set up for ``RELATE from_->edge->to``."""
     if isinstance(edge, str):
         if not edge:
             raise ValueError("relate() needs an edge table name")
-    elif not isinstance(edge, (Table, RecordID)):  # pyright: ignore[reportUnnecessaryIsInstance]
+    elif not isinstance(edge, (Table, RecordID, StringRecordId)):  # pyright: ignore[reportUnnecessaryIsInstance]
         raise TypeError(
-            "relate() takes the edge as a table name, a Table or a RecordID; "
+            "relate() takes the edge as a table name, a Table, a RecordID or "
+            "a StringRecordId; "
             f"got {type(edge).__name__}"
         )
     _check_relate_end(from_, "from_")
     _check_relate_end(to, "to")
     many = _is_many(from_) or _is_many(to)
-    if many and isinstance(edge, RecordID):
+    if many and isinstance(edge, (RecordID, StringRecordId)):
         raise ValueError(
             "relate() cannot give one edge id to several relations; pass the "
             "edge table name, so that each relation gets its own id"

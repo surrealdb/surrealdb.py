@@ -25,6 +25,7 @@ from surrealdb.connections.auth_provider import (
 from surrealdb.connections.builders import (
     _UNSET,
     M,
+    RelateEdge,
     RelateEnd,
     SyncCrudBuilder,
     SyncInsertBuilder,
@@ -1125,7 +1126,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
     ) -> Any:

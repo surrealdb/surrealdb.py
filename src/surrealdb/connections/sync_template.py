@@ -7,6 +7,7 @@ from surrealdb.connections.api import ApiResponse
 from surrealdb.connections.builders import (
     _UNSET,
     M,
+    RelateEdge,
     RelateEnd,
     SyncCrudBuilder,
     SyncInsertBuilder,
@@ -427,7 +428,7 @@ class SyncTemplate:
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
     ) -> Any:

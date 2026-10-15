@@ -10,6 +10,7 @@ from surrealdb.connections.builders import (
     AsyncInsertBuilder,
     AsyncQueryBuilder,
     M,
+    RelateEdge,
     RelateEnd,
 )
 from surrealdb.connections.import_export import (
@@ -518,7 +519,7 @@ class AsyncTemplate:
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
     ) -> AsyncCrudBuilder[Any]:

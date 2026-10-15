@@ -37,6 +37,7 @@ from surrealdb.connections.auth_provider import (
 from surrealdb.connections.builders import (
     _UNSET,
     M,
+    RelateEdge,
     RelateEnd,
     SyncCrudBuilder,
     SyncInsertBuilder,
@@ -2414,7 +2415,7 @@ class BlockingWsSurrealConnection(
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
         *,
@@ -2792,7 +2793,7 @@ class BlockingSurrealSession:
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
     ) -> Any:
@@ -3126,7 +3127,7 @@ class BlockingSurrealTransaction:
     def relate(
         self,
         from_: RelateEnd,
-        edge: str | Table | RecordID,
+        edge: RelateEdge,
         to: RelateEnd,
         data: Value = _UNSET,
     ) -> Any:
