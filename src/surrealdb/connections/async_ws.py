@@ -10,7 +10,7 @@ import uuid
 import warnings
 import weakref
 from asyncio import AbstractEventLoop, Future, Queue, Task
-from collections.abc import AsyncGenerator, Sequence
+from collections.abc import AsyncGenerator, Mapping, Sequence
 from contextlib import AbstractContextManager
 from types import TracebackType
 from typing import Any, overload
@@ -19,6 +19,12 @@ from uuid import UUID
 import websockets
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
+from surrealdb.connections.api import (
+    ApiResponse,
+    build_api_query,
+    graphql_params,
+    statement_results,
+)
 from surrealdb.connections.async_template import AsyncTemplate
 from surrealdb.connections.auth_provider import (
     AuthCredentials,
@@ -33,7 +39,9 @@ from surrealdb.connections.builders import (
     AsyncInsertBuilder,
     AsyncQueryBuilder,
     M,
+    RelateEnd,
     _Executor,
+    relate_builder,
 )
 from surrealdb.connections.files import AsyncFiles
 from surrealdb.connections.health import acheck_health
@@ -1229,6 +1237,84 @@ class AsyncWsSurrealConnection(
         """
         await acheck_health(self.url, self._request_timeout())
 
+    async def api(
+        self,
+        path: str,
+        *,
+        method: str = "get",
+        body: Value = None,
+        headers: Mapping[str, str] | None = None,
+        query: Mapping[str, str] | None = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> ApiResponse:
+        """Call an endpoint defined with ``DEFINE API``.
+
+        Sent as ``RETURN api::invoke(path, request)``. Needs SurrealDB 3.0 or
+        later, started with the ``define_api`` experimental capability.
+
+        Args:
+            path: The endpoint's path, starting with ``/``.
+            method: The HTTP method to invoke it with.
+            body: The request body.
+            headers: Request headers.
+            query: Query-string parameters.
+
+        Example:
+            response = await db.api("/greet", method="post", body={"name": "Ada"})
+            assert response.ok
+        """
+        await self.connect()
+        self._require(Features.API)
+        sql, variables = build_api_query(path, method, body, headers, query)
+        result = await self.query(
+            sql, variables, session_id=session_id, txn_id=txn_id
+        ).first()
+        return ApiResponse.from_result(result)
+
+    async def gql(
+        self,
+        query: str,
+        vars: Mapping[str, Value] | None = None,
+        *,
+        session_id: UUID | None = None,
+    ) -> list[Value]:
+        """Run an ISO GQL query, such as ``MATCH (p:person) RETURN p.name``.
+
+        Returns each statement's result, and raises the first statement that
+        failed. Needs a server with the ``gql`` RPC method.
+        """
+        await self.connect()
+        params: list[Value] = [query] if vars is None else [query, dict(vars)]
+        message = RequestMessage(RequestMethod.GQL, params=params, **_scope(session_id))
+        response = await self._send(message, "gql")
+        self.check_response_for_result(response, "gql")
+        return statement_results(response["result"], "gql")
+
+    async def graphql(
+        self,
+        query: str,
+        variables: Mapping[str, Value] | None = None,
+        operation_name: str | None = None,
+        *,
+        session_id: UUID | None = None,
+    ) -> dict[str, Value]:
+        """Run a GraphQL query and return the server's ``{data, errors}``.
+
+        Needs a server with the ``graphql`` RPC method and GraphQL enabled for
+        the database, for example with ``DEFINE CONFIG GRAPHQL AUTO``.
+        """
+        await self.connect()
+        message = RequestMessage(
+            RequestMethod.GRAPHQL,
+            params=graphql_params(query, variables, operation_name),
+            **_scope(session_id),
+        )
+        response = await self._send(message, "graphql")
+        self.check_response_for_result(response, "graphql")
+        result = response["result"]
+        return dict(result) if isinstance(result, dict) else {"data": result}
+
     async def signup(
         self, vars: dict[str, Value], session_id: UUID | None = None
     ) -> Tokens:
@@ -2402,6 +2488,30 @@ class AsyncWsSurrealConnection(
         """Typed helpers over the ``file::*`` functions - see `surrealdb.connections.files`."""
         return AsyncFiles(self)
 
+    def relate(
+        self,
+        from_: RelateEnd,
+        edge: str | Table | RecordID,
+        to: RelateEnd,
+        data: Value = _UNSET,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> AsyncCrudBuilder[Any]:
+        """Relate *from_* to *to* through *edge*: ``RELATE from->edge->to``.
+
+        *edge* is the edge table (a name or ``Table``), or a ``RecordID`` for
+        an edge with a chosen id. *from_* and *to* are records, or lists of
+        records to relate every pair. Pass *data* to set the edge's content.
+        Returns an awaitable builder taking ``.output()`` and ``.timeout()``.
+        """
+        builder: AsyncCrudBuilder[Any] = relate_builder(
+            AsyncCrudBuilder, self._make_executor(session_id, txn_id), from_, edge, to
+        )
+        if data is not _UNSET:
+            builder.content(data)
+        return builder
+
 
 class AsyncSurrealSession:
     def __init__(
@@ -2665,6 +2775,39 @@ class AsyncSurrealSession:
             table, data, into=into, relation=relation, session_id=self._session_id
         )
 
+    async def api(
+        self,
+        path: str,
+        *,
+        method: str = "get",
+        body: Value = None,
+        headers: Mapping[str, str] | None = None,
+        query: Mapping[str, str] | None = None,
+    ) -> ApiResponse:
+        return await self._connection.api(
+            path,
+            method=method,
+            body=body,
+            headers=headers,
+            query=query,
+            session_id=self._session_id,
+        )
+
+    async def gql(
+        self, query: str, vars: Mapping[str, Value] | None = None
+    ) -> list[Value]:
+        return await self._connection.gql(query, vars, session_id=self._session_id)
+
+    async def graphql(
+        self,
+        query: str,
+        variables: Mapping[str, Value] | None = None,
+        operation_name: str | None = None,
+    ) -> dict[str, Value]:
+        return await self._connection.graphql(
+            query, variables, operation_name, session_id=self._session_id
+        )
+
     async def run(
         self,
         name: str,
@@ -2716,6 +2859,17 @@ class AsyncSurrealSession:
     def files(self) -> AsyncFiles:
         """Typed helpers over the ``file::*`` functions - see `surrealdb.connections.files`."""
         return AsyncFiles(self)
+
+    def relate(
+        self,
+        from_: RelateEnd,
+        edge: str | Table | RecordID,
+        to: RelateEnd,
+        data: Value = _UNSET,
+    ) -> AsyncCrudBuilder[Any]:
+        return self._connection.relate(
+            from_, edge, to, data, session_id=self._session_id
+        )
 
 
 class AsyncSurrealTransaction:
@@ -2971,6 +3125,25 @@ class AsyncSurrealTransaction:
             txn_id=self._txn_id,
         )
 
+    async def api(
+        self,
+        path: str,
+        *,
+        method: str = "get",
+        body: Value = None,
+        headers: Mapping[str, str] | None = None,
+        query: Mapping[str, str] | None = None,
+    ) -> ApiResponse:
+        return await self._connection.api(
+            path,
+            method=method,
+            body=body,
+            headers=headers,
+            query=query,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+        )
+
     async def run(
         self,
         name: str,
@@ -3005,3 +3178,14 @@ class AsyncSurrealTransaction:
     def files(self) -> AsyncFiles:
         """Typed helpers over the ``file::*`` functions - see `surrealdb.connections.files`."""
         return AsyncFiles(self)
+
+    def relate(
+        self,
+        from_: RelateEnd,
+        edge: str | Table | RecordID,
+        to: RelateEnd,
+        data: Value = _UNSET,
+    ) -> AsyncCrudBuilder[Any]:
+        return self._connection.relate(
+            from_, edge, to, data, session_id=self._session_id, txn_id=self._txn_id
+        )

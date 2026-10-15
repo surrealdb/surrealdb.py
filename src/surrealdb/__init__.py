@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from surrealdb.connections.api import ApiResponse
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import (
     AsyncSurrealSession,
@@ -201,6 +202,7 @@ __all__ = [
     "Bound",
     "BoundIncluded",
     "BoundExcluded",
+    "ApiResponse",
     "ExportOptions",
     "ReconnectOptions",
     "RecordID",

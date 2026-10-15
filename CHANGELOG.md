@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Builder modifiers, compiled into the SurrealQL statement:
+  `.where(condition, variables)` on `select`, `update`, `upsert` and
+  `delete`; `.fetch(*paths)`, `.limit(n)`, `.start(n)` and `.version(at)` on
+  `select`; `.output(mode)` (`"none"`, `"null"`, `"diff"`, `"before"`,
+  `"after"` or a list of fields) on writes and inserts; and `.timeout(d)`,
+  SurrealQL's `TIMEOUT`, on all of them. A modifier a statement does not take
+  raises at once.
+
+- `db.relate(from_, edge, to, data=None)` sends `RELATE from_->edge->to`.
+  `edge` is a table or a `RecordID`; either end may be a list of records.
+  With `data`, the edge is created and returned at once (awaited on async
+  connections); without it, a builder taking `.output()`, `.timeout()` and
+  `.content(data)` is returned.
+
+- `db.api(path, method=..., body=..., headers=..., query=...)` calls an
+  endpoint defined with `DEFINE API` and returns an `ApiResponse` (`status`,
+  `body`, `headers`, `ok`). It is sent as `RETURN api::invoke(...)`, so it
+  works in sessions and transactions, and needs SurrealDB 3.0 or later with
+  the `define_api` capability.
+
+- `db.gql(query, vars=None)` runs an ISO GQL query and returns each
+  statement's result. `db.graphql(query, variables=None, operation_name=None)`
+  runs a GraphQL query and returns `{data, errors}`.
+
 - `db.export(options=None)` and `db.import_(data)` on every remote transport,
   over the server's `/export` and `/import` endpoints with the connection's
   token, namespace and database. `export()` returns the SurrealQL.

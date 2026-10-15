@@ -78,6 +78,7 @@ from collections.abc import (
     Sequence,
 )
 from dataclasses import fields, is_dataclass
+from datetime import datetime, timedelta
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -85,11 +86,14 @@ from typing import (
     Literal,
     NoReturn,
     Protocol,
+    TypeAlias,
     TypeVar,
     cast,
     overload,
 )
 
+from surrealdb.data.types.datetime import Datetime
+from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.range import Range
 from surrealdb.data.types.record_id import RecordID, RecordIdType, escape_identifier
 from surrealdb.data.types.table import Table
@@ -272,6 +276,21 @@ def _resource_to_variable(
     )
 
 
+def _is_many(resource: object) -> bool:
+    return isinstance(resource, Sequence) and not isinstance(resource, str)
+
+
+def _relate_end(resource: Any, variables: dict[str, Any], var_name: str) -> str:
+    """One end of a RELATE: a record, or a list of records to relate each."""
+    if _is_many(resource):
+        variables[var_name] = [
+            _string_to_record_id(item, var_name) if isinstance(item, str) else item
+            for item in resource
+        ]
+        return f"${var_name}"
+    return _resource_to_variable(resource, variables, var_name)
+
+
 def _is_single_record_operation(resource: RecordIdType) -> bool:
     """Whether *resource* can name at most one record.
 
@@ -424,6 +443,62 @@ class _SyncBuilderGuards(_WarnIfDropped):
             return True
 
 
+# A field path for FETCH or RETURN: `author`, `author.friends`.
+_FIELD_PATH_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$")
+# Variable names the generated SurrealQL binds itself.
+_RESERVED_VARIABLES = frozenset(
+    {"_resource", "_content", "_data", "_patches", "_version", "_from", "_to", "_edge"}
+)
+
+Output = Literal["none", "null", "diff", "before", "after"]
+_OUTPUTS = ("none", "null", "diff", "before", "after")
+
+# One end of a RELATE: a record, or several to relate each of.
+RelateEnd: TypeAlias = RecordIdType | Sequence[RecordID]
+
+_S = TypeVar("_S", bound="_CrudState")
+
+
+def _field_paths(method: str, fields: Sequence[str]) -> list[str]:
+    paths = list(fields)
+    if not paths:
+        raise ValueError(f"{method} needs at least one field")
+    for path in paths:
+        if not isinstance(path, str) or not _FIELD_PATH_PATTERN.match(path):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise ValueError(
+                f"{method} takes field paths such as 'author' or "
+                f"'author.friends'; got {path!r}. Use query() for anything else."
+            )
+    return paths
+
+
+def _duration_literal(duration: Duration | timedelta | str | int) -> str:
+    """A SurrealQL duration literal for TIMEOUT, which takes no parameter."""
+    if isinstance(duration, Duration):
+        value = duration
+    elif isinstance(duration, timedelta):
+        value = Duration(
+            (duration.days * 86_400 + duration.seconds) * 1_000_000_000
+            + duration.microseconds * 1_000
+        )
+    elif isinstance(duration, (str, int)) and not isinstance(duration, bool):  # pyright: ignore[reportUnnecessaryIsInstance]
+        value = Duration.parse(duration)
+    else:
+        raise TypeError(
+            "timeout() takes a Duration, a timedelta, a duration string such "
+            f"as '5s', or whole seconds; got {type(duration).__name__}"
+        )
+    if value.elapsed <= 0:
+        raise ValueError("timeout() needs a duration greater than zero")
+    return value.to_string()
+
+
+def _count(method: str, value: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:  # pyright: ignore[reportUnnecessaryIsInstance]
+        raise ValueError(f"{method} takes a whole number of at least 0; got {value!r}")
+    return value
+
+
 class _CrudState(_WarnIfDropped):
     """Holds the configurable state for a CRUD builder."""
 
@@ -454,6 +529,135 @@ class _CrudState(_WarnIfDropped):
         # SELECT only: the projection, so the server sends just what was asked
         # for. Every other operation ignores it.
         self._fields: Sequence[str] | None = fields
+        # The modifiers, each compiled into its own clause.
+        self._where: str | None = None
+        self._where_vars: dict[str, Any] = {}
+        self._fetch: list[str] = []
+        self._limit: int | None = None
+        self._start: int | None = None
+        self._version: Any = None
+        self._timeout: str | None = None
+        self._output: str | None = None
+        # RELATE only: the edge and its far end; `_record` is the near end.
+        self._edge: str | RecordID | Table | None = None
+        self._relate_to: RelateEnd | None = None
+
+    def relating(
+        self, edge: str | Table | RecordID, to: RelateEnd, single: bool
+    ) -> None:
+        """Set up a RELATE: the edge and the far end. Used by ``relate()``."""
+        self._edge = edge
+        self._relate_to = to
+        self._single = single
+
+    def _modifier(self, method: str, operations: tuple[str, ...]) -> None:
+        self._check_not_executed()
+        if self._operation not in operations:
+            raise SurrealError(
+                f"{self._operation} does not take {method}; it applies to "
+                f"{', '.join(operations)}"
+            )
+
+    def where(
+        self: _S, condition: str, variables: Mapping[str, Value] | None = None
+    ) -> _S:
+        """Only the records matching *condition*, a SurrealQL expression.
+
+        Bind values through *variables* and refer to them as ``$name`` rather
+        than formatting them into the condition.
+        """
+        self._modifier("where()", ("SELECT", "UPDATE", "UPSERT", "DELETE"))
+        if not isinstance(condition, str) or not condition.strip():  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise ValueError(
+                "where() needs a SurrealQL condition, such as 'age > $min'"
+            )
+        bound = dict(variables or {})
+        clash = sorted(_RESERVED_VARIABLES & set(bound))
+        if clash:
+            raise ValueError(
+                f"where() variables {clash} clash with the ones the builder "
+                "binds itself; rename them"
+            )
+        self._where = condition
+        self._where_vars = bound
+        return self
+
+    def fetch(self: _S, *fields: str) -> _S:
+        """Replace the record links at these field paths with the records."""
+        self._modifier("fetch()", ("SELECT",))
+        self._fetch = _field_paths("fetch()", fields)
+        return self
+
+    def limit(self: _S, count: int) -> _S:
+        """Return at most *count* records."""
+        self._modifier("limit()", ("SELECT",))
+        self._limit = _count("limit()", count)
+        return self
+
+    def start(self: _S, offset: int) -> _S:
+        """Skip the first *offset* records."""
+        self._modifier("start()", ("SELECT",))
+        self._start = _count("start()", offset)
+        return self
+
+    def version(self: _S, at: datetime | Datetime) -> _S:
+        """Read the records as they were at *at*, on a versioned datastore."""
+        self._modifier("version()", ("SELECT",))
+        if not isinstance(at, (datetime, Datetime)):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise TypeError(
+                f"version() takes a datetime or Datetime; got {type(at).__name__}"
+            )
+        self._version = at
+        return self
+
+    def timeout(self: _S, duration: Duration | timedelta | str | int) -> _S:
+        """Have the server give up on the statement after *duration*.
+
+        This is SurrealQL's ``TIMEOUT`` clause. How long the client waits for
+        a reply is the connection's ``timeout()`` instead.
+        """
+        self._modifier(
+            "timeout()",
+            ("SELECT", "CREATE", "UPDATE", "UPSERT", "DELETE", "RELATE"),
+        )
+        self._timeout = _duration_literal(duration)
+        return self
+
+    def output(self: _S, mode: Output | Sequence[str]) -> _S:
+        """What the statement returns: ``"none"``, ``"null"``, ``"diff"``,
+        ``"before"``, ``"after"``, or a list of field paths."""
+        self._modifier("output()", ("CREATE", "UPDATE", "UPSERT", "DELETE", "RELATE"))
+        if isinstance(mode, str):
+            if mode not in _OUTPUTS:
+                raise ValueError(
+                    f"output() takes one of {', '.join(_OUTPUTS)} or a list of "
+                    f"field paths; got {mode!r}"
+                )
+            self._output = mode.upper()
+        else:
+            self._output = ", ".join(_field_paths("output()", mode))
+        return self
+
+    def _clauses(self, variables: dict[str, Any]) -> str:
+        """The modifiers, rendered in the order SurrealQL takes them."""
+        parts: list[str] = []
+        if self._where is not None:
+            variables.update(self._where_vars)
+            parts.append(f"WHERE {self._where}")
+        if self._output is not None:
+            parts.append(f"RETURN {self._output}")
+        if self._limit is not None:
+            parts.append(f"LIMIT {self._limit}")
+        if self._start is not None:
+            parts.append(f"START {self._start}")
+        if self._fetch:
+            parts.append(f"FETCH {', '.join(self._fetch)}")
+        if self._version is not None:
+            variables["_version"] = self._version
+            parts.append("VERSION $_version")
+        if self._timeout is not None:
+            parts.append(f"TIMEOUT {self._timeout}")
+        return "".join(f" {part}" for part in parts)
 
     def _check_not_executed(self) -> None:
         """Raise if this builder has already been executed.
@@ -469,38 +673,71 @@ class _CrudState(_WarnIfDropped):
                 f"{self._operation} does not support "
                 ".content/.replace/.merge/.patch clauses"
             )
+        if self._operation == "RELATE" and mode != _Clause.CONTENT:
+            raise SurrealError("RELATE takes only .content(data)")
         self._mode = mode
         self._data = data
 
     def _build(self) -> tuple[str, dict[str, Any]]:
         variables: dict[str, Any] = {}
+        if self._operation == "RELATE":
+            return self._build_relate(variables)
         resource_ref = _resource_to_variable(self._record, variables, "_resource")
 
         if self._operation == "SELECT":
-            return (
-                f"SELECT {render_projection(self._fields)} FROM {resource_ref}",
-                variables,
-            )
+            projection = render_projection(self._fields)
+            clauses = self._clauses(variables)
+            return f"SELECT {projection} FROM {resource_ref}{clauses}", variables
 
         if self._operation == "DELETE":
-            return f"DELETE {resource_ref} RETURN BEFORE", variables
+            if self._output is None:
+                self._output = "BEFORE"
+            return f"DELETE {resource_ref}{self._clauses(variables)}", variables
 
         op = self._operation
         if self._mode == _Clause.DEFAULT:
-            return f"{op} {resource_ref}", variables
+            body = ""
+        elif self._mode == _Clause.CONTENT:
+            variables["_content"] = self._data
+            body = " CONTENT $_content"
+        elif self._mode == _Clause.REPLACE:
+            variables["_data"] = self._data
+            body = " REPLACE $_data"
+        elif self._mode == _Clause.MERGE:
+            variables["_data"] = self._data if self._data is not None else {}
+            body = " MERGE $_data"
+        elif self._mode == _Clause.PATCH:
+            variables["_patches"] = self._data if self._data is not None else []
+            body = " PATCH $_patches"
+        else:
+            raise SurrealError(f"unknown clause mode: {self._mode}")
+        return f"{op} {resource_ref}{body}{self._clauses(variables)}", variables
+
+    def _build_relate(self, variables: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+        assert self._relate_to is not None and self._edge is not None
+        from_ref = _relate_end(self._record, variables, "_resource")
+        to_ref = _relate_end(self._relate_to, variables, "_to")
+        edge = self._edge
+        if isinstance(edge, RecordID):
+            variables["_edge"] = edge
+            edge_ref = "$_edge"
+        else:
+            # The edge table cannot be a parameter or `type::table()` in RELATE,
+            # so it is inlined - escaped, as a record id's table is.
+            edge_ref = escape_identifier(
+                edge.table_name if isinstance(edge, Table) else edge
+            )
+        # SurrealDB 2 refuses ONLY on a statement that returns nothing.
+        only = "ONLY " if self._single and self._output != "NONE" else ""
+        body = ""
         if self._mode == _Clause.CONTENT:
             variables["_content"] = self._data
-            return f"{op} {resource_ref} CONTENT $_content", variables
-        if self._mode == _Clause.REPLACE:
-            variables["_data"] = self._data
-            return f"{op} {resource_ref} REPLACE $_data", variables
-        if self._mode == _Clause.MERGE:
-            variables["_data"] = self._data if self._data is not None else {}
-            return f"{op} {resource_ref} MERGE $_data", variables
-        if self._mode == _Clause.PATCH:
-            variables["_patches"] = self._data if self._data is not None else []
-            return f"{op} {resource_ref} PATCH $_patches", variables
-        raise SurrealError(f"unknown clause mode: {self._mode}")
+            body = " CONTENT $_content"
+        clauses = self._clauses(variables)
+        return (
+            f"RELATE {only}{from_ref}->{edge_ref}->{to_ref}{body}{clauses}",
+            variables,
+        )
 
     def _extract(self, response: dict[str, Any]) -> Any:
         stmts = _check_response(response, self._op_name)
@@ -522,6 +759,45 @@ class _CrudState(_WarnIfDropped):
             if len(result) == 1:
                 return result[0]
         return result
+
+
+_B = TypeVar("_B", bound=_CrudState)
+
+
+def relate_builder(
+    builder_cls: Callable[..., _B],
+    executor: Any,
+    from_: RelateEnd,
+    edge: str | Table | RecordID,
+    to: RelateEnd,
+) -> _B:
+    """A CRUD builder set up for ``RELATE from_->edge->to``."""
+    if isinstance(edge, str):
+        if not edge:
+            raise ValueError("relate() needs an edge table name")
+    elif not isinstance(edge, (Table, RecordID)):  # pyright: ignore[reportUnnecessaryIsInstance]
+        raise TypeError(
+            "relate() takes the edge as a table name, a Table or a RecordID; "
+            f"got {type(edge).__name__}"
+        )
+    single = not _is_many(from_) and not _is_many(to)
+    single = (
+        single
+        and _is_single_record_operation(cast(RecordIdType, from_))
+        and _is_single_record_operation(cast(RecordIdType, to))
+    )
+    builder = builder_cls(
+        executor=executor,
+        operation="RELATE",
+        record=from_,
+        op_name="relate",
+        always_unwrap=single,
+    )
+    builder.relating(edge, to, single)
+    return builder
+
+
+_I = TypeVar("_I", bound="_InsertState")
 
 
 class _InsertState(_WarnIfDropped):
@@ -551,9 +827,37 @@ class _InsertState(_WarnIfDropped):
         # Optional row-model class; when set the inserted records are mapped
         # element-wise through ``_map_to_class`` into ``list[into]``.
         self._into: type[Any] | None = into
+        self._output: str | None = None
+        self._timeout: str | None = None
 
     def _check_not_executed(self) -> None:
         """Subclasses override to consult their own execution state."""
+
+    def output(self: _I, mode: Output | Sequence[str]) -> _I:
+        """What the statement returns: ``"none"``, ``"null"``, ``"diff"``,
+        ``"before"``, ``"after"``, or a list of field paths."""
+        self._check_not_executed()
+        if isinstance(mode, str):
+            if mode not in _OUTPUTS:
+                raise ValueError(
+                    f"output() takes one of {', '.join(_OUTPUTS)} or a list of "
+                    f"field paths; got {mode!r}"
+                )
+            self._output = mode.upper()
+        else:
+            self._output = ", ".join(_field_paths("output()", mode))
+        return self
+
+    def timeout(self: _I, duration: Duration | timedelta | str | int) -> _I:
+        """Have the server give up on the statement after *duration*."""
+        self._check_not_executed()
+        self._timeout = _duration_literal(duration)
+        return self
+
+    def _clauses(self) -> str:
+        output = f" RETURN {self._output}" if self._output is not None else ""
+        timeout = f" TIMEOUT {self._timeout}" if self._timeout is not None else ""
+        return output + timeout
 
     def _build(self) -> tuple[str, dict[str, Any]]:
         if self._data is None:
@@ -572,7 +876,7 @@ class _InsertState(_WarnIfDropped):
         # is escaped as ``\⟩``).
         if isinstance(self._table, Table):
             escaped = escape_identifier(self._table.table_name)
-            return f"INSERT {rel}INTO {escaped} $_data", variables
+            return f"INSERT {rel}INTO {escaped} $_data{self._clauses()}", variables
         # Raw string: keep the strict identifier check so user-supplied
         # strings can never be concatenated into SurrealQL. Point users
         # at ``Table(...)`` for non-trivial names rather than risking
@@ -584,7 +888,7 @@ class _InsertState(_WarnIfDropped):
                 "non-trivial names, or use `query()` with an escaped "
                 "identifier `INSERT INTO ⟨...⟩ $data`."
             )
-        return f"INSERT {rel}INTO {self._table} $_data", variables
+        return f"INSERT {rel}INTO {self._table} $_data{self._clauses()}", variables
 
     def _extract(self, response: dict[str, Any]) -> Any:
         op_name = "insert_relation" if self._relation else "insert"
