@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `auth=` on the connections and on `Surreal`/`AsyncSurreal`, like the JS
+  SDK's `authentication` option, lets a connection sign itself in. It takes
+  signin credentials, an access token, `Tokens`, or a function returning one
+  of those; on `AsyncSurreal` the function may be a coroutine function. A
+  websocket connection applies it when the socket opens and again after every
+  reconnect, instead of replaying a token that may have expired while the
+  socket was down. HTTP applies it before its first request.
+
+  With `renew_access=True` (the default), a connection also renews its own
+  access token shortly before it expires: with its refresh token if it holds
+  one and the server supports them, otherwise by applying `auth=` again. The
+  async websocket does this on a timer. The blocking and HTTP connections
+  have no background work, so they renew before the next request that finds
+  the token due. A renewal that fails is reported as an `"error"` event.
+
 - Token and session management to match the JS SDK:
   - `db.refresh(tokens=None)` exchanges a refresh token for a new pair over
     the `refresh` RPC, authenticates with the new access token and returns

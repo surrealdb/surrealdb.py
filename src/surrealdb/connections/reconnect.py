@@ -231,6 +231,8 @@ class SessionTrackingMixin(EventsMixin):
         had_selection = state.namespace is not None or state.database is not None
         state.namespace = state.database = state.access = state.refresh = None
         state.variables.clear()
+        if had_auth:
+            self._auth_changed(session_id)
         if had_selection:
             self._emit("using", None, None, session_id)
         if had_auth:
@@ -270,15 +272,25 @@ class SessionTrackingMixin(EventsMixin):
         state = self._registry.state(session_id)
         state.access = tokens.access
         state.refresh = tokens.refresh
+        self._auth_changed(session_id)
         self._emit("auth", tokens, session_id)
 
     def _note_authenticated(self, session_id: UUID | None, token: str) -> None:
         state = self._registry.state(session_id)
         state.access = token
+        self._auth_changed(session_id)
         self._emit("auth", Tokens(access=token, refresh=state.refresh), session_id)
 
     def _note_signed_out(self, session_id: UUID | None) -> None:
         state = self._registry.state(session_id)
         state.access = None
         state.refresh = None
+        self._auth_changed(session_id)
         self._emit("auth", None, session_id)
+
+    def _auth_changed(self, session_id: UUID | None) -> None:
+        if session_id is None:
+            self._root_auth_changed()
+
+    def _root_auth_changed(self) -> None:
+        """Called when the connection's own access token changes."""

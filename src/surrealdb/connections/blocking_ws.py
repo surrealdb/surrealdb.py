@@ -2,6 +2,7 @@
 A basic blocking connection to a SurrealDB instance.
 """
 
+import inspect
 import logging
 import queue
 import threading
@@ -20,6 +21,13 @@ from websockets.exceptions import ConnectionClosed, WebSocketException
 from websockets.protocol import State
 from websockets.sync.client import ClientConnection
 
+from surrealdb.connections.auth_provider import (
+    AuthCredentials,
+    AuthProvider,
+    check_auth_provider,
+    check_credentials,
+    renewal_due,
+)
 from surrealdb.connections.builders import (
     _UNSET,
     M,
@@ -148,6 +156,8 @@ class BlockingWsSurrealConnection(
         timeout: float | None = DEFAULT_TIMEOUT,
         version_check: bool = True,
         reconnect: bool | ReconnectOptions = True,
+        auth: AuthProvider | None = None,
+        renew_access: bool = True,
     ) -> None:
         """
         The constructor for the BlockingWsSurrealConnection class.
@@ -173,10 +183,22 @@ class BlockingWsSurrealConnection(
             :mod:`surrealdb.connections.reconnect`. This transport has no
             background reader, so a dropped socket is noticed, and replaced,
             by the next request or live subscription that uses it.
+        :param auth: How the connection signs itself in when the socket opens
+            and after every reconnect: signin credentials, an access token,
+            :class:`Tokens`, or a function returning one of those - see
+            :mod:`surrealdb.connections.auth_provider`.
+        :param renew_access: Renew the connection's access token shortly
+            before it expires, with its refresh token or else with *auth*.
+            Checked before each request, as this transport has no background
+            work. On by default.
         """
         self.url: Url = Url(url)
         self._version_check = version_check
+        check_auth_provider(auth)
         self._reconnect: ReconnectOptions = ReconnectOptions.coerce(reconnect)
+        self._auth_provider: AuthProvider | None = auth
+        self._renew_access = renew_access
+        self._renewing = False
         self._registry = SessionRegistry()
         self._init_events()
         self._reconnecting = False
@@ -337,6 +359,8 @@ class BlockingWsSurrealConnection(
             else:
                 self.close()
                 self._open_locked()
+        if not self._reconnecting:
+            self._renew_locked()
 
     def _send_frame_locked(self, message: RequestMessage) -> None:
         """Send *message*, reconnecting first if the socket turns out closed.
@@ -379,10 +403,72 @@ class BlockingWsSurrealConnection(
             raise
         try:
             self._handshake_locked()
+            if self._auth_provider is not None:
+                self._apply_auth_provider_locked()
         except BaseException:
             self.close()
             raise
         self._set_status("connected", self._server_version)
+
+    def _provided_credentials(self) -> AuthCredentials:
+        provider = self._auth_provider
+        if callable(provider):
+            provided = provider()
+            if inspect.iscoroutine(provided):
+                provided.close()
+                raise TypeError(
+                    "auth is a coroutine function, which only an async "
+                    "connection can call; pass a plain function here"
+                )
+            return check_credentials(provided)
+        assert provider is not None
+        return provider
+
+    def _apply_auth_provider_locked(self) -> None:
+        """Sign the connection's own session in with ``auth=``."""
+        provided = self._provided_credentials()
+        if isinstance(provided, dict):
+            response = self._send_locked(
+                RequestMessage(RequestMethod.SIGN_IN, params=provided), "signing in"
+            )
+            self.check_response_for_result(response, "signing in")
+            self._note_tokens(None, parse_auth_result(response["result"]))
+            return
+        token = provided if isinstance(provided, str) else provided.access
+        if token is None:
+            raise ValueError("auth gave Tokens with no access token to sign in with")
+        self._send_locked(
+            RequestMessage(RequestMethod.AUTHENTICATE, token=token), "authenticating"
+        )
+        if isinstance(provided, Tokens):
+            self._note_tokens(None, provided)
+        else:
+            self._note_authenticated(None, token)
+
+    def _renew_locked(self) -> None:
+        """Replace the access token before it expires, if it is about to."""
+        root = self._registry.root
+        if not self._renew_access or self._renewing or not renewal_due(root.access):
+            return
+        self._renewing = True
+        try:
+            if root.refresh is not None and self.is_feature_supported(
+                Features.REFRESH_TOKENS
+            ):
+                pair = self._token_pair(None, None, "refresh()")
+                response = self._send_locked(
+                    RequestMessage(RequestMethod.REFRESH, params=[pair]),
+                    "refreshing the tokens",
+                )
+                self.check_response_for_result(response, "refreshing the tokens")
+                self._note_tokens(None, parse_auth_result(response["result"]))
+            elif self._auth_provider is not None:
+                self._apply_auth_provider_locked()
+        except SurrealError as exc:
+            logger.debug("renewing the access token failed: %s", exc)
+            self._emit("error", exc)
+        finally:
+            self._renewing = False
 
     def _reconnect_locked(self) -> None:
         """Replace a dropped socket and replay what the server forgot.
@@ -447,7 +533,11 @@ class BlockingWsSurrealConnection(
     def _restore_locked(self) -> None:
         """Replay every session, then every live query, on the new socket."""
         registry = self._registry
-        self._restore_session_locked(None, registry.root)
+        if self._auth_provider is None:
+            self._restore_session_locked(None, registry.root)
+        else:
+            self._restore_session_locked(None, registry.root, authenticate=False)
+            self._apply_auth_provider_locked()
         for session_id, state in list(registry.sessions.items()):
             self._send_locked(
                 RequestMessage(RequestMethod.ATTACH, session=session_id),
@@ -458,7 +548,7 @@ class BlockingWsSurrealConnection(
             self._restore_live_locked(live)
 
     def _restore_session_locked(
-        self, session_id: UUID | None, state: SessionState
+        self, session_id: UUID | None, state: SessionState, authenticate: bool = True
     ) -> None:
         scope: dict[str, Any] = {} if session_id is None else {"session": session_id}
         if state.namespace is not None or state.database is not None:
@@ -476,7 +566,7 @@ class BlockingWsSurrealConnection(
                 RequestMessage(RequestMethod.LET, key=key, value=value, **scope),
                 "re-setting a variable",
             )
-        if state.access is not None:
+        if authenticate and state.access is not None:
             try:
                 self._send_locked(
                     RequestMessage(

@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import uuid
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import AbstractContextManager
@@ -9,6 +10,13 @@ from uuid import UUID
 import aiohttp
 
 from surrealdb.connections.async_template import AsyncTemplate
+from surrealdb.connections.auth_provider import (
+    AuthCredentials,
+    AuthProvider,
+    check_auth_provider,
+    check_credentials,
+    renewal_due,
+)
 from surrealdb.connections.builders import (
     _UNSET,
     AsyncCrudBuilder,
@@ -84,6 +92,8 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         *,
         timeout: float | None = DEFAULT_TIMEOUT,
         version_check: bool = True,
+        auth: AuthProvider | None = None,
+        renew_access: bool = True,
     ) -> None:
         """
         Constructor for the AsyncHttpSurrealConnection class.
@@ -95,9 +105,20 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         :param version_check: Refuse to talk to a server outside the versions
             this SDK supports - see :mod:`surrealdb.features`. On by default.
             The version is asked for once, before the first request.
+        :param auth: How the connection signs itself in before its first
+            request: signin credentials, an access token, :class:`Tokens`, or
+            a function returning one of those - see
+            :mod:`surrealdb.connections.auth_provider`.
+        :param renew_access: Renew the access token shortly before it
+            expires, with the refresh token or else with *auth*, before the
+            request that finds it due. On by default.
         """
+        check_auth_provider(auth)
         self.url: Url = Url(url)
         self._version_check = version_check
+        self._auth_provider: AuthProvider | None = auth
+        self._renew_access = renew_access
+        self._authorising = False
         self._timeout: float | None = check_timeout("timeout", timeout)
         self.raw_url: str = self.url.raw_url
         self.host: str | None = self.url.hostname
@@ -146,6 +167,8 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         *token* authorises this request alone, without adopting it as the
         connection's identity - see :meth:`authenticate`.
         """
+        if not self._authorising and message.method is not RequestMethod.VERSION:
+            await self._authorise()
         if not self._version_learned and message.method is not RequestMethod.VERSION:
             await self._handshake()
         data = message.WS_CBOR_DESCRIPTOR
@@ -291,6 +314,47 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
             self.namespace = None if isinstance(namespace, NullType) else namespace
         if database is not None:
             self.database = None if isinstance(database, NullType) else database
+
+    async def _authorise(self) -> None:
+        """Apply ``auth=`` before the first request, and renew when due."""
+        due = self._renew_access and renewal_due(self.token)
+        first = self._auth_provider is not None and self.token is None
+        if not (first or due):
+            return
+        self._authorising = True
+        try:
+            if due and self._refresh_token is not None:
+                if not self._version_learned:
+                    await self._handshake()
+                if self.is_feature_supported(Features.REFRESH_TOKENS):
+                    await self.refresh()
+                    return
+            if self._auth_provider is None:
+                return
+            provided = await self._provided_credentials()
+            if isinstance(provided, dict):
+                await self.signin(provided)
+            elif isinstance(provided, str):
+                await self.authenticate(provided)
+            elif provided.access is None:
+                raise ValueError(
+                    "auth gave Tokens with no access token to sign in with"
+                )
+            else:
+                await self.authenticate(provided.access)
+                self._refresh_token = provided.refresh
+        finally:
+            self._authorising = False
+
+    async def _provided_credentials(self) -> AuthCredentials:
+        provider = self._auth_provider
+        if callable(provider):
+            provided = provider()
+            if inspect.isawaitable(provided):
+                provided = await provided
+            return check_credentials(provided)
+        assert provider is not None
+        return provider
 
     async def refresh(self, tokens: Tokens | None = None) -> Tokens:
         """Exchange a refresh token for a new access and refresh token.
