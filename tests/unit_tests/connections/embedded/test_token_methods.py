@@ -32,3 +32,15 @@ async def test_async_health_is_refused() -> None:
     connection = AsyncEmbeddedSurrealConnection("memory")
     with pytest.raises(UnsupportedFeatureError, match="health"):
         await connection.health()
+
+
+def test_blocking_sessions_is_refused() -> None:
+    connection = BlockingEmbeddedSurrealConnection("memory")
+    with pytest.raises(UnsupportedFeatureError):
+        connection.sessions()
+
+
+async def test_async_sessions_is_refused() -> None:
+    connection = AsyncEmbeddedSurrealConnection("memory")
+    with pytest.raises(UnsupportedFeatureError):
+        await connection.sessions()
