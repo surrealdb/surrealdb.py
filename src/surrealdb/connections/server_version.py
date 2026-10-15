@@ -21,6 +21,11 @@ from surrealdb.features import (
 logger = logging.getLogger(__name__)
 
 
+def asks_for_refresh(vars: Mapping[str, Any]) -> bool:
+    """Whether a sign-in uses refresh tokens, and so needs the version first."""
+    return vars.get("refresh") is not None
+
+
 class ServerVersionMixin:
     """Version handshake state shared by the remote transports.
 
@@ -98,5 +103,5 @@ class ServerVersionMixin:
 
     def _require_signin(self, vars: Mapping[str, Any]) -> None:
         """Refuse a refresh-token sign-in before sending it to a 2.x server."""
-        if vars.get("refresh") is not None:
+        if asks_for_refresh(vars):
             self._require(Features.REFRESH_TOKENS)
