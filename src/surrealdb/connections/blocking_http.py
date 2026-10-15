@@ -11,6 +11,7 @@ from uuid import UUID
 import requests
 
 from surrealdb.connections.auth_provider import (
+    SENT_WITHOUT_RENEWAL,
     AuthCredentials,
     AuthProvider,
     check_auth_provider,
@@ -169,7 +170,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         connection's identity - see :meth:`authenticate`. An empty *token*
         sends the request anonymously.
         """
-        if message.method is not RequestMethod.VERSION:
+        if message.method not in SENT_WITHOUT_RENEWAL:
             self._authorise()
         if not self._version_learned and message.method is not RequestMethod.VERSION:
             self._handshake()
