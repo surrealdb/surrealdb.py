@@ -1,6 +1,8 @@
 """`export()` and `import_()` over the server's /export and /import endpoints,
 on every transport, against a real server."""
 
+import io
+import time
 import uuid
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
@@ -134,3 +136,70 @@ def test_export_options_body() -> None:
     assert ExportOptions(tables={"exclude": ("a",)}).body() == {
         "tables": {"exclude": ["a"]}
     }
+
+    assert ExportOptions(tables="person").body() == {"tables": ["person"]}
+    assert ExportOptions(tables={"exclude": "a"}).body() == {
+        "tables": {"exclude": ["a"]}
+    }
+
+
+def test_versions_is_refused_where_the_server_dropped_it() -> None:
+    with pytest.raises(UnsupportedFeatureError, match="versions"):
+        ExportOptions(versions=True).check("3.3.1")
+    ExportOptions(versions=True).check("3.3.0")
+    ExportOptions(versions=True).check(None)
+    ExportOptions(versions=False).check("3.4.0")
+
+
+def test_export_to_writes_a_file_and_a_stream(db: Blocking, tmp_path: Path) -> None:
+    db.query("CREATE person:one SET name = 'One';").execute()
+    path = tmp_path / "export.surql"
+    db.export_to(path)
+    assert "person:one" in path.read_text()
+    stream = io.BytesIO()
+    db.export_to(stream)
+    assert stream.getvalue().decode() == path.read_text()
+
+    db.query("REMOVE TABLE person;").execute()
+    db.import_(path)
+    assert db.query("SELECT VALUE name FROM person:one;").first() == ["One"]
+
+
+async def test_async_export_to_a_file_and_import_it(adb: Async, tmp_path: Path) -> None:
+    await adb.query("CREATE person:one;")
+    path = tmp_path / "export.surql"
+    await adb.export_to(str(path))
+    assert "person:one" in path.read_text()
+    stream = io.BytesIO()
+    await adb.export_to(stream)
+    assert stream.getvalue().decode() == path.read_text()
+
+    await adb.query("REMOVE TABLE person;")
+    await adb.import_(path)
+    assert await adb.query("RETURN count(SELECT * FROM person);").first() == 1
+
+
+def test_blocking_ws_export_renews_a_due_token_first(
+    connection_params: dict[str, Any],
+    blocking_ws_connection: BlockingWsSurrealConnection,
+) -> None:
+    blocking_ws_connection.query(
+        "DEFINE USER OVERWRITE ie_short ON ROOT PASSWORD 'ie-short' "
+        "ROLES OWNER DURATION FOR TOKEN 2s, FOR SESSION 1h;"
+    ).execute()
+    db = BlockingWsSurrealConnection(
+        connection_params["ws_url"],
+        auth={"username": "ie_short", "password": "ie-short"},
+    )
+    try:
+        db.connect()
+        db.use(connection_params["namespace"], connection_params["database_name"])
+        first = db.token
+        time.sleep(2.1)
+        assert isinstance(db.export(), str)
+        assert db.token not in (None, first)
+    finally:
+        db.close()
+        blocking_ws_connection.query(
+            "REMOVE USER IF EXISTS ie_short ON ROOT;"
+        ).execute()

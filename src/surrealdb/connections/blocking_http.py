@@ -1,4 +1,5 @@
 import inspect
+import threading
 import uuid
 from collections.abc import Generator, Mapping, Sequence
 from contextlib import AbstractContextManager
@@ -35,8 +36,10 @@ from surrealdb.connections.files import BlockingFiles
 from surrealdb.connections.health import check_health
 from surrealdb.connections.import_export import (
     ExportOptions,
+    ExportTarget,
     ImportData,
     export_sql,
+    export_sql_to,
     import_sql,
 )
 from surrealdb.connections.server_version import ServerVersionMixin
@@ -116,6 +119,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         self._auth_provider: AuthProvider | None = auth
         self._renew_access = renew_access
         self._authorising = False
+        self._auth_lock = threading.RLock()
         self._timeout: float | None = check_timeout("timeout", timeout)
         self.raw_url: str = url.rstrip("/")
         self.host: str | None = self.url.hostname
@@ -145,7 +149,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         """Ask the server for its version, once, before the first request."""
         try:
             response = self._send(
-                RequestMessage(RequestMethod.VERSION), "checking the server version"
+                RequestMessage(RequestMethod.VERSION),
+                "checking the server version",
+                token="",
             )
         except ServerError:
             self._adopt_server_version(None)
@@ -162,9 +168,10 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         """Send one RPC over HTTP.
 
         *token* authorises this request alone, without adopting it as the
-        connection's identity - see :meth:`authenticate`.
+        connection's identity - see :meth:`authenticate`. An empty *token*
+        sends the request anonymously.
         """
-        if not self._authorising and message.method is not RequestMethod.VERSION:
+        if message.method is not RequestMethod.VERSION:
             self._authorise()
         if not self._version_learned and message.method is not RequestMethod.VERSION:
             self._handshake()
@@ -234,11 +241,12 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         self.id = message.id
         self._send(message, "invalidating")
         self.token = None
+        self._refresh_token = None
 
     def signup(self, vars: dict[str, Value]) -> Tokens:
         message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
         self.id = message.id
-        response = self._send(message, "signup")
+        response = self._send(message, "signup", token="")
         self.check_response_for_result(response, "signup")
         tokens = parse_auth_result(response["result"])
         self.token = tokens.access
@@ -248,7 +256,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
     def signin(self, vars: dict[str, Value]) -> Tokens:
         message = RequestMessage(RequestMethod.SIGN_IN, params=vars)
         self.id = message.id
-        response = self._send(message, "signing in")
+        response = self._send(message, "signing in", token="")
         self.check_response_for_result(response, "signing in")
         tokens = parse_auth_result(response["result"])
         self.token = tokens.access
@@ -296,36 +304,48 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         if database is not None:
             self.database = None if isinstance(database, NullType) else database
 
-    def _authorise(self) -> None:
-        """Apply ``auth=`` before the first request, and renew when due."""
-        due = self._renew_access and renewal_due(self.token)
+    def _authorisation_due(self) -> bool:
         first = self._auth_provider is not None and self.token is None
-        if not (first or due):
+        return first or (self._renew_access and renewal_due(self.token))
+
+    def _authorise(self) -> None:
+        """Apply ``auth=`` before the first request, and renew when due.
+
+        One thread authorises at a time; the others wait for it and then find
+        nothing left to do. The requests authorising makes come back here on
+        the same thread and pass straight through.
+        """
+        if not self._authorisation_due():
             return
-        self._authorising = True
-        try:
-            if due and self._refresh_token is not None:
-                if not self._version_learned:
-                    self._handshake()
-                if self.is_feature_supported(Features.REFRESH_TOKENS):
-                    self.refresh()
-                    return
-            if self._auth_provider is None:
+        with self._auth_lock:
+            if self._authorising or not self._authorisation_due():
                 return
-            provided = self._provided_credentials()
-            if isinstance(provided, dict):
-                self.signin(provided)
-            elif isinstance(provided, str):
-                self.authenticate(provided)
-            elif provided.access is None:
-                raise ValueError(
-                    "auth gave Tokens with no access token to sign in with"
-                )
-            else:
-                self.authenticate(provided.access)
-                self._refresh_token = provided.refresh
-        finally:
-            self._authorising = False
+            self._authorising = True
+            try:
+                self._apply_auth()
+            finally:
+                self._authorising = False
+
+    def _apply_auth(self) -> None:
+        due = self._renew_access and renewal_due(self.token)
+        if due and self._refresh_token is not None:
+            if not self._version_learned:
+                self._handshake()
+            if self.is_feature_supported(Features.REFRESH_TOKENS):
+                self.refresh()
+                return
+        if self._auth_provider is None:
+            return
+        provided = self._provided_credentials()
+        if isinstance(provided, dict):
+            self.signin(provided)
+        elif isinstance(provided, str):
+            self.authenticate(provided)
+        elif provided.access is None:
+            raise ValueError("auth gave Tokens with no access token to sign in with")
+        else:
+            self.authenticate(provided.access)
+            self._refresh_token = provided.refresh
 
     def _provided_credentials(self) -> AuthCredentials:
         provider = self._auth_provider
@@ -348,13 +368,13 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         given, and sends the new access token from then on. The old refresh
         token is spent. Needs SurrealDB 3.0 or later.
         """
-        pair = self._token_pair(tokens, "refresh()")
         if not self._version_learned:
             self._handshake()
         self._require(Features.REFRESH_TOKENS)
+        pair = self._token_pair(tokens, "refresh()")
         message = RequestMessage(RequestMethod.REFRESH, params=[pair])
         self.id = message.id
-        response = self._send(message, "refreshing the tokens")
+        response = self._send(message, "refreshing the tokens", token="")
         self.check_response_for_result(response, "refreshing the tokens")
         renewed = parse_auth_result(response["result"])
         self.token = renewed.access
@@ -366,10 +386,10 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
 
         Needs SurrealDB 3.0 or later.
         """
-        pair = self._token_pair(tokens, "revoke()")
         if not self._version_learned:
             self._handshake()
         self._require(Features.REFRESH_TOKENS)
+        pair = self._token_pair(tokens, "revoke()")
         message = RequestMessage(RequestMethod.REVOKE, params=[pair])
         self.id = message.id
         self._send(message, "revoking a refresh token")
@@ -380,8 +400,12 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         """Forget the namespace, database, variables and authentication.
 
         Over HTTP these live on the client and are sent with each request, so
-        there is nothing to tell the server.
+        there is nothing to tell the server. Needs SurrealDB 3.0 or later,
+        like ``reset`` on the other transports.
         """
+        if not self._version_learned:
+            self._handshake()
+        self._require(Features.SESSIONS)
         self.namespace = None
         self.database = None
         self.vars.clear()
@@ -408,10 +432,44 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         Example:
             sql = db.export(ExportOptions(tables=["person"], records=False))
         """
+        options = options or ExportOptions()
         self._authorise()
+        if not self._version_learned:
+            self._handshake()
+        options.check(self._server_version)
         return export_sql(
             self.url,
-            options or ExportOptions(),
+            options,
+            effective_timeout(self, self._timeout),
+            self.token,
+            self.namespace,
+            self.database,
+        )
+
+    def export_to(
+        self, target: ExportTarget, options: ExportOptions | None = None
+    ) -> None:
+        """Export the selected database as SurrealQL into *target*.
+
+        Writes the export as it arrives, so one too large to hold in memory
+        can still be saved.
+
+        Args:
+            target: The path of a file to write, or a binary file object.
+            options: What to include, as for :meth:`export`.
+
+        Example:
+            db.export_to("backup.surql")
+        """
+        options = options or ExportOptions()
+        self._authorise()
+        if not self._version_learned:
+            self._handshake()
+        options.check(self._server_version)
+        export_sql_to(
+            self.url,
+            options,
+            target,
             effective_timeout(self, self._timeout),
             self.token,
             self.namespace,
@@ -923,8 +981,9 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
     def version(self) -> str:
         message = RequestMessage(RequestMethod.VERSION)
         self.id = message.id
-        response = self._send(message, "getting database version")
+        response = self._send(message, "getting database version", token="")
         self.check_response_for_result(response, "getting database version")
+        self._adopt_server_version(response["result"])
         return response["result"]
 
     def connect(self, url: str | None = None) -> None:
