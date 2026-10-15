@@ -30,6 +30,7 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import TypeAlias
 
+from surrealdb.request_message.methods import RequestMethod
 from surrealdb.types import Tokens, Value
 
 AuthCredentials: TypeAlias = dict[str, Value] | str | Tokens
@@ -45,6 +46,10 @@ RENEW_BEFORE = 60.0
 # RENEW_RETRY_MAX, while the token may still be renewed.
 RENEW_RETRY = 5.0
 RENEW_RETRY_MAX = 300.0
+
+SENT_WITHOUT_RENEWAL = frozenset(
+    {RequestMethod.VERSION, RequestMethod.REFRESH, RequestMethod.REVOKE}
+)
 
 
 def check_auth_provider(provider: object) -> None:

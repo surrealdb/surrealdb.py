@@ -445,3 +445,58 @@ async def test_async_http_repointing_applies_auth_afresh(
         assert calls == 2
     finally:
         await db.close()
+
+
+@pytest.fixture
+def refreshable_access(
+    connection_params: dict[str, Any],
+    blocking_ws_connection: BlockingWsSurrealConnection,
+) -> dict[str, Any]:
+    """Sign-up variables for a record access WITH REFRESH and 2s tokens."""
+    if not blocking_ws_connection.is_feature_supported(Features.REFRESH_TOKENS):
+        pytest.skip("refresh tokens need SurrealDB 3.0 or later")
+    blocking_ws_connection.query(
+        """
+        DEFINE TABLE IF NOT EXISTS renew_user SCHEMALESS;
+        DEFINE ACCESS OVERWRITE renew_acc ON DATABASE TYPE RECORD
+            SIGNUP (CREATE renew_user SET name = $name)
+            SIGNIN (SELECT * FROM renew_user WHERE name = $name)
+            WITH REFRESH
+            DURATION FOR TOKEN 2s, FOR SESSION 1h;
+        """
+    ).execute()
+    return {
+        "namespace": connection_params["namespace"],
+        "database": connection_params["database_name"],
+        "access": "renew_acc",
+        "variables": {"name": f"renew-{uuid.uuid4().hex[:8]}"},
+    }
+
+
+@pytest.mark.parametrize("kind", ["ws", "http"])
+def test_an_explicit_refresh_of_a_due_token_is_not_renewed_first(
+    kind: str, connection_params: dict[str, Any], refreshable_access: dict[str, Any]
+) -> None:
+    db = Surreal(connection_params["ws_url" if kind == "ws" else "url"])
+    try:
+        first = db.signup(refreshable_access)
+        time.sleep(1.9)
+        renewed = db.refresh()
+        assert renewed.refresh not in (None, first.refresh)
+        db.revoke()
+    finally:
+        db.close()
+
+
+async def test_async_http_explicit_refresh_of_a_due_token_is_not_renewed_first(
+    connection_params: dict[str, Any], refreshable_access: dict[str, Any]
+) -> None:
+    db = AsyncHttpSurrealConnection(connection_params["url"])
+    try:
+        first = await db.signup(refreshable_access)
+        await asyncio.sleep(1.9)
+        renewed = await db.refresh()
+        assert renewed.refresh not in (None, first.refresh)
+        await db.revoke()
+    finally:
+        await db.close()
