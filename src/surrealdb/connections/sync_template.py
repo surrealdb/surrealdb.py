@@ -18,6 +18,7 @@ from surrealdb.connections.import_export import (
     ExportTarget,
     ImportData,
 )
+from surrealdb.connections.live import LiveSubscription
 from surrealdb.connections.timeouts import check_timeout
 from surrealdb.data.types.null import NullType
 from surrealdb.data.types.record_id import RecordID, RecordIdType, StringRecordId
@@ -415,7 +416,7 @@ class SyncTemplate:
         """Run a SurrealDB function and return its result."""
         raise NotImplementedError(f"run not implemented for: {self}")
 
-    def live(self, table: str | Table, diff: bool = False) -> UUID:
+    def live(self, table: str | Table, diff: bool = False) -> LiveSubscription:
         """Initiate a live query on the given table."""
         raise NotImplementedError(f"live not implemented for: {self}")
 
@@ -424,6 +425,10 @@ class SyncTemplate:
     ) -> Generator[dict[str, Value], None, None]:
         """Iterate live notifications for the given live query id."""
         raise NotImplementedError(f"subscribe_live not implemented for: {self}")
+
+    def live_of(self, live_id: str | UUID) -> LiveSubscription:
+        """Attach to a live query started some other way, by its id."""
+        raise NotImplementedError(f"live_of not implemented for: {self}")
 
     def kill(self, query_uuid: str | UUID) -> None:
         """Kill a running live query by its UUID."""

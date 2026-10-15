@@ -13,7 +13,7 @@ from asyncio import AbstractEventLoop, Future, Queue, Task
 from collections.abc import AsyncGenerator, Mapping, Sequence
 from contextlib import AbstractContextManager
 from types import TracebackType
-from typing import Any, overload
+from typing import Any, cast, overload
 from uuid import UUID
 
 import websockets
@@ -57,6 +57,7 @@ from surrealdb.connections.import_export import (
     aexport_sql_to,
     aimport_sql,
 )
+from surrealdb.connections.live import AsyncLiveSubscription, SubscriptionTracker
 from surrealdb.connections.reconnect import (
     LiveQuery,
     ReconnectOptions,
@@ -389,6 +390,7 @@ class AsyncWsSurrealConnection(
         # Queues hold live-notification dicts plus the ``_LIVE_QUEUE_CLOSED``
         # sentinel, so the value type is ``Any``.
         self.live_queues: dict[str, list[Queue[Any]]] = {}
+        self._live_tracker = SubscriptionTracker()
         # Guards socket creation - see `_connect_guard`. Built on first use
         # rather than here: an `asyncio.Lock` binds to the loop that first
         # awaits it, and these connections are routinely constructed outside
@@ -602,6 +604,7 @@ class AsyncWsSurrealConnection(
                     response_result["id"] = UUID(live_id)
                 if response_result.get("action") == _LIVE_KILLED:
                     self._registry.drop_live(live_id)
+                    self._live_tracker.ended(live_id)
                 for queue in self.live_queues.get(live_id, []):
                     queue.put_nowait(response_result)
             else:
@@ -676,6 +679,7 @@ class AsyncWsSurrealConnection(
                 continue
             for queue in queues:
                 queue.put_nowait(_LIVE_QUEUE_BROKEN)
+        self._live_tracker.ended(keep=self._registry.live.keys() if replaying else ())
         if not unexpected:
             return
         if not replaying:
@@ -740,6 +744,7 @@ class AsyncWsSurrealConnection(
         for queues in self.live_queues.values():
             for queue in queues:
                 queue.put_nowait(_LIVE_QUEUE_BROKEN)
+        self._live_tracker.ended()
         self._registry.clear()
         self._set_status("disconnected")
         self._emit("error", error)
@@ -953,6 +958,7 @@ class AsyncWsSurrealConnection(
     def _end_live(self, logical: str, sentinel: object) -> None:
         """Stop tracking a live query and end its subscriptions with *sentinel*."""
         self._registry.drop_live(logical)
+        self._live_tracker.ended(logical)
         for queue in self.live_queues.pop(logical, []):
             queue.put_nowait(sentinel)
 
@@ -2231,8 +2237,12 @@ class AsyncWsSurrealConnection(
         table: str | Table,
         diff: bool = False,
         session_id: UUID | None = None,
-    ) -> UUID:
-        """Start a live query on *table* and return its UUID.
+    ) -> AsyncLiveSubscription:
+        """Start a live query on *table* and return its subscription.
+
+        The subscription is also the query's UUID. Iterate it with
+        ``async for`` for notifications, and ``kill()`` it, or use it with
+        ``async with``, to stop the query.
 
         Pass ``diff=True`` for JSON-Patch notifications. Consume notifications
         with :meth:`subscribe_live` and stop the query with :meth:`kill`.
@@ -2248,7 +2258,26 @@ class AsyncWsSurrealConnection(
         self.live_queues[str(uuid)] = []
         live_id = UUID(str(uuid))
         self._registry.add_live(LiveQuery(live_id, live_id, table, diff, session_id))
-        return uuid
+        subscription = AsyncLiveSubscription(live_id, self, session_id, managed=True)
+        self._live_tracker.add(subscription)
+        # Listening from now, so nothing that changes before the caller starts
+        # iterating is lost.
+        subscription._hold(self._open_live(subscription))  # pyright: ignore[reportPrivateUsage]
+        return subscription
+
+    def live_of(
+        self, live_id: str | UUID, session_id: UUID | None = None
+    ) -> AsyncLiveSubscription:
+        """Attach to a live query started some other way, by its id.
+
+        For example one started with ``LIVE SELECT`` through :meth:`query`.
+        Its notifications are delivered from now on; the query is not
+        restarted after a reconnect, since the connection does not know it.
+        """
+        subscription = AsyncLiveSubscription(live_id, self, session_id, managed=False)
+        self._live_tracker.add(subscription)
+        subscription._hold(self._open_live(subscription))  # pyright: ignore[reportPrivateUsage]
+        return subscription
 
     async def subscribe_live(
         self, query_uuid: str | UUID
@@ -2264,7 +2293,20 @@ class AsyncWsSurrealConnection(
             subscription is active. That is not a clean end of stream - some
             changes to the table went undelivered - so it is raised rather than
             ending the iteration, matching the blocking transport.
+
+        A subscription from :meth:`live` already holds a registered generator,
+        which is handed over rather than registering a second one.
         """
+        if isinstance(query_uuid, AsyncLiveSubscription):
+            held = query_uuid._take()  # pyright: ignore[reportPrivateUsage]
+            if held is not None:
+                return cast(AsyncGenerator[dict[str, Value], None], held)
+        return self._open_live(query_uuid)
+
+    def _open_live(
+        self, query_uuid: str | UUID
+    ) -> AsyncGenerator[dict[str, Value], None]:
+        """The body of :meth:`subscribe_live`: registers at once, awaits nothing."""
         result_queue: Queue[Any] = Queue()
         suid = str(query_uuid)
 
@@ -2482,6 +2524,7 @@ class AsyncWsSurrealConnection(
         for queues in self.live_queues.values():
             for queue in queues:
                 queue.put_nowait(_LIVE_QUEUE_CLOSED)
+        self._live_tracker.ended()
         await self._teardown()
         # A new socket is a new server-side session, so nothing about this one
         # is replayed into it.
@@ -2953,8 +2996,11 @@ class AsyncSurrealSession:
         self,
         table: str | Table,
         diff: bool = False,
-    ) -> UUID:
+    ) -> AsyncLiveSubscription:
         return await self._connection.live(table, diff, session_id=self._session_id)
+
+    def live_of(self, live_id: str | UUID) -> AsyncLiveSubscription:
+        return self._connection.live_of(live_id, session_id=self._session_id)
 
     async def kill(self, query_uuid: str | UUID) -> None:
         await self._connection.kill(query_uuid, session_id=self._session_id)

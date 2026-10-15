@@ -16,6 +16,7 @@ from surrealdb.connections.import_export import (
     ExportTarget,
     ImportData,
 )
+from surrealdb.connections.live import AsyncLiveSubscription
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import mapped_engine_errors
 from surrealdb.data.cbor import decode
@@ -264,7 +265,12 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         table: str | Table,
         diff: bool = False,
         session_id: UUID | None = None,
-    ) -> UUID:
+    ) -> AsyncLiveSubscription:
+        raise UnsupportedFeatureError(_NO_LIVE_QUERIES)
+
+    def live_of(
+        self, live_id: str | UUID, session_id: UUID | None = None
+    ) -> AsyncLiveSubscription:
         raise UnsupportedFeatureError(_NO_LIVE_QUERIES)
 
     async def kill(

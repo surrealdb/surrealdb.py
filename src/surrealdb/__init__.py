@@ -29,6 +29,7 @@ from surrealdb.connections.builders import (
 )
 from surrealdb.connections.files import AsyncFiles, BlockingFiles, FileMetadata
 from surrealdb.connections.import_export import ExportOptions
+from surrealdb.connections.live import AsyncLiveSubscription, LiveSubscription
 from surrealdb.connections.reconnect import ReconnectOptions
 from surrealdb.connections.url import Url, UrlScheme
 from surrealdb.data.types.datetime import Datetime, PreciseDatetime
@@ -205,6 +206,8 @@ __all__ = [
     "BoundExcluded",
     "ApiResponse",
     "ExportOptions",
+    "AsyncLiveSubscription",
+    "LiveSubscription",
     "ReconnectOptions",
     "RecordID",
     # The id types SurrealDB accepts. `RecordID.id` is deliberately wider
