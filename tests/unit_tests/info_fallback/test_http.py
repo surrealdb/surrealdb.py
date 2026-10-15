@@ -28,6 +28,8 @@ from surrealdb.data.types.record_id import RecordID
 from surrealdb.errors import NotAllowedError, ServerError
 from surrealdb.types import Value
 
+pytestmark = pytest.mark.usefixtures("no_version_handshake")
+
 RPC_URL = "http://localhost:8000/rpc"
 
 # A representative record-auth sign-in payload; the mocked server ignores it.
