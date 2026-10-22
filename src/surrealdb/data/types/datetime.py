@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, SupportsIndex, cast
 
 
 class Datetime:
@@ -70,6 +70,15 @@ class PreciseDatetime(datetime):
         instance = super().__new__(cls, *args, **kwargs)
         object.__setattr__(instance, "nanosecond", nanosecond)
         return instance
+
+    def __reduce_ex__(self, protocol: SupportsIndex) -> tuple[Any, ...]:
+        constructor, args = cast(
+            tuple[Any, tuple[Any, ...]], super().__reduce_ex__(protocol)
+        )
+        return constructor, args, self.nanosecond
+
+    def __setstate__(self, nanosecond: int) -> None:
+        object.__setattr__(self, "nanosecond", nanosecond)
 
     @classmethod
     def from_seconds_and_nanos(
