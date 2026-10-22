@@ -188,3 +188,42 @@ def test_arithmetic_drops_the_remainder() -> None:
 def test_the_remainder_must_be_sub_microsecond() -> None:
     with pytest.raises(ValueError, match="0-999"):
         PreciseDatetime(2026, 1, 1, tzinfo=dt.timezone.utc, nanosecond=1000)
+
+
+@pytest.mark.parametrize("protocol", range(pickle.HIGHEST_PROTOCOL + 1))
+@pytest.mark.parametrize("nanosecond", [0, 7, 789])
+@pytest.mark.parametrize(
+    "tzinfo", [None, dt.timezone(dt.timedelta(hours=5, minutes=30))]
+)
+def test_pickle_preserves_nanoseconds(
+    protocol: int, nanosecond: int, tzinfo: dt.tzinfo | None
+) -> None:
+    value = PreciseDatetime(
+        2026, 1, 1, 12, 30, 45, 123456, tzinfo=tzinfo, nanosecond=nanosecond
+    )
+
+    restored = pickle.loads(pickle.dumps(value, protocol=protocol))
+
+    assert restored == value
+    assert restored.nanosecond == nanosecond
+    assert encode(restored) == encode(value)
+
+
+@pytest.mark.parametrize("operation", ["copy", "deepcopy"])
+@pytest.mark.parametrize("nanosecond", [0, 7, 789])
+@pytest.mark.parametrize(
+    "tzinfo", [None, dt.timezone(dt.timedelta(hours=5, minutes=30))]
+)
+def test_copy_preserves_nanoseconds(
+    operation: str, nanosecond: int, tzinfo: dt.tzinfo | None
+) -> None:
+    value = PreciseDatetime(
+        2026, 1, 1, 12, 30, 45, 123456, tzinfo=tzinfo, nanosecond=nanosecond
+    )
+
+    restored = copy.copy(value) if operation == "copy" else copy.deepcopy(value)
+
+    assert restored is not value
+    assert restored == value
+    assert restored.nanosecond == nanosecond
+    assert encode(restored) == encode(value)
