@@ -20,7 +20,7 @@ from collections.abc import Iterator
 import pytest
 
 from surrealdb import PreciseDatetime
-from surrealdb.cbor import CBORTag, dumps, loads
+from surrealdb.cbor import CBORTag, dumps
 from surrealdb.data.cbor import decode, encode
 from surrealdb.data.types import constants
 
@@ -76,21 +76,20 @@ def test_it_is_a_datetime_in_every_other_respect() -> None:
 def test_the_wire_form_carries_all_nine_digits() -> None:
     """Re-encoding must not quietly drop what decoding preserved.
 
-    Asserted on the raw bytes: cbor2 handles the standard datetime tag
-    internally, before any tag hook, and decodes it back to a microsecond
-    ``datetime`` - so neither ``loads`` nor a hook can show what was actually
-    written.
+    Asserted on the raw bytes, because a decode of the result cannot show
+    whether the nanoseconds were written or merely survived the trip.
     """
     value = decode(_compact(1767225600, 123456789))
 
-    assert b"2026-01-01T00:00:00.123456789Z" in encode(value)
+    assert encode(value) == _compact(1767225600, 123456789)
 
 
-def test_a_plain_datetime_is_encoded_exactly_as_before() -> None:
-    """The hook is registered for the subclass only, so nothing else moves."""
+def test_a_plain_datetime_is_encoded_as_seconds_and_nanoseconds() -> None:
+    """A plain ``datetime`` takes the same tag, with microseconds as nanoseconds."""
     plain = dt.datetime(2026, 1, 1, 0, 0, 0, 123456, tzinfo=dt.timezone.utc)
 
-    assert loads(encode(plain)) == plain
+    assert encode(plain) == _compact(1767225600, 123456000)
+    assert decode(encode(plain)) == plain
 
 
 @pytest.mark.skipif(not hasattr(time, "tzset"), reason="needs a POSIX TZ database")
@@ -128,10 +127,10 @@ def test_a_naive_value_agrees_with_a_naive_plain_datetime(zone: str) -> None:
         naive = dt.datetime(2026, 1, 1, 12, 0, 0)
         precise = PreciseDatetime(2026, 1, 1, 12, 0, 0)
 
-        assert loads(encode(naive)) == dt.datetime(
+        assert decode(encode(naive)) == dt.datetime(
             2026, 1, 1, 12, 0, 0, tzinfo=dt.timezone.utc
         )
-        assert precise.isoformat_with_nanoseconds().startswith("2026-01-01T12:00:00")
+        assert encode(precise) == encode(naive)
 
 
 @pytest.mark.skipif(not hasattr(time, "tzset"), reason="needs a POSIX TZ database")

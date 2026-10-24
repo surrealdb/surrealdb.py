@@ -1,6 +1,7 @@
 import decimal
+import re
 import uuid
-from datetime import timezone
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from typing import Any
 
@@ -84,7 +85,9 @@ def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
         tagged = CBORTag(constants.TAG_DURATION_COMPACT, obj.get_seconds_and_nano())
 
     elif isinstance(obj, Datetime):
-        tagged = CBORTag(constants.TAG_DATETIME, obj.dt)
+        tagged = CBORTag(
+            constants.TAG_DATETIME_COMPACT, list(_wrapper_seconds_and_nanos(obj.dt))
+        )
 
     elif isinstance(obj, (set, frozenset)):
         # SurrealDB uses its own set tag (56); the bundled cbor2 encoder would
@@ -246,9 +249,71 @@ _I64_MIN = -(2**63)
 _I64_MAX = 2**63 - 1
 
 
-def _encode_precise_datetime(encoder: CBOREncoder, value: PreciseDatetime) -> None:
-    """Send all nine fractional digits, which SurrealDB stores faithfully."""
-    encoder.encode(CBORTag(constants.TAG_DATETIME, value.isoformat_with_nanoseconds()))
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+_RFC3339 = re.compile(
+    r"(\d{4})-(\d{2})-(\d{2})[Tt ](\d{2}):(\d{2}):(\d{2})"
+    r"(?:\.(\d{1,9}))?"
+    r"(?:([Zz])|([+-])(\d{2}):?(\d{2}))?\Z"
+)
+
+
+def _seconds_and_nanos(value: datetime) -> tuple[int, int]:
+    """Split an instant into the ``[seconds, nanoseconds]`` pair of tag 12.
+
+    Integer arithmetic throughout: ``timestamp()`` is a float and cannot hold
+    nine fractional digits. Seconds are floored, so an instant before the epoch
+    has negative seconds and non-negative nanoseconds, which is the form the
+    server reads. A naive value is read as UTC.
+    """
+    remainder = value.nanosecond if isinstance(value, PreciseDatetime) else 0
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    delta = -(_EPOCH - value)
+    return (
+        delta.days * 86400 + delta.seconds,
+        delta.microseconds * 1000 + remainder,
+    )
+
+
+def _wrapper_seconds_and_nanos(text: str) -> tuple[int, int]:
+    match = _RFC3339.match(text)
+    if match is None:
+        raise ValueError(
+            f"cannot encode Datetime({text!r}): expected an RFC 3339 timestamp "
+            "such as '2025-02-03T12:30:45.123456789Z'"
+        )
+    year, month, day, hour, minute, second, fraction, zulu, sign, off_h, off_m = (
+        match.groups()
+    )
+    nanoseconds = int((fraction or "").ljust(9, "0"))
+    offset = timedelta(0)
+    if zulu is None and sign is not None:
+        offset = timedelta(hours=int(off_h), minutes=int(off_m))
+        if sign == "-":
+            offset = -offset
+    moment = datetime(
+        int(year),
+        int(month),
+        int(day),
+        int(hour),
+        int(minute),
+        int(second),
+        nanoseconds // 1000,
+        tzinfo=timezone(offset),
+    )
+    seconds, nanos = _seconds_and_nanos(moment)
+    return seconds, nanos + nanoseconds % 1000
+
+
+def _encode_datetime(encoder: CBOREncoder, value: datetime) -> None:
+    """Send an instant as tag 12 ``[seconds, nanoseconds]``.
+
+    SurrealDB 4.0 refuses tag 0 (a datetime as text); every server since 1.5.0
+    reads tag 12. A :class:`PreciseDatetime` keeps its sub-microsecond digits.
+    """
+    seconds, nanoseconds = _seconds_and_nanos(value)
+    encoder.encode(CBORTag(constants.TAG_DATETIME_COMPACT, [seconds, nanoseconds]))
 
 
 class _SurrealEncoder(CBOREncoder):
@@ -277,11 +342,7 @@ class _SurrealEncoder(CBOREncoder):
 
         self._encoders[SurrealSet] = _encode_surreal_set
 
-        # Registered for the exact subclass only, so a plain `datetime` keeps
-        # cbor2's native encoding untouched. Without this the native encoder
-        # claims the subclass through the MRO and silently drops the
-        # nanoseconds again - the `default=` hook never sees it.
-        self._encoders[PreciseDatetime] = _encode_precise_datetime
+        self._encoders[datetime] = _encode_datetime
 
         encode_int = self._encoders[int]
 
