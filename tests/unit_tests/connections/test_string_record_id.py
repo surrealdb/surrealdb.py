@@ -106,6 +106,16 @@ def test_value_semantics() -> None:
         StringRecordId(1)  # type: ignore[arg-type]
     with pytest.raises(InvalidRecordIdError):
         StringRecordId("person")
+    for value in ("person:1..=3", "person:[1]..[3]", "person:..", "person:1.."):
+        with pytest.raises(InvalidRecordIdError, match="range"):
+            StringRecordId(value)
+    for value in (
+        "person:⟨a..b⟩",
+        "person:[1..2]",
+        "person:{a: 1..2}",
+        "person:`a..b`",
+    ):
+        assert StringRecordId(value).value == value
 
 
 def test_decodes_what_it_encodes() -> None:
@@ -117,13 +127,11 @@ def test_a_quoted_dot_dot_is_one_record(db: Blocking) -> None:
     db.query("CREATE person:⟨a..b⟩ SET n = 3;").execute()
     one: Any = db.select(StringRecordId("person:⟨a..b⟩")).execute()
     assert one["n"] == 3
-    assert isinstance(db.select(StringRecordId("person:1..=1")).execute(), list)
 
 
 def test_a_bracketed_dot_dot_is_one_record(db: Blocking) -> None:
     assert db.select(StringRecordId("person:[1..2]")).execute() is None
     assert db.select(StringRecordId("person:{a: 1..2}")).execute() is None
-    assert isinstance(db.select(StringRecordId("person:[1]..[3]")).execute(), list)
 
 
 def test_relate_takes_string_record_ids(db: Blocking) -> None:

@@ -325,7 +325,7 @@ def _is_single_record_operation(resource: RecordIdType) -> bool:
     if isinstance(resource, RecordID):
         return not isinstance(resource.id, Range)
     if isinstance(resource, StringRecordId):
-        return ".." not in _top_level(resource.value)
+        return True
     if isinstance(resource, Table):
         return False
     if isinstance(resource, Range):
@@ -333,40 +333,6 @@ def _is_single_record_operation(resource: RecordIdType) -> bool:
         # answer here only has to be defined, not meaningful.
         return False
     return bool(":" in resource and ".." not in resource)
-
-
-_QUOTE_CLOSERS = {"⟨": "⟩", "`": "`", '"': '"', "'": "'"}
-_OPENERS = frozenset("[{(")
-_CLOSERS = frozenset("]})")
-
-
-def _top_level(text: str) -> str:
-    """*text* without its quoted or bracketed parts.
-
-    So neither ``person:⟨a..b⟩`` nor the array key ``person:[1..2]`` reads as
-    a range, while ``person:[1]..[3]`` still does.
-    """
-    kept: list[str] = []
-    closer: str | None = None
-    escaped = False
-    depth = 0
-    for char in text:
-        if closer is None:
-            if char in _QUOTE_CLOSERS:
-                closer = _QUOTE_CLOSERS[char]
-            elif char in _OPENERS:
-                depth += 1
-            elif char in _CLOSERS:
-                depth = max(depth - 1, 0)
-            elif depth == 0:
-                kept.append(char)
-        elif escaped:
-            escaped = False
-        elif char == "\\":
-            escaped = True
-        elif char == closer:
-            closer = None
-    return "".join(kept)
 
 
 def _check_response(response: dict[str, Any], op_name: str) -> list[dict[str, Any]]:
