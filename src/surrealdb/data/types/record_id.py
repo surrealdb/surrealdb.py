@@ -366,9 +366,47 @@ class RecordID:
         return handler(core_schema.str_schema())
 
 
+_QUOTE_CLOSERS = {"⟨": "⟩", "`": "`", '"': '"', "'": "'"}
+_OPENERS = frozenset("[{(")
+_CLOSERS = frozenset("]})")
+
+
+def _top_level(text: str) -> str:
+    """*text* without its quoted or bracketed parts.
+
+    So neither ``person:⟨a..b⟩`` nor the array key ``person:[1..2]`` reads as
+    a range, while ``person:[1]..[3]`` still does.
+    """
+    kept: list[str] = []
+    closer: str | None = None
+    escaped = False
+    depth = 0
+    for char in text:
+        if closer is None:
+            if char in _QUOTE_CLOSERS:
+                closer = _QUOTE_CLOSERS[char]
+            elif char in _OPENERS:
+                depth += 1
+            elif char in _CLOSERS:
+                depth = max(depth - 1, 0)
+            elif depth == 0:
+                kept.append(char)
+        elif escaped:
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == closer:
+            closer = None
+    return "".join(kept)
+
+
 class StringRecordId:
     """A record id written as SurrealQL, such as ``"person:tobie"`` or
     ``"person:⟨a:b⟩"``, for the server to parse.
+
+    It names one record. A range is refused: SurrealDB 2 read one as a range,
+    3.x up to 3.3 read only its start, and later servers refuse it, so the
+    same string meant three different things.
 
     Unlike a plain string, it is never parsed by the SDK, so every id the
     server can read works, and its meaning cannot shift with the SDK's own
@@ -386,6 +424,11 @@ class StringRecordId:
         if ":" not in value:
             raise InvalidRecordIdError(
                 f"StringRecordId takes a 'table:id' string; {value!r} has no ':'"
+            )
+        if ".." in _top_level(value):
+            raise InvalidRecordIdError(
+                f"StringRecordId names one record, and {value!r} is a range; "
+                "use RecordID(table, Range(...)) to target a range of records"
             )
         self._value = value
 
