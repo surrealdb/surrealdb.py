@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Datetimes are sent as CBOR tag 12 `[seconds, nanoseconds]` instead of tag 0
+  (a datetime as text). SurrealDB 4.0 refuses tag 0, tag 9 (a UUID as text) and
+  tag 13 (a duration as text) in a request, and reads tag 12, tag 37 and tag 14,
+  as every server has since 1.5.0, so this is safe to upgrade to ahead of the
+  server. UUIDs and durations were already sent as tag 37 (16 bytes) and tag 14
+  `[seconds, nanoseconds]`. Nothing changes for callers: timezone-aware values
+  are the same instant, a naive datetime is still read as UTC, and a
+  `PreciseDatetime` keeps its nanoseconds. Tags 0, 9 and 13 are still decoded.
+
+  `Datetime("...")` is now parsed as an RFC 3339 timestamp when it is encoded,
+  so a string that is not one raises `ValueError` rather than being sent for
+  the server to reject.
+
 ## [3.0.0-beta.10] - 2026-10-08
 
 Upgrading from `3.0.0-beta.9`: nothing changes at runtime. The one thing to
