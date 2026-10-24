@@ -67,9 +67,6 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         # version: an unknown version, so nothing is gated.
         self._version_learned = True
         self.id: str = str(uuid.uuid4())
-        self.namespace: str | None = None
-        self.database: str | None = None
-        self.vars: dict[str, Any] = {}
 
         # Embedded database handle
         with mapped_engine_errors("opening the database"):
