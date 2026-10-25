@@ -38,9 +38,9 @@ class _FakeRaw:
 
 class _FakeResponse:
     status_code = 200
-    headers = {"Content-Type": "application/cbor"}
 
     def __init__(self) -> None:
+        self.headers = {"Content-Type": "application/cbor"}
         self.content = encode({"id": "1", "result": None})
         self.raw = _FakeRaw(self.content)
 

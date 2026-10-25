@@ -1,7 +1,7 @@
 """The shared CBOR value vectors from surrealdb-protocol, run against this codec.
 
-``vectors/VERSION`` names the surrealdb-protocol release they were copied from;
-``scripts/protocol-vectors.sh`` refreshes them. ``cbor.yaml`` is the plain
+``vectors/VERSION`` names the surrealdb-protocol release they come from;
+``scripts/protocol-vectors.sh`` fetches them, and the tests skip until it has. ``cbor.yaml`` is the plain
 ``cbor`` wire, and every vector in it whose ``formats`` does not leave ``cbor.2``
 out holds for ``cbor.2`` too. ``cbor2.yaml`` is ``cbor.2`` only.
 
@@ -17,12 +17,19 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
 
 from conformance.typed_json import same, to_json, to_native
 from surrealdb.data.cbor import decode, encode
 
 _VECTORS = Path(__file__).parent / "vectors"
+
+if not (_VECTORS / "cbor.yaml").exists():
+    pytest.skip(
+        "no protocol vectors; fetch them with scripts/protocol-vectors.sh",
+        allow_module_level=True,
+    )
+
+yaml = pytest.importorskip("yaml")
 
 
 def _load(name: str) -> list[dict[str, Any]]:

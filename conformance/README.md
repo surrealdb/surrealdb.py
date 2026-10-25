@@ -6,8 +6,10 @@ release named in `tests/unit_tests/conformance/vectors/VERSION`.
 
 - **CBOR value vectors.** `tests/unit_tests/conformance/` runs the protocol's
   `spec/vectors/cbor.yaml` and `cbor2.yaml` against the codec, over plain
-  `cbor` and over `cbor.2`. `scripts/protocol-vectors.sh <tag>` copies them
-  from a release and updates `VERSION`.
+  `cbor` and over `cbor.2`. `scripts/protocol-vectors.sh` fetches them from
+  the release in `VERSION`, and the tests skip until it has. Pass a tag to move
+  to another release. The vectors are fetched rather than committed while
+  surrealdb-protocol releases are licensed BUSL-1.1.
 - **Scenarios.** `driver.py` maps the runner's ops onto the SDK's async API.
   CI runs it in the `conformance` job. Ops without an SDK API answer
   `Unsupported`, which the runner reports as a skip.

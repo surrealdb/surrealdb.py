@@ -331,6 +331,9 @@ jobs:
         env:
           PYTHONPATH: ./src
 
+      - name: Fetch the protocol vectors
+        run: ./scripts/protocol-vectors.sh
+
       - name: Run unit tests
         run: uv run pytest --ignore=tests/unit_tests/connections/embedded
         env:
