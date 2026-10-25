@@ -13,6 +13,9 @@ import pytest
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.errors import SurrealError
 from surrealdb.types import Tokens
+from tests.unit_tests.connections.bearer_v3.server_version import (
+    bearer_jwts_authenticate,
+)
 
 
 def test_bearer_access_record_user(bearer_v3_root_ws: dict) -> None:
@@ -67,12 +70,12 @@ def test_bearer_access_record_user(bearer_v3_root_ws: dict) -> None:
             conn.socket.close()
 
 
-def test_bearer_record_signin_token_not_usable_with_authenticate(
+def test_bearer_record_signin_token_with_authenticate(
     bearer_v3_root_ws: dict,
 ) -> None:
     """
-    Authenticate does NOT work with bearer-obtained JWT for record users.
-    Bearer keys are for SignIn only.
+    Authenticate refuses a record user's bearer-obtained JWT before 3.4 and
+    accepts it from 3.4 on, where the server checks it against its grant.
     """
     root = bearer_v3_root_ws["connection"]
     url = bearer_v3_root_ws["url"]
@@ -106,8 +109,12 @@ def test_bearer_record_signin_token_not_usable_with_authenticate(
         conn2 = BlockingWsSurrealConnection(url)
         try:
             conn2.use(namespace=namespace, database=database_name)
-            with pytest.raises(SurrealError):
+            if bearer_jwts_authenticate(bearer_v3_root_ws["version"]):
                 conn2.authenticate(tokens.access)
+                assert conn2.query("RETURN 1").first() == 1
+            else:
+                with pytest.raises(SurrealError):
+                    conn2.authenticate(tokens.access)
         finally:
             if conn2.socket:
                 conn2.socket.close()
