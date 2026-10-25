@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -109,3 +110,46 @@ class PreciseDatetime(datetime):
             utc.strftime("%Y-%m-%dT%H:%M:%S.")
             + f"{utc.microsecond:06d}{self.nanosecond:03d}Z"
         )
+
+
+_ISO = re.compile(
+    r"(?P<base>\d{4}-\d{2}-\d{2}(?:[Tt ]\d{2}:\d{2}(?::\d{2})?)?)"
+    r"(?:[.,](?P<fraction>\d{1,9}))?"
+    r"(?P<zone>[Zz]|[+-]\d{2}:?\d{2})?"
+)
+
+
+def parse_instant(text: str) -> PreciseDatetime:
+    """The instant an ISO 8601 string names, to the nanosecond; with no zone, UTC.
+
+    :raises ValueError: if *text* is not an ISO 8601 datetime.
+    """
+    match = _ISO.fullmatch(text.strip())
+    try:
+        if match is None:
+            raise ValueError
+        moment = datetime.fromisoformat(match["base"].replace("t", "T"))
+    except ValueError:
+        raise ValueError(
+            f"{text!r} is not an ISO 8601 datetime; pass one such as "
+            "'2026-01-01T12:00:00Z' or '2026-01-01T12:00:00.123456789+02:00'"
+        ) from None
+    zone = match["zone"]
+    if zone is None or zone in "Zz":
+        tz = timezone.utc
+    else:
+        sign = -1 if zone[0] == "-" else 1
+        digits = zone[1:].replace(":", "")
+        tz = timezone(sign * timedelta(hours=int(digits[:2]), minutes=int(digits[2:])))
+    fraction = (match["fraction"] or "").ljust(9, "0")
+    return PreciseDatetime(
+        moment.year,
+        moment.month,
+        moment.day,
+        moment.hour,
+        moment.minute,
+        moment.second,
+        int(fraction[:6]),
+        tzinfo=tz,
+        nanosecond=int(fraction[6:]),
+    )
