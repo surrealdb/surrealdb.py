@@ -59,8 +59,10 @@ from surrealdb.connections.timeouts import (
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import (
     AUTH_FALLBACK_QUERY,
+    CBOR2_MEDIA_TYPE,
     UtilsMixin,
     build_run_query,
+    is_cbor2_media_type,
     merge_query_vars,
 )
 from surrealdb.data.types.null import NullType
@@ -202,11 +204,11 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
             await self._authorise()
         if not self._version_learned and message.method is not RequestMethod.VERSION:
             await self._handshake()
-        data = message.WS_CBOR_DESCRIPTOR
+        data = message.encoded(v2=self._v2)
         url = f"{self.url.raw_url}/rpc"
         headers: dict[str, str] = {}
-        headers["Accept"] = "application/cbor"
-        headers["content-type"] = "application/cbor"
+        headers["Accept"] = CBOR2_MEDIA_TYPE
+        headers["content-type"] = CBOR2_MEDIA_TYPE if self._v2 else "application/cbor"
         bearer = self.token if token is None else token
         if bearer:
             headers["Authorization"] = f"Bearer {bearer}"
@@ -243,6 +245,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
                 timeout=aiohttp.ClientTimeout(total=timeout),
             ) as response:
                 status = response.status
+                v2 = is_cbor2_media_type(response.headers.get("Content-Type"))
                 raw_cbor = await response.read()
         except asyncio.TimeoutError as exc:
             raise TransportTimeoutError(
@@ -254,9 +257,10 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
                 f"could not reach {url} while {operation}: {exc}"
             ) from exc
 
-        self.check_status_for_error(status, raw_cbor, url)
+        self.check_status_for_error(status, raw_cbor, url, v2=v2)
 
-        result = self.decode_response(raw_cbor, operation)
+        result = self.decode_response(raw_cbor, operation, v2=v2)
+        self._v2 = v2
         if bypass is False:
             self.check_response_for_error(result, operation)
         return result

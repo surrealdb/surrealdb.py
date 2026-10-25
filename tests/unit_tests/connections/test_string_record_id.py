@@ -118,9 +118,17 @@ def test_value_semantics() -> None:
         assert StringRecordId(value).value == value
 
 
-def test_decodes_what_it_encodes() -> None:
-    for value in ("person:abc", "person:⟨a:b⟩", "t:1"):
-        assert decode(encode(StringRecordId(value))) == StringRecordId(value)
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("person:abc", RecordID("person", "abc")),
+        ("person:⟨a:b⟩", RecordID("person", "a:b")),
+        ("t:1", RecordID("t", 1)),
+    ],
+)
+def test_decodes_to_the_record_it_names(value: str, expected: RecordID) -> None:
+    """A server never sends the text form, but one decodes to its parts."""
+    assert decode(encode(StringRecordId(value))) == expected
 
 
 def test_a_quoted_dot_dot_is_one_record(db: Blocking) -> None:

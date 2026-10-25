@@ -15,6 +15,7 @@ from surrealdb.cbor import (
 from surrealdb.data import cbor
 from surrealdb.data.types import constants
 from surrealdb.data.types.null import Null
+from surrealdb.errors import UnexpectedResponseError
 
 
 def test_public_cbor_api_exports() -> None:
@@ -183,10 +184,8 @@ def test_uuid_roundtrip_via_native_tag() -> None:
     assert decoded == original
 
 
-def test_uuid_tag_9_defensive_decode() -> None:
-    """A hand-built string-tagged UUID (tag 9) is decoded defensively."""
-    original = uuid.uuid4()
-    raw = dumps(CBORTag(constants.TAG_UUID_STRING, str(original)))
-    decoded = cbor.decode(raw)
-    assert isinstance(decoded, uuid.UUID)
-    assert decoded == original
+def test_uuid_tag_9_is_refused() -> None:
+    """SurrealDB 4 refuses a uuid as text (tag 9), so the decoder does too."""
+    raw = dumps(CBORTag(constants.TAG_UUID_STRING, str(uuid.uuid4())))
+    with pytest.raises(UnexpectedResponseError, match="tag 9"):
+        cbor.decode(raw)

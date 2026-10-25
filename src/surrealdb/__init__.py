@@ -54,6 +54,19 @@ from surrealdb.data.types.record_id import (
     escape_identifier,
 )
 from surrealdb.data.types.set import SurrealSet
+from surrealdb.data.types.sized import (
+    F16,
+    F32,
+    I8,
+    I16,
+    I32,
+    U8,
+    U16,
+    U32,
+    U64,
+    SizedFloat,
+    SizedInt,
+)
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     AlreadyExistsDetailKind,
@@ -217,6 +230,17 @@ __all__ = [
     "StringRecordId",
     "Datetime",
     "PreciseDatetime",
+    "I8",
+    "U8",
+    "I16",
+    "U16",
+    "I32",
+    "U32",
+    "U64",
+    "F16",
+    "F32",
+    "SizedInt",
+    "SizedFloat",
     "Null",
     "NullType",
     "SurrealSet",

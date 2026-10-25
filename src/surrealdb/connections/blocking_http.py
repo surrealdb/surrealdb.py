@@ -60,8 +60,10 @@ from surrealdb.connections.timeouts import (
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import (
     AUTH_FALLBACK_QUERY,
+    CBOR2_MEDIA_TYPE,
     UtilsMixin,
     build_run_query,
+    is_cbor2_media_type,
     merge_query_vars,
 )
 from surrealdb.data.types.null import NullType
@@ -185,11 +187,11 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
             self._authorise()
         if not self._version_learned and message.method is not RequestMethod.VERSION:
             self._handshake()
-        data = message.WS_CBOR_DESCRIPTOR
+        data = message.encoded(v2=self._v2)
         url = f"{self.url.raw_url}/rpc"
         headers = {
-            "Accept": "application/cbor",
-            "Content-Type": "application/cbor",
+            "Accept": CBOR2_MEDIA_TYPE,
+            "Content-Type": CBOR2_MEDIA_TYPE if self._v2 else "application/cbor",
         }
         bearer = self.token if token is None else token
         if bearer:
@@ -227,9 +229,11 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
                 f"could not reach {url} while {operation}: {exc}"
             ) from exc
 
-        self.check_status_for_error(response.status_code, content, url)
+        v2 = is_cbor2_media_type(response.headers.get("Content-Type"))
+        self.check_status_for_error(response.status_code, content, url, v2=v2)
 
-        data_dict = self.decode_response(content, operation)
+        data_dict = self.decode_response(content, operation, v2=v2)
+        self._v2 = v2
 
         if not bypass:
             self.check_response_for_error(data_dict, operation)

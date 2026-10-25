@@ -77,6 +77,8 @@ from surrealdb.connections.timeouts import (
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import (
     AUTH_FALLBACK_QUERY,
+    CBOR,
+    CBOR2,
     UtilsMixin,
     check_keepalive,
 )
@@ -281,10 +283,13 @@ class BlockingWsSurrealConnection(
     def _connect_socket(self) -> ClientConnection:
         """Open the websocket, mapping transport failures to SDK errors."""
         try:
-            return ws_sync.connect(
+            socket = ws_sync.connect(
                 self.raw_url,
                 max_size=None,
-                subprotocols=[websockets.Subprotocol("cbor")],
+                subprotocols=[
+                    websockets.Subprotocol(CBOR2),
+                    websockets.Subprotocol(CBOR),
+                ],
                 ping_interval=self._ping_interval,
                 ping_timeout=self._ping_timeout,
             )
@@ -296,6 +301,8 @@ class BlockingWsSurrealConnection(
             raise ConnectionUnavailableError(
                 f"could not connect to {self.raw_url}: {exc}"
             ) from exc
+        self._v2 = socket.subprotocol == CBOR2
+        return socket
 
     def connect(self, url: str | None = None) -> None:
         """Open the websocket.
@@ -392,7 +399,7 @@ class BlockingWsSurrealConnection(
         """
         assert self.socket is not None
         try:
-            self.socket.send(message.WS_CBOR_DESCRIPTOR)
+            self.socket.send(message.encoded(v2=self._v2))
         except ConnectionClosed:
             if not self._reconnect.enabled or self._reconnecting:
                 raise
@@ -405,7 +412,7 @@ class BlockingWsSurrealConnection(
                 if unsent is not None:
                     self._streams[message.id] = unsent
             assert self.socket is not None
-            self.socket.send(message.WS_CBOR_DESCRIPTOR)
+            self.socket.send(message.encoded(v2=self._v2))
 
     def _ensure_open(self) -> None:
         """Open the socket if there is none, as the next request would."""
@@ -684,7 +691,9 @@ class BlockingWsSurrealConnection(
                     )
                 data = self.socket.recv(timeout=remaining)
                 response = self.decode_response(
-                    data if isinstance(data, bytes) else data.encode(), process
+                    data if isinstance(data, bytes) else data.encode(),
+                    process,
+                    v2=self._v2,
                 )
                 response_id = response.get("id")
                 if response_id == message.id:
@@ -1313,6 +1322,7 @@ class BlockingWsSurrealConnection(
                     self.decode_response(
                         data if isinstance(data, bytes) else data.encode(),
                         "reading a streaming query frame",
+                        v2=self._v2,
                     )
                 )
                 return
@@ -2242,6 +2252,7 @@ class BlockingWsSurrealConnection(
                         response = self.decode_response(
                             data if isinstance(data, bytes) else data.encode(),
                             "reading a live notification",
+                            v2=self._v2,
                         )
                         if response.get("id") is not None:
                             # Not a notification: an RPC reply with no waiter,

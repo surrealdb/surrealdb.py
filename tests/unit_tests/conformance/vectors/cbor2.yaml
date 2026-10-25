@@ -1,0 +1,305 @@
+# cbor.2 value test vectors for SurrealDB 4.0.
+#
+# cbor.2 (WebSocket subprotocol `cbor.2`, HTTP `application/cbor; v=2`) is
+# plain cbor plus the sized-number tags 180 to 188 (spec/cbor-tags.yaml): for
+# every type plain cbor has, the bytes are the same. So a cbor.2 codec MUST
+# pass every vector in cbor.yaml whose `formats` does not leave out cbor.2,
+# decoding and encoding as cbor.2, and every vector here. The ones that leave
+# it out are the plain-cbor refusals of tags 180 to 188 and the widened forms
+# of the sized numbers, which cbor.2 sends tagged.
+#
+# The kinds and fields are those of cbor.yaml; `value` uses the typed JSON
+# sized forms ($i8, $u8, $i16, $u16, $i32, $u32, $u64, $f16, $f32). Servers
+# before 4.0 do not speak cbor.2, so there are no `legacy` entries.
+#
+# `cbor`, `diag`, `canonical` and `server` are written by `bun run vectors:write`
+# against a live 4.0 server, which also checks every `value` independently and
+# checks that plain cbor widens each canonical vector as the reference encoder
+# does. Edit the `surql`, `value` and (for decode and reject vectors) `diag`
+# fields; never edit the hex by hand.
+
+version: 1
+server: surrealdb-4.0.0-nightly
+vectors:
+  # --- integers ------------------------------------------------------------
+
+  - name: i8-min
+    kind: canonical
+    surql: -128i8
+    value: { $i8: -128 }
+    cbor: d8b4387f
+    diag: 180(-128)
+
+  - name: i8-max
+    kind: canonical
+    surql: 127i8
+    value: { $i8: 127 }
+    cbor: d8b4187f
+    diag: 180(127)
+
+  - name: u8-zero
+    kind: canonical
+    surql: 0u8
+    value: { $u8: 0 }
+    cbor: d8b500
+    diag: 181(0)
+
+  - name: u8-max
+    kind: canonical
+    surql: 255u8
+    value: { $u8: 255 }
+    cbor: d8b518ff
+    diag: 181(255)
+
+  - name: i16-min
+    kind: canonical
+    surql: -32768i16
+    value: { $i16: -32768 }
+    cbor: d8b6397fff
+    diag: 182(-32768)
+
+  - name: u16-max
+    kind: canonical
+    surql: 65535u16
+    value: { $u16: 65535 }
+    cbor: d8b719ffff
+    diag: 183(65535)
+
+  - name: i32-min
+    kind: canonical
+    surql: -2147483648i32
+    value: { $i32: -2147483648 }
+    cbor: d8b83a7fffffff
+    diag: 184(-2147483648)
+
+  - name: u32-max
+    kind: canonical
+    surql: 4294967295u32
+    value: { $u32: 4294967295 }
+    cbor: d8b91affffffff
+    diag: 185(4294967295)
+
+  - name: u64-small
+    kind: canonical
+    surql: 5u64
+    value: { $u64: 5 }
+    notes: The integer under the tag takes the shortest head, as every integer does.
+    cbor: d8ba05
+    diag: 186(5)
+
+  - name: u64-max
+    kind: canonical
+    surql: 18446744073709551615u64
+    value: { $u64: "18446744073709551615" }
+    notes: The one way to carry an integer above i64::MAX as an integer. Plain cbor sends it as a tag 10 decimal.
+    cbor: d8ba1bffffffffffffffff
+    diag: 186(18446744073709551615)
+
+  - name: int-stays-untagged
+    kind: canonical
+    surql: "[5, 5u8]"
+    value: [ 5, { $u8: 5 } ]
+    notes: An int is never tagged; the width is the tag. The two compare equal on the server, but decode to different kinds.
+    cbor: 8205d8b505
+    diag: "[5, 181(5)]"
+
+  # --- floats --------------------------------------------------------------
+
+  - name: f16-one-and-a-half
+    kind: canonical
+    surql: 1.5f16
+    value: { $f16: 1.5 }
+    cbor: d8bbf93e00
+    diag: 187(1.5_1)
+
+  - name: f16-max
+    kind: canonical
+    surql: 65504f16
+    value: { $f16: 65504 }
+    cbor: d8bbf97bff
+    diag: 187(65504.0_1)
+
+  - name: f16-smallest-subnormal
+    kind: canonical
+    surql: 0.000000059604645f16
+    value: { $f16: 5.960464477539063e-8 }
+    cbor: d8bbf90001
+    diag: 187(5.960464477539063e-8_1)
+
+  - name: f16-negative-zero
+    kind: canonical
+    surql: -0.0f16
+    value: { $f16: "-0" }
+    cbor: d8bbf98000
+    diag: 187(-0.0_1)
+
+  - name: f16-nan
+    kind: canonical
+    surql: <f16>NaN
+    value: { $f16: "NaN" }
+    cbor: d8bbf97e00
+    diag: 187(NaN_1)
+
+  - name: f16-negative-infinity
+    kind: canonical
+    surql: <f16>-Infinity
+    value: { $f16: "-Infinity" }
+    cbor: d8bbf9fc00
+    diag: 187(-Infinity_1)
+
+  - name: f32-half-width
+    kind: canonical
+    surql: 1.5f32
+    value: { $f32: 1.5 }
+    notes: The float under the tag takes the shortest exact width, so an f32 can arrive as a half.
+    cbor: d8bcf93e00
+    diag: 188(1.5_1)
+
+  - name: f32-single-width
+    kind: canonical
+    surql: 0.1f32
+    value: { $f32: 0.10000000149011612 }
+    cbor: d8bcfa3dcccccd
+    diag: 188(0.10000000149011612_2)
+
+  - name: f32-max
+    kind: canonical
+    surql: 3.4028235e38f32
+    value: { $f32: 3.4028234663852886e+38 }
+    cbor: d8bcfa7f7fffff
+    diag: 188(3.4028234663852886e+38_2)
+
+  - name: f32-infinity
+    kind: canonical
+    surql: <f32>Infinity
+    value: { $f32: "Infinity" }
+    cbor: d8bcf97c00
+    diag: 188(Infinity_1)
+
+  # --- in containers -------------------------------------------------------
+
+  - name: sized-in-array-and-object
+    kind: canonical
+    surql: "{ a: [1i8, 2u16], b: 1.5f32 }"
+    value: { a: [ { $i8: 1 }, { $u16: 2 } ], b: { $f32: 1.5 } }
+    cbor: a2616182d8b401d8b7026162d8bcf93e00
+    diag: '{"a": [180(1), 183(2)], "b": 188(1.5_1)}'
+
+  - name: sized-in-record-id-array-key
+    kind: canonical
+    surql: "t:[5u8, 1.5f32]"
+    value: { $record: { table: t, key: [ { $u8: 5 }, { $f32: 1.5 } ] } }
+    notes: Inside an array or object key the width is kept.
+    cbor: c882617482d8b505d8bcf93e00
+    diag: 8(["t", [181(5), 188(1.5_1)]])
+
+  # --- accepted, never produced --------------------------------------------
+
+  - name: f16-double-width-accepted
+    kind: decode
+    diag: 187(1.5_3)
+    value: { $f16: 1.5 }
+    notes: A decoder reads any float width under the tag; only the value must fit.
+    cbor: d8bbfb3ff8000000000000
+    canonical: d8bbf93e00
+
+  - name: u8-record-id-key-is-int
+    kind: decode
+    diag: '8(["t", 181(5)])'
+    value: { $record: { table: t, key: 5 } }
+    notes: A record id key holds an i64, so the server reads a sized integer key as a plain int key.
+    cbor: c8826174d8b505
+    canonical: c882617405
+
+  # --- rejected ------------------------------------------------------------
+
+  - name: reject-i8-overflow
+    kind: reject
+    diag: 180(128)
+    notes: '"integer 128 is outside the 8-bit signed range"'
+    cbor: d8b41880
+
+  - name: reject-i8-underflow
+    kind: reject
+    diag: 180(-129)
+    cbor: d8b43880
+
+  - name: reject-u8-negative
+    kind: reject
+    diag: 181(-1)
+    cbor: d8b520
+
+  - name: reject-u8-overflow
+    kind: reject
+    diag: 181(256)
+    cbor: d8b5190100
+
+  - name: reject-i16-overflow
+    kind: reject
+    diag: 182(32768)
+    cbor: d8b6198000
+
+  - name: reject-u16-overflow
+    kind: reject
+    diag: 183(65536)
+    cbor: d8b71a00010000
+
+  - name: reject-i32-overflow
+    kind: reject
+    diag: 184(2147483648)
+    cbor: d8b81a80000000
+
+  - name: reject-u32-overflow
+    kind: reject
+    diag: 185(4294967296)
+    cbor: d8b91b0000000100000000
+
+  - name: reject-u64-negative
+    kind: reject
+    diag: 186(-1)
+    cbor: d8ba20
+
+  - name: reject-f16-inexact
+    kind: reject
+    diag: 187(0.1)
+    notes: '"float 0.1 cannot be losslessly represented as f16". Encoders round before tagging.'
+    cbor: d8bbfb3fb999999999999a
+
+  - name: reject-f32-inexact
+    kind: reject
+    diag: 188(0.1)
+    cbor: d8bcfb3fb999999999999a
+
+  - name: reject-f16-integer
+    kind: reject
+    diag: 187(1)
+    notes: The float tags need a CBOR float; an integer, even an exact one, is refused.
+    cbor: d8bb01
+
+  - name: reject-u8-float
+    kind: reject
+    diag: 181(1.0)
+    notes: The integer tags need a CBOR integer.
+    cbor: d8b5f93c00
+
+  - name: reject-u8-text
+    kind: reject
+    diag: 181("1")
+    cbor: d8b56131
+
+  - name: reject-untagged-integer-past-i64
+    kind: reject
+    diag: "18446744073709551615"
+    notes: cbor.2 does not relax plain cbor's rule that an untagged integer fits in i64; tag it 186.
+    cbor: 1bffffffffffffffff
+
+  - name: reject-u64-record-id-key-past-i64
+    kind: reject
+    diag: '8(["t", 186(18446744073709551615)])'
+    notes: A record id key holds an i64.
+    cbor: c8826174d8ba1bffffffffffffffff
+
+  - name: reject-f16-record-id-key
+    kind: reject
+    diag: '8(["t", 187(1.5)])'
+    cbor: c8826174d8bbf93e00

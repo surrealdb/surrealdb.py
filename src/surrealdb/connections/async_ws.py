@@ -76,6 +76,8 @@ from surrealdb.connections.timeouts import (
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import (
     AUTH_FALLBACK_QUERY,
+    CBOR,
+    CBOR2,
     UtilsMixin,
     check_keepalive,
 )
@@ -581,7 +583,7 @@ class AsyncWsSurrealConnection(
         # would ever resolve. The caller then waited forever, with no timeout
         # anywhere on this path.
         try:
-            response = decode(data)
+            response = decode(data, v2=self._v2)
         except Exception as exc:
             self._fail_pending(
                 UnexpectedResponseError(f"could not decode a websocket frame: {exc}")
@@ -1004,7 +1006,7 @@ class AsyncWsSurrealConnection(
         try:
             # correlate message to query, send and forget it
             try:
-                await self.socket.send(message.WS_CBOR_DESCRIPTOR)
+                await self.socket.send(message.encoded(v2=self._v2))
             except (WebSocketException, OSError) as exc:
                 raise ConnectionUnavailableError(
                     f"the connection to {self.raw_url} failed while {process}: {exc}"
@@ -1143,7 +1145,10 @@ class AsyncWsSurrealConnection(
             self.socket = await websockets.connect(
                 self.raw_url,
                 max_size=None,
-                subprotocols=[websockets.Subprotocol("cbor")],
+                subprotocols=[
+                    websockets.Subprotocol(CBOR2),
+                    websockets.Subprotocol(CBOR),
+                ],
                 ping_interval=self._ping_interval,
                 ping_timeout=self._ping_timeout,
             )
@@ -1155,6 +1160,7 @@ class AsyncWsSurrealConnection(
             raise ConnectionUnavailableError(
                 f"could not connect to {self.raw_url}: {exc}"
             ) from exc
+        self._v2 = self.socket.subprotocol == CBOR2
         self.loop = asyncio.get_running_loop()
         self._closing = False
         self.recv_task = asyncio.create_task(
@@ -1627,7 +1633,7 @@ class AsyncWsSurrealConnection(
         await self.connect()
         assert self.socket is not None
         try:
-            await self.socket.send(message.WS_CBOR_DESCRIPTOR)
+            await self.socket.send(message.encoded(v2=self._v2))
         except (WebSocketException, OSError) as exc:
             raise ConnectionUnavailableError(
                 f"the connection to {self.raw_url} failed while starting a "

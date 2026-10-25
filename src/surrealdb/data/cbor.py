@@ -1,8 +1,7 @@
-import decimal
-import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from io import BytesIO
-from typing import Any
+from typing import Any, cast
 
 from surrealdb.cbor import (
     CBORDecoder,
@@ -10,6 +9,7 @@ from surrealdb.cbor import (
     CBORTag,
     shareable_encoder,
 )
+from surrealdb.data._decoder import Decoder
 from surrealdb.data.types import constants
 from surrealdb.data.types.datetime import Datetime, PreciseDatetime, parse_instant
 from surrealdb.data.types.duration import Duration
@@ -23,12 +23,24 @@ from surrealdb.data.types.geometry import (
     GeometryPoint,
     GeometryPolygon,
 )
-from surrealdb.data.types.null import Null, NullType
+from surrealdb.data.types.null import NullType
 from surrealdb.data.types.range import BoundExcluded, BoundIncluded, Range
 from surrealdb.data.types.record_id import RecordID, StringRecordId
 from surrealdb.data.types.set import SurrealSet
+from surrealdb.data.types.sized import (
+    F16,
+    F32,
+    I8,
+    I16,
+    I32,
+    U8,
+    U16,
+    U32,
+    U64,
+    SizedFloat,
+    SizedInt,
+)
 from surrealdb.data.types.table import Table
-from surrealdb.errors import UnexpectedResponseError
 
 # Plain CBOR null: major type 7, subtype 22.
 _CBOR_NULL_SUBTYPE = 22
@@ -80,11 +92,9 @@ def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
 
     elif isinstance(obj, Duration):
         # Tag 14 (compact) is the `[seconds, nanoseconds]` form. Tag 13 carries
-        # the *string* form ("1h30m"), so pairing it with the array payload
-        # produced a frame the server rejects with HTTP 400 - a `Duration`
-        # could be read back but never sent. The SDK's own decoder accepts
-        # either shape, which is why this survived round-trip tests.
-        tagged = CBORTag(constants.TAG_DURATION_COMPACT, obj.get_seconds_and_nano())
+        # the *string* form ("1h30m"), which SurrealDB 4 refuses.
+        _encode_duration(encoder, obj)
+        return
 
     elif isinstance(obj, Datetime):
         tagged = CBORTag(
@@ -120,129 +130,12 @@ def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
 
 
 def tag_decoder(
-    decoder: CBORDecoder, tag: CBORTag, shareable_index: int | None = None
+    decoder: CBORDecoder | None, tag: CBORTag, shareable_index: int | None = None
 ) -> Any:
-    if tag.tag == constants.TAG_GEOMETRY_POINT:
-        return GeometryPoint.parse_coordinates(tag.value)
+    """The SurrealDB value for a tag cbor2 has already decoded, read as plain cbor."""
+    from surrealdb.cbor import dumps
 
-    elif tag.tag == constants.TAG_GEOMETRY_LINE:
-        return GeometryLine(*tag.value)
-
-    elif tag.tag == constants.TAG_GEOMETRY_POLYGON:
-        return GeometryPolygon(*tag.value)
-
-    elif tag.tag == constants.TAG_GEOMETRY_MULTI_POINT:
-        return GeometryMultiPoint(*tag.value)
-
-    elif tag.tag == constants.TAG_GEOMETRY_MULTI_LINE:
-        return GeometryMultiLine(*tag.value)
-
-    elif tag.tag == constants.TAG_GEOMETRY_MULTI_POLYGON:
-        return GeometryMultiPolygon(*tag.value)
-
-    elif tag.tag == constants.TAG_GEOMETRY_COLLECTION:
-        return GeometryCollection(*tag.value)
-
-    elif tag.tag == constants.TAG_NONE:
-        return None
-
-    elif tag.tag == constants.TAG_RECORD_ID:
-        if isinstance(tag.value, str):
-            return StringRecordId._unchecked(tag.value)  # pyright: ignore[reportPrivateUsage]
-        # `_unchecked`, not the constructor: the constructor validates the id
-        # type, and applying that to a value the *server* chose would turn a
-        # future server's new id type into an unreadable record - and lose the
-        # rest of the response with it, since this runs inside the decode of the
-        # whole frame.
-        return RecordID._unchecked(  # pyright: ignore[reportPrivateUsage]
-            tag.value[0], tag.value[1]
-        )
-
-    elif tag.tag == constants.TAG_FILE:
-        # `[bucket, key]`. Built unchecked: the server is the authority on what
-        # a file reference is, and refusing to decode one the SDK dislikes would
-        # lose the whole response rather than the one value.
-        if not isinstance(tag.value, (list, tuple)) or len(tag.value) != 2:
-            raise UnexpectedResponseError(
-                f"expected a [bucket, key] pair for a file, got {tag.value!r}"
-            )
-        return File._unchecked(  # pyright: ignore[reportPrivateUsage]
-            tag.value[0],
-            tag.value[1],
-        )
-
-    elif tag.tag == constants.TAG_TABLE_NAME:
-        return Table._unchecked(tag.value)  # pyright: ignore[reportPrivateUsage]
-
-    elif tag.tag == constants.TAG_BOUND_INCLUDED:
-        return BoundIncluded(tag.value)
-
-    elif tag.tag == constants.TAG_BOUND_EXCLUDED:
-        return BoundExcluded(tag.value)
-
-    elif tag.tag == constants.TAG_RANGE:
-        return Range(tag.value[0], tag.value[1])
-
-    elif tag.tag == constants.TAG_DURATION_COMPACT:
-        # The server omits trailing zero components, so a zero duration arrives
-        # as an EMPTY array. Indexing [0] then raised IndexError and destroyed
-        # the whole response, not just the field - and an ordinary expression
-        # such as `time::now() - time::now()` produces one.
-        if not tag.value:
-            return Duration.parse(0, 0)
-        if len(tag.value) == 1:
-            return Duration.parse(tag.value[0], 0)  # seconds only
-        # seconds and nanoseconds
-        return Duration.parse(tag.value[0], tag.value[1])
-
-    elif tag.tag == constants.TAG_DURATION:
-        # TAG_DURATION is encoded as [seconds, nanoseconds] tuple
-        if isinstance(tag.value, (list, tuple)) and len(tag.value) == 2:
-            return Duration.parse(tag.value[0], tag.value[1])
-        # Fallback for string format (if server sends it)
-        elif isinstance(tag.value, str):
-            return Duration.parse(tag.value)
-        else:
-            raise ValueError(f"Unexpected TAG_DURATION value format: {tag.value}")
-
-    elif tag.tag == constants.TAG_DATETIME_COMPACT:
-        # `[seconds, nanoseconds]`. `datetime` resolves to microseconds, so
-        # this used to drop the last three digits - and writing the value back
-        # then stored the truncated form, destroying precision in the database
-        # on an ordinary read-modify-write. `PreciseDatetime` is a `datetime`
-        # that keeps the remainder, so the value can be written back unchanged.
-        seconds = tag.value[0] if tag.value else 0
-        nanoseconds = tag.value[1] if len(tag.value) > 1 else 0
-        return PreciseDatetime.from_seconds_and_nanos(seconds, nanoseconds)
-
-    elif tag.tag == constants.TAG_UUID_STRING:
-        # Defensive: the server encodes UUIDs with native tag 37, but decode a
-        # string-tagged UUID (tag 9) too, in case one is ever received.
-        return uuid.UUID(tag.value)
-
-    elif tag.tag == constants.TAG_DECIMAL_STRING:
-        return decimal.Decimal(tag.value)
-
-    elif tag.tag == constants.TAG_SET:
-        # `SurrealSet`, not a Python `set` and not a plain list. A Python set
-        # cannot hold the objects and arrays a `set<object>` column contains, so
-        # decoding into one raised `unhashable type: 'dict'` and lost the whole
-        # response. A plain list can hold them but is a *different type* to the
-        # server, so writing a record back either failed on a schemafull field
-        # or silently turned a schemaless one into an array. `SurrealSet` reads
-        # like the sequence it is and encodes back as a set - see
-        # `surrealdb.data.types.set`.
-        return SurrealSet(tag.value) if isinstance(tag.value, list) else tag.value
-
-    else:
-        # Unlike the encoder's unsupported-type case, this is not a caller
-        # mistake: the server sent a tag this SDK does not know, which is an
-        # operational failure and belongs in the SurrealError hierarchy so
-        # `except SurrealError` covers it.
-        raise UnexpectedResponseError(
-            f"no decoder for CBOR tag {tag.tag}; the server sent a value this "
-            "version of the SDK does not understand"
-        )
+    return decode(dumps(tag))
 
 
 # SurrealDB stores integers as signed 64-bit. A Python int above the signed
@@ -262,6 +155,54 @@ def _seconds_and_nanos(value: datetime) -> list[int]:
     delta = moment - _EPOCH
     nanosecond = value.nanosecond if isinstance(value, PreciseDatetime) else 0
     return [delta.days * 86400 + delta.seconds, delta.microseconds * 1000 + nanosecond]
+
+
+_U64_MAX = 2**64 - 1
+_NANOS = 1_000_000_000
+
+_SIZED_TAGS: dict[type, int] = {
+    I8: constants.TAG_I8,
+    U8: constants.TAG_U8,
+    I16: constants.TAG_I16,
+    U16: constants.TAG_U16,
+    I32: constants.TAG_I32,
+    U32: constants.TAG_U32,
+    U64: constants.TAG_U64,
+    F16: constants.TAG_F16,
+    F32: constants.TAG_F32,
+}
+
+
+def _encode_duration(encoder: CBOREncoder, value: Duration) -> None:
+    """Tag 14 ``[seconds, nanoseconds]``, whose seconds run to u64, past an int's i64."""
+    seconds, nanoseconds = divmod(value.elapsed, _NANOS)
+    if not 0 <= seconds <= _U64_MAX:
+        raise ValueError(
+            f"{value!r} is outside the durations SurrealDB holds (0 to {_U64_MAX} "
+            "seconds); a duration cannot be negative"
+        )
+    encoder.encode_length(6, constants.TAG_DURATION_COMPACT)
+    encoder.encode_length(4, 2)
+    encoder.encode_length(0, seconds)
+    encoder.encode_length(0, nanoseconds)
+
+
+def _encode_sized(encoder: CBOREncoder, value: SizedInt | SizedFloat) -> None:
+    """A sized number: tagged over ``cbor.2``, widened as the server widens it otherwise."""
+    if cast(_SurrealEncoder, encoder).v2:
+        encoder.encode_length(6, _SIZED_TAGS[type(value)])
+        if isinstance(value, SizedFloat):
+            encoder.encode_float(float(value))
+        elif value >= 0:
+            encoder.encode_length(0, int(value))
+        else:
+            encoder.encode_length(1, -int(value) - 1)
+    elif isinstance(value, SizedFloat):
+        encoder.encode_float(float(value))
+    elif value > _I64_MAX:
+        encoder.encode(CBORTag(constants.TAG_DECIMAL_STRING, str(int(value))))
+    else:
+        encoder.encode_int(int(value))
 
 
 def _encode_datetime(encoder: CBOREncoder, value: datetime) -> None:
@@ -284,8 +225,9 @@ class _SurrealEncoder(CBOREncoder):
     it wrap silently on the server.
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, v2: bool = False, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        self.v2 = v2
         self._encoders.pop(set, None)
         self._encoders.pop(frozenset, None)
 
@@ -303,6 +245,19 @@ class _SurrealEncoder(CBOREncoder):
         self._encoders[datetime] = _encode_datetime
         self._encoders[PreciseDatetime] = _encode_datetime
 
+        self._encoders[Duration] = _encode_duration
+
+        def _encode_plain_decimal(encoder: CBOREncoder, value: Decimal) -> None:
+            # `str` writes exponent notation (`1E-28`), which SurrealDB refuses.
+            if not value.is_finite():
+                encoder.encode_decimal(value)
+                return
+            encoder.encode(CBORTag(constants.TAG_DECIMAL_STRING, format(value, "f")))
+
+        self._encoders[Decimal] = _encode_plain_decimal
+        for sized in _SIZED_TAGS:
+            self._encoders[sized] = _encode_sized
+
         encode_int = self._encoders[int]
 
         def _encode_checked_int(encoder: CBOREncoder, value: int) -> None:
@@ -317,21 +272,26 @@ class _SurrealEncoder(CBOREncoder):
         self._encoders[int] = _encode_checked_int
 
 
-def encode(obj: Any) -> bytes:
+def encode(obj: Any, *, v2: bool = False) -> bytes:
+    """Encode *obj* for SurrealDB, as ``cbor.2`` when *v2* and as plain ``cbor`` otherwise.
+
+    The two differ only in sized numbers (:mod:`surrealdb.data.types.sized`):
+    ``cbor.2`` tags them, and plain ``cbor`` widens them as the server would.
+    """
     with BytesIO() as fp:
-        _SurrealEncoder(fp, default=default_encoder, timezone=timezone.utc).encode(obj)
+        encoder = _SurrealEncoder(
+            fp, default=default_encoder, timezone=timezone.utc, v2=v2
+        )
+        encoder.encode(obj)
         return fp.getvalue()
 
 
-def decode(data: bytes) -> Any:
-    """Decode a SurrealDB CBOR payload.
+def decode(data: bytes, *, v2: bool = False) -> Any:
+    """Decode a SurrealDB CBOR payload, as ``cbor.2`` when *v2* and as plain ``cbor`` otherwise.
 
     Plain CBOR null becomes :data:`Null`, not ``None``: on this wire a null is
-    SurrealDB's NULL, which is a different value from its NONE. The public
-    ``surrealdb.cbor`` package is a general-purpose CBOR implementation and is
-    left alone - ``loads(b"\\xf6")`` there still returns ``None``.
+    SurrealDB's NULL, which is a different value from its NONE. Decoding is as
+    strict as a SurrealDB 4 server's, so input that does not hold a SurrealDB
+    value raises :class:`~surrealdb.errors.UnexpectedResponseError`.
     """
-    with BytesIO(data) as fp:
-        decoder = CBORDecoder(fp, tag_hook=tag_decoder)
-        decoder.null_value = Null
-        return decoder.decode()
+    return Decoder(bytes(data), v2=v2).decode()
