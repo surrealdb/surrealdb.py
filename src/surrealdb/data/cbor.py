@@ -1,6 +1,6 @@
 import decimal
 import uuid
-from datetime import timezone
+from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any
 
@@ -11,7 +11,7 @@ from surrealdb.cbor import (
     shareable_encoder,
 )
 from surrealdb.data.types import constants
-from surrealdb.data.types.datetime import Datetime, PreciseDatetime
+from surrealdb.data.types.datetime import Datetime, PreciseDatetime, parse_instant
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.file import File
 from surrealdb.data.types.geometry import (
@@ -84,7 +84,9 @@ def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
         tagged = CBORTag(constants.TAG_DURATION_COMPACT, obj.get_seconds_and_nano())
 
     elif isinstance(obj, Datetime):
-        tagged = CBORTag(constants.TAG_DATETIME, obj.dt)
+        tagged = CBORTag(
+            constants.TAG_DATETIME_COMPACT, _seconds_and_nanos(parse_instant(obj.dt))
+        )
 
     elif isinstance(obj, (set, frozenset)):
         # SurrealDB uses its own set tag (56); the bundled cbor2 encoder would
@@ -246,9 +248,23 @@ _I64_MIN = -(2**63)
 _I64_MAX = 2**63 - 1
 
 
-def _encode_precise_datetime(encoder: CBOREncoder, value: PreciseDatetime) -> None:
-    """Send all nine fractional digits, which SurrealDB stores faithfully."""
-    encoder.encode(CBORTag(constants.TAG_DATETIME, value.isoformat_with_nanoseconds()))
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
+def _seconds_and_nanos(value: datetime) -> list[int]:
+    """The ``[seconds, nanoseconds]`` pair of tag 12, reading a naive value as UTC."""
+    moment = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+    delta = moment - _EPOCH
+    nanosecond = value.nanosecond if isinstance(value, PreciseDatetime) else 0
+    return [delta.days * 86400 + delta.seconds, delta.microseconds * 1000 + nanosecond]
+
+
+def _encode_datetime(encoder: CBOREncoder, value: datetime) -> None:
+    """Send a datetime as tag 12, which every SurrealDB 2.x, 3.x and 4.x server reads.
+
+    cbor2 would write tag 0 (the datetime as text), which SurrealDB 4 refuses.
+    """
+    encoder.encode(CBORTag(constants.TAG_DATETIME_COMPACT, _seconds_and_nanos(value)))
 
 
 class _SurrealEncoder(CBOREncoder):
@@ -277,11 +293,10 @@ class _SurrealEncoder(CBOREncoder):
 
         self._encoders[SurrealSet] = _encode_surreal_set
 
-        # Registered for the exact subclass only, so a plain `datetime` keeps
-        # cbor2's native encoding untouched. Without this the native encoder
-        # claims the subclass through the MRO and silently drops the
-        # nanoseconds again - the `default=` hook never sees it.
-        self._encoders[PreciseDatetime] = _encode_precise_datetime
+        # Registered for the subclass too, so the generic lookup never hands a
+        # `PreciseDatetime` to an encoder that drops its nanoseconds.
+        self._encoders[datetime] = _encode_datetime
+        self._encoders[PreciseDatetime] = _encode_datetime
 
         encode_int = self._encoders[int]
 
