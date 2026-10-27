@@ -1,3 +1,4 @@
+import threading
 from typing import TypeVar
 from uuid import UUID, uuid4
 
@@ -23,6 +24,11 @@ def _bare(cls: type[C]) -> C:
     conn = object.__new__(cls)
     conn._registry = SessionRegistry()
     conn._init_events()
+    if isinstance(conn, BlockingWsSurrealConnection):
+        conn._lock = threading.Lock()
+        conn._lock_owner = None
+        conn._pending_events = []
+        conn._session_lock = threading.RLock()
     return conn
 
 

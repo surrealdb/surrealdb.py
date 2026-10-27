@@ -16,6 +16,7 @@ rather than being sent again, since it may already have run; a request made
 while reconnecting waits for the replay to finish first.
 """
 
+import copy
 import random
 from dataclasses import dataclass, field, replace
 from typing import Any
@@ -225,7 +226,9 @@ class SessionTrackingMixin(EventsMixin):
         self._emit("using", state.namespace, state.database, session_id)
 
     def _note_let(self, session_id: UUID | None, key: str, value: Value) -> None:
-        self._registry.state(session_id).variables[key] = value
+        # A copy, so a caller mutating the value afterwards does not change
+        # what a reconnect replays.
+        self._registry.state(session_id).variables[key] = copy.deepcopy(value)
 
     def _note_unset(self, session_id: UUID | None, key: str) -> None:
         self._registry.state(session_id).variables.pop(key, None)

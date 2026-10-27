@@ -111,6 +111,7 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
             with mapped_engine_errors("opening the database"):
                 self._db = AsyncEmbeddedDB(url)
             self._closed = False
+            self._registry.clear()
         elif self._closed:
             with mapped_engine_errors("opening the database"):
                 self._db = AsyncEmbeddedDB(self.raw_url)
@@ -131,6 +132,8 @@ class AsyncEmbeddedSurrealConnection(AsyncWsSurrealConnection):
         with mapped_engine_errors("closing"):
             await self._db.close()
         self._closed = True
+        # The engine forgot the session with the close, so forget it here too.
+        self._registry.clear()
 
     async def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
