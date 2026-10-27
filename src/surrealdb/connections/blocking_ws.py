@@ -10,7 +10,7 @@ import time
 import uuid
 import weakref
 from collections.abc import Generator, Mapping, Sequence
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, contextmanager
 from types import TracebackType
 from typing import Any, cast, overload
 from uuid import UUID
@@ -234,6 +234,15 @@ class BlockingWsSurrealConnection(
         )
         self._ping_timeout: float | None = check_keepalive("ping_timeout", ping_timeout)
         self._lock: threading.Lock = threading.Lock()
+        # The thread holding `_lock`, and the events raised while it did: they
+        # are published once it is released, since a listener that makes a
+        # request on this connection would otherwise wait on the lock forever.
+        self._lock_owner: int | None = None
+        self._pending_events: list[tuple[str, tuple[Any, ...]]] = []
+        # Held across a state-changing request and the registry update that
+        # records it, so concurrent threads record them in the order the
+        # server applied them. Reentrant, so a listener can make one too.
+        self._session_lock: threading.RLock = threading.RLock()
         # Live-query notification queues keyed by live-query UUID string. A
         # ``subscribe_live`` consumer registers its own queue here so that
         # notifications ``_send`` reads while correlating an RPC reply are
@@ -327,7 +336,7 @@ class BlockingWsSurrealConnection(
         with its ``recv_events`` and ``keepalive`` threads - was overwritten
         and leaked with no reference left to close it.
         """
-        with self._lock:
+        with self._locked():
             self._connect_locked(url)
 
     def _connect_locked(self, url: str | None = None) -> None:
@@ -363,12 +372,34 @@ class BlockingWsSurrealConnection(
 
         self._open_locked()
 
+    @contextmanager
+    def _locked(self) -> Generator[None, None, None]:
+        """Hold ``self._lock``, publishing the events raised meanwhile after."""
+        pending: list[tuple[str, tuple[Any, ...]]] = []
+        try:
+            with self._lock:
+                self._lock_owner = threading.get_ident()
+                try:
+                    yield
+                finally:
+                    self._lock_owner = None
+                    pending, self._pending_events = self._pending_events, []
+        finally:
+            for event, payload in pending:
+                super()._emit(event, *payload)
+
+    def _emit(self, event: str, *payload: Any) -> None:
+        if self._lock_owner == threading.get_ident():
+            self._pending_events.append((event, payload))
+            return
+        super()._emit(event, *payload)
+
     def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
     ) -> dict[str, Any]:
         # Use a lock to ensure thread-safe send/recv operations
         # This prevents race conditions when multiple threads share the same connection
-        with self._lock:
+        with self._locked():
             return self._send_locked(message, process, bypass)
 
     def _ready_locked(self, renew: bool = True) -> None:
@@ -416,7 +447,7 @@ class BlockingWsSurrealConnection(
 
     def _ensure_open(self) -> None:
         """Open the socket if there is none, as the next request would."""
-        with self._lock:
+        with self._locked():
             if self.socket is None:
                 self._open_locked()
 
@@ -824,10 +855,11 @@ class BlockingWsSurrealConnection(
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.AUTHENTICATE, **kwargs)
         self.id = message.id
-        self._send(message, "authenticating")
-        # Record the token as the session's identity so a reconnect - and, for
-        # the connection's own, new_session() - can replay it.
-        self._note_authenticated(session_id, token)
+        with self._session_lock:
+            self._send(message, "authenticating")
+            # Record the token as the session's identity so a reconnect - and,
+            # for the connection's own, new_session() - can replay it.
+            self._note_authenticated(session_id, token)
 
     def invalidate(self, session_id: UUID | None = None) -> None:
         kwargs: dict[str, Any] = {}
@@ -835,8 +867,9 @@ class BlockingWsSurrealConnection(
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.INVALIDATE, **kwargs)
         self.id = message.id
-        self._send(message, "invalidating")
-        self._note_signed_out(session_id)
+        with self._session_lock:
+            self._send(message, "invalidating")
+            self._note_signed_out(session_id)
 
     def refresh(
         self, tokens: Tokens | None = None, session_id: UUID | None = None
@@ -854,10 +887,11 @@ class BlockingWsSurrealConnection(
         message = RequestMessage(
             RequestMethod.REFRESH, params=[pair], **_scope(session_id)
         )
-        response = self._send(message, "refreshing the tokens")
-        self.check_response_for_result(response, "refreshing the tokens")
-        renewed = parse_auth_result(response["result"])
-        self._note_tokens(session_id, renewed)
+        with self._session_lock:
+            response = self._send(message, "refreshing the tokens")
+            self.check_response_for_result(response, "refreshing the tokens")
+            renewed = parse_auth_result(response["result"])
+            self._note_tokens(session_id, renewed)
         return renewed
 
     def revoke(
@@ -875,8 +909,9 @@ class BlockingWsSurrealConnection(
         message = RequestMessage(
             RequestMethod.REVOKE, params=[pair], **_scope(session_id)
         )
-        self._send(message, "revoking a refresh token")
-        self._note_revoked(session_id, pair["refresh"])
+        with self._session_lock:
+            self._send(message, "revoking a refresh token")
+            self._note_revoked(session_id, pair["refresh"])
 
     def reset(self, session_id: UUID | None = None) -> None:
         """Return the session to how it started: no namespace, database,
@@ -884,9 +919,10 @@ class BlockingWsSurrealConnection(
         self._ensure_open()
         self._require(Features.SESSIONS)
         message = RequestMessage(RequestMethod.RESET, **_scope(session_id))
-        self._send(message, "resetting the session")
-        self._note_reset(session_id)
-        self._end_session_live(session_id)
+        with self._session_lock:
+            self._send(message, "resetting the session")
+            self._note_reset(session_id)
+            self._end_session_live(session_id)
 
     def sessions(self) -> list[UUID]:
         """The ids of the sessions attached to this connection on the server,
@@ -910,7 +946,7 @@ class BlockingWsSurrealConnection(
             sql = db.export(ExportOptions(tables=["person"], records=False))
         """
         options = options or ExportOptions()
-        with self._lock:
+        with self._locked():
             self._ready_locked()
         options.check(self._server_version)
         return export_sql(
@@ -938,7 +974,7 @@ class BlockingWsSurrealConnection(
             db.export_to("backup.surql")
         """
         options = options or ExportOptions()
-        with self._lock:
+        with self._locked():
             self._ready_locked()
         options.check(self._server_version)
         export_sql_to(
@@ -963,7 +999,7 @@ class BlockingWsSurrealConnection(
             ImportFailedError: if any statement failed, with each failure in
                 ``failures``. The other statements were still applied.
         """
-        with self._lock:
+        with self._locked():
             self._ready_locked()
         import_sql(
             self.url,
@@ -1065,10 +1101,11 @@ class BlockingWsSurrealConnection(
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.SIGN_UP, **kwargs)
         self.id = message.id
-        response = self._send(message, "signup")
-        self.check_response_for_result(response, "signup")
-        tokens = parse_auth_result(response["result"])
-        self._note_tokens(session_id, tokens)
+        with self._session_lock:
+            response = self._send(message, "signup")
+            self.check_response_for_result(response, "signup")
+            tokens = parse_auth_result(response["result"])
+            self._note_tokens(session_id, tokens)
         return tokens
 
     def signin(self, vars: dict[str, Value], session_id: UUID | None = None) -> Tokens:
@@ -1080,10 +1117,11 @@ class BlockingWsSurrealConnection(
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.SIGN_IN, **kwargs)
         self.id = message.id
-        response = self._send(message, "signing in")
-        self.check_response_for_result(response, "signing in")
-        tokens = parse_auth_result(response["result"])
-        self._note_tokens(session_id, tokens)
+        with self._session_lock:
+            response = self._send(message, "signing in")
+            self.check_response_for_result(response, "signing in")
+            tokens = parse_auth_result(response["result"])
+            self._note_tokens(session_id, tokens)
         return tokens
 
     def info(self, session_id: UUID | None = None) -> Value:
@@ -1128,8 +1166,9 @@ class BlockingWsSurrealConnection(
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.USE, **kwargs)
         self.id = message.id
-        self._send(message, "use")
-        self._note_use(session_id, namespace, database)
+        with self._session_lock:
+            self._send(message, "use")
+            self._note_use(session_id, namespace, database)
 
     def query(
         self,
@@ -1250,7 +1289,7 @@ class BlockingWsSurrealConnection(
         loops that route into these queues, so a bounded queue could only be
         made to wait by stopping the reads that drain it.
         """
-        with self._lock:
+        with self._locked():
             # Exactly as `_send` does, so a query on a dropped connection is
             # handled the same whichever path it takes.
             self._ready_locked()
@@ -1268,7 +1307,7 @@ class BlockingWsSurrealConnection(
         Not :meth:`_send`: that reads until it sees one response for this id
         and would consume the stream's first frame as the whole answer.
         """
-        with self._lock:
+        with self._locked():
             self._ready_locked()
             try:
                 self._send_frame_locked(message)
@@ -1294,7 +1333,7 @@ class BlockingWsSurrealConnection(
         released, so it is available for most of every slice.
         """
         poll = min(_STREAM_POLL_TIMEOUT, timeout)
-        with self._lock:
+        with self._locked():
             if self.socket is None:
                 raise ConnectionUnavailableError(
                     "WebSocket connection is not established."
@@ -1387,9 +1426,10 @@ class BlockingWsSurrealConnection(
             kwargs["txn"] = txn_id
         message = RequestMessage(RequestMethod.LET, **kwargs)
         self.id = message.id
-        self._send(message, "letting")
-        if txn_id is None:
-            self._note_let(session_id, key, value)
+        with self._session_lock:
+            self._send(message, "letting")
+            if txn_id is None:
+                self._note_let(session_id, key, value)
 
     def set(
         self,
@@ -1414,9 +1454,10 @@ class BlockingWsSurrealConnection(
             kwargs["txn"] = txn_id
         message = RequestMessage(RequestMethod.UNSET, **kwargs)
         self.id = message.id
-        self._send(message, "unsetting")
-        if txn_id is None:
-            self._note_unset(session_id, key)
+        with self._session_lock:
+            self._send(message, "unsetting")
+            if txn_id is None:
+                self._note_unset(session_id, key)
 
     @overload
     def select(
@@ -2079,10 +2120,13 @@ class BlockingWsSurrealConnection(
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.LIVE, **kwargs)
         self.id = message.id
-        response = self._send(message, "live")
-        self.check_response_for_result(response, "live")
-        live_id = UUID(str(response["result"]))
-        self._registry.add_live(LiveQuery(live_id, live_id, table, diff, session_id))
+        with self._session_lock:
+            response = self._send(message, "live")
+            self.check_response_for_result(response, "live")
+            live_id = UUID(str(response["result"]))
+            self._registry.add_live(
+                LiveQuery(live_id, live_id, table, diff, session_id)
+            )
         subscription = LiveSubscription(live_id, self, session_id, managed=True)
         self._live_tracker.add(subscription)
         # Listening from now, so nothing that changes before the caller starts
@@ -2120,19 +2164,20 @@ class BlockingWsSurrealConnection(
         always done.
         """
         suid = str(query_uuid)
-        # The caller holds the id the query was started under; after a
-        # reconnect the server knows it by another.
-        current = self._registry.resolve(suid)
-        kwargs: dict[str, Any] = {
-            "uuid": query_uuid if current == suid else UUID(current)
-        }
-        if session_id is not None:
-            kwargs["session"] = session_id
-        message = RequestMessage(RequestMethod.KILL, **kwargs)
-        self.id = message.id
-        self._send(message, "kill")
+        with self._session_lock:
+            # The caller holds the id the query was started under; after a
+            # reconnect the server knows it by another.
+            current = self._registry.resolve(suid)
+            kwargs: dict[str, Any] = {
+                "uuid": query_uuid if current == suid else UUID(current)
+            }
+            if session_id is not None:
+                kwargs["session"] = session_id
+            message = RequestMessage(RequestMethod.KILL, **kwargs)
+            self.id = message.id
+            self._send(message, "kill")
+            self._registry.drop_live(suid)
 
-        self._registry.drop_live(suid)
         self._live_tracker.ended(suid)
         for notifications in self.live_queues.get(suid, []):
             notifications.put(_LIVE_KILLED_SENTINEL)
@@ -2225,7 +2270,7 @@ class BlockingWsSurrealConnection(
                 # we never race ``_send``. The short timeout releases the lock
                 # between reads to keep concurrent RPCs responsive.
                 response: dict[str, Any] | None = None
-                with self._lock:
+                with self._locked():
                     if self.socket is None:
                         raise ConnectionUnavailableError(
                             "WebSocket connection is not established."
@@ -2299,16 +2344,18 @@ class BlockingWsSurrealConnection(
         session_id = UUID(str(uuid.uuid4()))
         message = RequestMessage(RequestMethod.ATTACH, session=session_id)
         self.id = message.id
-        self._send(message, "attach")
-        self._registry.state(session_id)
+        with self._session_lock:
+            self._send(message, "attach")
+            self._registry.state(session_id)
         return session_id
 
     def detach(self, session_id: UUID) -> None:
         message = RequestMessage(RequestMethod.DETACH, session=session_id)
         self.id = message.id
-        self._send(message, "detach")
-        self._end_session_live(session_id)
-        self._registry.forget_session(session_id)
+        with self._session_lock:
+            self._send(message, "detach")
+            self._end_session_live(session_id)
+            self._registry.forget_session(session_id)
 
     def _end_session_live(self, session_id: UUID | None) -> None:
         """End the live queries the server dropped with *session_id*'s state."""
@@ -2370,24 +2417,26 @@ class BlockingWsSurrealConnection(
         default - into a newly attached session. The two are independent from
         then on. Needs SurrealDB 3.0 or later.
         """
-        if session_id is not None and session_id not in self._registry.sessions:
-            raise ValueError(
-                f"session {session_id} is not attached to this connection, so "
-                "there is nothing to fork; fork a session that is still open"
-            )
-        source = self._registry.state(session_id).fork()
-        forked = self.attach()
-        try:
-            with self._lock:
-                authenticated = self._restore_session_locked(forked, source)
-        except BaseException:
-            self.detach(forked)
-            raise
-        state = self._registry.state(forked)
-        state.namespace, state.database = source.namespace, source.database
-        state.variables = source.variables
-        if authenticated and source.access is not None:
-            state.access, state.refresh = source.access, source.refresh
+        with self._session_lock:
+            if session_id is not None and session_id not in self._registry.sessions:
+                raise ValueError(
+                    f"session {session_id} is not attached to this connection, "
+                    "so there is nothing to fork; fork a session that is still "
+                    "open"
+                )
+            source = self._registry.state(session_id).fork()
+            forked = self.attach()
+            try:
+                with self._locked():
+                    authenticated = self._restore_session_locked(forked, source)
+            except BaseException:
+                self.detach(forked)
+                raise
+            state = self._registry.state(forked)
+            state.namespace, state.database = source.namespace, source.database
+            state.variables = source.variables
+            if authenticated and source.access is not None:
+                state.access, state.refresh = source.access, source.refresh
         return BlockingSurrealSession(self, forked)
 
     def begin_transaction(

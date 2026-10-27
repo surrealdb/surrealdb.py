@@ -264,7 +264,7 @@ def test_a_reading_subscription_hears_when_a_dead_socket_is_replaced(
     try:
         subscription = db.subscribe_live(db.live("reconnect_live"))
         thread, outcome = _iterate_in_background(subscription)
-        with db._lock:
+        with db._locked():
             _drop(proxy, db)
             db._ready_locked()
         thread.join(5)
@@ -283,7 +283,7 @@ def test_a_reconnect_ends_an_attached_subscription(
     live_id = db.query("LIVE SELECT * FROM reconnect_live;").first()
     subscription = db.live_of(str(live_id))
     thread, outcome = _iterate_in_background(subscription)
-    with db._lock:
+    with db._locked():
         _drop(proxy, db)
         db._ready_locked()
     thread.join(5)
@@ -308,3 +308,61 @@ def test_a_subscription_that_loses_its_socket_is_no_longer_alive(
         assert not subscription.is_alive
     finally:
         db.close()
+
+
+def test_a_listener_can_make_a_request_on_its_own_connection(
+    proxy: DroppableProxy, connection_params: dict[str, Any]
+) -> None:
+    """Events raised while the request lock is held are published after it."""
+    db = BlockingWsSurrealConnection(proxy.ws_url, reconnect=_FAST)
+    versions: list[str] = []
+    db.subscribe("connected", lambda _version: versions.append(db.version()))
+
+    def connect_then_reconnect() -> None:
+        db.signin(connection_params["vars_params"])
+        _drop(proxy, db)
+        db.query("RETURN 1;").execute()
+
+    worker = threading.Thread(target=connect_then_reconnect, daemon=True)
+    worker.start()
+    worker.join(10)
+    assert not worker.is_alive(), "a listener's request deadlocked the connection"
+    db.close()
+    assert len(versions) == 2
+
+
+def test_concurrent_lets_are_replayed_in_the_order_the_server_applied_them(
+    db: BlockingWsSurrealConnection,
+    proxy: DroppableProxy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    send = db._send
+    first_sent = threading.Event()
+
+    def send_then_stall_once(message: Any, process: str, bypass: bool = False) -> Any:
+        response = send(message, process, bypass)
+        if process == "letting" and not first_sent.is_set():
+            first_sent.set()
+            time.sleep(0.3)
+        return response
+
+    monkeypatch.setattr(db, "_send", send_then_stall_once)
+    first = threading.Thread(target=db.let, args=("x", 1))
+    first.start()
+    assert first_sent.wait(5)
+    db.let("x", 2)
+    first.join(5)
+
+    _drop(proxy, db)
+    assert db.query("RETURN $x;").first() == 2
+
+
+def test_a_variable_is_replayed_as_it_was_sent(
+    db: BlockingWsSurrealConnection, proxy: DroppableProxy
+) -> None:
+    value: dict[str, Any] = {"items": [1]}
+    db.let("v", value)
+    value["items"].append(2)
+
+    _drop(proxy, db)
+    assert db.query("RETURN $v;").first() == {"items": [1]}
