@@ -16,6 +16,7 @@ rather than being sent again, since it may already have run; a request made
 while reconnecting waits for the replay to finish first.
 """
 
+import copy
 import random
 from dataclasses import dataclass, field, replace
 from typing import Any
@@ -87,7 +88,12 @@ class ReconnectOptions:
 
     def delay(self, attempt: int) -> float:
         """Seconds to wait before attempt number *attempt* (counting from 1)."""
-        base = self.retry_delay * self.retry_delay_multiplier ** (attempt - 1)
+        try:
+            base = self.retry_delay * self.retry_delay_multiplier ** (attempt - 1)
+        except OverflowError:
+            # With unlimited attempts the exponent eventually overflows a
+            # float; by then the wait is long past its cap anyway.
+            base = self.retry_delay_max
         jitter = random.uniform(-self.retry_delay_jitter, self.retry_delay_jitter)
         return max(0.0, min(base * (1 + jitter), self.retry_delay_max))
 
@@ -274,7 +280,9 @@ class SessionTrackingMixin(EventsMixin):
         return pair
 
     def _note_let(self, session_id: UUID | None, key: str, value: Value) -> None:
-        self._registry.state(session_id).variables[key] = value
+        # A copy, so a caller mutating the value afterwards does not change
+        # what a reconnect replays.
+        self._registry.state(session_id).variables[key] = copy.deepcopy(value)
 
     def _note_unset(self, session_id: UUID | None, key: str) -> None:
         self._registry.state(session_id).variables.pop(key, None)

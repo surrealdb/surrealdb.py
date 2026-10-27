@@ -234,3 +234,61 @@ def test_a_request_cut_off_mid_flight_fails_and_the_next_one_reconnects(
     finally:
         timer.join()
     assert db.query("RETURN $answer;").first() == 42
+
+
+def test_a_listener_can_make_a_request_on_its_own_connection(
+    proxy: DroppableProxy, connection_params: dict[str, Any]
+) -> None:
+    """Events raised while the request lock is held are published after it."""
+    db = BlockingWsSurrealConnection(proxy.ws_url, reconnect=_FAST)
+    versions: list[str] = []
+    db.subscribe("connected", lambda _version: versions.append(db.version()))
+
+    def connect_then_reconnect() -> None:
+        db.signin(connection_params["vars_params"])
+        _drop(proxy, db)
+        db.query("RETURN 1;").execute()
+
+    worker = threading.Thread(target=connect_then_reconnect, daemon=True)
+    worker.start()
+    worker.join(10)
+    assert not worker.is_alive(), "a listener's request deadlocked the connection"
+    db.close()
+    assert len(versions) == 2
+
+
+def test_concurrent_lets_are_replayed_in_the_order_the_server_applied_them(
+    db: BlockingWsSurrealConnection,
+    proxy: DroppableProxy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    send = db._send
+    first_sent = threading.Event()
+
+    def send_then_stall_once(message: Any, process: str, bypass: bool = False) -> Any:
+        response = send(message, process, bypass)
+        if process == "letting" and not first_sent.is_set():
+            first_sent.set()
+            time.sleep(0.3)
+        return response
+
+    monkeypatch.setattr(db, "_send", send_then_stall_once)
+    first = threading.Thread(target=db.let, args=("x", 1))
+    first.start()
+    assert first_sent.wait(5)
+    db.let("x", 2)
+    first.join(5)
+
+    _drop(proxy, db)
+    assert db.query("RETURN $x;").first() == 2
+
+
+def test_a_variable_is_replayed_as_it_was_sent(
+    db: BlockingWsSurrealConnection, proxy: DroppableProxy
+) -> None:
+    value: dict[str, Any] = {"items": [1]}
+    db.let("v", value)
+    value["items"].append(2)
+
+    _drop(proxy, db)
+    assert db.query("RETURN $v;").first() == {"items": [1]}

@@ -111,6 +111,7 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
             with mapped_engine_errors("opening the database"):
                 self._db = SyncEmbeddedDB(url)
             self._closed = False
+            self._registry.clear()
         elif self._closed:
             with mapped_engine_errors("opening the database"):
                 self._db = SyncEmbeddedDB(self.raw_url)
@@ -131,6 +132,8 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
         with mapped_engine_errors("closing"):
             self._db.close()
         self._closed = True
+        # The engine forgot the session with the close, so forget it here too.
+        self._registry.clear()
         self.socket = None
 
     def _ensure_open(self) -> None:
