@@ -907,7 +907,7 @@ class BlockingWsSurrealConnection(
             sql = db.export(ExportOptions(tables=["person"], records=False))
         """
         options = options or ExportOptions()
-        with self._lock:
+        with self._locked():
             self._ready_locked()
         options.check(self._server_version)
         return export_sql(
@@ -935,7 +935,7 @@ class BlockingWsSurrealConnection(
             db.export_to("backup.surql")
         """
         options = options or ExportOptions()
-        with self._lock:
+        with self._locked():
             self._ready_locked()
         options.check(self._server_version)
         export_sql_to(
@@ -960,7 +960,7 @@ class BlockingWsSurrealConnection(
             ImportFailedError: if any statement failed, with each failure in
                 ``failures``. The other statements were still applied.
         """
-        with self._lock:
+        with self._locked():
             self._ready_locked()
         import_sql(
             self.url,
