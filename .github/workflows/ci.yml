@@ -369,20 +369,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Read the surrealdb-protocol release
-        id: protocol
-        run: echo "ref=$(cat tests/unit_tests/conformance/vectors/VERSION)" >>"$GITHUB_OUTPUT"
+      # The release is spelled out, not read from vectors/VERSION, so the code
+      # this job runs is fixed in the workflow; this step keeps the two in step.
+      - name: Check the surrealdb-protocol release
+        run: test "$(cat tests/unit_tests/conformance/vectors/VERSION)" = v0.14.0
 
       - name: Checkout surrealdb-protocol
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: surrealdb/surrealdb-protocol
-          ref: ${{ steps.protocol.outputs.ref }}
+          ref: v0.14.0
           path: surrealdb-protocol
           persist-credentials: false
 
-      # No cache: this job runs code checked out from another repository, which
-      # must not be able to write a cache that other jobs restore.
+      # No cache: this job runs code from another repository, which must not
+      # be able to write a cache that other jobs restore.
       - name: Install uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
@@ -413,10 +414,14 @@ jobs:
 
       - name: Run the conformance suite
         working-directory: surrealdb-protocol
+        # The filter leaves out the one scenario written for plain-cbor clients:
+        # this SDK speaks cbor.2 to a server that offers it, and so receives
+        # sized numbers unwidened, as the suite's README says it should.
         run: |
           bun install --frozen-lockfile
           bun conformance/runner/cli.ts \
             --driver "uv run --project $GITHUB_WORKSPACE python $GITHUB_WORKSPACE/conformance/driver.py" \
+            --filter '^(?!query-sized-numbers-widen-over-plain-cbor$)' \
             --report "$RUNNER_TEMP/conformance.json"
         env:
           PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}

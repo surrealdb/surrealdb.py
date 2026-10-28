@@ -10,6 +10,8 @@ release named in `tests/unit_tests/conformance/vectors/VERSION`.
   the release in `VERSION`, and the tests skip until it has. Pass a tag to move
   to another release. The vectors are fetched rather than committed while
   surrealdb-protocol releases are licensed BUSL-1.1.
+  The `conformance` CI job names the same release in its checkout, and fails
+  if `VERSION` names another, so moving release means changing both.
 - **Scenarios.** `driver.py` maps the runner's ops onto the SDK's async API.
   CI runs it in the `conformance` job. Ops without an SDK API answer
   `Unsupported`, which the runner reports as a skip.
