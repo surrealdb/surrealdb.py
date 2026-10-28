@@ -434,8 +434,7 @@ class BlockingWsSurrealConnection(
                 attempt += 1
                 if not self._reconnect.allows(attempt):
                     break
-                if attempt > 1:
-                    time.sleep(self._reconnect.delay(attempt - 1))
+                time.sleep(self._reconnect.delay(attempt))
                 self._drop_socket()
                 try:
                     self.socket = self._connect_socket()
