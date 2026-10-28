@@ -478,7 +478,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         return await aexport_sql(
             self.url,
             options,
-            effective_timeout(self, self._timeout),
+            effective_timeout(self, None),
             self.token,
             self.namespace,
             self.database,
@@ -508,7 +508,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
             self.url,
             options,
             target,
-            effective_timeout(self, self._timeout),
+            effective_timeout(self, None),
             self.token,
             self.namespace,
             self.database,
@@ -532,7 +532,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         await aimport_sql(
             self.url,
             data,
-            effective_timeout(self, self._timeout),
+            effective_timeout(self, None),
             self.token,
             self.namespace,
             self.database,

@@ -455,7 +455,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         return export_sql(
             self.url,
             options,
-            effective_timeout(self, self._timeout),
+            effective_timeout(self, None),
             self.token,
             self.namespace,
             self.database,
@@ -485,7 +485,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
             self.url,
             options,
             target,
-            effective_timeout(self, self._timeout),
+            effective_timeout(self, None),
             self.token,
             self.namespace,
             self.database,
@@ -509,7 +509,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         import_sql(
             self.url,
             data,
-            effective_timeout(self, self._timeout),
+            effective_timeout(self, None),
             self.token,
             self.namespace,
             self.database,

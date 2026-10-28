@@ -913,7 +913,7 @@ class BlockingWsSurrealConnection(
         return export_sql(
             self.url,
             options,
-            self._request_timeout(),
+            effective_timeout(self, None),
             self.token,
             self.namespace,
             self.database,
@@ -942,7 +942,7 @@ class BlockingWsSurrealConnection(
             self.url,
             options,
             target,
-            self._request_timeout(),
+            effective_timeout(self, None),
             self.token,
             self.namespace,
             self.database,
@@ -965,7 +965,7 @@ class BlockingWsSurrealConnection(
         import_sql(
             self.url,
             data,
-            self._request_timeout(),
+            effective_timeout(self, None),
             self.token,
             self.namespace,
             self.database,
