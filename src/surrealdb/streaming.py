@@ -44,6 +44,7 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
+from surrealdb.connections.timeouts import describe
 from surrealdb.errors import (
     NotAllowedError,
     NotFoundError,
@@ -630,7 +631,10 @@ class AsyncStreamOps:
     Attributes:
         registry: The transport's stream registry, so a finaliser can drop an
             abandoned registration without holding the connection alive.
-        open_timeout: How long to wait for the opening answer, in seconds.
+        request_timeout: How long to wait for the opening answer, in seconds,
+            or ``None`` to wait indefinitely. Asked when the request is sent, so
+            a ``timeout()`` block around the iteration applies, not one around
+            where the stream was built.
         open: Register a request id, connecting if needed, and return the queue
             its frames arrive on.
         release: Deregister a request id. Safe to call twice.
@@ -643,7 +647,7 @@ class AsyncStreamOps:
     """
 
     registry: dict[str, asyncio.Queue[Any]]
-    open_timeout: float
+    request_timeout: Callable[[], float | None]
     open: Callable[[str], Awaitable[asyncio.Queue[Any]]]
     release: Callable[[str], None]
     send: Callable[[RequestMessage], Awaitable[None]]
@@ -674,7 +678,7 @@ class AsyncStreamOps:
         """
         return cls(
             registry={},
-            open_timeout=0.0,
+            request_timeout=lambda: 0.0,
             open=_unreachable,
             release=_ignore,
             send=_unreachable,
@@ -703,7 +707,7 @@ class SyncStreamOps:
     """
 
     registry: dict[str, queue.Queue[Any]]
-    open_timeout: float
+    request_timeout: Callable[[], float | None]
     open: Callable[[str], queue.Queue[Any]]
     release: Callable[[str], None]
     send: Callable[[RequestMessage], None]
@@ -731,7 +735,7 @@ class SyncStreamOps:
         """Ops for a transport that can only ever answer the buffered way."""
         return cls(
             registry={},
-            open_timeout=0.0,
+            request_timeout=lambda: 0.0,
             open=_unreachable,
             release=_ignore,
             send=_unreachable,
@@ -789,6 +793,7 @@ class _StreamBase:
         self._claimed = False
         self._open = False
         self._request_id: str | None = None
+        self._open_timeout: float | None = None
         # Whether a stream may be executing on the server that we are
         # responsible for stopping. Set once the request is on the wire, and
         # cleared the moment we learn there is nothing to stop. Gating the
@@ -879,10 +884,10 @@ class _StreamBase:
             return None
         return take(self._request_id)
 
-    def _timed_out(self, budget: float) -> TransportTimeoutError:
+    def _timed_out(self, budget: float | None) -> TransportTimeoutError:
         """The deadline a streamed query inherits from the buffered path."""
         return TransportTimeoutError(
-            f"timed out while query: no answer within {budget}s"
+            f"timed out while query: no answer {describe(budget)}"
         )
 
     def _terminal(self, payload: Any) -> bool:
@@ -1100,6 +1105,7 @@ class AsyncQueryStream(_StreamBase):
         accumulator = _Accumulator(retain_rows=retain_rows)
         message = self._message()
         request_id = message.id
+        self._open_timeout = ops.request_timeout()
         frames = await ops.open(request_id)
         # The finaliser only deregisters. Telling the server to stop needs the
         # socket, which is what `aclose` is for; this is the backstop that
@@ -1175,11 +1181,16 @@ class AsyncQueryStream(_StreamBase):
         statements: list[dict[str, Any]] = []
         message = self._message()
         request_id = message.id
+        self._open_timeout = ops.request_timeout()
         frames = await ops.open(request_id)
         finalizer = weakref.finalize(self, _release_stream, ops.registry, request_id)
         # The whole exchange is bounded by the deadline a buffered call had, not
         # just its opening frame - see `_next_payload`.
-        deadline = asyncio.get_running_loop().time() + ops.open_timeout
+        deadline = (
+            None
+            if self._open_timeout is None
+            else asyncio.get_running_loop().time() + self._open_timeout
+        )
         try:
             await ops.send(message)
             self._cancellable = True
@@ -1259,7 +1270,7 @@ class AsyncQueryStream(_StreamBase):
         nothing bounded the rest.
         """
         if deadline is not None:
-            budget = self._ops.open_timeout
+            budget = self._open_timeout
             remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:
                 raise self._timed_out(budget)
@@ -1272,7 +1283,7 @@ class AsyncQueryStream(_StreamBase):
                 raise self._timed_out(budget) from exc
         if self._open:
             return await frames.get()
-        timeout = self._ops.open_timeout
+        timeout = self._open_timeout
         try:
             return await asyncio.wait_for(frames.get(), timeout)
         except asyncio.TimeoutError as exc:
@@ -1287,7 +1298,7 @@ class AsyncQueryStream(_StreamBase):
                 raise held from exc
             raise TransportTimeoutError(
                 "timed out waiting for a streaming query to start: no frame "
-                f"within {timeout}s"
+                f"{describe(timeout)}"
             ) from exc
 
     async def _buffered(self, *, retain_rows: bool) -> list[_Event]:
@@ -1443,6 +1454,7 @@ class QueryStream(_StreamBase):
         accumulator = _Accumulator(retain_rows=retain_rows)
         message = self._message()
         request_id = message.id
+        self._open_timeout = ops.request_timeout()
         frames = ops.open(request_id)
         finalizer = weakref.finalize(self, _release_stream, ops.registry, request_id)
         try:
@@ -1498,10 +1510,15 @@ class QueryStream(_StreamBase):
         statements: list[dict[str, Any]] = []
         message = self._message()
         request_id = message.id
+        self._open_timeout = ops.request_timeout()
         frames = ops.open(request_id)
         finalizer = weakref.finalize(self, _release_stream, ops.registry, request_id)
         # Bounded by the deadline a buffered call had - see `_next_payload`.
-        deadline = time.monotonic() + ops.open_timeout
+        deadline = (
+            None
+            if self._open_timeout is None
+            else time.monotonic() + self._open_timeout
+        )
         try:
             ops.send(message)
             self._cancellable = True
@@ -1550,8 +1567,8 @@ class QueryStream(_StreamBase):
         passes one, for the reason given on
         :meth:`AsyncQueryStream._next_payload`.
         """
-        open_timeout = self._ops.open_timeout
-        if deadline is None and not self._open:
+        open_timeout = self._open_timeout
+        if deadline is None and not self._open and open_timeout is not None:
             deadline = time.monotonic() + open_timeout
         while True:
             try:
@@ -1570,7 +1587,7 @@ class QueryStream(_StreamBase):
                     raise self._timed_out(open_timeout)
                 raise TransportTimeoutError(
                     "timed out waiting for a streaming query to start: no "
-                    f"frame within {open_timeout}s"
+                    f"frame {describe(open_timeout)}"
                 )
             self._ops.pump(min(_SYNC_PUMP_SLICE, remaining))
 
