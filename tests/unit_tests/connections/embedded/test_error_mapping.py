@@ -8,7 +8,7 @@ would never execute in CI at all.
 
 import pytest
 
-from surrealdb import Surreal
+from surrealdb import StringRecordId, Surreal
 from surrealdb.errors import ConnectionUnavailableError, SurrealError
 
 
@@ -21,7 +21,7 @@ def test_embedded_use_after_close_matches_the_remote_transports() -> None:
     """
     db = Surreal("mem://")
     db.use("test", "test")
-    db.create("closed_test:1", {"n": 1})
+    db.create(StringRecordId("closed_test:1"), {"n": 1})
     db.close()
 
     with pytest.raises(ConnectionUnavailableError) as exc_info:

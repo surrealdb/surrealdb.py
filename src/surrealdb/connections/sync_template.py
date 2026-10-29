@@ -208,7 +208,7 @@ class SyncTemplate:
         Returns a builder: ``.execute()`` runs it, and iterating it (or
         ``.rows()``) reads the records as the server produces them.
 
-        A ``RecordID`` (or ``"table:id"`` string) returns the record dict, or
+        A ``RecordID`` (or ``StringRecordId``) returns the record dict, or
         ``None`` when it is absent. A ``Table`` (or bare table-name string)
         returns the list of records.
 
@@ -361,7 +361,7 @@ class SyncTemplate:
     ) -> SyncCrudBuilder[Any]:
         """Delete records, returning a builder for the deleted record(s).
 
-        A ``RecordID`` (or ``"table:id"``) returns the deleted record, or
+        A ``RecordID`` (or ``StringRecordId``) returns the deleted record, or
         ``None`` when no record was deleted (matching select); a ``Table``
         (or bare name) returns the list of deleted records. Pass ``into=Model``
         to map the deleted record(s) onto ``Model``.
