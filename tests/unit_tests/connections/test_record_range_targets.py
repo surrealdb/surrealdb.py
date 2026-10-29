@@ -68,9 +68,14 @@ def test_a_range_spelled_as_a_string_is_a_table_name(
     table = _rows(blocking_ws_connection)
 
     # A plain string is a table name, never parsed: this is not a range of
-    # `table`, it is a table whose name happens to contain ":1..=3".
-    with pytest.raises(NotFoundError, match="does not exist"):
-        blocking_ws_connection.select(f"{table}:1..=3").execute()
+    # `table`, it is a table whose name happens to contain ":1..=3". 3.x
+    # refuses a table that does not exist; 2.x selects nothing from it.
+    try:
+        result = blocking_ws_connection.select(f"{table}:1..=3").execute()
+    except NotFoundError as exc:
+        assert "does not exist" in str(exc)
+    else:
+        assert not result
 
 
 def test_an_excluded_end_bound_is_honoured(
@@ -280,8 +285,12 @@ def test_a_bare_range_is_refused_with_an_explanation(
 def test_the_string_advice_no_longer_recommends_a_bare_range(
     blocking_ws_connection: BlockingWsSurrealConnection,
 ) -> None:
-    """The message that sent callers into the failure above."""
-    with pytest.raises(SurrealError) as caught:
-        blocking_ws_connection.select("not a valid target!").execute()
+    """The message that sent callers into the failure above.
 
-    assert "Range instance" not in str(caught.value)
+    The string is a table name now, so any error is the server's; 2.x raises
+    none for a table that does not exist.
+    """
+    try:
+        blocking_ws_connection.select("not a valid target!").execute()
+    except SurrealError as exc:
+        assert "Range instance" not in str(exc)

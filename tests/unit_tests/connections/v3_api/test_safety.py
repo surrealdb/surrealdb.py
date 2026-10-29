@@ -8,6 +8,7 @@ Tests for the v3.0 builder safety properties:
 """
 
 import asyncio
+import contextlib
 import threading
 import warnings
 from collections.abc import AsyncGenerator, Generator
@@ -195,24 +196,32 @@ def test_sync_builder_repr_does_not_execute(
 
 
 @pytest.mark.asyncio
-async def test_async_unsafe_string_record_rejected(
+async def test_async_a_string_target_cannot_inject_a_statement(
     async_ws_connection: AsyncWsSurrealConnection,
     _async_setup: None,
     _sync_setup: None,
 ) -> None:
-    """A semicolon in a str target must be rejected up-front."""
-    with pytest.raises(SurrealError):
-        # Range-syntax fallback path - ".." present so we don't parse as
-        # record-id - then the unsafe-character check fires.
+    """A str target is only ever a table name, bound as a parameter.
+
+    3.x refuses the table as one that does not exist; 2.x deletes from it,
+    finding nothing. Either way the statement after the semicolon never runs.
+    """
+    await async_ws_connection.create(StringRecordId("counter:kept"), {"n": 1})
+    with contextlib.suppress(SurrealError):
         await async_ws_connection.delete("counter:1..10; REMOVE TABLE counter;")
+    kept = await async_ws_connection.select(StringRecordId("counter:kept"))
+    assert isinstance(kept, dict) and kept["n"] == 1
 
 
-def test_sync_unsafe_string_record_rejected(
+def test_sync_a_string_target_cannot_inject_a_statement(
     blocking_ws_connection: BlockingWsSurrealConnection,
     _sync_setup: None,
 ) -> None:
-    with pytest.raises(SurrealError):
+    blocking_ws_connection.create(StringRecordId("counter:kept"), {"n": 1})
+    with contextlib.suppress(SurrealError):
         blocking_ws_connection.delete("counter:1..10; REMOVE TABLE counter;").execute()
+    kept = blocking_ws_connection.select(StringRecordId("counter:kept")).execute()
+    assert isinstance(kept, dict) and kept["n"] == 1
 
 
 @pytest.mark.asyncio

@@ -314,17 +314,6 @@ def _caller_location() -> str:
     return f"{frame.f_code.co_filename}:{frame.f_lineno}"
 
 
-def _caller_stacklevel() -> int:
-    """The ``stacklevel`` that points a warning at the caller's own code."""
-    level = 2
-    current = inspect.currentframe()
-    frame = current.f_back.f_back if current and current.f_back else None
-    while frame is not None and frame.f_code.co_filename.startswith(_PACKAGE_DIR):
-        level += 1
-        frame = frame.f_back
-    return level
-
-
 class _WarnIfDropped:
     """Warn when a builder is thrown away without ever running.
 
