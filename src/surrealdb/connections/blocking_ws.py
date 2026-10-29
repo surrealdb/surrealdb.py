@@ -1478,7 +1478,7 @@ class BlockingWsSurrealConnection(
     ) -> Any:
         """Select records, returning a builder.
 
-        A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
+        A ``RecordID`` (or ``StringRecordId``) returns the record dict, or ``None``
         when it is absent. A ``Table`` (or bare table-name string) returns the
         list of records. Pass ``into=Model`` to map each record onto ``Model``.
 
@@ -1945,7 +1945,7 @@ class BlockingWsSurrealConnection(
         """Delete records, returning a builder.
 
         ``.execute()`` gives the deleted record(s) - a ``RecordID`` (or
-        ``"table:id"``) the deleted record, or ``None`` when none was deleted,
+        ``StringRecordId``) the deleted record, or ``None`` when none was deleted,
         matching select; a ``Table`` (or bare name) the list. ``.rows()`` reads
         them as the server produces them, since ``DELETE ... RETURN BEFORE``
         does return rows. Pass ``into=Model`` to map them onto ``Model``.

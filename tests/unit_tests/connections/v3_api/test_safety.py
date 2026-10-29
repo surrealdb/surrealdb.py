@@ -9,12 +9,14 @@ Tests for the v3.0 builder safety properties:
 
 import asyncio
 import threading
+import warnings
 from collections.abc import AsyncGenerator, Generator
 from dataclasses import dataclass
 from typing import Any
 
 import pytest
 
+from surrealdb import StringRecordId
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
@@ -100,7 +102,7 @@ async def test_async_crud_awaited_twice_runs_once(
     _async_setup: None,
     _sync_setup: None,
 ) -> None:
-    builder = async_ws_connection.create("counter:once", {"n": 1})
+    builder = async_ws_connection.create(StringRecordId("counter:once"), {"n": 1})
     first = await builder
     second = await builder
     assert first == second
@@ -176,9 +178,9 @@ def test_sync_builder_repr_does_not_execute(
     other incidental inspection) can never fire the pending operation.
     """
     blocking_ws_connection.query("CREATE counter:repr_safe SET n = 1").execute()
-    blocking_ws_connection.update("counter:repr_safe").merge({"n": 999})
+    blocking_ws_connection.update(StringRecordId("counter:repr_safe")).merge({"n": 999})
     # Fresh no-data builder - just inspecting must not execute it.
-    pending = blocking_ws_connection.update("counter:repr_safe")
+    pending = blocking_ws_connection.update(StringRecordId("counter:repr_safe"))
     repr(pending)
     str(pending)
     after = blocking_ws_connection.query("SELECT n FROM counter:repr_safe").first()
@@ -223,8 +225,8 @@ async def test_string_record_id_bound_safely(
 
     select() of a single record-id string unwraps to the record dict.
     """
-    await async_ws_connection.create("counter:abc", {"n": 42})
-    out = await async_ws_connection.select("counter:abc")
+    await async_ws_connection.create(StringRecordId("counter:abc"), {"n": 42})
+    out = await async_ws_connection.select(StringRecordId("counter:abc"))
     assert isinstance(out, dict)
     assert out["n"] == 42
 
@@ -258,7 +260,7 @@ async def test_async_crud_reconfigure_after_execute_raises(
     *first* cached result, ignoring the new clause, which is one of the
     most insidious shapes of a stale-cache bug.
     """
-    builder = async_ws_connection.create("counter:reconfig", {"n": 1})
+    builder = async_ws_connection.create(StringRecordId("counter:reconfig"), {"n": 1})
     await builder
     with pytest.raises(SurrealError, match="Cannot reconfigure"):
         builder.merge({"n": 2})
@@ -285,7 +287,7 @@ def test_sync_crud_reconfigure_after_execute_raises(
     _sync_setup: None,
 ) -> None:
     # No-data create returns a builder; run it, then reconfiguring raises.
-    builder = blocking_ws_connection.create("counter:sync_reconfig")
+    builder = blocking_ws_connection.create(StringRecordId("counter:sync_reconfig"))
     builder.execute()  # explicit consumption
     with pytest.raises(SurrealError, match="Cannot reconfigure"):
         builder.merge({"n": 2})
@@ -328,21 +330,19 @@ def test_sync_query_into_and_execute_share_fetch(
 
 
 # ---------------------------------------------------------------------------
-# Compound record-id strings are rejected
+# A colon in a plain string is not a record id, so it is never "ambiguous"
 # ---------------------------------------------------------------------------
 
 
-def test_string_record_id_with_extra_colons_rejected(
+def test_string_with_extra_colons_is_a_table_name(
     blocking_ws_connection: BlockingWsSurrealConnection,
     _sync_setup: None,
 ) -> None:
-    """`"table:part:rest"` is ambiguous - require an explicit RecordID.
-
-    Single-colon partition can't reliably round-trip with the server's
-    literal-parsing rules for compound IDs, so we refuse to guess.
-    """
-    with pytest.raises(SurrealError, match="Ambiguous record-id"):
-        blocking_ws_connection.delete("counter:part:rest").execute()
+    """`"table:part:rest"` is a table of that name: not parsed, not refused."""
+    created: Any = blocking_ws_connection.create("counter:part:rest", {"n": 1})
+    assert created["id"].table_name == "counter:part:rest"
+    rows: Any = blocking_ws_connection.select("counter:part:rest").execute()
+    assert created in rows
 
 
 # ---------------------------------------------------------------------------
@@ -552,45 +552,34 @@ async def test_async_into_then_await_shares_fetch(
 
 
 # ---------------------------------------------------------------------------
-# Negative-int record-id strings are NOT silently coerced to int
+# A plain string is a table name, never a record id
 # ---------------------------------------------------------------------------
 
 
-def test_string_record_id_negative_int_kept_as_string() -> None:
-    """``"user:-5"`` becomes a string-id ``RecordID``, not an int.
+@pytest.mark.parametrize(
+    "text", ["counter:-5", "counter:42", "counter:²", "counter:a:b", "person:tobie"]
+)
+def test_plain_string_with_colon_is_bound_as_a_table_name(text: str) -> None:
+    """A plain string is never parsed, coerced or refused for holding a colon:
+    it goes out as ``type::table($var)`` with the string untouched."""
+    from surrealdb.connections.builders import _resource_to_variable
 
-    The numeric-coercion path only fires for non-negative digit ids;
-    negative-int literal semantics in SurrealQL are version-dependent
-    so we don't guess. Users who genuinely want an int id pass
-    ``RecordID("user", -5)`` explicitly.
-    """
-    from surrealdb.connections.builders import _string_to_record_id
-
-    rec = _string_to_record_id("counter:-5", "_resource")
-    assert rec.table_name == "counter"
-    assert rec.id == "-5"
-    assert isinstance(rec.id, str)
-
-    # Sanity: non-negative numeric ids still coerce to int.
-    rec_pos = _string_to_record_id("counter:42", "_resource")
-    assert rec_pos.id == 42
-    assert isinstance(rec_pos.id, int)
+    variables: dict[str, Any] = {}
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        sql = _resource_to_variable(text, variables, "_resource")
+    assert sql == "type::table($_resource)"
+    assert variables == {"_resource": text}
+    assert isinstance(variables["_resource"], str)
 
 
-def test_string_record_id_unicode_digits_kept_as_string() -> None:
-    """``"counter:²"`` (unicode digit) is NOT coerced to int.
+def test_string_record_id_is_bound_as_is() -> None:
+    from surrealdb.connections.builders import _resource_to_variable
 
-    ``str.isdigit()`` returns True for unicode digits like ``²`` but
-    ``int()`` rejects most of them. The previous coercion path used
-    just ``isdigit()``; the new ``isascii() and isdigit()`` check keeps
-    pathological unicode-digit strings as string ids without crashing.
-    """
-    from surrealdb.connections.builders import _string_to_record_id
-
-    rec = _string_to_record_id("counter:²", "_resource")
-    assert rec.table_name == "counter"
-    assert rec.id == "²"
-    assert isinstance(rec.id, str)
+    variables: dict[str, Any] = {}
+    sid = StringRecordId("counter:42")
+    assert _resource_to_variable(sid, variables, "_resource") == "$_resource"
+    assert variables["_resource"] is sid
 
 
 # ---------------------------------------------------------------------------

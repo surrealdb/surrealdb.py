@@ -260,7 +260,7 @@ class AsyncTemplate:
     ) -> AsyncCrudBuilder[Any]:
         """Select all records in a table or a specific record.
 
-        A ``RecordID`` (or ``"table:id"`` string) returns the record dict, or
+        A ``RecordID`` (or ``StringRecordId``) returns the record dict, or
         ``None`` when it is absent. A ``Table`` (or bare table-name string)
         returns the list of records.
 
@@ -428,7 +428,7 @@ class AsyncTemplate:
     ) -> AsyncCrudBuilder[Any]:
         """Delete records.
 
-        Returns an awaitable builder. A ``RecordID`` (or ``"table:id"``)
+        Returns an awaitable builder. A ``RecordID`` (or ``StringRecordId``)
         resolves to the deleted record, or ``None`` when no record was
         deleted (matching select); a ``Table`` (or bare name) resolves to the
         list of deleted records. ``DELETE`` does not support clause methods.

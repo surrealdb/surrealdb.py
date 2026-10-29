@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 
+from surrealdb import StringRecordId
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 pytestmark = pytest.mark.surrealdb_v3
@@ -63,7 +64,7 @@ def session_txn_requires_v3(
             # again. ``.first()`` returns the first statement's rows (a list of
             # record dicts); ``.execute()`` would wrap that in an outer
             # per-statement list, so the row check below would never see a dict.
-            session.create("session_txn_probe:check", {"probe": True})
+            session.create(StringRecordId("session_txn_probe:check"), {"probe": True})
             result = session.query("SELECT * FROM session_txn_probe;").first()
         except Exception as exc:
             probe_error = exc

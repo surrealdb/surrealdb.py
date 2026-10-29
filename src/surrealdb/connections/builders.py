@@ -170,64 +170,6 @@ _UNSET: Any = object()
 # / ``type::table()`` so user-supplied strings can never be concatenated into
 # the generated SurrealQL.
 _TABLE_ID_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-# Range syntax such as ``user:1..10`` or ``user:a..=z``. We require a
-# safe-identifier table prefix and only permit alphanumerics, ``_`` and ``-``
-# in the bound positions so the inline fallback path cannot smuggle in
-# arbitrary SurrealQL.
-_RANGE_PATTERN = re.compile(
-    r"^[A-Za-z_][A-Za-z0-9_]*"  # table identifier
-    r":"
-    r"[A-Za-z0-9_\-]*"  # optional start bound
-    r"\.\.=?"  # `..` or `..=`
-    r"[A-Za-z0-9_\-]*$"  # optional end bound
-)
-
-
-def _string_to_record_id(s: str, var_name: str) -> RecordID:
-    """Parse a ``"table:id"`` string into a :class:`RecordID`.
-
-    Mirrors SurrealQL's parsing of bare record-id literals: a non-negative
-    pure-digit id is coerced to ``int`` so ``"user:1234"`` and the inline
-    literal ``user:1234`` resolve to the same record. Negative numeric ids
-    fall through to the string-id branch - the SurrealQL literal parser's
-    semantics for negative ints are version-dependent, so we don't guess;
-    pass an explicit ``RecordID(table, -5)`` if you need an int id.
-
-    Strings with more than one ``:`` are rejected because the partitioning
-    rule (split on the first colon) cannot reliably round-trip with the
-    server's literal-parsing rules for compound identifiers - the user
-    should construct a :class:`RecordID` explicitly so the id type and
-    encoding are unambiguous.
-    """
-    if s.count(":") != 1:
-        raise SurrealError(
-            f"Ambiguous record-id string {s!r} for resource '{var_name}': "
-            "strings with more than one ':' cannot be safely parsed - pass "
-            "an explicit RecordID instance instead."
-        )
-    table, _, ident = s.partition(":")
-    if not table or not ident:
-        raise SurrealError(f"Invalid record-id string {s!r} for resource '{var_name}'")
-    # Both checks matter: ``str.isdigit()`` returns True for unicode
-    # digits like ``"²"`` which would round-trip through ``int()`` for
-    # most but not all unicode digit forms; restricting to ASCII digits
-    # keeps the coercion predictable and matches SurrealQL's bare-int
-    # literal grammar.
-    if ident.isascii() and ident.isdigit():
-        return RecordID(table, int(ident))
-    return RecordID(table, ident)
-
-
-def _implicit_record_id(s: str, var_name: str) -> RecordID:
-    """Parse a plain ``"table:id"`` string, warning that this is deprecated."""
-    warnings.warn(
-        f"Passing the plain string {s!r} as a record id is deprecated: the SDK "
-        "parses it itself, which cannot read every id the server can. Pass "
-        f"StringRecordId({s!r}) to have the server parse it, or a RecordID.",
-        DeprecationWarning,
-        stacklevel=_caller_stacklevel(),
-    )
-    return _string_to_record_id(s, var_name)
 
 
 def _resource_to_variable(
@@ -241,15 +183,13 @@ def _resource_to_variable(
     - ``RecordID`` is bound directly as a CBOR-typed value.
     - ``Table`` is wrapped in ``type::table($var)`` so the table name is
       a parameter rather than concatenated into the SQL.
-    - ``"table:id"`` strings are parsed client-side into a ``RecordID``
-      (matching SurrealQL's bare-literal semantics) and bound directly.
-    - Bare table-name strings (``"user"``) use ``type::table($var)``.
-    - Range syntax (``"user:1..10"`` / ``"user:a..=z"``) is matched
-      against a strict allow-list pattern and only then inlined - no
-      runtime helper currently parses it for parameter binding.
+    - ``StringRecordId`` is bound as CBOR tag 8, so the *server* parses it.
+    - A plain string is ALWAYS a table name, whatever it contains:
+      ``type::table($var)``. It is never parsed as a record id and never
+      rejected for holding a colon, since ``"person:tobie"`` can be a table's
+      real name. Use ``StringRecordId`` or ``RecordID`` for a record.
 
-    Anything that matches none of the above is rejected with
-    :class:`SurrealError` rather than being concatenated into the SQL.
+    Nothing is ever concatenated into the SQL.
     """
     if isinstance(resource, (RecordID, StringRecordId)):
         variables[var_name] = resource
@@ -274,24 +214,8 @@ def _resource_to_variable(
             f"records - e.g. RecordID('person', {resource!r})."
         )
 
-    if ":" in resource and ".." not in resource:
-        variables[var_name] = _implicit_record_id(resource, var_name)
-        return f"${var_name}"
-
-    if _TABLE_ID_PATTERN.match(resource):
-        variables[var_name] = resource
-        return f"type::table(${var_name})"
-
-    if _RANGE_PATTERN.match(resource):
-        # Strictly-validated range literal; inline is safe because the
-        # allow-list excludes every SurrealQL meta-character.
-        return resource
-
-    raise SurrealError(
-        f"Cannot use raw string {resource!r} as a SurrealDB resource target. "
-        "Pass a RecordID or Table instance, or simplify the string to a bare "
-        "identifier, 'table:id', or 'table:start..=end' form."
-    )
+    variables[var_name] = resource
+    return f"type::table(${var_name})"
 
 
 def _is_many(resource: object) -> bool:
@@ -301,10 +225,7 @@ def _is_many(resource: object) -> bool:
 def _relate_end(resource: Any, variables: dict[str, Any], var_name: str) -> str:
     """One end of a RELATE: a record, or a list of records to relate each."""
     if _is_many(resource):
-        variables[var_name] = [
-            _implicit_record_id(item, var_name) if isinstance(item, str) else item
-            for item in resource
-        ]
+        variables[var_name] = list(resource)
         return f"${var_name}"
     return _resource_to_variable(resource, variables, var_name)
 
@@ -332,7 +253,8 @@ def _is_single_record_operation(resource: RecordIdType) -> bool:
         # Rejected by `_resource_to_variable` before it can be executed; the
         # answer here only has to be defined, not meaningful.
         return False
-    return bool(":" in resource and ".." not in resource)
+    # A plain string is a table name, so it can name any number of records.
+    return False
 
 
 def _check_response(response: dict[str, Any], op_name: str) -> list[dict[str, Any]]:
@@ -510,14 +432,12 @@ def _check_relate_end(end: object, side: str) -> None:
         end if isinstance(end, Sequence) and not isinstance(end, str) else [end]
     )
     for item in items:
-        if isinstance(item, (RecordID, StringRecordId)) or (
-            isinstance(item, str) and ":" in item
-        ):
+        if isinstance(item, (RecordID, StringRecordId)):
             continue
         raise TypeError(
             f"relate() relates records, so {side} must be a RecordID, a "
-            "StringRecordId, a 'table:id' string, or a list of record ids; "
-            f"got {item!r}. To "
+            "StringRecordId, or a list of record ids (a plain string is a "
+            f"table name, not a record id); got {item!r}. To "
             "relate every record of a table, select them and pass the list"
         )
 

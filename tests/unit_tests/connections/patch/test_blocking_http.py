@@ -3,6 +3,7 @@ from typing import Any, cast
 
 import pytest
 
+from surrealdb import StringRecordId
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
@@ -36,7 +37,7 @@ def test_patch_string_with_data(
     setup_user: None,
 ) -> None:
     record_id = RecordID("user", "tobie")
-    outcome = blocking_http_connection.update("user:tobie").patch(
+    outcome = blocking_http_connection.update(StringRecordId("user:tobie")).patch(
         cast(Value, patch_data)
     )
     assert outcome["id"] == record_id

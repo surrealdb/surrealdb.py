@@ -31,7 +31,7 @@ from surrealdb.connections.builders import SyncCrudBuilder
 from surrealdb.data.types.range import BoundExcluded, BoundIncluded, Range
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
-from surrealdb.errors import SurrealError
+from surrealdb.errors import NotFoundError, SurrealError
 
 
 def _rows(connection: BlockingWsSurrealConnection) -> str:
@@ -62,17 +62,15 @@ def test_select_returns_every_record_in_the_range(
     assert _ids(result) == [1, 2, 3]
 
 
-def test_the_record_id_and_string_spellings_agree(
+def test_a_range_spelled_as_a_string_is_a_table_name(
     blocking_ws_connection: BlockingWsSurrealConnection,
 ) -> None:
     table = _rows(blocking_ws_connection)
 
-    typed = blocking_ws_connection.select(
-        RecordID(table, Range(BoundIncluded(1), BoundIncluded(3)))
-    ).execute()
-    spelled = blocking_ws_connection.select(f"{table}:1..=3").execute()
-
-    assert typed == spelled
+    # A plain string is a table name, never parsed: this is not a range of
+    # `table`, it is a table whose name happens to contain ":1..=3".
+    with pytest.raises(NotFoundError, match="does not exist"):
+        blocking_ws_connection.select(f"{table}:1..=3").execute()
 
 
 def test_an_excluded_end_bound_is_honoured(

@@ -3,6 +3,7 @@ from typing import Any
 
 import pytest
 
+from surrealdb import StringRecordId
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
@@ -34,7 +35,7 @@ def test_merge_string(
     blocking_ws_connection: BlockingWsSurrealConnection, setup_user: None
 ) -> None:
     record_id = RecordID("user", "tobie")
-    outcome = blocking_ws_connection.update("user:tobie").merge({})
+    outcome = blocking_ws_connection.update(StringRecordId("user:tobie")).merge({})
     assert outcome["id"] == record_id
     assert outcome["name"] == "Tobie"
     result = blocking_ws_connection.query("SELECT * FROM user;").first()
@@ -48,7 +49,9 @@ def test_merge_string_with_data(
     setup_user: None,
 ) -> None:
     record_id = RecordID("user", "tobie")
-    first_outcome = blocking_ws_connection.update("user:tobie").merge(merge_data)
+    first_outcome = blocking_ws_connection.update(StringRecordId("user:tobie")).merge(
+        merge_data
+    )
     assert first_outcome["id"] == record_id
     assert first_outcome["name"] == "Jaime"
     assert first_outcome["email"] == "jaime@example.com"

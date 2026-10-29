@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from surrealdb import StringRecordId
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data import cbor
 from surrealdb.data.types.record_id import RecordID
@@ -108,7 +109,7 @@ async def test_none(surrealdb_connection: Any) -> None:
     """
     await surrealdb_connection.query(schema)
     outcome = await surrealdb_connection.create(
-        "person:john", {"name": "John", "age": None}
+        StringRecordId("person:john"), {"name": "John", "age": None}
     )
     record_check = RecordID(table_name="person", identifier="john")
     assert record_check == outcome["id"]
@@ -116,7 +117,7 @@ async def test_none(surrealdb_connection: Any) -> None:
     assert None is outcome.get("age")
 
     outcome = await surrealdb_connection.create(
-        "person:dave", {"name": "Dave", "age": 34}
+        StringRecordId("person:dave"), {"name": "Dave", "age": 34}
     )
     record_check = RecordID(table_name="person", identifier="dave")
     assert record_check == outcome["id"]

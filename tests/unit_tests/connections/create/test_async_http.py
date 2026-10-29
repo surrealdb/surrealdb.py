@@ -3,6 +3,7 @@ from typing import Any, cast
 
 import pytest
 
+from surrealdb import StringRecordId
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
@@ -73,7 +74,9 @@ async def test_create_string_with_data_and_id(
     create_data: dict[str, Any],
     setup_user: None,
 ) -> None:
-    first_outcome = await async_http_connection.create("user:tobie", create_data)
+    first_outcome = await async_http_connection.create(
+        StringRecordId("user:tobie"), create_data
+    )
     assert "user" == first_outcome["id"].table_name
     assert "tobie" == first_outcome["id"].id
     assert create_data["name"] == first_outcome["name"]
