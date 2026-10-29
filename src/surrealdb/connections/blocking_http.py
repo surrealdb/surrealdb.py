@@ -860,7 +860,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
     ) -> SyncCrudBuilder[Any]:
         """Delete records, returning a builder.
 
-        A ``RecordID`` (or ``"table:id"``) returns the deleted record, or
+        A ``RecordID`` (or ``StringRecordId``) returns the deleted record, or
         ``None`` when no record was deleted (matching select); a ``Table`` (or
         bare name) returns the list of deleted records. Pass ``into=Model`` to
         map the deleted record(s) onto ``Model``.
@@ -1008,7 +1008,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
     ) -> SyncCrudBuilder[Any]:
         """Select records, returning a builder.
 
-        A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
+        A ``RecordID`` (or ``StringRecordId``) returns the record dict, or ``None``
         when it is absent. A ``Table`` (or bare table-name string) returns the
         list of records. Pass ``into=Model`` to map each record onto ``Model``.
 

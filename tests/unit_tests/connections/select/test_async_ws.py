@@ -2,6 +2,7 @@ from typing import cast
 
 import pytest
 
+from surrealdb import StringRecordId
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
@@ -63,7 +64,7 @@ async def test_select_string_record_id_present(
     await async_ws_connection.query("DELETE user;").execute()
     await async_ws_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()
 
-    outcome = await async_ws_connection.select("user:tobie")
+    outcome = await async_ws_connection.select(StringRecordId("user:tobie"))
     assert isinstance(outcome, dict)
     assert outcome["name"] == "Tobie"
 

@@ -24,7 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `StringRecordId("person:⟨a:b⟩")`, as in the JS SDK: a record id written as
   SurrealQL, sent for the server to parse. It works wherever a `RecordID`
   does, including as a query variable, and reaches every id the server can
-  read, including ones the SDK's own parsing of plain strings refuses.
+  read, including ones `RecordID.parse` refuses. It is also how to pass a record id
+  as text, since a plain string is always a table name.
 
 - Builder modifiers, compiled into the SurrealQL statement:
   `.where(condition, variables)` on `select`, `update`, `upsert` and
@@ -171,14 +172,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   embedded engine accepts `timeout()` and ignores it, since its requests never
   leave the process.
 
-### Deprecated
+### Changed
 
-- Passing a plain `"table:id"` string where a record is expected, as in
-  `db.select("person:1")`. It still works, parsed by the SDK as before, but
-  raises a `DeprecationWarning` naming the call site. Pass
-  `StringRecordId("person:1")` to have the server parse it, or a `RecordID`
-  (`RecordID("person", 1)` or `RecordID.parse("person:1")`). A bare table
-  name such as `"person"` is not affected.
+- **Behaviour change:** a plain string is always a table name. `"person:1"` and
+  `"person:tobie"` used to be parsed by the SDK into a record id (an `int` key
+  when the part after the colon was all ASCII digits, otherwise a string key),
+  so `db.select("person:1")` read one record. It now reads the table that is
+  literally named `person:1`, as the JS, Go, Ruby and Dart SDKs do. Nothing is
+  parsed, coerced, warned about or refused, because a table can legitimately
+  be named `person:tobie`. The same holds for `"user:1..10"`, which is no
+  longer read as a range, and for the ends of `relate()`, which relates
+  records and now raises a `TypeError` for a plain string.
+
+  To target a record, pass `StringRecordId("person:1")` to have the server
+  parse it, or a `RecordID` (`RecordID("person", 1)` or
+  `RecordID.parse("person:1")`). A bare table name such as `"person"` is not
+  affected.
 
 ## [3.0.0-beta.10] - 2026-10-08
 

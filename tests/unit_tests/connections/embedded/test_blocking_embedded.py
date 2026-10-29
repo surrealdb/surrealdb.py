@@ -1,6 +1,6 @@
 """Tests for BlockingEmbeddedSurrealConnection."""
 
-from surrealdb import Surreal
+from surrealdb import StringRecordId, Surreal
 
 
 def test_mem_connection() -> None:
@@ -96,10 +96,10 @@ def test_upsert_operation() -> None:
     with Surreal("mem://") as db:
         db.use("test", "test")
 
-        upserted = db.upsert("record:1", {"value": "first"})
+        upserted = db.upsert(StringRecordId("record:1"), {"value": "first"})
         assert upserted is not None
 
-        upserted = db.upsert("record:1", {"value": "second"})
+        upserted = db.upsert(StringRecordId("record:1"), {"value": "second"})
         assert upserted is not None
 
 

@@ -1,5 +1,5 @@
-"""`StringRecordId`: a record id the server parses, and the deprecation of
-plain "table:id" strings, which the SDK parses itself."""
+"""`StringRecordId`: a record id the server parses. A plain "table:id" string
+is not one: it is a table name, whatever it contains."""
 
 import typing
 import uuid
@@ -57,13 +57,18 @@ def test_the_server_parses_ids_the_sdk_cannot(db: Blocking) -> None:
         )
 
 
-def test_a_plain_string_still_works_but_is_deprecated(db: Blocking) -> None:
-    with pytest.warns(
-        DeprecationWarning, match=r"StringRecordId\('person:1'\)"
-    ) as caught:
-        record: Any = db.select("person:1").execute()
-    assert record["n"] == 2
-    assert caught[0].filename == __file__
+def test_a_plain_string_is_a_table_name_even_with_a_colon(db: Blocking) -> None:
+    # "person:1" is not parsed as a record id, and not refused either: it names
+    # a table, which a table really can be called. No warning, no coercion.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        created: Any = db.create("person:1", {"n": 9})
+        assert created["id"].table_name == "person:1"
+        assert db.select("person:1").execute() == [created]
+    assert db.select(StringRecordId("person:1")).execute() == {
+        "id": RecordID("person", 1),
+        "n": 2,
+    }
 
 
 def test_a_table_name_is_not_deprecated(db: Blocking) -> None:
@@ -148,7 +153,14 @@ def test_relate_takes_string_record_ids(db: Blocking) -> None:
     )
     assert len(many) == 1
     with pytest.raises(ValueError, match="one edge id"):
-        db.relate([StringRecordId("person:1")], StringRecordId("likes:two"), "person:1")
+        db.relate(
+            [StringRecordId("person:1")],
+            StringRecordId("likes:two"),
+            StringRecordId("person:1"),
+        )
+    # A plain string is a table name, and RELATE relates records.
+    with pytest.raises(TypeError, match="table name"):
+        db.relate(StringRecordId("person:1"), "likes", "person:1")
 
 
 def test_pydantic_takes_and_gives_a_string() -> None:

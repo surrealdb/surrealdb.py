@@ -1782,7 +1782,7 @@ class AsyncWsSurrealConnection(
     ) -> AsyncCrudBuilder[Any]:
         """Select records.
 
-        A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
+        A ``RecordID`` (or ``StringRecordId``) returns the record dict, or ``None``
         when it is absent. A ``Table`` (or bare table-name string) returns the
         list of records. Pass ``into=Model`` to map each record onto ``Model``.
 
@@ -2143,7 +2143,7 @@ class AsyncWsSurrealConnection(
     ) -> AsyncCrudBuilder[Any]:
         """Delete records; returns an awaitable builder.
 
-        A ``RecordID`` (or ``"table:id"``) resolves to the deleted record, or
+        A ``RecordID`` (or ``StringRecordId``) resolves to the deleted record, or
         ``None`` when no record was deleted (matching select); a ``Table`` (or
         bare name) to the list of deleted records. ``DELETE`` has no clause
         methods. Pass ``into=Model`` to map the deleted record(s) onto ``Model``.

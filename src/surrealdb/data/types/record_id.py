@@ -408,9 +408,11 @@ class StringRecordId:
     3.x up to 3.3 read only its start, and later servers refuse it, so the
     same string meant three different things.
 
-    Unlike a plain string, it is never parsed by the SDK, so every id the
-    server can read works, and its meaning cannot shift with the SDK's own
-    parsing rules. Use :class:`RecordID` to build an id from its parts.
+    A plain string is always a table name (``"person:tobie"`` names a table
+    called that), so this is how to give a record id as text. The SDK never
+    parses it, so every id the server can read works, and its meaning cannot
+    shift with the SDK's own parsing rules. Use :class:`RecordID` to build an
+    id from its parts.
     """
 
     __slots__ = ("_value",)
