@@ -1,5 +1,6 @@
 from typing import cast
 
+from surrealdb import StringRecordId
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
@@ -54,7 +55,7 @@ def test_select_string_record_id_present(
     blocking_ws_connection.query("DELETE user;").execute()
     blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()
 
-    outcome = blocking_ws_connection.select("user:tobie").execute()
+    outcome = blocking_ws_connection.select(StringRecordId("user:tobie")).execute()
     assert isinstance(outcome, dict)
     assert outcome["name"] == "Tobie"
 
