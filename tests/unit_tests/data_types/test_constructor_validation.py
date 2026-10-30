@@ -183,52 +183,38 @@ def test_the_errors_are_type_errors_not_surreal_errors() -> None:
 # --------------------------------------------------- the decode path is exempt
 
 
-def test_the_decoder_accepts_an_id_type_the_constructor_would_refuse() -> None:
-    """The constraint the whole design turns on.
+def test_the_decoder_refuses_a_key_surrealdb_refuses() -> None:
+    """The decoder is as strict as a SurrealDB 4 server, and no stricter.
 
-    The CBOR decoder builds a ``RecordID`` for every record read back. If it
-    validated, a future server's new id type would stop the record being
-    *readable* - and because ``tag_decoder`` runs inside the decode of a whole
-    frame, it would take every other row with it. A bad write is recoverable; a
-    record you cannot load is not.
+    A float key is refused by the server, so it is refused here too rather
+    than read as some other value (surrealdb-protocol's CBOR vectors).
     """
     from surrealdb.cbor import CBORTag, dumps
     from surrealdb.data import cbor
     from surrealdb.data.types import constants
+    from surrealdb.errors import UnexpectedResponseError
 
-    # A float id: refused by the constructor, and by the server - but if one
-    # ever arrives, it has to decode.
     frame = dumps(CBORTag(constants.TAG_RECORD_ID, ["person", 1.5]))
-    decoded = cbor.decode(frame)
-
-    assert isinstance(decoded, RecordID)
-    assert decoded.id == 1.5
-    assert decoded.table_name == "person"
+    with pytest.raises(UnexpectedResponseError, match="record id key"):
+        cbor.decode(frame)
 
 
-def test_the_decoder_accepts_a_table_name_the_constructor_would_refuse() -> None:
+def test_the_decoder_refuses_a_table_name_that_is_not_text() -> None:
     from surrealdb.cbor import CBORTag, dumps
     from surrealdb.data import cbor
     from surrealdb.data.types import constants
+    from surrealdb.errors import UnexpectedResponseError
 
-    decoded = cbor.decode(dumps(CBORTag(constants.TAG_TABLE_NAME, 123)))
-
-    assert isinstance(decoded, Table)
-    # Held as `Any`: the attribute is annotated `str`, which is true of every
-    # name a server has ever sent and is exactly what `_unchecked` does not
-    # promise.
-    name: Any = decoded.table_name
-    assert name == 123
+    with pytest.raises(UnexpectedResponseError, match="table name"):
+        cbor.decode(dumps(CBORTag(constants.TAG_TABLE_NAME, 123)))
 
 
 def test_a_decoded_record_id_re_encodes_unchanged() -> None:
-    """Round-tripping a value the constructor would refuse must still work, or
-    the exemption above buys a readable record you cannot write back."""
     from surrealdb.cbor import CBORTag, dumps
     from surrealdb.data import cbor
     from surrealdb.data.types import constants
 
-    frame = dumps(CBORTag(constants.TAG_RECORD_ID, ["person", 1.5]))
+    frame = dumps(CBORTag(constants.TAG_RECORD_ID, ["person", {"a": [1, "x"]}]))
     decoded = cbor.decode(frame)
 
     assert cbor.decode(cbor.encode(decoded)) == decoded

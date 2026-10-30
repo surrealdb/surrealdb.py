@@ -3,6 +3,7 @@ from typing import Any, cast
 
 import pytest
 
+from surrealdb import StringRecordId
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
@@ -36,7 +37,9 @@ def test_patch_string_with_data(
     setup_user: None,
 ) -> None:
     record_id = RecordID("user", "tobie")
-    outcome = blocking_ws_connection.update("user:tobie").patch(cast(Value, patch_data))
+    outcome = blocking_ws_connection.update(StringRecordId("user:tobie")).patch(
+        cast(Value, patch_data)
+    )
     assert outcome["id"] == record_id
     assert outcome["name"] == "Jaime"
     assert outcome["email"] == "jaime@example.com"

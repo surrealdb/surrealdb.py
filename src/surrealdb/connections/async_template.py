@@ -1,16 +1,27 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Mapping
 from contextlib import AbstractContextManager, nullcontext
 from typing import Any, overload
 from uuid import UUID
 
+from surrealdb.connections.api import ApiResponse
 from surrealdb.connections.builders import (
+    _UNSET,
     AsyncCrudBuilder,
     AsyncInsertBuilder,
     AsyncQueryBuilder,
     M,
+    RelateEdge,
+    RelateEnd,
 )
+from surrealdb.connections.import_export import (
+    ExportOptions,
+    ExportTarget,
+    ImportData,
+)
+from surrealdb.connections.live import AsyncLiveSubscription
 from surrealdb.connections.timeouts import check_timeout
-from surrealdb.data.types.record_id import RecordID, RecordIdType
+from surrealdb.data.types.null import NullType
+from surrealdb.data.types.record_id import RecordID, RecordIdType, StringRecordId
 from surrealdb.data.types.table import Table
 from surrealdb.types import Tokens, Value
 
@@ -45,17 +56,90 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"close not implemented for: {self}")
 
-    async def use(self, namespace: str, database: str) -> None:
+    async def use(
+        self,
+        namespace: str | NullType | None = None,
+        database: str | NullType | None = None,
+    ) -> None:
         """Switch to a specific namespace and database.
 
         Args:
-            namespace: Switches to a specific namespace.
-            database: Switches to a specific database.
+            namespace: The namespace to select; ``None`` keeps the current
+                one and ``Null`` clears it.
+            database: The database to select; ``None`` keeps the current one
+                and ``Null`` clears it.
 
         Example:
             await db.use('test', 'test')
         """
         raise NotImplementedError(f"use not implemented for: {self}")
+
+    async def refresh(self, tokens: Tokens | None = None) -> Tokens:
+        """Exchange a refresh token for a new access and refresh token.
+
+        Args:
+            tokens: The tokens to exchange; by default the ones this
+                connection signed in with.
+        """
+        raise NotImplementedError(f"refresh not implemented for: {self}")
+
+    async def revoke(self, tokens: Tokens | None = None) -> None:
+        """Revoke a refresh token so it can never be exchanged again.
+
+        Args:
+            tokens: The tokens whose refresh token to revoke; by default the
+                ones this connection signed in with.
+        """
+        raise NotImplementedError(f"revoke not implemented for: {self}")
+
+    async def reset(self) -> None:
+        """Clear the namespace, database, variables and authentication."""
+        raise NotImplementedError(f"reset not implemented for: {self}")
+
+    async def export(self, options: ExportOptions | None = None) -> str:
+        """Export the selected database as SurrealQL."""
+        raise NotImplementedError(f"export not implemented for: {self}")
+
+    async def export_to(
+        self, target: ExportTarget, options: ExportOptions | None = None
+    ) -> None:
+        """Export the selected database as SurrealQL into a file, as it arrives."""
+        raise NotImplementedError(f"export_to not implemented for: {self}")
+
+    async def import_(self, data: ImportData) -> None:
+        """Import SurrealQL into the selected database."""
+        raise NotImplementedError(f"import_ not implemented for: {self}")
+
+    async def health(self) -> None:
+        """Raise unless the server reports itself healthy."""
+        raise NotImplementedError(f"health not implemented for: {self}")
+
+    async def api(
+        self,
+        path: str,
+        *,
+        method: str = "get",
+        body: Value = None,
+        headers: Mapping[str, str] | None = None,
+        query: Mapping[str, str] | None = None,
+    ) -> ApiResponse:
+        """Call an endpoint defined with ``DEFINE API``."""
+        raise NotImplementedError(f"api not implemented for: {self}")
+
+    async def gql(
+        self, query: str, vars: Mapping[str, Value] | None = None
+    ) -> list[Value]:
+        """Run an ISO GQL query and return each statement's result."""
+        raise NotImplementedError(f"gql not implemented for: {self}")
+
+    async def graphql(
+        self,
+        query: str,
+        variables: Mapping[str, Value] | None = None,
+        operation_name: str | None = None,
+    ) -> dict[str, Value]:
+        """Run a GraphQL query and return the server's ``{data, errors}``."""
+        raise NotImplementedError(f"graphql not implemented for: {self}")
 
     async def authenticate(self, token: str) -> None:
         """Authenticate the current connection with a JWT token.
@@ -117,6 +201,10 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"let not implemented for: {self}")
 
+    async def set(self, key: str, value: Value) -> None:
+        """Assign a value as a variable for this connection; ``let`` by its JS name."""
+        await self.let(key, value)
+
     async def unset(self, key: str) -> None:
         """Removes a variable for this connection.
 
@@ -156,7 +244,7 @@ class AsyncTemplate:
 
     @overload
     def select(
-        self, record: RecordID, *, into: type[M]
+        self, record: RecordID | StringRecordId, *, into: type[M]
     ) -> AsyncCrudBuilder[M | None]: ...
     @overload
     def select(self, record: Table, *, into: type[M]) -> AsyncCrudBuilder[list[M]]: ...
@@ -165,7 +253,9 @@ class AsyncTemplate:
         self, record: str, *, into: type[M]
     ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    def select(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
+    def select(
+        self, record: RecordID | StringRecordId
+    ) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def select(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
@@ -175,7 +265,7 @@ class AsyncTemplate:
     ) -> AsyncCrudBuilder[Any]:
         """Select all records in a table or a specific record.
 
-        A ``RecordID`` (or ``"table:id"`` string) returns the record dict, or
+        A ``RecordID`` (or ``StringRecordId``) returns the record dict, or
         ``None`` when it is absent. A ``Table`` (or bare table-name string)
         returns the list of records.
 
@@ -195,7 +285,7 @@ class AsyncTemplate:
     ) -> AsyncCrudBuilder[M]: ...
     @overload
     def create(
-        self, record: RecordID, data: Value | None = None
+        self, record: RecordID | StringRecordId, data: Value | None = None
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def create(
@@ -234,7 +324,11 @@ class AsyncTemplate:
 
     @overload
     def update(
-        self, record: RecordID, data: Value | None = None, *, into: type[M]
+        self,
+        record: RecordID | StringRecordId,
+        data: Value | None = None,
+        *,
+        into: type[M],
     ) -> AsyncCrudBuilder[M]: ...
     @overload
     def update(
@@ -246,7 +340,7 @@ class AsyncTemplate:
     ) -> AsyncCrudBuilder[M | list[M]]: ...
     @overload
     def update(
-        self, record: RecordID, data: Value | None = None
+        self, record: RecordID | StringRecordId, data: Value | None = None
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def update(
@@ -274,7 +368,11 @@ class AsyncTemplate:
 
     @overload
     def upsert(
-        self, record: RecordID, data: Value | None = None, *, into: type[M]
+        self,
+        record: RecordID | StringRecordId,
+        data: Value | None = None,
+        *,
+        into: type[M],
     ) -> AsyncCrudBuilder[M]: ...
     @overload
     def upsert(
@@ -286,7 +384,7 @@ class AsyncTemplate:
     ) -> AsyncCrudBuilder[M | list[M]]: ...
     @overload
     def upsert(
-        self, record: RecordID, data: Value | None = None
+        self, record: RecordID | StringRecordId, data: Value | None = None
     ) -> AsyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def upsert(
@@ -314,7 +412,7 @@ class AsyncTemplate:
 
     @overload
     def delete(
-        self, record: RecordID, *, into: type[M]
+        self, record: RecordID | StringRecordId, *, into: type[M]
     ) -> AsyncCrudBuilder[M | None]: ...
     @overload
     def delete(self, record: Table, *, into: type[M]) -> AsyncCrudBuilder[list[M]]: ...
@@ -323,7 +421,9 @@ class AsyncTemplate:
         self, record: str, *, into: type[M]
     ) -> AsyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    def delete(self, record: RecordID) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
+    def delete(
+        self, record: RecordID | StringRecordId
+    ) -> AsyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def delete(self, record: Table) -> AsyncCrudBuilder[list[Value]]: ...
     @overload
@@ -333,7 +433,7 @@ class AsyncTemplate:
     ) -> AsyncCrudBuilder[Any]:
         """Delete records.
 
-        Returns an awaitable builder. A ``RecordID`` (or ``"table:id"``)
+        Returns an awaitable builder. A ``RecordID`` (or ``StringRecordId``)
         resolves to the deleted record, or ``None`` when no record was
         deleted (matching select); a ``Table`` (or bare name) resolves to the
         list of deleted records. ``DELETE`` does not support clause methods.
@@ -398,7 +498,9 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"run not implemented for: {self}")
 
-    async def live(self, table: str | Table, diff: bool = False) -> UUID:
+    async def live(
+        self, table: str | Table, diff: bool = False
+    ) -> AsyncLiveSubscription:
         """Initiate a live query on the given table.
 
         Args:
@@ -417,6 +519,20 @@ class AsyncTemplate:
         """Iterate live notifications for the given live query id."""
         raise NotImplementedError(f"subscribe_live not implemented for: {self}")
 
+    def live_of(self, live_id: str | UUID) -> AsyncLiveSubscription:
+        """Attach to a live query started some other way, by its id."""
+        raise NotImplementedError(f"live_of not implemented for: {self}")
+
     async def kill(self, query_uuid: str | UUID) -> None:
         """Kill a running live query by its UUID."""
         raise NotImplementedError(f"kill not implemented for: {self}")
+
+    def relate(
+        self,
+        from_: RelateEnd,
+        edge: RelateEdge,
+        to: RelateEnd,
+        data: Value = _UNSET,
+    ) -> AsyncCrudBuilder[Any]:
+        """Relate *from_* to *to* through *edge*: ``RELATE from->edge->to``."""
+        raise NotImplementedError(f"relate not implemented for: {self}")

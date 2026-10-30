@@ -1,17 +1,27 @@
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from contextlib import AbstractContextManager, nullcontext
 from typing import Any, overload
 from uuid import UUID
 
+from surrealdb.connections.api import ApiResponse
 from surrealdb.connections.builders import (
     _UNSET,
     M,
+    RelateEdge,
+    RelateEnd,
     SyncCrudBuilder,
     SyncInsertBuilder,
     SyncQueryBuilder,
 )
+from surrealdb.connections.import_export import (
+    ExportOptions,
+    ExportTarget,
+    ImportData,
+)
+from surrealdb.connections.live import LiveSubscription
 from surrealdb.connections.timeouts import check_timeout
-from surrealdb.data.types.record_id import RecordID, RecordIdType
+from surrealdb.data.types.null import NullType
+from surrealdb.data.types.record_id import RecordID, RecordIdType, StringRecordId
 from surrealdb.data.types.table import Table
 from surrealdb.types import Tokens, Value
 
@@ -41,9 +51,88 @@ class SyncTemplate:
         """Closes the persistent connection to the database."""
         raise NotImplementedError(f"close not implemented for: {self}")
 
-    def use(self, namespace: str, database: str) -> None:
-        """Switch to a specific namespace and database."""
+    def use(
+        self,
+        namespace: str | NullType | None = None,
+        database: str | NullType | None = None,
+    ) -> None:
+        """Switch to a specific namespace and database.
+
+        Args:
+            namespace: The namespace to select; ``None`` keeps the current
+                one and ``Null`` clears it.
+            database: The database to select; ``None`` keeps the current one
+                and ``Null`` clears it.
+
+        Example:
+            db.use('test', 'test')
+        """
         raise NotImplementedError(f"use not implemented for: {self}")
+
+    def refresh(self, tokens: Tokens | None = None) -> Tokens:
+        """Exchange a refresh token for a new access and refresh token.
+
+        Args:
+            tokens: The tokens to exchange; by default the ones this
+                connection signed in with.
+        """
+        raise NotImplementedError(f"refresh not implemented for: {self}")
+
+    def revoke(self, tokens: Tokens | None = None) -> None:
+        """Revoke a refresh token so it can never be exchanged again.
+
+        Args:
+            tokens: The tokens whose refresh token to revoke; by default the
+                ones this connection signed in with.
+        """
+        raise NotImplementedError(f"revoke not implemented for: {self}")
+
+    def reset(self) -> None:
+        """Clear the namespace, database, variables and authentication."""
+        raise NotImplementedError(f"reset not implemented for: {self}")
+
+    def export(self, options: ExportOptions | None = None) -> str:
+        """Export the selected database as SurrealQL."""
+        raise NotImplementedError(f"export not implemented for: {self}")
+
+    def export_to(
+        self, target: ExportTarget, options: ExportOptions | None = None
+    ) -> None:
+        """Export the selected database as SurrealQL into a file, as it arrives."""
+        raise NotImplementedError(f"export_to not implemented for: {self}")
+
+    def import_(self, data: ImportData) -> None:
+        """Import SurrealQL into the selected database."""
+        raise NotImplementedError(f"import_ not implemented for: {self}")
+
+    def health(self) -> None:
+        """Raise unless the server reports itself healthy."""
+        raise NotImplementedError(f"health not implemented for: {self}")
+
+    def api(
+        self,
+        path: str,
+        *,
+        method: str = "get",
+        body: Value = None,
+        headers: Mapping[str, str] | None = None,
+        query: Mapping[str, str] | None = None,
+    ) -> ApiResponse:
+        """Call an endpoint defined with ``DEFINE API``."""
+        raise NotImplementedError(f"api not implemented for: {self}")
+
+    def gql(self, query: str, vars: Mapping[str, Value] | None = None) -> list[Value]:
+        """Run an ISO GQL query and return each statement's result."""
+        raise NotImplementedError(f"gql not implemented for: {self}")
+
+    def graphql(
+        self,
+        query: str,
+        variables: Mapping[str, Value] | None = None,
+        operation_name: str | None = None,
+    ) -> dict[str, Value]:
+        """Run a GraphQL query and return the server's ``{data, errors}``."""
+        raise NotImplementedError(f"graphql not implemented for: {self}")
 
     def authenticate(self, token: str) -> None:
         """Authenticate the current connection with a JWT token."""
@@ -64,6 +153,10 @@ class SyncTemplate:
     def let(self, key: str, value: Value) -> None:
         """Assign a value as a variable for this connection."""
         raise NotImplementedError(f"let not implemented for: {self}")
+
+    def set(self, key: str, value: Value) -> None:
+        """Assign a value as a variable for this connection; ``let`` by its JS name."""
+        self.let(key, value)
 
     def unset(self, key: str) -> None:
         """Removes a variable for this connection."""
@@ -91,7 +184,7 @@ class SyncTemplate:
 
     @overload
     def select(
-        self, record: RecordID, *, into: type[M]
+        self, record: RecordID | StringRecordId, *, into: type[M]
     ) -> SyncCrudBuilder[M | None]: ...
     @overload
     def select(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
@@ -100,7 +193,9 @@ class SyncTemplate:
         self, record: str, *, into: type[M]
     ) -> SyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    def select(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value] | None]: ...
+    def select(
+        self, record: RecordID | StringRecordId
+    ) -> SyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def select(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
@@ -113,7 +208,7 @@ class SyncTemplate:
         Returns a builder: ``.execute()`` runs it, and iterating it (or
         ``.rows()``) reads the records as the server produces them.
 
-        A ``RecordID`` (or ``"table:id"`` string) returns the record dict, or
+        A ``RecordID`` (or ``StringRecordId``) returns the record dict, or
         ``None`` when it is absent. A ``Table`` (or bare table-name string)
         returns the list of records.
 
@@ -153,25 +248,33 @@ class SyncTemplate:
         raise NotImplementedError(f"create not implemented for: {self}")
 
     @overload
-    def update(self, record: RecordID, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    def update(
+        self, record: RecordID | StringRecordId, *, into: type[M]
+    ) -> SyncCrudBuilder[M]: ...
     @overload
     def update(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
     @overload
     def update(self, record: str, *, into: type[M]) -> SyncCrudBuilder[M | list[M]]: ...
     @overload
-    def update(self, record: RecordID, data: Value, *, into: type[M]) -> M: ...
+    def update(
+        self, record: RecordID | StringRecordId, data: Value, *, into: type[M]
+    ) -> M: ...
     @overload
     def update(self, record: Table, data: Value, *, into: type[M]) -> list[M]: ...
     @overload
     def update(self, record: str, data: Value, *, into: type[M]) -> M | list[M]: ...
     @overload
-    def update(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def update(
+        self, record: RecordID | StringRecordId
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def update(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
     def update(self, record: str) -> SyncCrudBuilder[Value]: ...
     @overload
-    def update(self, record: RecordID, data: Value) -> dict[str, Value]: ...
+    def update(
+        self, record: RecordID | StringRecordId, data: Value
+    ) -> dict[str, Value]: ...
     @overload
     def update(self, record: Table, data: Value) -> list[Value]: ...
     @overload
@@ -191,25 +294,33 @@ class SyncTemplate:
         raise NotImplementedError(f"update not implemented for: {self}")
 
     @overload
-    def upsert(self, record: RecordID, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    def upsert(
+        self, record: RecordID | StringRecordId, *, into: type[M]
+    ) -> SyncCrudBuilder[M]: ...
     @overload
     def upsert(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
     @overload
     def upsert(self, record: str, *, into: type[M]) -> SyncCrudBuilder[M | list[M]]: ...
     @overload
-    def upsert(self, record: RecordID, data: Value, *, into: type[M]) -> M: ...
+    def upsert(
+        self, record: RecordID | StringRecordId, data: Value, *, into: type[M]
+    ) -> M: ...
     @overload
     def upsert(self, record: Table, data: Value, *, into: type[M]) -> list[M]: ...
     @overload
     def upsert(self, record: str, data: Value, *, into: type[M]) -> M | list[M]: ...
     @overload
-    def upsert(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def upsert(
+        self, record: RecordID | StringRecordId
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def upsert(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
     def upsert(self, record: str) -> SyncCrudBuilder[Value]: ...
     @overload
-    def upsert(self, record: RecordID, data: Value) -> dict[str, Value]: ...
+    def upsert(
+        self, record: RecordID | StringRecordId, data: Value
+    ) -> dict[str, Value]: ...
     @overload
     def upsert(self, record: Table, data: Value) -> list[Value]: ...
     @overload
@@ -229,7 +340,7 @@ class SyncTemplate:
 
     @overload
     def delete(
-        self, record: RecordID, *, into: type[M]
+        self, record: RecordID | StringRecordId, *, into: type[M]
     ) -> SyncCrudBuilder[M | None]: ...
     @overload
     def delete(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
@@ -238,7 +349,9 @@ class SyncTemplate:
         self, record: str, *, into: type[M]
     ) -> SyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    def delete(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value] | None]: ...
+    def delete(
+        self, record: RecordID | StringRecordId
+    ) -> SyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def delete(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
@@ -248,7 +361,7 @@ class SyncTemplate:
     ) -> SyncCrudBuilder[Any]:
         """Delete records, returning a builder for the deleted record(s).
 
-        A ``RecordID`` (or ``"table:id"``) returns the deleted record, or
+        A ``RecordID`` (or ``StringRecordId``) returns the deleted record, or
         ``None`` when no record was deleted (matching select); a ``Table``
         (or bare name) returns the list of deleted records. Pass ``into=Model``
         to map the deleted record(s) onto ``Model``.
@@ -303,7 +416,7 @@ class SyncTemplate:
         """Run a SurrealDB function and return its result."""
         raise NotImplementedError(f"run not implemented for: {self}")
 
-    def live(self, table: str | Table, diff: bool = False) -> UUID:
+    def live(self, table: str | Table, diff: bool = False) -> LiveSubscription:
         """Initiate a live query on the given table."""
         raise NotImplementedError(f"live not implemented for: {self}")
 
@@ -313,6 +426,20 @@ class SyncTemplate:
         """Iterate live notifications for the given live query id."""
         raise NotImplementedError(f"subscribe_live not implemented for: {self}")
 
+    def live_of(self, live_id: str | UUID) -> LiveSubscription:
+        """Attach to a live query started some other way, by its id."""
+        raise NotImplementedError(f"live_of not implemented for: {self}")
+
     def kill(self, query_uuid: str | UUID) -> None:
         """Kill a running live query by its UUID."""
         raise NotImplementedError(f"kill not implemented for: {self}")
+
+    def relate(
+        self,
+        from_: RelateEnd,
+        edge: RelateEdge,
+        to: RelateEnd,
+        data: Value = _UNSET,
+    ) -> Any:
+        """Relate *from_* to *to* through *edge*: ``RELATE from->edge->to``."""
+        raise NotImplementedError(f"relate not implemented for: {self}")

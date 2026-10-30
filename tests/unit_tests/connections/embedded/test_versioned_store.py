@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from surrealdb import BlockingSurrealConnection, Surreal
+from surrealdb import BlockingSurrealConnection, StringRecordId, Surreal
 from surrealdb.errors import SurrealError
 
 
@@ -72,12 +72,12 @@ def test_versioned_store_persists_across_connections() -> None:
 
         with Surreal(db_url) as db:
             db.use("test", "test")
-            db.create("person:one", {"name": "Ada"})
+            db.create(StringRecordId("person:one"), {"name": "Ada"})
 
         with Surreal(db_url) as db:
             db.use("test", "test")
 
-            assert db.select("person:one").execute()["name"] == "Ada"
+            assert db.select(StringRecordId("person:one")).execute()["name"] == "Ada"
 
 
 def test_versioned_scheme_preserves_a_caller_query_string() -> None:

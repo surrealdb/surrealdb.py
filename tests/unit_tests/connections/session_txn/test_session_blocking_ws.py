@@ -2,6 +2,7 @@ from collections.abc import Generator
 
 import pytest
 
+from surrealdb import StringRecordId
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 
@@ -39,11 +40,11 @@ def test_new_session_use_query_create_select(
     assert len(result) == 0
 
     session.create(
-        "session_txn_test:one",
+        StringRecordId("session_txn_test:one"),
         {"name": "session-created", "value": 1},
     )
 
-    selected = session.select("session_txn_test:one").execute()
+    selected = session.select(StringRecordId("session_txn_test:one")).execute()
     assert selected is not None
     if isinstance(selected, list) and len(selected) >= 1:
         rec = selected[0] if isinstance(selected[0], dict) else selected
@@ -73,11 +74,11 @@ def test_two_sessions_isolated(
     )
 
     session_a.create(
-        "session_txn_test:from_a",
+        StringRecordId("session_txn_test:from_a"),
         {"name": "from-session-a"},
     )
     session_b.create(
-        "session_txn_test:from_b",
+        StringRecordId("session_txn_test:from_b"),
         {"name": "from-session-b"},
     )
 

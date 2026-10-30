@@ -217,14 +217,47 @@ __all__ = [
     "RecordIdType",
     "SurrealError",
     "Table",
+    "CBOR",
+    "CBOR2",
+    "CBOR2_MEDIA_TYPE",
     "UtilsMixin",
     "build_run_query",
     "check_keepalive",
+    "is_cbor2_media_type",
     "merge_query_vars",
 ]
 
 
+CBOR = "cbor"
+CBOR2 = "cbor.2"
+CBOR2_MEDIA_TYPE = "application/cbor; v=2"
+
+
+def is_cbor2_media_type(content_type: str | None) -> bool:
+    """Whether a ``Content-Type`` is ``application/cbor`` with ``v=2``."""
+    if not content_type:
+        return False
+    kind, *params = (part.strip() for part in content_type.split(";"))
+    if kind.lower() != "application/cbor":
+        return False
+    return any(p.replace(" ", "").lower() in ("v=2", 'v="2"') for p in params)
+
+
 class UtilsMixin:
+    _v2: bool = False
+
+    @property
+    def wire_format(self) -> str:
+        """The CBOR the connection speaks: ``"cbor.2"`` with SurrealDB 4, ``"cbor"`` otherwise.
+
+        Over WebSocket it is negotiated when the socket opens. Over HTTP the
+        connection asks for ``cbor.2`` and switches once a response comes back
+        in it, so it reads ``"cbor"`` until the first request has been
+        answered. Only ``cbor.2`` carries the sized numbers in
+        :mod:`surrealdb.data.types.sized` at their width.
+        """
+        return CBOR2 if self._v2 else CBOR
+
     @staticmethod
     def check_response_for_error(response: dict[str, Any], process: str) -> None:
         error = response.get("error")
@@ -232,7 +265,9 @@ class UtilsMixin:
             raise parse_rpc_error(error)
 
     @staticmethod
-    def check_status_for_error(status: int, body: bytes, url: str) -> None:
+    def check_status_for_error(
+        status: int, body: bytes, url: str, *, v2: bool = False
+    ) -> None:
         """Raise when an HTTP RPC response carries a non-2xx status.
 
         A non-2xx ``/rpc`` response normally carries an HTTP-layer body — plain
@@ -245,7 +280,7 @@ class UtilsMixin:
         if 200 <= status < 300:
             return
         try:
-            decoded = decode(body)
+            decoded = decode(body, v2=v2)
         except Exception:
             decoded = None
         if isinstance(decoded, dict):
@@ -255,7 +290,9 @@ class UtilsMixin:
         raise HttpStatusError(status, _body_text(body), url)
 
     @staticmethod
-    def decode_response(body: bytes, process: str) -> dict[str, Any]:
+    def decode_response(
+        body: bytes, process: str, *, v2: bool = False
+    ) -> dict[str, Any]:
         """Decode a CBOR RPC envelope, or raise ``UnexpectedResponseError``.
 
         The envelope is always a map, and every caller reads it as one. Handing
@@ -266,7 +303,7 @@ class UtilsMixin:
         neither the operation nor what had actually come back.
         """
         try:
-            decoded = decode(body)
+            decoded = decode(body, v2=v2)
         except Exception as exc:
             raise UnexpectedResponseError(
                 f"could not decode the response while {process}: {exc}"

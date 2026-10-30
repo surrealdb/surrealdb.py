@@ -20,6 +20,8 @@ from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.data.cbor import encode
 from surrealdb.errors import SurrealError
 
+pytestmark = pytest.mark.usefixtures("no_version_handshake")
+
 HTTP_URL = "http://localhost:8000"
 GOOD_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhIn0.Zm9vYmFyYmF6"
 OTHER_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJiIn0.cXV4cXV1eHF1dXg"
@@ -38,6 +40,7 @@ class _FakeResponse:
     status_code = 200
 
     def __init__(self) -> None:
+        self.headers = {"Content-Type": "application/cbor"}
         self.content = encode({"id": "1", "result": None})
         self.raw = _FakeRaw(self.content)
 

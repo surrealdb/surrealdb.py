@@ -20,6 +20,8 @@ from websockets.protocol import State
 
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
+pytestmark = pytest.mark.usefixtures("no_version_handshake")
+
 WS_URL = "ws://localhost:8000"
 OTHER_WS_URL = "ws://127.0.0.1:9999"
 

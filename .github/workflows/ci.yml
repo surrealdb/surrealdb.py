@@ -331,6 +331,9 @@ jobs:
         env:
           PYTHONPATH: ./src
 
+      - name: Fetch the protocol vectors
+        run: ./scripts/protocol-vectors.sh
+
       - name: Run unit tests
         run: uv run pytest --ignore=tests/unit_tests/connections/embedded
         env:
@@ -349,6 +352,79 @@ jobs:
           # fallback is asserted. See tests/.../query_stream/expectation.py.
           SURREALDB_EXPECT_STREAMING: ${{ (matrix.surrealdb-version == 'v3.3.0' || matrix.surrealdb-version == 'nightly') && '1' || '0' }}
           PYTHONWARNINGS: ignore::ResourceWarning
+
+  # The shared conformance suite from surrealdb-protocol, at the release
+  # pinned in tests/unit_tests/conformance/vectors/VERSION, run through this
+  # SDK's driver (conformance/driver.py). Scenarios needing an op the SDK
+  # has no API for skip; only failures fail the job.
+  conformance:
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.surrealdb-version == 'nightly' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        surrealdb-version: ["v3.3.4", "nightly"]
+    name: Conformance - SurrealDB ${{ matrix.surrealdb-version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # The release is spelled out, not read from vectors/VERSION, so the code
+      # this job runs is fixed in the workflow; this step keeps the two in step.
+      - name: Check the surrealdb-protocol release
+        run: test "$(cat tests/unit_tests/conformance/vectors/VERSION)" = v0.14.0
+
+      - name: Checkout surrealdb-protocol
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: surrealdb/surrealdb-protocol
+          ref: v0.14.0
+          path: surrealdb-protocol
+          persist-credentials: false
+
+      # No cache: this job runs code from another repository, which must not
+      # be able to write a cache that other jobs restore.
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "latest"
+          enable-cache: false
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.13"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          no-cache: true
+
+      - name: Install surrealdb
+        run: |
+          if [ "${{ matrix.surrealdb-version }}" = "nightly" ]; then
+            curl --proto '=https' --tlsv1.2 -sSf https://install.surrealdb.com | sh -s -- --nightly
+          else
+            curl -sSf https://install.surrealdb.com | sh -s -- --version ${{ matrix.surrealdb-version }}
+          fi
+          echo "SURREAL_BIN=$(command -v surreal)" >>"$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Run the conformance suite
+        working-directory: surrealdb-protocol
+        # The filter leaves out the one scenario written for plain-cbor clients:
+        # this SDK speaks cbor.2 to a server that offers it, and so receives
+        # sized numbers unwidened, as the suite's README says it should.
+        run: |
+          bun install --frozen-lockfile
+          bun conformance/runner/cli.ts \
+            --driver "uv run --project $GITHUB_WORKSPACE python $GITHUB_WORKSPACE/conformance/driver.py" \
+            --filter '^(?!query-sized-numbers-widen-over-plain-cbor$)' \
+            --report "$RUNNER_TEMP/conformance.json"
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}
 
   test-memory:
     runs-on: ubuntu-latest

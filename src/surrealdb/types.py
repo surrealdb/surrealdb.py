@@ -26,7 +26,7 @@ from surrealdb.data.types.geometry import (
 )
 from surrealdb.data.types.null import NullType
 from surrealdb.data.types.range import Range
-from surrealdb.data.types.record_id import RecordID
+from surrealdb.data.types.record_id import RecordID, StringRecordId
 from surrealdb.data.types.set import SurrealSet
 from surrealdb.data.types.table import Table
 
@@ -46,6 +46,7 @@ Value = (
     | Table
     | Range
     | RecordID
+    | StringRecordId
     # A reference to a file in a storage bucket. Encodable since file support
     # landed, and returned by the decoder, so leaving it out made storing one
     # in a record - the main thing it is for - fail a type check on code that
