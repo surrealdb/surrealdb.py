@@ -15,6 +15,10 @@ stop the rest, so the server's answer is read for failures: SurrealDB 3.1 and
 later answers 422 with only the failed statements, and older servers answer
 200 with every statement's result. Either way any failures are raised together
 as :class:`~surrealdb.errors.ImportFailedError`.
+
+Neither is bound by the connection's default ``timeout``, as in the JS SDK: a
+transfer is long-running, and a limit meant for a single reply would cut it
+short. Only a ``with db.timeout(seconds):`` block around the call limits it.
 """
 
 import asyncio

@@ -1262,7 +1262,7 @@ class AsyncWsSurrealConnection(
         return await aexport_sql(
             self.url,
             options,
-            self._request_timeout(),
+            effective_timeout(self, None),
             self.token,
             self.namespace,
             self.database,
@@ -1290,7 +1290,7 @@ class AsyncWsSurrealConnection(
             self.url,
             options,
             target,
-            self._request_timeout(),
+            effective_timeout(self, None),
             self.token,
             self.namespace,
             self.database,
@@ -1312,7 +1312,7 @@ class AsyncWsSurrealConnection(
         await aimport_sql(
             self.url,
             data,
-            self._request_timeout(),
+            effective_timeout(self, None),
             self.token,
             self.namespace,
             self.database,
