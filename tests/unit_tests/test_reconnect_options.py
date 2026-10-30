@@ -37,13 +37,13 @@ def test_coerce_passes_options_through_and_refuses_anything_else() -> None:
 
 def test_the_delay_grows_and_is_capped() -> None:
     options = ReconnectOptions(retry_delay=1, retry_delay_max=5, retry_delay_jitter=0)
-    assert [options.delay(n) for n in range(1, 6)] == [1, 2, 4, 5, 5]
+    assert [options.delay(n) for n in range(1, 6)] == [2, 4, 5, 5, 5]
 
 
 def test_jitter_stays_within_its_fraction() -> None:
     options = ReconnectOptions(retry_delay=10, retry_delay_jitter=0.1)
     for _ in range(100):
-        assert 9 <= options.delay(1) <= 11
+        assert 18 <= options.delay(1) <= 22
 
 
 def test_attempts_bound_the_loop_unless_unlimited() -> None:

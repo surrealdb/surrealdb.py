@@ -35,7 +35,8 @@ class ReconnectOptions:
         enabled: Reconnect at all.
         attempts: How many attempts to make before giving up, or ``-1`` for
             no limit.
-        retry_delay: Seconds to wait before the first attempt.
+        retry_delay: The base wait in seconds; the wait before attempt n is
+            this times the multiplier to the power n, as in the JS SDK.
         retry_delay_max: The longest wait between attempts, in seconds.
         retry_delay_multiplier: What each wait is multiplied by for the next.
         retry_delay_jitter: The fraction of each wait to offset it by, at
@@ -87,9 +88,13 @@ class ReconnectOptions:
         return self.enabled and (self.attempts == -1 or attempt <= self.attempts)
 
     def delay(self, attempt: int) -> float:
-        """Seconds to wait before attempt number *attempt* (counting from 1)."""
+        """Seconds to wait before attempt number *attempt* (counting from 1).
+
+        The JS SDK's schedule: ``retry_delay * multiplier**attempt``, so the
+        first wait is already one multiplier step long.
+        """
         try:
-            base = self.retry_delay * self.retry_delay_multiplier ** (attempt - 1)
+            base = self.retry_delay * self.retry_delay_multiplier**attempt
         except OverflowError:
             # With unlimited attempts the exponent eventually overflows a
             # float; by then the wait is long past its cap anyway.
