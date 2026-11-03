@@ -24,9 +24,11 @@ short. Only a ``with db.timeout(seconds):`` block around the call limits it.
 import asyncio
 import json
 import os
+import stat
 import time
+import uuid
 from collections.abc import Awaitable, Callable, Generator, Mapping, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from typing import IO, Any, TypeVar
 
@@ -144,14 +146,60 @@ def _payload(data: ImportData) -> Generator[bytes | IO[bytes], None, None]:
             yield source
 
 
+class _FileSink:
+    """Writes an export to a path, by way of a temporary file beside it.
+
+    The temporary file replaces the target only once the export has arrived
+    in full, so one that breaks off leaves an existing file - perhaps the last
+    good backup - as it was. A target that is not a regular file, such as a
+    pipe, is written to directly.
+    """
+
+    def __init__(self, target: str | os.PathLike[str]) -> None:
+        self._path = os.path.realpath(target)
+        self._partial: str | None = None
+        self._file: IO[bytes] | None = None
+
+    def open(self) -> IO[bytes]:
+        try:
+            existing: os.stat_result | None = os.stat(self._path)
+        except FileNotFoundError:
+            existing = None
+        if existing is not None and not stat.S_ISREG(existing.st_mode):
+            self._file = open(self._path, "wb")  # noqa: SIM115 - closed by close()
+            return self._file
+        folder, name = os.path.split(self._path)
+        self._partial = os.path.join(folder, f".{name}.{uuid.uuid4().hex}.partial")
+        self._file = open(self._partial, "xb")  # noqa: SIM115 - closed by close()
+        if existing is not None:
+            os.chmod(self._partial, stat.S_IMODE(existing.st_mode))
+        return self._file
+
+    def close(self, completed: bool) -> None:
+        if self._file is not None:
+            self._file.close()
+        if self._partial is None:
+            return
+        if completed:
+            os.replace(self._partial, self._path)
+        else:
+            with suppress(OSError):
+                os.unlink(self._partial)
+
+
 @contextmanager
 def _sink(target: ExportTarget) -> Generator[IO[bytes], None, None]:
     """The file to write an export to: opened from a path, or as given."""
-    if isinstance(target, (str, os.PathLike)):
-        with open(target, "wb") as sink:
-            yield sink
-    else:
+    if not isinstance(target, (str, os.PathLike)):
         yield target
+        return
+    sink = _FileSink(target)
+    completed = False
+    try:
+        yield sink.open()
+        completed = True
+    finally:
+        sink.close(completed)
 
 
 def _check_import(status: int, body: str, endpoint: str) -> None:
@@ -358,24 +406,26 @@ async def aexport_sql_to(
     The file is opened and written on a worker thread, so a slow disk does
     not hold up the event loop.
     """
+    sink = _FileSink(target) if isinstance(target, (str, os.PathLike)) else None
     opened: list[IO[bytes]] = []
 
     async def start() -> None:
-        # Only once the server has said yes, so a failed export leaves an
-        # existing file - perhaps the last good backup - as it was.
-        if isinstance(target, (str, os.PathLike)):
-            opened.append(await asyncio.to_thread(open, target, "wb"))
-        else:
+        # Only once the server has said yes.
+        if sink is not None:
+            opened.append(await asyncio.to_thread(sink.open))
+        elif not isinstance(target, (str, os.PathLike)):
             opened.append(target)
 
     async def write(chunk: bytes) -> None:
         await asyncio.to_thread(opened[0].write, chunk)
 
+    completed = False
     try:
         await _aexport(url, options, timeout, token, namespace, database, write, start)
+        completed = True
     finally:
-        if opened and opened[0] is not target:
-            await asyncio.to_thread(opened[0].close)
+        if sink is not None:
+            await asyncio.to_thread(sink.close, completed)
 
 
 async def _aexport(

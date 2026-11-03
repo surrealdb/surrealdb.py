@@ -105,6 +105,12 @@ after 30 seconds unless you set `timeout=`.
   `{"exclude": [...]}`. SurrealDB 2.0 takes no options and says so with
   `UnsupportedFeatureError`.
 
+  `db.export_to(target, options=None)` writes the export into a file, or a
+  binary file object, as it arrives, so one too large to hold in memory can
+  still be saved. A file is replaced only once the export has arrived in full:
+  one that breaks off leaves an existing file - perhaps the last good backup -
+  as it was.
+
   `import_()` takes SurrealQL as `str` or `bytes`, or the path of a file. A
   failed statement does not stop the rest, so `import_()` reads the server's
   answer and raises `ImportFailedError` with every failure in `failures`.
