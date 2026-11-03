@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking for on-disk embedded databases.** The `surrealdb-embedded`
+  extension now builds against `surrealdb-core` 4.0.0, up from 3.3.5, so
+  `mem://`, `file://` and `surrealkv://` connections run the SurrealDB 4.0
+  engine. SurrealDB 4.0 refuses to open a `file://` or `surrealkv://` directory
+  that a 3.x engine wrote: the connection raises `ConnectionUnavailableError`
+  saying the directory "holds a SurrealKV v0.x database written by SurrealDB
+  3.x", and leaves the files untouched, so the previous `surrealdb-embedded`
+  release still opens them. The message suggests setting
+  `SURREAL_EXPERIMENTAL_UPGRADE_FROM_3X=true`, but the embedded engine does not
+  read `SURREAL_*` environment variables, so that has no effect here. To carry
+  data across, export it with a 3.x `surreal` binary (`surreal export`) and
+  import it into a new 4.0 datastore. In-memory databases are not affected.
+- SurrealDB 4.0 moved most SurrealQL function families behind cargo features.
+  The extension builds the engine without its defaults, to leave out GraphQL
+  and the PostgreSQL and MySQL wire dialects, so it now names each family the
+  3.x engine always had: `crypto::*` digests and password hashing, `geo::*`,
+  `encoding::*`, `parse::url::*`, `string::slug` and `ORDER BY … COLLATE`,
+  `string::html::sanitize`, Unicode regexes, full-text and HNSW indexes with
+  `search::*`, `DEFINE API` with `api::*`, text patches in `RETURN DIFF`, and the
+  background maintenance tasks. Without them those calls failed with "This
+  build was compiled without the `<feature>` feature". File buckets
+  (`DEFINE BUCKET`, `file::*`), experimental in 3.x and unavailable from the
+  embedded engine, now work.
+- Building the extension from source needs Rust 1.95 or later, which a
+  transitive dependency of `surrealdb-core` 4.0 requires.
+
 ## [3.0.0-beta.11] - 2026-11-03
 
 Upgrading from `3.0.0-beta.10`: nothing to change. Requests still time out
