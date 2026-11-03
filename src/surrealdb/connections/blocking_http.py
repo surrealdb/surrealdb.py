@@ -1,4 +1,5 @@
 import inspect
+import logging
 import threading
 import time
 import uuid
@@ -23,6 +24,7 @@ from surrealdb.connections.auth_provider import (
     check_auth_provider,
     check_credentials,
     renewal_due,
+    signs_in_afresh,
 )
 from surrealdb.connections.batch import Batch
 from surrealdb.connections.builders import (
@@ -86,6 +88,8 @@ from surrealdb.streaming import (
     buffered_statements,
 )
 from surrealdb.types import Tokens, Value, parse_auth_result
+
+logger = logging.getLogger(__name__)
 
 # Live queries need a persistent connection to push notifications down, which
 # is what makes them a websocket-only feature - as the README documents.
@@ -361,8 +365,19 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
             if not self._version_learned:
                 self._handshake()
             if self.is_feature_supported(Features.REFRESH_TOKENS):
-                self.refresh()
-                return
+                try:
+                    self.refresh()
+                except ServerError as exc:
+                    # Refused - expired, revoked or already spent. Kept, it
+                    # would be tried before every request; dropped, `auth=` can
+                    # sign in instead, or the request goes ahead on the access
+                    # token it has, which may still be good.
+                    logger.debug("renewing with the refresh token failed: %s", exc)
+                    self._refresh_token = None
+                    if not signs_in_afresh(self._auth_provider):
+                        return
+                else:
+                    return
         if self._auth_provider is None:
             return
         provided = self._provided_credentials()

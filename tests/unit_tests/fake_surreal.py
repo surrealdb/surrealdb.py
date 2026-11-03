@@ -1,10 +1,10 @@
-"""An in-process stand-in for a SurrealDB server's websocket RPC endpoint.
+"""In-process stand-ins for a SurrealDB server's RPC endpoints.
 
-The reconnect tests under ``tests/unit_tests/connections/reconnect`` need a
-real server. This fake needs nothing: it runs on its own thread and event loop,
-so blocking and async connections can both be pointed at it, and it can cut
-every socket, refuse new ones for a while, push live notifications and answer
-any method however a test scripts it.
+The reconnect and auth tests under ``tests/unit_tests/connections`` need a
+real server. These fakes need nothing: each runs on its own thread, so blocking
+and async connections can both be pointed at them, and each answers any method
+however a test scripts it. The websocket one can also cut every socket, refuse
+new ones for a while and push live notifications.
 """
 
 import asyncio
@@ -16,6 +16,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 from websockets.asyncio.server import Server, ServerConnection, serve
@@ -71,32 +72,19 @@ class Call:
     method: str
     params: Any
     session: Any
+    token: str | None = None
 
 
 Handler = Callable[[Call], Any]
 
 
-class FakeSurreal:
-    """A fake server speaking plain ``cbor`` on ``ws://127.0.0.1:<port>/rpc``."""
+class _Scripted:
+    """What both fakes share: the calls they saw and how they answer them."""
 
-    def __init__(self, version: str = "surrealdb-3.0.0") -> None:
+    def __init__(self, version: str) -> None:
         self.version = version
         self.calls: list[Call] = []
         self.handlers: dict[str, Handler] = {}
-        self.accepting = True
-        self._sockets: list[ServerConnection] = []
-        self._loop = asyncio.new_event_loop()
-        self._ready = threading.Event()
-        self._server: Server | None = None
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
-        self._ready.wait(5)
-        assert self._server is not None
-        self.port: int = self._server.sockets[0].getsockname()[1]
-
-    @property
-    def url(self) -> str:
-        return f"ws://127.0.0.1:{self.port}"
 
     def respond(self, method: str, handler: Handler) -> None:
         """Answer *method* with ``handler(call)``; raise RpcFailure to refuse."""
@@ -112,31 +100,12 @@ class FakeSurreal:
             if c.method == method and (socket is None or c.socket == socket)
         ]
 
-    @property
-    def sockets_opened(self) -> int:
-        return len(self._sockets)
-
-    def drop(self) -> None:
-        """Cut every open socket at once, as a network failure would."""
-        self._call(self._drop())
-
-    def notify(self, live_id: Any, action: str = "CREATE", record: Any = None) -> None:
-        """Push a live notification on the newest socket."""
-        frame = {"result": {"id": live_id, "action": action, "result": record}}
-        self._call(self._sockets[-1].send(encode(frame)))
-
     def wait_for(self, predicate: Callable[[], bool], timeout: float = 5.0) -> None:
         deadline = time.monotonic() + timeout
         while not predicate():
             if time.monotonic() > deadline:
                 raise AssertionError(f"timed out; calls were {self.methods()}")
             time.sleep(0.01)
-
-    def close(self) -> None:
-        if self._server is not None:
-            self._call(self._stop())
-        self._loop.call_soon_threadsafe(self._loop.stop)
-        self._thread.join(5)
 
     def default(self, call: Call) -> Any:
         if call.method == "version":
@@ -150,6 +119,64 @@ class FakeSurreal:
         if call.method == "query":
             return [{"status": "OK", "result": [], "time": "0ms"}]
         return None
+
+    def _answer(self, raw: bytes, socket: int, token: str | None = None) -> bytes:
+        request = decode(raw)
+        call = Call(
+            socket,
+            request["method"],
+            request.get("params"),
+            request.get("session"),
+            token,
+        )
+        self.calls.append(call)
+        handler = self.handlers.get(call.method, self.default)
+        reply: dict[str, Any] = {"id": request["id"]}
+        try:
+            reply["result"] = handler(call)
+        except RpcFailure as failure:
+            reply["error"] = failure.payload
+        return encode(reply)
+
+
+class FakeSurreal(_Scripted):
+    """A fake server speaking plain ``cbor`` on ``ws://127.0.0.1:<port>/rpc``."""
+
+    def __init__(self, version: str = "surrealdb-3.0.0") -> None:
+        super().__init__(version)
+        self.accepting = True
+        self._sockets: list[ServerConnection] = []
+        self._loop = asyncio.new_event_loop()
+        self._ready = threading.Event()
+        self._server: Server | None = None
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+        self._ready.wait(5)
+        assert self._server is not None
+        self.port: int = self._server.sockets[0].getsockname()[1]
+
+    @property
+    def url(self) -> str:
+        return f"ws://127.0.0.1:{self.port}"
+
+    @property
+    def sockets_opened(self) -> int:
+        return len(self._sockets)
+
+    def drop(self) -> None:
+        """Cut every open socket at once, as a network failure would."""
+        self._call(self._drop())
+
+    def notify(self, live_id: Any, action: str = "CREATE", record: Any = None) -> None:
+        """Push a live notification on the newest socket."""
+        frame = {"result": {"id": live_id, "action": action, "result": record}}
+        self._call(self._sockets[-1].send(encode(frame)))
+
+    def close(self) -> None:
+        if self._server is not None:
+            self._call(self._stop())
+        self._loop.call_soon_threadsafe(self._loop.stop)
+        self._thread.join(5)
 
     def _call(self, coroutine: Any) -> Any:
         return asyncio.run_coroutine_threadsafe(coroutine, self._loop).result(5)
@@ -188,16 +215,54 @@ class FakeSurreal:
         self._sockets.append(socket)
         try:
             async for raw in socket:
-                request = decode(raw if isinstance(raw, bytes) else raw.encode())
-                params = request.get("params")
-                call = Call(index, request["method"], params, request.get("session"))
-                self.calls.append(call)
-                handler = self.handlers.get(call.method, self.default)
-                reply: dict[str, Any] = {"id": request["id"]}
-                try:
-                    reply["result"] = handler(call)
-                except RpcFailure as failure:
-                    reply["error"] = failure.payload
-                await socket.send(encode(reply))
+                frame = raw if isinstance(raw, bytes) else raw.encode()
+                await socket.send(self._answer(frame, index))
         except ConnectionClosed:
             pass
+
+
+class FakeSurrealHttp(_Scripted):
+    """A fake server answering ``POST /rpc`` in plain ``cbor``.
+
+    Each call's ``token`` is the bearer token the request carried, if any.
+    """
+
+    def __init__(self, version: str = "surrealdb-3.0.0") -> None:
+        super().__init__(version)
+        fake = self
+
+        class _Rpc(BaseHTTPRequestHandler):
+            # Kept alive: the blocking client reads its body in a way an
+            # HTTP/1.0 server, closing after each reply, does not survive.
+            protocol_version = "HTTP/1.1"
+
+            def do_POST(self) -> None:
+                body = self.rfile.read(int(self.headers["Content-Length"]))
+                bearer = self.headers.get("Authorization", "")
+                token = bearer.removeprefix("Bearer ") or None
+                reply = fake._answer(body, 0, token)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/cbor")
+                self.send_header("Content-Length", str(len(reply)))
+                self.end_headers()
+                self.wfile.write(reply)
+
+            def log_message(self, format: str, *args: Any) -> None:
+                pass
+
+        self._server = ThreadingHTTPServer(("127.0.0.1", 0), _Rpc)
+        self._server.daemon_threads = True
+        self.port: int = self._server.server_address[1]
+        self._thread = threading.Thread(
+            target=self._server.serve_forever, args=(0.01,), daemon=True
+        )
+        self._thread.start()
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self.port}"
+
+    def close(self) -> None:
+        self._server.shutdown()
+        self._server.server_close()
+        self._thread.join(5)

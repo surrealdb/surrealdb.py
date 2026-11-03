@@ -129,7 +129,10 @@ after 30 seconds unless you set `timeout=`.
   one and the server supports them, otherwise by applying `auth=` again. The
   async websocket does this on a timer. The blocking and HTTP connections
   have no background work, so they renew before the next request that finds
-  the token due. A renewal that fails is reported as an `"error"` event.
+  the token due. A renewal that fails is reported as an `"error"` event. A
+  refresh token the server refuses is dropped rather than tried again, and
+  the connection signs in with `auth=` instead - or, with no credentials or
+  function to sign in with, carries on with the access token it has.
 
 - Token and session management to match the JS SDK:
   - `db.refresh(tokens=None)` exchanges a refresh token for a new pair over

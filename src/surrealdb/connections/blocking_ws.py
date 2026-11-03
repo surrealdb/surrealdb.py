@@ -512,23 +512,40 @@ class BlockingWsSurrealConnection(
             return
         self._renewing = True
         try:
-            if root.refresh is not None and self.is_feature_supported(
-                Features.REFRESH_TOKENS
+            if not self._renew_with_refresh_token_locked() and signs_in_afresh(
+                self._auth_provider
             ):
-                pair = self._token_pair(None, None, "refresh()")
-                response = self._send_locked(
-                    RequestMessage(RequestMethod.REFRESH, params=[pair]),
-                    "refreshing the tokens",
-                )
-                self.check_response_for_result(response, "refreshing the tokens")
-                self._note_tokens(None, parse_auth_result(response["result"]))
-            elif self._auth_provider is not None:
                 self._apply_auth_provider_locked()
         except Exception as exc:
             logger.debug("renewing the access token failed: %s", exc)
             self._emit("error", exc)
         finally:
             self._renewing = False
+
+    def _renew_with_refresh_token_locked(self) -> bool:
+        """Renew with the refresh token, if there is one the server can take.
+
+        One the server refuses - expired, revoked or already spent - is
+        dropped and reported, so the renewal falls back to ``auth=`` rather
+        than trying it again before every request.
+        """
+        refresh = self._registry.root.refresh
+        if refresh is None or not self.is_feature_supported(Features.REFRESH_TOKENS):
+            return False
+        pair = self._token_pair(None, None, "refresh()")
+        try:
+            response = self._send_locked(
+                RequestMessage(RequestMethod.REFRESH, params=[pair]),
+                "refreshing the tokens",
+            )
+            self.check_response_for_result(response, "refreshing the tokens")
+        except ServerError as exc:
+            logger.debug("renewing with the refresh token failed: %s", exc)
+            self._emit("error", exc)
+            self._note_revoked(None, refresh)
+            return False
+        self._note_tokens(None, parse_auth_result(response["result"]))
+        return True
 
     def _reconnect_locked(self) -> None:
         """Replace a dropped socket and replay what the server forgot.

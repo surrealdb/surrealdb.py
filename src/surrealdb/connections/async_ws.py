@@ -859,14 +859,11 @@ class AsyncWsSurrealConnection(
         A failed attempt is tried again after a delay that doubles each time,
         up to a bound, so one transient failure does not let the token lapse.
         """
-        root = self._registry.root
         self._renewing = True
         try:
-            if root.refresh is not None and self.is_feature_supported(
-                Features.REFRESH_TOKENS
+            if not await self._renew_with_refresh_token() and signs_in_afresh(
+                self._auth_provider
             ):
-                await self.refresh()
-            elif self._auth_provider is not None:
                 await self.connect()
                 async with self._connect_guard():
                     await self._apply_auth_provider()
@@ -882,6 +879,25 @@ class AsyncWsSurrealConnection(
         finally:
             self._renewing = False
         self._renew_retry = RENEW_RETRY
+
+    async def _renew_with_refresh_token(self) -> bool:
+        """Renew with the refresh token, if there is one the server can take.
+
+        One the server refuses - expired, revoked or already spent - is
+        dropped and reported, so the renewal falls back to ``auth=`` rather
+        than trying it again on every attempt.
+        """
+        refresh = self._registry.root.refresh
+        if refresh is None or not self.is_feature_supported(Features.REFRESH_TOKENS):
+            return False
+        try:
+            await self.refresh()
+        except ServerError as exc:
+            logger.debug("renewing with the refresh token failed: %s", exc)
+            self._emit("error", exc)
+            self._note_revoked(None, refresh)
+            return False
+        return True
 
     async def _restore(self) -> None:
         """Replay every session, then every live query, on the new socket."""
