@@ -1,5 +1,7 @@
 """``health()``: the server's ``/health`` endpoint, which has no RPC equivalent."""
 
+import asyncio
+
 import aiohttp
 import requests
 
@@ -49,7 +51,7 @@ async def acheck_health(url: Url, timeout: float | None) -> None:
             session.get(endpoint) as response,
         ):
             status = response.status
-    except TimeoutError as exc:
+    except asyncio.TimeoutError as exc:
         raise TransportTimeoutError(
             f"timed out checking the health of {endpoint}: no reply {describe(timeout)}"
         ) from exc

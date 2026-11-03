@@ -461,7 +461,7 @@ async def _aexport(
                     await start()
                 async for chunk in response.content.iter_chunked(_CHUNK):
                     await take(chunk)
-    except TimeoutError as exc:
+    except asyncio.TimeoutError as exc:
         raise _timed_out("exporting from", endpoint, timeout) from exc
     except aiohttp.ClientError as exc:
         raise ConnectionUnavailableError(
@@ -490,7 +490,7 @@ async def aimport_sql(
                     data=payload,
                 ) as response:
                     status, text = response.status, await response.text()
-    except TimeoutError as exc:
+    except asyncio.TimeoutError as exc:
         raise _timed_out("importing into", endpoint, timeout) from exc
     except aiohttp.ClientError as exc:
         raise ConnectionUnavailableError(
