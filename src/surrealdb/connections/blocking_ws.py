@@ -588,6 +588,11 @@ class BlockingWsSurrealConnection(
         finally:
             self._reconnecting = False
         self._drop_socket()
+        # The next request opens a fresh socket that carries none of these
+        # queries, so a subscriber still iterating would wait on it forever.
+        for queues in list(self.live_queues.values()):
+            for notifications in list(queues):
+                notifications.put(_LIVE_BROKEN_SENTINEL)
         self._registry.clear()
         self._live_tracker.ended()
         error = ConnectionUnavailableError(

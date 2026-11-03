@@ -7,6 +7,7 @@ down, a session signed in as someone else - stay covered.
 """
 
 import asyncio
+import threading
 import time
 import uuid
 from collections.abc import Callable, Iterator
@@ -257,5 +258,37 @@ def test_blocking_a_reconnect_keeps_the_tokens_renewal_replaced(
             [renewed["access"]]
         ]
         assert db.token == renewed["access"]
+    finally:
+        db.close()
+
+
+def test_blocking_giving_up_ends_a_live_iterator_already_running(
+    fake: FakeSurreal,
+) -> None:
+    options = ReconnectOptions(
+        attempts=2, retry_delay=0.01, retry_delay_max=0.02, retry_delay_jitter=0
+    )
+    db = BlockingWsSurrealConnection(fake.url, reconnect=options)
+    outcome: list[BaseException | dict[str, Value]] = []
+    try:
+        notifications = iter(db.live("orders"))
+        fake.accepting = False
+        _dropped(db, fake)
+        with pytest.raises(ConnectionUnavailableError):
+            db.version()
+        fake.accepting = True
+        db.version()
+
+        def consume() -> None:
+            try:
+                outcome.append(next(notifications))
+            except BaseException as exc:
+                outcome.append(exc)
+
+        consumer = threading.Thread(target=consume, daemon=True)
+        consumer.start()
+        consumer.join(5)
+        assert not consumer.is_alive(), "the live iterator is still waiting"
+        assert isinstance(outcome[0], ConnectionUnavailableError)
     finally:
         db.close()
