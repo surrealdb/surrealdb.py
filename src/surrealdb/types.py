@@ -91,6 +91,17 @@ class Tokens:
     access: str | None = None
     refresh: str | None = None
 
+    def __repr__(self) -> str:
+        # Credentials, so kept out of logs, tracebacks and debugger output.
+        return (
+            f"Tokens(access={_redacted(self.access)}, "
+            f"refresh={_redacted(self.refresh)})"
+        )
+
+
+def _redacted(token: str | None) -> str:
+    return "None" if token is None else "'<redacted>'"
+
 
 def parse_auth_result(result: Any) -> Tokens:
     """

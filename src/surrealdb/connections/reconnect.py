@@ -118,8 +118,9 @@ class SessionState:
     namespace: str | None = None
     database: str | None = None
     variables: dict[str, Value] = field(default_factory=dict)
-    access: str | None = None
-    refresh: str | None = None
+    # Credentials, so left out of the repr.
+    access: str | None = field(default=None, repr=False)
+    refresh: str | None = field(default=None, repr=False)
 
     def tokens(self) -> Tokens | None:
         if self.access is None and self.refresh is None:

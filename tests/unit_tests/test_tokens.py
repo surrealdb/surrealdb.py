@@ -1,3 +1,4 @@
+from surrealdb.connections.reconnect import SessionState
 from surrealdb.types import Tokens, parse_auth_result
 
 
@@ -43,3 +44,17 @@ def test_parse_auth_result_unexpected_type() -> None:
     assert isinstance(result, Tokens)
     assert result.access is None
     assert result.refresh is None
+
+
+def test_tokens_keep_their_values_out_of_the_repr() -> None:
+    tokens = Tokens(access="secret-access", refresh="secret-refresh")
+    assert "secret" not in repr(tokens)
+    assert repr(tokens) == "Tokens(access='<redacted>', refresh='<redacted>')"
+    assert repr(Tokens()) == "Tokens(access=None, refresh=None)"
+    assert tokens.access == "secret-access"
+
+
+def test_session_state_keeps_its_tokens_out_of_the_repr() -> None:
+    state = SessionState(namespace="ns", access="secret-access", refresh="secret")
+    assert "secret" not in repr(state)
+    assert "ns" in repr(state)
