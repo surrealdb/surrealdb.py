@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0-beta.11] - 2026-11-03
+
+Upgrading from `3.0.0-beta.10`: nothing to change. Requests still time out
+after 30 seconds unless you set `timeout=`.
+
 ### Added
 
 - Request timeouts are configurable. Every request waited at most 30 seconds
@@ -28,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   concurrent task or another thread. The default stays at 30 seconds. The
   embedded engine accepts `timeout()` and ignores it, since its requests never
   leave the process.
+
+### Fixed
+
+- A `GeometryCollection` that contains a point renders as a valid SurrealQL
+  literal. `str()` wrote each point member as `(longitude, latitude)`, and
+  SurrealDB 3.x reads a collection with such a member as a plain object, not
+  a geometry. Point members now render as GeoJSON objects
+  (`{ type: 'Point', coordinates: [1.0, 2.0] }`). Other members are unchanged.
 
 ## [3.0.0-beta.10] - 2026-10-08
 
@@ -795,7 +808,8 @@ Follow-up to `3.0.0-alpha.1` that finalises the v3 API surface and fixes a batch
 ### Added
 - Initial stable release of the SurrealDB Python client.
 
-[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.10...HEAD
+[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.11...HEAD
+[3.0.0-beta.11]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.10...v3.0.0-beta.11
 [3.0.0-beta.10]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.9...v3.0.0-beta.10
 [3.0.0-beta.9]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.8...v3.0.0-beta.9
 [3.0.0-beta.8]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.7...v3.0.0-beta.8
