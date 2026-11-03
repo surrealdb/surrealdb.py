@@ -163,6 +163,32 @@ def _seconds_and_nanos(value: datetime) -> list[int]:
 _U64_MAX = 2**64 - 1
 _NANOS = 1_000_000_000
 
+# SurrealDB's decimal holds at most 28 digits after the point.
+_DECIMAL_SCALE_MAX = 28
+
+
+def _within_decimal_scale(value: Decimal) -> Decimal:
+    """*value* without the trailing zeros that take it past SurrealDB's scale.
+
+    Decimal arithmetic leaves them behind - ``Decimal("0E-30")`` is an
+    ordinary result - and they change nothing about the number, but written
+    out they are 30 digits after the point, which no SurrealDB decimal holds.
+    Digits that are not zeros are left alone: dropping them would send a
+    different number.
+    """
+    sign, digits, written = value.as_tuple()
+    if not isinstance(written, int) or written >= -_DECIMAL_SCALE_MAX:
+        return value
+    exponent: int = written
+    kept = list(digits)
+    while exponent < -_DECIMAL_SCALE_MAX and len(kept) > 1 and kept[-1] == 0:
+        kept.pop()
+        exponent += 1
+    if kept == [0]:
+        exponent = max(exponent, -_DECIMAL_SCALE_MAX)
+    return Decimal((sign, tuple(kept), exponent))
+
+
 _SIZED_TAGS: dict[type, int] = {
     I8: constants.TAG_I8,
     U8: constants.TAG_U8,
@@ -255,7 +281,8 @@ class _SurrealEncoder(CBOREncoder):
             if not value.is_finite():
                 encoder.encode_decimal(value)
                 return
-            encoder.encode(CBORTag(constants.TAG_DECIMAL_STRING, format(value, "f")))
+            text = format(_within_decimal_scale(value), "f")
+            encoder.encode(CBORTag(constants.TAG_DECIMAL_STRING, text))
 
         self._encoders[Decimal] = _encode_plain_decimal
         for sized in _SIZED_TAGS:

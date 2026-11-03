@@ -64,7 +64,8 @@ _PYTHON_MIN = -62135596800
 _PYTHON_MAX = 253402300799
 
 # rust_decimal: a 96-bit mantissa and at most 28 fractional digits.
-_DECIMAL = re.compile(r"-?\d+(?:\.(\d+))?")
+# ASCII digits only: `\d` would read `١٢٣` as 123.
+_DECIMAL = re.compile(r"-?[0-9]+(?:\.([0-9]+))?")
 _DECIMAL_MANTISSA_MAX = 2**96 - 1
 _DECIMAL_SCALE_MAX = 28
 
@@ -347,8 +348,14 @@ def _decimal(value: Any) -> Decimal:
     if not isinstance(value, str) or (match := _DECIMAL.fullmatch(value)) is None:
         _refuse(f"tag 10 must carry a decimal number as text, got {value!r}")
     scale = len(match.group(1) or "")
-    mantissa = int(value.replace("-", "").replace(".", ""))
-    if scale > _DECIMAL_SCALE_MAX or mantissa > _DECIMAL_MANTISSA_MAX:
+    # Measured before `int()`, which refuses past 4300 digits with a bare
+    # ValueError; a 96-bit mantissa has at most 29.
+    digits = value.replace("-", "").replace(".", "").lstrip("0") or "0"
+    if (
+        scale > _DECIMAL_SCALE_MAX
+        or len(digits) > len(str(_DECIMAL_MANTISSA_MAX))
+        or int(digits) > _DECIMAL_MANTISSA_MAX
+    ):
         _refuse(
             f"decimal {value} is beyond a 96-bit mantissa with 28 fractional digits"
         )
