@@ -385,7 +385,7 @@ class _SyncBuilderGuards(_WarnIfDropped):
             return True
 
 
-_FIELD_PATH_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$")
+_FIELD_PATH_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*")
 _RESERVED_VARIABLES = frozenset(
     {"_resource", "_content", "_data", "_patches", "_version", "_from", "_to", "_edge"}
 )
@@ -435,16 +435,23 @@ _S = TypeVar("_S", bound="_CrudState")
 
 
 def _field_paths(method: str, fields: Sequence[str]) -> list[str]:
+    """*fields* checked as field paths, and rendered with every segment delimited.
+
+    Delimited even where it would read the same bare: a field named after a
+    keyword - ``before``, ``after``, ``diff``, ``none``, ``value`` - is read as
+    the keyword otherwise, so ``RETURN before`` returned the whole previous
+    record rather than a field called ``before``.
+    """
     paths = list(fields)
     if not paths:
         raise ValueError(f"{method} needs at least one field")
     for path in paths:
-        if not isinstance(path, str) or not _FIELD_PATH_PATTERN.match(path):  # pyright: ignore[reportUnnecessaryIsInstance]
+        if not isinstance(path, str) or not _FIELD_PATH_PATTERN.fullmatch(path):  # pyright: ignore[reportUnnecessaryIsInstance]
             raise ValueError(
                 f"{method} takes field paths such as 'author' or "
                 f"'author.friends'; got {path!r}. Use query() for anything else."
             )
-    return paths
+    return [".".join(f"⟨{segment}⟩" for segment in path.split(".")) for path in paths]
 
 
 def _duration_literal(duration: Duration | timedelta | str | int) -> str:
@@ -535,7 +542,9 @@ class _CrudState(_WarnIfDropped):
         """Only the records matching *condition*, a SurrealQL expression.
 
         Bind values through *variables* and refer to them as ``$name`` rather
-        than formatting them into the condition.
+        than formatting them into the condition. The condition is kept to one
+        expression: a ``;`` or a comment in it cannot reach past it into the
+        clauses that follow.
         """
         self._modifier("where()", ("SELECT", "UPDATE", "UPSERT", "DELETE"))
         if not isinstance(condition, str) or not condition.strip():  # pyright: ignore[reportUnnecessaryIsInstance]
@@ -614,7 +623,10 @@ class _CrudState(_WarnIfDropped):
         parts: list[str] = []
         if self._where is not None:
             variables.update(self._where_vars)
-            parts.append(f"WHERE {self._where}")
+            # Parenthesised, closing on a line of its own, so a trailing `--`
+            # comment cannot swallow LIMIT, TIMEOUT and the rest, and a `;`
+            # is a syntax error rather than the start of another statement.
+            parts.append(f"WHERE ({self._where}\n)")
         if self._output is not None:
             parts.append(f"RETURN {self._output}")
         if self._limit is not None:
