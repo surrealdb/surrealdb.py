@@ -12,10 +12,12 @@ from SurrealDB can be written back unchanged.
 import contextlib
 import copy
 import datetime as dt
+import io
 import os
 import pickle
 import time
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 
@@ -250,3 +252,54 @@ def test_a_pickle_written_before_the_remainder_was_pickled_still_loads(
     assert restored == dt.datetime(2026, 1, 1, 12, 30, 45, 123456)
     assert restored.nanosecond == 0
     assert encode(restored) == encode(PreciseDatetime(2026, 1, 1, 12, 30, 45, 123456))
+
+
+class _Beta10PreciseDatetime(dt.datetime):
+    """``PreciseDatetime`` as 3.0.0-beta.10 defined it, with no pickling of its own."""
+
+    __slots__ = ("nanosecond",)
+
+    nanosecond: int  # pyright: ignore[reportUninitializedInstanceVariable]
+
+    def __new__(
+        cls, *args: Any, nanosecond: int = 0, **kwargs: Any
+    ) -> "_Beta10PreciseDatetime":
+        instance = super().__new__(cls, *args, **kwargs)
+        object.__setattr__(instance, "nanosecond", nanosecond)
+        return instance
+
+
+class _Beta10Unpickler(pickle.Unpickler):
+    """Loads a ``PreciseDatetime`` as 3.0.0-beta.10's class, as that release would."""
+
+    def find_class(self, module_name: str, global_name: str) -> Any:
+        if (module_name, global_name) == (
+            "surrealdb.data.types.datetime",
+            "PreciseDatetime",
+        ):
+            return _Beta10PreciseDatetime
+        return super().find_class(module_name, global_name)
+
+
+@pytest.mark.parametrize("protocol", range(pickle.HIGHEST_PROTOCOL + 1))
+@pytest.mark.parametrize("nanosecond", [0, 789])
+def test_a_pickle_written_now_loads_in_3_0_0_beta_10(
+    protocol: int, nanosecond: int
+) -> None:
+    """3.0.0-beta.10 loads today's pickles, remainder included.
+
+    That release has no ``__setstate__``, so it applies pickled state the
+    default way: a dict of attributes, or a ``(dict, slots)`` pair. State in
+    any other shape fails the whole load with ``UnpicklingError`` - every value
+    in the pickle, not only the datetime - so a rolling deploy or a rollback
+    that shares a cache or a queue across the two versions breaks.
+    """
+    value = PreciseDatetime(2026, 1, 1, 12, 30, 45, 123456, nanosecond=nanosecond)
+
+    restored = _Beta10Unpickler(
+        io.BytesIO(pickle.dumps(value, protocol=protocol))
+    ).load()
+
+    assert type(restored) is _Beta10PreciseDatetime
+    assert restored == value
+    assert restored.nanosecond == nanosecond

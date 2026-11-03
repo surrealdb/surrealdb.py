@@ -76,10 +76,7 @@ class PreciseDatetime(datetime):
         constructor, args = cast(
             tuple[Any, tuple[Any, ...]], super().__reduce_ex__(protocol)
         )
-        return constructor, args, self.nanosecond
-
-    def __setstate__(self, nanosecond: int) -> None:
-        object.__setattr__(self, "nanosecond", nanosecond)
+        return constructor, args, (None, {"nanosecond": self.nanosecond})
 
     @classmethod
     def from_seconds_and_nanos(
