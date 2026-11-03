@@ -223,3 +223,19 @@ def test_tag_decoder_reads_tags_whose_insides_are_already_decoded() -> None:
 
     bounds = CBORTag(constants.TAG_RANGE, [BoundIncluded(1), BoundExcluded(5)])
     assert cbor.tag_decoder(None, bounds) == Range(BoundIncluded(1), BoundExcluded(5))
+
+
+@pytest.mark.parametrize(
+    ("raw", "refusal"),
+    [
+        (b"\x65ab", "ends inside an item"),
+        (b"\x62\xff\xfe", "not UTF-8"),
+        (b"\x78\x05abc", "ends inside an item"),
+        (b"", "ends inside an item"),
+    ],
+)
+def test_short_and_long_text_are_refused_alike(raw: bytes, refusal: str) -> None:
+    """Short text is read on a path of its own, for speed; it refuses what the
+    general one does."""
+    with pytest.raises(UnexpectedResponseError, match=refusal):
+        cbor.decode(raw)

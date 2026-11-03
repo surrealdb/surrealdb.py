@@ -129,11 +129,19 @@ class Decoder:
         self._pos = end
         return chunk
 
+    def _byte(self) -> int:
+        """The next byte. Indexed rather than sliced: it is read for every item."""
+        pos = self._pos
+        if pos >= len(self._data):
+            _refuse("the input ends inside an item")
+        self._pos = pos + 1
+        return self._data[pos]
+
     def _length(self, info: int) -> int | None:
         if info < 24:
             return info
         if info == 24:
-            return self._read(1)[0]
+            return self._byte()
         if info == 25:
             return int.from_bytes(self._read(2), "big")
         if info == 26:
@@ -153,20 +161,35 @@ class Decoder:
     def _value(self) -> Any:
         """The next item, refusing an integer past i64."""
         item = self._item()
-        if isinstance(item, _Wide):
+        if type(item) is _Wide:
             _refuse(f"integer {int(item)} is outside the 64-bit signed range")
         if item is _BREAK:
             _refuse("a break outside an indefinite-length item")
         return item
 
     def _item(self) -> Any:
-        initial = self._read(1)[0]
+        data, pos = self._data, self._pos
+        if pos >= len(data):
+            _refuse("the input ends inside an item")
+        initial = data[pos]
+        self._pos = pos + 1
         major, info = initial >> 5, initial & 0x1F
+        if major == 3 and info < 24:
+            # Short text - field names and most values in any response - read
+            # here rather than through `_string`, as it is the commonest item.
+            end = pos + 1 + info
+            if end > len(data):
+                _refuse("the input ends inside an item")
+            self._pos = end
+            try:
+                return data[pos + 1 : end].decode("utf-8")
+            except UnicodeDecodeError:
+                _refuse("text that is not UTF-8")
         if major == 0:
-            n = self._definite(info)
+            n = info if info < 24 else self._definite(info)
             return n if n <= _I64_MAX else _Wide(n)
         if major == 1:
-            n = -1 - self._definite(info)
+            n = -1 - (info if info < 24 else self._definite(info))
             return n if n >= _I64_MIN else _Wide(n)
         if major == 2:
             return self._string(info, major, bytes)
@@ -186,7 +209,7 @@ class Decoder:
             return self._chunk(length, kind)
         chunks = []
         while True:
-            initial = self._read(1)[0]
+            initial = self._byte()
             if initial == 0xFF:
                 break
             if initial >> 5 != major or initial & 0x1F == 31:
