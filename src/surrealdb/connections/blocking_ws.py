@@ -541,13 +541,46 @@ class BlockingWsSurrealConnection(
         token = provided if isinstance(provided, str) else provided.access
         if token is None:
             raise ValueError("auth gave Tokens with no access token to sign in with")
-        self._send_locked(
-            RequestMessage(RequestMethod.AUTHENTICATE, token=token), "authenticating"
-        )
+        try:
+            self._send_locked(
+                RequestMessage(RequestMethod.AUTHENTICATE, token=token),
+                "authenticating",
+            )
+        except ServerError:
+            # Tokens saved past the access token's expiry, say, whose refresh
+            # token is still good.
+            if isinstance(provided, Tokens) and self._refreshed_locked(None, provided):
+                return
+            raise
         if isinstance(provided, Tokens):
             self._note_tokens(None, provided)
         else:
             self._note_authenticated(None, token)
+
+    def _refreshed_locked(self, session_id: UUID | None, tokens: Tokens) -> bool:
+        """Renew *tokens* with their refresh token, with the lock held.
+
+        Whether the server took it; it then holds the session signed in with
+        the new access token.
+        """
+        if tokens.refresh is None or not self.is_feature_supported(
+            Features.REFRESH_TOKENS
+        ):
+            return False
+        pair = self._token_pair(tokens, session_id, "refreshing")
+        try:
+            response = self._send_locked(
+                RequestMessage(
+                    RequestMethod.REFRESH, params=[pair], **_scope(session_id)
+                ),
+                "refreshing the tokens",
+            )
+            self.check_response_for_result(response, "refreshing the tokens")
+        except ServerError as exc:
+            logger.debug("refreshing the tokens failed: %s", exc)
+            return False
+        self._note_tokens(session_id, parse_auth_result(response["result"]))
+        return True
 
     def _renew_locked(self) -> None:
         """Replace the access token before it expires, if it is about to.
@@ -756,19 +789,30 @@ class BlockingWsSurrealConnection(
         else:
             # The tokens held now, which renewing may have replaced since a
             # static `auth=` gave them.
-            self._restore_session_locked(None, registry.root)
+            self._restore_session_locked(None, registry.root, renew=True)
         for session_id, state in list(registry.sessions.items()):
             self._send_locked(
                 RequestMessage(RequestMethod.ATTACH, session=session_id),
                 "re-attaching a session",
             )
-            self._restore_session_locked(session_id, state)
+            self._restore_session_locked(session_id, state, renew=True)
         for live in list(registry.live.values()):
             self._restore_live_locked(live)
 
     def _restore_session_locked(
-        self, session_id: UUID | None, state: SessionState, authenticate: bool = True
+        self,
+        session_id: UUID | None,
+        state: SessionState,
+        authenticate: bool = True,
+        renew: bool = False,
     ) -> bool:
+        """Replay *state* onto *session_id*: whether it ended up signed in.
+
+        With *renew*, an access token the server refuses - most often one
+        that expired while the socket was down - is renewed with the
+        session's refresh token, if it holds one. Only for the session's own
+        state: a refresh token is spent by renewing with it.
+        """
         scope: dict[str, Any] = {} if session_id is None else {"session": session_id}
         if state.namespace is not None or state.database is not None:
             self._send_locked(
@@ -794,6 +838,13 @@ class BlockingWsSurrealConnection(
                     "re-authenticating",
                 )
             except ServerError as exc:
+                tokens = state.tokens()
+                if (
+                    renew
+                    and tokens is not None
+                    and self._refreshed_locked(session_id, tokens)
+                ):
+                    return True
                 self._emit("error", exc)
                 self._note_signed_out(session_id)
                 return False

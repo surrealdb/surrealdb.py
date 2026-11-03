@@ -21,7 +21,7 @@ from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.connections.reconnect import ReconnectOptions
 from surrealdb.errors import ConnectionUnavailableError, TransportTimeoutError
 from surrealdb.types import Tokens, Value
-from tests.unit_tests.fake_surreal import Call, FakeSurreal, jwt
+from tests.unit_tests.fake_surreal import Call, FakeSurreal, jwt, token_expired
 
 FAST = ReconnectOptions(retry_delay=0.01, retry_delay_max=0.02, retry_delay_jitter=0)
 ROOT: dict[str, Value] = {"username": "root", "password": "root"}
@@ -373,5 +373,51 @@ def test_blocking_a_reconnect_carries_on_after_its_caller_timed_out(
         fake.wait_for(lambda: db.status == "connected")
         assert ("use", ["ns", "db"]) in _replay(fake, fake.sockets_opened - 1)
         assert db.version() == fake.version
+    finally:
+        db.close()
+
+
+def _expire_every_token(fake: FakeSurreal) -> dict[str, str]:
+    """From now on refuse every access token as expired; renew with fresh ones."""
+
+    def expired(call: Call) -> None:
+        raise token_expired()
+
+    renewed = {"access": jwt("root"), "refresh": "refresh-1"}
+    fake.respond("authenticate", expired)
+    fake.respond("refresh", lambda call: renewed)
+    return renewed
+
+
+async def test_async_a_replay_renews_an_access_token_that_expired_meanwhile(
+    fake: FakeSurreal,
+) -> None:
+    fake.respond("signin", lambda call: {"access": jwt("root"), "refresh": "r-0"})
+    db = AsyncWsSurrealConnection(fake.url, reconnect=FAST)
+    errors: list[BaseException] = []
+    db.subscribe("error", errors.append)
+    try:
+        await db.signin(ROOT)
+        renewed = _expire_every_token(fake)
+        await _reconnected(db, fake)
+        assert fake.methods(1)[-2:] == ["authenticate", "refresh"]
+        assert db.token == renewed["access"]
+        assert not errors
+    finally:
+        await db.close()
+
+
+def test_blocking_a_replay_renews_an_access_token_that_expired_meanwhile(
+    fake: FakeSurreal,
+) -> None:
+    fake.respond("signin", lambda call: {"access": jwt("root"), "refresh": "r-0"})
+    db = BlockingWsSurrealConnection(fake.url, reconnect=FAST)
+    try:
+        db.signin(ROOT)
+        renewed = _expire_every_token(fake)
+        _dropped(db, fake)
+        db.version()
+        assert fake.methods(1)[-3:] == ["authenticate", "refresh", "version"]
+        assert db.token == renewed["access"]
     finally:
         db.close()

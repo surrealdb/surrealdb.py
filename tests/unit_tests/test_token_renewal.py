@@ -15,13 +15,14 @@ from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
-from surrealdb.types import Value
+from surrealdb.types import Tokens, Value
 from tests.unit_tests.fake_surreal import (
     Call,
     FakeSurreal,
     FakeSurrealHttp,
     RpcFailure,
     jwt,
+    token_expired,
 )
 
 ROOT: dict[str, Value] = {"username": "root", "password": "root"}
@@ -244,5 +245,67 @@ def test_blocking_ws_a_failed_renewal_waits_before_it_is_tried_again(
             db.query(f"RETURN {n}").execute()
         assert asked == 2
         assert sum(isinstance(error, RuntimeError) for error in errors) == 1
+    finally:
+        db.close()
+
+
+class _SavedTokens:
+    """`auth=Tokens(...)` saved past its access token's expiry."""
+
+    def __init__(self, server: FakeSurreal | FakeSurrealHttp) -> None:
+        expired = jwt("root", lifetime=-60)
+        self.given = Tokens(access=expired, refresh="refresh-0")
+        self.renewed = {"access": jwt("root"), "refresh": "refresh-1"}
+
+        def authenticate(call: Call) -> None:
+            if call.params[0] == expired:
+                raise token_expired()
+
+        server.respond("authenticate", authenticate)
+        server.respond("refresh", lambda call: self.renewed)
+
+
+def test_blocking_http_renews_auth_tokens_whose_access_token_expired(
+    http: FakeSurrealHttp,
+) -> None:
+    saved = _SavedTokens(http)
+    db = BlockingHttpSurrealConnection(http.url, auth=saved.given)
+    db.query("RETURN 1").execute()
+    db.query("RETURN 2").execute()
+    assert http.methods().count("refresh") == 1
+    assert http.calls_to("query")[-1].token == saved.renewed["access"]
+
+
+async def test_async_http_renews_auth_tokens_whose_access_token_expired(
+    http: FakeSurrealHttp,
+) -> None:
+    saved = _SavedTokens(http)
+    db = AsyncHttpSurrealConnection(http.url, auth=saved.given)
+    await db.query("RETURN 1")
+    await db.query("RETURN 2")
+    assert http.methods().count("refresh") == 1
+    assert http.calls_to("query")[-1].token == saved.renewed["access"]
+
+
+async def test_async_ws_renews_auth_tokens_whose_access_token_expired(
+    ws: FakeSurreal,
+) -> None:
+    saved = _SavedTokens(ws)
+    db = AsyncWsSurrealConnection(ws.url, auth=saved.given)
+    try:
+        await db.connect()
+        assert db.token == saved.renewed["access"]
+    finally:
+        await db.close()
+
+
+def test_blocking_ws_renews_auth_tokens_whose_access_token_expired(
+    ws: FakeSurreal,
+) -> None:
+    saved = _SavedTokens(ws)
+    db = BlockingWsSurrealConnection(ws.url, auth=saved.given)
+    try:
+        db.connect()
+        assert db.token == saved.renewed["access"]
     finally:
         db.close()

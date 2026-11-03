@@ -128,7 +128,8 @@ after 30 seconds unless you set `timeout=`.
   replaying a token that may have expired while the socket was down; a token
   or `Tokens` given as they are is not applied again, so the tokens a renewal
   got in their place are the ones replayed. HTTP applies it before its first
-  request.
+  request. `Tokens` whose access token the server refuses - saved past its
+  expiry, say - are renewed with their refresh token instead.
 
   With `renew_access=True` (the default), a connection also renews its own
   access token shortly before it expires: with its refresh token if it holds
@@ -165,6 +166,8 @@ after 30 seconds unless you set `timeout=`.
   connection opens a new one, with backoff, and replays what the server forgot
   with the old one: the namespace and database, the variables from `let`, the
   authentication, every session from `new_session()`, and every live query.
+  An access token that expired while the socket was down is renewed with the
+  session's refresh token, if it holds one.
   A live query is started again under a new server-side id, and its
   notifications keep arriving on the subscription the caller already holds,
   with the original id. It is started again in the namespace and database it

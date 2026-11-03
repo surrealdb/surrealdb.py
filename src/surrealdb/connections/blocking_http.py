@@ -399,7 +399,18 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         elif provided.access is None:
             raise ValueError("auth gave Tokens with no access token to sign in with")
         else:
-            self.authenticate(provided.access)
+            try:
+                self.authenticate(provided.access)
+            except ServerError:
+                # Tokens saved past the access token's expiry, say, whose
+                # refresh token is still good.
+                if provided.refresh is None or not self.is_feature_supported(
+                    Features.REFRESH_TOKENS
+                ):
+                    raise
+                self.refresh(provided)
+                self._auth_settled = True
+                return
             self._refresh_token = provided.refresh
 
     def _provided_credentials(self) -> AuthCredentials:
