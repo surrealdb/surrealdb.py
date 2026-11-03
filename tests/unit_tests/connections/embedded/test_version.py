@@ -2,12 +2,12 @@
 
 from surrealdb import AsyncSurreal, Features, Surreal
 
-# The engine floor is the `surrealdb-core = "3"` requirement in
+# The engine floor is the `surrealdb-core = "4"` requirement in
 # embedded/Cargo.toml narrowed to the minor series currently resolved. It is
 # deliberately not compared against the extension's own version: the SDK line
 # and the engine line both track SurrealDB majors, so they will eventually
 # collide on the same number and an inequality would fail bafflingly.
-MINIMUM_ENGINE_VERSION = (3, 2)
+MINIMUM_ENGINE_VERSION = (4, 0)
 
 
 def _assert_engine_version(version: str) -> None:
