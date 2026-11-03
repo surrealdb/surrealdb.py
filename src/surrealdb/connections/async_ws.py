@@ -2457,8 +2457,11 @@ class AsyncWsSurrealConnection(
     ) -> None:
         """Kill a running live query by its UUID."""
         suid = str(query_uuid)
+        self._check_event_loop()
+        await self._await_reconnect()
         # The caller holds the id the query was started under; after a
-        # reconnect the server knows it by another.
+        # reconnect the server knows it by another. Read only now, once a
+        # reconnect under way has restarted the query under it.
         current = self._registry.resolve(suid)
         kwargs: dict[str, Any] = {
             "uuid": query_uuid if current == suid else UUID(current)

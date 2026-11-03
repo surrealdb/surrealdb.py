@@ -421,3 +421,37 @@ def test_blocking_a_replay_renews_an_access_token_that_expired_meanwhile(
         assert db.token == renewed["access"]
     finally:
         db.close()
+
+
+async def test_async_kill_during_a_reconnect_kills_the_restarted_query(
+    fake: FakeSurreal,
+) -> None:
+    started, restarted = uuid.uuid4(), uuid.uuid4()
+    ids = iter([started, restarted])
+    fake.respond("live", lambda call: next(ids))
+    slow = ReconnectOptions(retry_delay=0.2, retry_delay_jitter=0)
+    db = AsyncWsSurrealConnection(fake.url, reconnect=slow)
+    try:
+        subscription = await db.live("orders")
+        fake.drop()
+        await _until(lambda: db.status == "reconnecting")
+        await db.kill(subscription)
+        assert [call.params for call in fake.calls_to("kill")] == [[restarted]]
+    finally:
+        await db.close()
+
+
+def test_blocking_kill_after_a_drop_kills_the_restarted_query(
+    fake: FakeSurreal,
+) -> None:
+    started, restarted = uuid.uuid4(), uuid.uuid4()
+    ids = iter([started, restarted])
+    fake.respond("live", lambda call: next(ids))
+    db = BlockingWsSurrealConnection(fake.url, reconnect=FAST)
+    try:
+        subscription = db.live("orders")
+        _dropped(db, fake)
+        db.kill(subscription)
+        assert [call.params for call in fake.calls_to("kill")] == [[restarted]]
+    finally:
+        db.close()

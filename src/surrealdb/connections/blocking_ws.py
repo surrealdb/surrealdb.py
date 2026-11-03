@@ -2377,6 +2377,11 @@ class BlockingWsSurrealConnection(
         """
         suid = str(query_uuid)
         with self._session_lock:
+            if self.socket is not None:
+                # A dropped socket is replaced first, so that a reconnect has
+                # restarted the query before its id is read below.
+                with self._locked():
+                    self._ready_locked(renew=False)
             # The caller holds the id the query was started under; after a
             # reconnect the server knows it by another.
             current = self._registry.resolve(suid)
