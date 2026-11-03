@@ -19,7 +19,7 @@ from websockets.protocol import State
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.connections.reconnect import ReconnectOptions
-from surrealdb.errors import ConnectionUnavailableError
+from surrealdb.errors import ConnectionUnavailableError, TransportTimeoutError
 from surrealdb.types import Tokens, Value
 from tests.unit_tests.fake_surreal import Call, FakeSurreal, jwt
 
@@ -290,5 +290,88 @@ def test_blocking_giving_up_ends_a_live_iterator_already_running(
         consumer.join(5)
         assert not consumer.is_alive(), "the live iterator is still waiting"
         assert isinstance(outcome[0], ConnectionUnavailableError)
+    finally:
+        db.close()
+
+
+def test_blocking_the_first_reconnect_attempt_is_immediate(fake: FakeSurreal) -> None:
+    db = BlockingWsSurrealConnection(fake.url)
+    try:
+        db.use("ns", "db")
+        _dropped(db, fake)
+        started = time.monotonic()
+        db.version()
+        assert time.monotonic() - started < 1.0
+        assert "use" in fake.methods(1)
+    finally:
+        db.close()
+
+
+def test_blocking_a_reconnect_keeps_to_the_request_timeout(fake: FakeSurreal) -> None:
+    options = ReconnectOptions(attempts=3, retry_delay=0.5, retry_delay_jitter=0)
+    db = BlockingWsSurrealConnection(fake.url, timeout=0.5, reconnect=options)
+    try:
+        db.version()
+        fake.accepting = False
+        _dropped(db, fake)
+        started = time.monotonic()
+        with pytest.raises(TransportTimeoutError):
+            db.version()
+        assert time.monotonic() - started < 1.5
+    finally:
+        db.close()
+
+
+def test_blocking_threads_waiting_on_a_reconnect_keep_to_their_own_timeout(
+    fake: FakeSurreal,
+) -> None:
+    options = ReconnectOptions(retry_delay=0.2, retry_delay_jitter=0)
+    db = BlockingWsSurrealConnection(fake.url, reconnect=options)
+    outcomes: dict[str, Any] = {}
+
+    def request(name: str, seconds: float) -> None:
+        started = time.monotonic()
+        try:
+            with db.timeout(seconds):
+                outcomes[name] = db.version()
+        except BaseException as exc:
+            outcomes[name] = exc
+        outcomes[f"{name} took"] = time.monotonic() - started
+
+    try:
+        db.version()
+        fake.accepting = False
+        _dropped(db, fake)
+        patient = threading.Thread(target=request, args=("patient", 10.0))
+        patient.start()
+        fake.wait_for(lambda: db.status == "reconnecting")
+        hasty = threading.Thread(target=request, args=("hasty", 0.3))
+        hasty.start()
+        hasty.join(5)
+        assert isinstance(outcomes["hasty"], TransportTimeoutError)
+        assert outcomes["hasty took"] < 1.5
+
+        fake.accepting = True
+        patient.join(10)
+        assert outcomes["patient"] == fake.version
+    finally:
+        db.close()
+
+
+def test_blocking_a_reconnect_carries_on_after_its_caller_timed_out(
+    fake: FakeSurreal,
+) -> None:
+    options = ReconnectOptions(retry_delay=0.1, retry_delay_jitter=0)
+    db = BlockingWsSurrealConnection(fake.url, timeout=0.2, reconnect=options)
+    try:
+        db.use("ns", "db")
+        fake.accepting = False
+        _dropped(db, fake)
+        with pytest.raises(TransportTimeoutError):
+            db.version()
+        fake.accepting = True
+        fake.wait_for(lambda: db.status == "connected")
+        assert ("use", ["ns", "db"]) in _replay(fake, fake.sockets_opened - 1)
+        assert db.version() == fake.version
     finally:
         db.close()

@@ -168,7 +168,9 @@ after 30 seconds unless you set `timeout=`.
   dropped fails with `ConnectionUnavailableError` rather than being sent twice;
   one made while the async connection is reconnecting waits for the replay. The
   blocking connection has no background reader, so it reconnects when the next
-  request or live subscription uses the socket.
+  request or live subscription uses the socket. Its first attempt is made at
+  once, and a request waits for the reconnect for at most its own timeout,
+  while the attempts carry on without holding up other threads.
 
   On by default. `reconnect=False` turns it off, on the connection classes and
   on `Surreal`/`AsyncSurreal`; `reconnect=ReconnectOptions(attempts=...,

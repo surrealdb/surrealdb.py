@@ -204,8 +204,10 @@ class BlockingWsSurrealConnection(
         :param reconnect: Reconnect when the socket has dropped, replaying the
             session state and live queries - see
             :mod:`surrealdb.connections.reconnect`. This transport has no
-            background reader, so a dropped socket is noticed, and replaced,
-            by the next request or live subscription that uses it.
+            background reader, so a dropped socket is noticed by the next
+            request or live subscription that uses it. That request waits for
+            the replacement for at most its own timeout, while the attempts
+            carry on without it; the first attempt is made at once.
         :param auth: How the connection signs itself in when the socket opens
             and after every reconnect: signin credentials, an access token,
             :class:`Tokens`, or a function returning one of those - see
@@ -224,7 +226,14 @@ class BlockingWsSurrealConnection(
         self._renewing = False
         self._registry = SessionRegistry()
         self._init_events()
+        # A reconnect under way runs on `_reconnect_worker`; `_reconnect_done`
+        # is set once it has ended, and `_reconnect_failure` says why it gave
+        # up, if it did.
         self._reconnecting = False
+        self._reconnect_worker: threading.Thread | None = None
+        self._reconnect_done = threading.Event()
+        self._reconnect_done.set()
+        self._reconnect_failure: str | None = None
         self.raw_url: str = f"{self.url.raw_url}/rpc"
         self.host: str | None = self.url.hostname
         self.port: int | None = self.url.port
@@ -343,6 +352,8 @@ class BlockingWsSurrealConnection(
 
     def _connect_locked(self, url: str | None = None) -> None:
         """The body of :meth:`connect`, called with ``self._lock`` held."""
+        if self._reconnecting:
+            self._await_reconnect_locked(self._request_timeout())
         if url is not None:
             target = Url(url)
             target_raw = f"{target.raw_url}/rpc"
@@ -368,7 +379,7 @@ class BlockingWsSurrealConnection(
             # noticed this through its reader task; the blocking one has no
             # reader, so the socket's own state is what says so.
             if self._reconnect.enabled:
-                self._reconnect_locked()
+                self._reconnect_locked(self._request_timeout())
                 return
             self._shut()
 
@@ -390,6 +401,24 @@ class BlockingWsSurrealConnection(
             for event, payload in pending:
                 super()._emit(event, *payload)
 
+    @contextmanager
+    def _released(self) -> Generator[None, None, None]:
+        """Let go of ``self._lock`` for the body, from inside :meth:`_locked`.
+
+        The events raised so far are published first, as :meth:`_locked`
+        would on its way out.
+        """
+        pending, self._pending_events = self._pending_events, []
+        self._lock_owner = None
+        self._lock.release()
+        try:
+            for event, payload in pending:
+                super()._emit(event, *payload)
+            yield
+        finally:
+            self._lock.acquire()
+            self._lock_owner = threading.get_ident()
+
     def _emit(self, event: str, *payload: Any) -> None:
         if self._lock_owner == threading.get_ident():
             self._pending_events.append((event, payload))
@@ -409,13 +438,19 @@ class BlockingWsSurrealConnection(
 
         A socket the peer dropped is replaced: by reconnecting, which replays
         the session, or - with reconnecting off - by a fresh one, since the
-        server forgot the session along with the old socket.
+        server forgot the session along with the old socket. While another
+        thread's reconnect is under way, this waits for it.
         """
+        if (
+            self._reconnecting
+            and self._reconnect_worker is not threading.current_thread()
+        ):
+            self._await_reconnect_locked(self._request_timeout())
         if self.socket is None:
             self._open_locked()
         elif self.socket.state is not State.OPEN and not self._reconnecting:
             if self._reconnect.enabled:
-                self._reconnect_locked()
+                self._reconnect_locked(self._request_timeout())
             else:
                 self._shut()
                 self._open_locked()
@@ -440,7 +475,7 @@ class BlockingWsSurrealConnection(
             # so it is spared when the reconnect breaks the open ones.
             unsent = self._streams.pop(message.id, None)
             try:
-                self._reconnect_locked()
+                self._reconnect_locked(self._request_timeout())
             finally:
                 if unsent is not None:
                     self._streams[message.id] = unsent
@@ -450,7 +485,9 @@ class BlockingWsSurrealConnection(
     def _ensure_open(self) -> None:
         """Open the socket if there is none, as the next request would."""
         with self._locked():
-            if self.socket is None:
+            if self._reconnecting:
+                self._await_reconnect_locked(self._request_timeout())
+            elif self.socket is None:
                 self._open_locked()
 
     def _open_locked(self) -> None:
@@ -547,46 +584,80 @@ class BlockingWsSurrealConnection(
         self._note_tokens(None, parse_auth_result(response["result"]))
         return True
 
-    def _reconnect_locked(self) -> None:
+    def _reconnect_locked(self, budget: float | None) -> None:
         """Replace a dropped socket and replay what the server forgot.
 
-        Runs on the thread that noticed, holding the lock - so other threads
-        wait for the replay rather than racing it. The first attempt is
-        immediate, since the drop is only noticed when the socket is next
+        The attempts run on a thread of their own, which holds the lock only
+        while it opens a socket and replays onto it, and sleeps out the backoff
+        without it. The caller - and any other thread that needs the socket
+        meanwhile - waits for the outcome with the lock released, for at most
+        *budget* seconds, so other threads wait for the replay rather than
+        racing it, and nobody waits past their own timeout. The first attempt
+        is immediate, since the drop is only noticed when the socket is next
         needed; later ones back off.
 
+        :raises TransportTimeoutError: if the connection is not back within
+            *budget*. The attempts carry on, and later requests wait for them.
         :raises ConnectionUnavailableError: once every attempt has failed. The
             session state is forgotten then, so the request after that starts
             on a fresh, unauthenticated session.
         """
-        self._set_status("reconnecting")
-        self._break_streams(
-            ConnectionUnavailableError(
-                "the connection dropped while a streaming query was open."
+        if not self._reconnecting:
+            self._set_status("reconnecting")
+            self._break_streams(
+                ConnectionUnavailableError(
+                    "the connection dropped while a streaming query was open."
+                )
             )
-        )
-        self._reconnecting = True
+            self._reconnecting = True
+            self._reconnect_failure = None
+            self._reconnect_done.clear()
+            self._reconnect_worker = threading.Thread(
+                target=self._run_reconnect, name="surrealdb-reconnect", daemon=True
+            )
+            self._reconnect_worker.start()
+        self._await_reconnect_locked(budget)
+
+    def _run_reconnect(self) -> None:
+        """Make the reconnect attempts, on the thread `_reconnect_locked` starts."""
         attempt = 0
         try:
-            while True:
+            while self._reconnect.allows(attempt + 1):
                 attempt += 1
-                if not self._reconnect.allows(attempt):
-                    break
-                time.sleep(self._reconnect.delay(attempt))
-                self._drop_socket()
-                try:
-                    self.socket = self._connect_socket()
-                    self._handshake_locked()
-                    self._restore_locked()
-                except Exception as exc:
-                    logger.debug("reconnect attempt %d failed: %s", attempt, exc)
-                    self._emit("error", exc)
-                    continue
-                self._set_status("connected", self._server_version)
-                self._end_unmanaged_live()
-                return
+                if attempt > 1:
+                    time.sleep(self._reconnect.delay(attempt - 1))
+                with self._locked():
+                    if self._reconnect_once_locked(attempt):
+                        self._end_reconnect_locked(None)
+                        return
+            with self._locked():
+                self._end_reconnect_locked(self._give_up_locked(attempt))
         finally:
-            self._reconnecting = False
+            if self._reconnecting:
+                # Only reached if something above raised unexpectedly; the
+                # threads waiting on the outcome must not wait forever.
+                with self._locked():
+                    self._end_reconnect_locked(
+                        f"reconnecting to {self.raw_url} failed unexpectedly"
+                    )
+
+    def _reconnect_once_locked(self, attempt: int) -> bool:
+        """One attempt: a new socket, the handshake, then the replay."""
+        self._drop_socket()
+        try:
+            self.socket = self._connect_socket()
+            self._handshake_locked()
+            self._restore_locked()
+        except Exception as exc:
+            logger.debug("reconnect attempt %d failed: %s", attempt, exc)
+            self._emit("error", exc)
+            return False
+        self._set_status("connected", self._server_version)
+        self._end_unmanaged_live()
+        return True
+
+    def _give_up_locked(self, attempts: int) -> str:
+        """Stop reconnecting: end every subscription and forget the state."""
         self._drop_socket()
         # The next request opens a fresh socket that carries none of these
         # queries, so a subscriber still iterating would wait on it forever.
@@ -597,11 +668,36 @@ class BlockingWsSurrealConnection(
         self._live_tracker.ended()
         error = ConnectionUnavailableError(
             f"the connection to {self.raw_url} dropped and could not be "
-            f"re-established after {attempt - 1} attempt(s)"
+            f"re-established after {attempts} attempt(s)"
         )
         self._set_status("disconnected")
         self._emit("error", error)
-        raise error
+        return str(error)
+
+    def _end_reconnect_locked(self, failure: str | None) -> None:
+        self._reconnect_failure = failure
+        self._reconnecting = False
+        self._reconnect_worker = None
+        self._reconnect_done.set()
+
+    def _await_reconnect_locked(self, budget: float | None) -> None:
+        """Wait, with the lock released, for the reconnect under way to end.
+
+        :raises TransportTimeoutError: if it has not ended within *budget*.
+        :raises ConnectionUnavailableError: if it ended by giving up.
+        """
+        deadline = None if budget is None else time.monotonic() + budget
+        while self._reconnecting:
+            remaining = None if deadline is None else deadline - time.monotonic()
+            if remaining is not None and remaining <= 0:
+                raise TransportTimeoutError(
+                    f"timed out waiting for the connection to {self.raw_url} to "
+                    f"be re-established: not back {describe(budget)}"
+                )
+            with self._released():
+                self._reconnect_done.wait(remaining)
+        if self._reconnect_failure is not None:
+            raise ConnectionUnavailableError(self._reconnect_failure)
 
     def _end_unmanaged_live(self) -> None:
         """Break the subscriptions a reconnect did not restart.
@@ -2312,6 +2408,11 @@ class BlockingWsSurrealConnection(
                 # between reads to keep concurrent RPCs responsive.
                 response: dict[str, Any] | None = None
                 with self._locked():
+                    if self._reconnecting:
+                        # Another thread noticed the drop first. This query
+                        # comes back with its replay, or ends if it cannot.
+                        self._await_reconnect_locked(None)
+                        continue
                     if self.socket is None:
                         raise ConnectionUnavailableError(
                             "WebSocket connection is not established."
@@ -2326,8 +2427,9 @@ class BlockingWsSurrealConnection(
                             continue
                         if self._reconnect.enabled and suid in self._registry.live:
                             # Replays this query under a new server-side id
-                            # that still routes to `suid`; carry on reading.
-                            self._reconnect_locked()
+                            # that still routes to `suid`; carry on reading. A
+                            # subscriber has no request timeout to keep to.
+                            self._reconnect_locked(None)
                             continue
                         logger.warning("Live subscription socket closed: %s", exc)
                         raise ConnectionUnavailableError(
