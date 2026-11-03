@@ -519,6 +519,15 @@ class GeometryMultiPolygon(Geometry):
         return hash(_hashable(self.get_coordinates()))
 
 
+def _collection_member(geometry: Geometry) -> str:
+    """A geometry as it appears inside a collection's ``geometries`` array.
+    Points render as GeoJSON objects there, because SurrealDB 3.x reads a
+    collection with a ``(longitude, latitude)`` member as a plain object."""
+    if isinstance(geometry, GeometryPoint):
+        return f"{{ type: 'Point', coordinates: {_coord_pair(geometry)} }}"
+    return str(geometry)
+
+
 @dataclass
 class GeometryCollection:
     """
@@ -539,13 +548,14 @@ class GeometryCollection:
     def __str__(self) -> str:
         """
         Renders the collection as a valid SurrealQL geometry literal, e.g.
-        ``{ type: 'GeometryCollection', geometries: [(1.0, 2.0), ...] }``.
-        Nested geometries render recursively via their own ``__str__``.
+        ``{ type: 'GeometryCollection', geometries: [{ type: 'Point', coordinates: [1.0, 2.0] }, ...] }``.
+        Point members render as GeoJSON objects; other nested geometries
+        render recursively via their own ``__str__``.
 
         Returns:
             The SurrealQL string representation of the collection.
         """
-        geometries = ", ".join(str(geo) for geo in self.geometries)
+        geometries = ", ".join(_collection_member(geo) for geo in self.geometries)
         return f"{{ type: 'GeometryCollection', geometries: [{geometries}] }}"
 
     def __eq__(self, other: object) -> bool:
