@@ -1119,6 +1119,9 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         """
         if url is not None:
             self._forget_server_version()
+            # The new server may not read `cbor.2`; it says so by answering in
+            # it, from the version request on.
+            self._v2 = False
             # Credentials belong to the server that issued them: none is sent
             # to the new one, and ``auth=`` is applied there afresh.
             self.token = None

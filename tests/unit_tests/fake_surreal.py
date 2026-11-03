@@ -73,6 +73,7 @@ class Call:
     params: Any
     session: Any
     token: str | None = None
+    content_type: str | None = None
 
 
 Handler = Callable[[Call], Any]
@@ -120,7 +121,13 @@ class _Scripted:
             return [{"status": "OK", "result": [], "time": "0ms"}]
         return None
 
-    def _answer(self, raw: bytes, socket: int, token: str | None = None) -> bytes:
+    def _answer(
+        self,
+        raw: bytes,
+        socket: int,
+        token: str | None = None,
+        content_type: str | None = None,
+    ) -> bytes:
         request = decode(raw)
         call = Call(
             socket,
@@ -128,6 +135,7 @@ class _Scripted:
             request.get("params"),
             request.get("session"),
             token,
+            content_type,
         )
         self.calls.append(call)
         handler = self.handlers.get(call.method, self.default)
@@ -224,7 +232,8 @@ class FakeSurreal(_Scripted):
 class FakeSurrealHttp(_Scripted):
     """A fake server answering ``POST /rpc`` in plain ``cbor``.
 
-    Each call's ``token`` is the bearer token the request carried, if any.
+    Each call's ``token`` is the bearer token the request carried, if any, and
+    its ``content_type`` the format the request was sent in.
     """
 
     def __init__(self, version: str = "surrealdb-3.0.0") -> None:
@@ -240,7 +249,8 @@ class FakeSurrealHttp(_Scripted):
                 body = self.rfile.read(int(self.headers["Content-Length"]))
                 bearer = self.headers.get("Authorization", "")
                 token = bearer.removeprefix("Bearer ") or None
-                reply = fake._answer(body, 0, token)
+                kind = self.headers.get("Content-Type")
+                reply = fake._answer(body, 0, token, kind)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/cbor")
                 self.send_header("Content-Length", str(len(reply)))
