@@ -155,11 +155,14 @@ after 30 seconds unless you set `timeout=`.
   authentication, every session from `new_session()`, and every live query.
   A live query is started again under a new server-side id, and its
   notifications keep arriving on the subscription the caller already holds,
-  with the original id. A request in flight when the socket dropped fails with
-  `ConnectionUnavailableError` rather than being sent twice; one made while the
-  async connection is reconnecting waits for the replay. The blocking
-  connection has no background reader, so it reconnects when the next request
-  or live subscription uses the socket.
+  with the original id. It is started again in the namespace and database it
+  was first started in, even if its session has selected others since; if the
+  session has since signed in as someone else, the subscription ends with
+  `ConnectionUnavailableError` instead. A request in flight when the socket
+  dropped fails with `ConnectionUnavailableError` rather than being sent twice;
+  one made while the async connection is reconnecting waits for the replay. The
+  blocking connection has no background reader, so it reconnects when the next
+  request or live subscription uses the socket.
 
   On by default. `reconnect=False` turns it off, on the connection classes and
   on `Surreal`/`AsyncSurreal`; `reconnect=ReconnectOptions(attempts=...,

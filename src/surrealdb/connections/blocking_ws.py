@@ -64,6 +64,7 @@ from surrealdb.connections.reconnect import (
     SessionRegistry,
     SessionState,
     SessionTrackingMixin,
+    not_restarted,
 )
 from surrealdb.connections.server_version import ServerVersionMixin, asks_for_refresh
 from surrealdb.connections.sync_template import SyncTemplate
@@ -654,23 +655,41 @@ class BlockingWsSurrealConnection(
         return True
 
     def _restore_live_locked(self, live: LiveQuery) -> None:
+        if self._live_identity_changed(live):
+            self._emit("error", not_restarted(live))
+            self._break_live(live)
+            return
+        selection = self._live_selection(live)
         kwargs: dict[str, Any] = {"table": live.table, "diff": live.diff}
         if live.session_id is not None:
             kwargs["session"] = live.session_id
         try:
+            if selection is not None:
+                self._send_locked(
+                    selection[0], "re-selecting a live query's namespace and database"
+                )
             response = self._send_locked(
                 RequestMessage(RequestMethod.LIVE, **kwargs), "restarting a live query"
             )
             self.check_response_for_result(response, "restarting a live query")
+            restarted: UUID | ServerError = UUID(str(response["result"]))
         except ServerError as exc:
-            self._emit("error", exc)
-            logical = str(live.logical)
-            self._registry.drop_live(logical)
-            self._live_tracker.ended(logical)
-            for notifications in self.live_queues.get(logical, []):
-                notifications.put(_LIVE_BROKEN_SENTINEL)
+            restarted = exc
+        if selection is not None:
+            self._send_locked(selection[1], "re-selecting the namespace and database")
+        if isinstance(restarted, ServerError):
+            self._emit("error", restarted)
+            self._break_live(live)
             return
-        self._registry.move_live(live, UUID(str(response["result"])))
+        self._registry.move_live(live, restarted)
+
+    def _break_live(self, live: LiveQuery) -> None:
+        """Stop tracking a live query a reconnect could not restart."""
+        logical = str(live.logical)
+        self._registry.drop_live(logical)
+        self._live_tracker.ended(logical)
+        for notifications in self.live_queues.get(logical, []):
+            notifications.put(_LIVE_BROKEN_SENTINEL)
 
     def _handshake_locked(self) -> None:
         """Ask a freshly opened socket's server for its version."""
@@ -2123,9 +2142,7 @@ class BlockingWsSurrealConnection(
             response = self._send(message, "live")
             self.check_response_for_result(response, "live")
             live_id = UUID(str(response["result"]))
-            self._registry.add_live(
-                LiveQuery(live_id, live_id, table, diff, session_id)
-            )
+            self._track_live(live_id, table, diff, session_id)
         subscription = LiveSubscription(live_id, self, session_id, managed=True)
         self._live_tracker.add(subscription)
         # Listening from now, so nothing that changes before the caller starts

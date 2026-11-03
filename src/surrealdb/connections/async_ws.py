@@ -64,6 +64,7 @@ from surrealdb.connections.reconnect import (
     SessionRegistry,
     SessionState,
     SessionTrackingMixin,
+    not_restarted,
 )
 from surrealdb.connections.server_version import ServerVersionMixin, asks_for_refresh
 from surrealdb.connections.timeouts import (
@@ -937,19 +938,33 @@ class AsyncWsSurrealConnection(
         return True
 
     async def _restore_live(self, live: LiveQuery) -> None:
+        if self._live_identity_changed(live):
+            self._emit("error", not_restarted(live))
+            self._end_live(str(live.logical), _LIVE_QUEUE_BROKEN)
+            return
+        selection = self._live_selection(live)
         kwargs: dict[str, Any] = {"table": live.table, "diff": live.diff}
         if live.session_id is not None:
             kwargs["session"] = live.session_id
         try:
+            if selection is not None:
+                await self._request(
+                    selection[0], "re-selecting a live query's namespace and database"
+                )
             response = await self._request(
                 RequestMessage(RequestMethod.LIVE, **kwargs), "restarting a live query"
             )
             self.check_response_for_result(response, "restarting a live query")
+            restarted: UUID | ServerError = UUID(str(response["result"]))
         except ServerError as exc:
-            self._emit("error", exc)
+            restarted = exc
+        if selection is not None:
+            await self._request(selection[1], "re-selecting the namespace and database")
+        if isinstance(restarted, ServerError):
+            self._emit("error", restarted)
             self._end_live(str(live.logical), _LIVE_QUEUE_BROKEN)
             return
-        self._registry.move_live(live, UUID(str(response["result"])))
+        self._registry.move_live(live, restarted)
 
     def _end_session_live(self, session_id: UUID | None) -> None:
         """End the live queries the server dropped with *session_id*'s state."""
@@ -2263,7 +2278,7 @@ class AsyncWsSurrealConnection(
         assert uuid not in self.live_queues
         self.live_queues[str(uuid)] = []
         live_id = UUID(str(uuid))
-        self._registry.add_live(LiveQuery(live_id, live_id, table, diff, session_id))
+        self._track_live(live_id, table, diff, session_id)
         subscription = AsyncLiveSubscription(live_id, self, session_id, managed=True)
         self._live_tracker.add(subscription)
         # Listening from now, so nothing that changes before the caller starts

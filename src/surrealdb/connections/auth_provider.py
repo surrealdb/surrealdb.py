@@ -51,6 +51,9 @@ SENT_WITHOUT_RENEWAL = frozenset(
     {RequestMethod.VERSION, RequestMethod.REFRESH, RequestMethod.REVOKE}
 )
 
+# The claims that say who a token signs in as. Renewing a token keeps them.
+_IDENTITY_CLAIMS = ("NS", "DB", "AC", "ID")
+
 
 def check_auth_provider(provider: object) -> None:
     """Refuse an ``auth=`` the connection would not know how to apply."""
@@ -113,3 +116,16 @@ def renewal_due(token: str | None) -> bool:
     """Whether *token* should be renewed now."""
     when = renew_at(token)
     return when is not None and time.time() >= when
+
+
+def token_identity(token: str | None) -> tuple[object, ...] | None:
+    """Who *token* signs in as, or ``None`` for no token at all.
+
+    Read from the token's ``NS``, ``DB``, ``AC`` and ``ID`` claims, which a
+    renewed token keeps, so renewing does not count as signing in as someone
+    else. Tokens whose claims cannot be read all count as the same identity.
+    """
+    if token is None:
+        return None
+    claims = _claims(token) or {}
+    return tuple(claims.get(name) for name in _IDENTITY_CLAIMS)

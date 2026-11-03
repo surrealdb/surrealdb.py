@@ -10,10 +10,14 @@ Once a new socket is open, the connection replays what the server forgot with
 the old one: for the root session and every session from ``new_session()``,
 the selected namespace and database, the variables from ``let``, and the
 authentication; then every live query started with ``live()``, under a new
-server-side id that the original id keeps routing to. A request that was in
-flight when the socket dropped fails with ``ConnectionUnavailableError``
-rather than being sent again, since it may already have run; a request made
-while reconnecting waits for the replay to finish first.
+server-side id that the original id keeps routing to. A live query is started
+again in the namespace and database it was first started in, even if its
+session has selected others since; one whose session is no longer signed in
+as it was then is ended instead, rather than started again as someone else.
+A request that was in flight when the socket dropped fails with
+``ConnectionUnavailableError`` rather than being sent again, since it may
+already have run; a request made while reconnecting waits for the replay to
+finish first.
 """
 
 import copy
@@ -22,8 +26,12 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 from uuid import UUID
 
+from surrealdb.connections.auth_provider import token_identity
 from surrealdb.connections.events import EventsMixin
 from surrealdb.data.types.null import NullType
+from surrealdb.errors import ConnectionUnavailableError
+from surrealdb.request_message.message import RequestMessage
+from surrealdb.request_message.methods import RequestMethod
 from surrealdb.types import Tokens, Value
 
 
@@ -128,7 +136,9 @@ class LiveQuery:
 
     ``logical`` is the id the caller was given and keeps using; ``current`` is
     the id the server knows it by on the socket in use, which changes each
-    time the query is started again.
+    time the query is started again. ``namespace``, ``database`` and
+    ``identity`` are what its session had selected and was signed in as when
+    it started, which the server bound the query to.
     """
 
     logical: UUID
@@ -136,6 +146,17 @@ class LiveQuery:
     table: Any
     diff: bool
     session_id: UUID | None
+    namespace: str | None = None
+    database: str | None = None
+    identity: tuple[object, ...] | None = None
+
+
+def not_restarted(live: LiveQuery) -> ConnectionUnavailableError:
+    """The error for a live query a reconnect will not start again."""
+    return ConnectionUnavailableError(
+        f"live query {live.logical} was not restarted after reconnecting: its "
+        "session is no longer signed in as it was when the query started"
+    )
 
 
 class SessionRegistry:
@@ -285,6 +306,59 @@ class SessionTrackingMixin(EventsMixin):
         if held.access is not None:
             pair["access"] = held.access
         return pair
+
+    def _track_live(
+        self, live_id: UUID, table: Any, diff: bool, session_id: UUID | None
+    ) -> None:
+        """Record a live query the server started, so a reconnect restarts it."""
+        state = self._registry.state(session_id)
+        self._registry.add_live(
+            LiveQuery(
+                live_id,
+                live_id,
+                table,
+                diff,
+                session_id,
+                state.namespace,
+                state.database,
+                token_identity(state.access),
+            )
+        )
+
+    def _live_identity_changed(self, live: LiveQuery) -> bool:
+        """Whether *live*'s session is no longer signed in as it was when the
+        query started, so restarting it would run it as someone else."""
+        state = self._registry.find(live.session_id)
+        return state is None or token_identity(state.access) != live.identity
+
+    def _live_selection(
+        self, live: LiveQuery
+    ) -> tuple[RequestMessage, RequestMessage] | None:
+        """The ``use`` requests to restart *live* between, if its session has
+        selected another namespace or database since the query started: one
+        selecting the query's, then one selecting the session's own again."""
+        state = self._registry.find(live.session_id)
+        started = (live.namespace, live.database)
+        if state is None or started in (
+            (None, None),
+            (state.namespace, state.database),
+        ):
+            return None
+        scope: dict[str, Any] = {}
+        if live.session_id is not None:
+            scope["session"] = live.session_id
+        into = RequestMessage(
+            RequestMethod.USE, namespace=live.namespace, database=live.database, **scope
+        )
+        # `None` keeps what is selected, so one the session has cleared since
+        # has to be cleared again with `Null`.
+        back = RequestMessage(
+            RequestMethod.USE,
+            namespace=NullType() if state.namespace is None else state.namespace,
+            database=NullType() if state.database is None else state.database,
+            **scope,
+        )
+        return into, back
 
     def _note_let(self, session_id: UUID | None, key: str, value: Value) -> None:
         # A copy, so a caller mutating the value afterwards does not change
