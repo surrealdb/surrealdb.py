@@ -9,6 +9,7 @@ import time
 import uuid
 import weakref
 from collections.abc import Generator, Sequence
+from contextlib import AbstractContextManager
 from types import TracebackType
 from typing import Any, overload
 from uuid import UUID
@@ -29,6 +30,13 @@ from surrealdb.connections.builders import (
 )
 from surrealdb.connections.files import BlockingFiles
 from surrealdb.connections.sync_template import SyncTemplate
+from surrealdb.connections.timeouts import (
+    DEFAULT_TIMEOUT,
+    check_timeout,
+    describe,
+    effective_timeout,
+    scoped_timeout,
+)
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import (
     AUTH_FALLBACK_QUERY,
@@ -77,13 +85,6 @@ _LIVE_KILLED = "KILLED"
 # generator ends without waiting for a server notification. 2.x never sends one.
 _LIVE_KILLED_SENTINEL: dict[str, Any] = {"action": _LIVE_KILLED, "id": None}
 
-# Upper bound on how long a single RPC waits for its reply. Without it the
-# receive loop below blocks forever if the reply never arrives - which it does
-# not when the server answers with a protocol-level error, since those carry no
-# `id` to correlate. Matches the 30s total the HTTP transports give aiohttp and
-# requests.
-_RPC_RECV_TIMEOUT = 30.0
-
 
 def _release_live_queue(
     live_queues: dict[str, list["queue.Queue[dict[str, Any]]"]],
@@ -120,6 +121,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         streaming: bool = True,
         ping_interval: float | None = 30.0,
         ping_timeout: float | None = 10.0,
+        timeout: float | None = DEFAULT_TIMEOUT,
     ) -> None:
         """
         The constructor for the BlockingWsSurrealConnection class.
@@ -135,11 +137,15 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             connection is considered dead and closed, or ``None`` to wait
             indefinitely. Defaults to 10, so a gone peer is noticed within
             roughly ``ping_interval + ping_timeout``.
+        :param timeout: Seconds to wait for each reply, or ``None`` to wait
+            indefinitely. Defaults to 30. Override it for a block of requests
+            with :meth:`timeout`.
         """
         self.url: Url = Url(url)
         self.raw_url: str = f"{self.url.raw_url}/rpc"
         self.host: str | None = self.url.hostname
         self.port: int | None = self.url.port
+        self._timeout: float | None = check_timeout("timeout", timeout)
         self.id: str = str(uuid.uuid4())
         self.token: str | None = None
         self.socket: ClientConnection | None = None
@@ -175,6 +181,23 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         # The driver-level switch, distinct from what the server turned out to
         # support.
         self._streaming_enabled: bool = streaming
+
+    def timeout(self, seconds: float | None) -> AbstractContextManager[None]:
+        """Wait *seconds* for each reply to a request made inside the block.
+
+        Overrides the connection's ``timeout`` for the code inside the ``with``
+        block only, on the thread that runs it, so a slow import or a long
+        report can wait longer without changing the default for everything
+        else on the connection. ``None`` waits indefinitely::
+
+            with db.timeout(300):
+                db.query("SELECT * FROM big_table")
+        """
+        return scoped_timeout(self, seconds)
+
+    def _request_timeout(self) -> float | None:
+        """The reply deadline for a request made from the current context."""
+        return effective_timeout(self, self._timeout)
 
     def _connect_socket(self) -> ClientConnection:
         """Open the websocket, mapping transport failures to SDK errors."""
@@ -265,12 +288,15 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             # our reply; route those to their live queue (if a subscriber is
             # registered, else drop) and keep reading, so a notification is
             # never returned as an RPC result.
+            budget = self._request_timeout()
             try:
                 self.socket.send(message.WS_CBOR_DESCRIPTOR)
-                deadline = time.monotonic() + _RPC_RECV_TIMEOUT
+                deadline = None if budget is None else time.monotonic() + budget
                 while True:
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0:
+                    remaining = (
+                        None if deadline is None else deadline - time.monotonic()
+                    )
+                    if remaining is not None and remaining <= 0:
                         # The request was sent, so a reply is still coming.
                         # Remember it, or the next call reads this reply,
                         # mismatches the id and fails - and so does every call
@@ -278,7 +304,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                         self._abandoned.add(message.id)
                         raise TransportTimeoutError(
                             f"timed out while {process} on {self.raw_url}: no "
-                            f"reply within {_RPC_RECV_TIMEOUT}s"
+                            f"reply {describe(budget)}"
                         )
                     data = self.socket.recv(timeout=remaining)
                     response = self.decode_response(
@@ -306,7 +332,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 # waiting in the socket for the next caller to trip over.
                 self._abandoned.add(message.id)
                 raise TransportTimeoutError(
-                    f"timed out while {process} on {self.raw_url}: {exc}"
+                    f"timed out while {process} on {self.raw_url}: no reply "
+                    f"{describe(budget)}"
                 ) from exc
             except (WebSocketException, OSError) as exc:
                 raise ConnectionUnavailableError(
@@ -565,7 +592,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         """
         return SyncStreamOps(
             registry=self._streams,
-            open_timeout=_RPC_RECV_TIMEOUT,
+            request_timeout=self._request_timeout,
             open=self._stream_open,
             release=self._stream_release,
             send=self._stream_send,
@@ -1744,6 +1771,10 @@ class BlockingSurrealSession:
         self._connection = connection
         self._session_id = session_id
 
+    def timeout(self, seconds: float | None) -> AbstractContextManager[None]:
+        """Wait *seconds* for each reply inside the block - see the connection's."""
+        return self._connection.timeout(seconds)
+
     def use(self, namespace: str, database: str) -> None:
         self._connection.use(namespace, database, session_id=self._session_id)
 
@@ -2020,6 +2051,10 @@ class BlockingSurrealTransaction:
         self._connection = connection
         self._session_id = session_id
         self._txn_id = txn_id
+
+    def timeout(self, seconds: float | None) -> AbstractContextManager[None]:
+        """Wait *seconds* for each reply inside the block - see the connection's."""
+        return self._connection.timeout(seconds)
 
     def query(
         self,

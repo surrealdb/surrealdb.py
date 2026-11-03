@@ -295,6 +295,7 @@ def Surreal(
     streaming: bool = True,
     ping_interval: float | None = 30.0,
     ping_timeout: float | None = 10.0,
+    timeout: float | None = 30.0,
 ) -> BlockingSurrealConnection:
     """Open a connection to *url*, picking the transport from its scheme.
 
@@ -316,6 +317,10 @@ def Surreal(
             is treated as dead, or ``None`` to wait indefinitely. Defaults to 10,
             so a peer that has gone away is noticed within roughly
             ``ping_interval + ping_timeout``.
+        timeout: Seconds to wait for each request's reply, or ``None`` to wait
+            indefinitely. Defaults to 30. ``with db.timeout(seconds):`` overrides
+            it for the requests made inside the block. Ignored by the embedded
+            engine, whose requests never leave the process.
     """
     constructed_url = Url(url)
     if constructed_url.scheme in _EMBEDDED_SCHEMES:
@@ -326,7 +331,7 @@ def Surreal(
         constructed_url.scheme == UrlScheme.HTTP
         or constructed_url.scheme == UrlScheme.HTTPS
     ):
-        return BlockingHttpSurrealConnection(url=url)
+        return BlockingHttpSurrealConnection(url=url, timeout=timeout)
     elif (
         constructed_url.scheme == UrlScheme.WS
         or constructed_url.scheme == UrlScheme.WSS
@@ -336,6 +341,7 @@ def Surreal(
             streaming=streaming,
             ping_interval=ping_interval,
             ping_timeout=ping_timeout,
+            timeout=timeout,
         )
     else:
         raise UnsupportedEngineError(url)
@@ -347,6 +353,7 @@ def AsyncSurreal(
     streaming: bool = True,
     ping_interval: float | None = 30.0,
     ping_timeout: float | None = 10.0,
+    timeout: float | None = 30.0,
 ) -> AsyncSurrealConnection:
     """Open a connection to *url*, picking the transport from its scheme.
 
@@ -368,6 +375,10 @@ def AsyncSurreal(
             is treated as dead, or ``None`` to wait indefinitely. Defaults to 10,
             so a peer that has gone away is noticed within roughly
             ``ping_interval + ping_timeout``.
+        timeout: Seconds to wait for each request's reply, or ``None`` to wait
+            indefinitely. Defaults to 30. ``with db.timeout(seconds):`` overrides
+            it for the requests made inside the block. Ignored by the embedded
+            engine, whose requests never leave the process.
     """
     constructed_url = Url(url)
     if constructed_url.scheme in _EMBEDDED_SCHEMES:
@@ -378,7 +389,7 @@ def AsyncSurreal(
         constructed_url.scheme == UrlScheme.HTTP
         or constructed_url.scheme == UrlScheme.HTTPS
     ):
-        return AsyncHttpSurrealConnection(url=url)
+        return AsyncHttpSurrealConnection(url=url, timeout=timeout)
     elif (
         constructed_url.scheme == UrlScheme.WS
         or constructed_url.scheme == UrlScheme.WSS
@@ -388,6 +399,7 @@ def AsyncSurreal(
             streaming=streaming,
             ping_interval=ping_interval,
             ping_timeout=ping_timeout,
+            timeout=timeout,
         )
     else:
         raise UnsupportedEngineError(url)

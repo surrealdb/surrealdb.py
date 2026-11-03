@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Request timeouts are configurable. Every request waited at most 30 seconds
+  for its reply, and that was hardcoded in all four remote transports, so a
+  query that legitimately ran longer could not finish. `timeout=` on the
+  connection classes and on `Surreal`/`AsyncSurreal` sets the default, in
+  seconds, and `None` waits indefinitely. `with db.timeout(seconds):` overrides
+  it for the requests made inside the block - on sessions and transactions too
+  - without touching anything else using the connection:
+
+  ```python
+  db = AsyncSurreal("ws://localhost:8000", timeout=10)
+  with db.timeout(300):
+      await db.query("SELECT * FROM big_table")
+  ```
+
+  The override is held in a context variable, so it follows `await` and is
+  inherited by tasks started inside the block, but never leaks into a
+  concurrent task or another thread. The default stays at 30 seconds. The
+  embedded engine accepts `timeout()` and ignores it, since its requests never
+  leave the process.
+
 ## [3.0.0-beta.10] - 2026-10-08
 
 Upgrading from `3.0.0-beta.9`: nothing changes at runtime. The one thing to
