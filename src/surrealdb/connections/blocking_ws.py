@@ -28,6 +28,8 @@ from surrealdb.connections.api import (
     statement_results,
 )
 from surrealdb.connections.auth_provider import (
+    RENEW_RETRY,
+    RENEW_RETRY_MAX,
     SENT_WITHOUT_RENEWAL,
     AuthCredentials,
     AuthProvider,
@@ -224,6 +226,11 @@ class BlockingWsSurrealConnection(
         self._auth_provider: AuthProvider | None = auth
         self._renew_access = renew_access
         self._renewing = False
+        # See `_renew_locked`: a token renewing handed over already due, and
+        # when a failed renewal may be tried again.
+        self._renewed_due: str | None = None
+        self._renew_retry = RENEW_RETRY
+        self._renew_retry_at = 0.0
         self._registry = SessionRegistry()
         self._init_events()
         # A reconnect under way runs on `_reconnect_worker`; `_reconnect_done`
@@ -543,9 +550,21 @@ class BlockingWsSurrealConnection(
             self._note_authenticated(None, token)
 
     def _renew_locked(self) -> None:
-        """Replace the access token before it expires, if it is about to."""
+        """Replace the access token before it expires, if it is about to.
+
+        A token that renewing hands over already due is not renewed again, as
+        renewing produced nothing newer; and a failed attempt is not tried
+        again before a delay that doubles each time, up to a bound - as on the
+        async transport. Either would otherwise repeat before every request.
+        """
         root = self._registry.root
-        if not self._renew_access or self._renewing or not renewal_due(root.access):
+        if (
+            not self._renew_access
+            or self._renewing
+            or root.access == self._renewed_due
+            or time.monotonic() < self._renew_retry_at
+            or not renewal_due(root.access)
+        ):
             return
         self._renewing = True
         try:
@@ -556,8 +575,13 @@ class BlockingWsSurrealConnection(
         except Exception as exc:
             logger.debug("renewing the access token failed: %s", exc)
             self._emit("error", exc)
+            self._renew_retry_at = time.monotonic() + self._renew_retry
+            self._renew_retry = min(self._renew_retry * 2, RENEW_RETRY_MAX)
+            return
         finally:
             self._renewing = False
+        self._renew_retry = RENEW_RETRY
+        self._renewed_due = root.access if renewal_due(root.access) else None
 
     def _renew_with_refresh_token_locked(self) -> bool:
         """Renew with the refresh token, if there is one the server can take.

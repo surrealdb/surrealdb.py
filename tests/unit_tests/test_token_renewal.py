@@ -174,3 +174,75 @@ def test_blocking_ws_a_refused_refresh_falls_back_to_auth(ws: FakeSurreal) -> No
         assert db.token == signins.issued[-1]
     finally:
         db.close()
+
+
+def test_blocking_http_a_due_token_is_not_renewed_before_every_request(
+    http: FakeSurrealHttp,
+) -> None:
+    http.respond("signin", lambda call: _due())
+    db = BlockingHttpSurrealConnection(http.url, auth=ROOT)
+    for n in range(5):
+        db.query(f"RETURN {n}").execute()
+    # The sign-in, then one renewal that produced nothing newer.
+    assert http.methods().count("signin") == 2
+
+
+async def test_async_http_a_due_token_is_not_renewed_before_every_request(
+    http: FakeSurrealHttp,
+) -> None:
+    http.respond("signin", lambda call: _due())
+    db = AsyncHttpSurrealConnection(http.url, auth=ROOT)
+    for n in range(5):
+        await db.query(f"RETURN {n}")
+    # The sign-in, then one renewal that produced nothing newer.
+    assert http.methods().count("signin") == 2
+
+
+def test_blocking_http_a_static_due_token_is_not_authenticated_again(
+    http: FakeSurrealHttp,
+) -> None:
+    db = BlockingHttpSurrealConnection(http.url, auth=_due())
+    for n in range(5):
+        db.query(f"RETURN {n}").execute()
+    assert http.methods().count("authenticate") == 1
+
+
+def test_blocking_ws_a_due_token_is_not_renewed_before_every_request(
+    ws: FakeSurreal,
+) -> None:
+    ws.respond("signin", lambda call: _due())
+    db = BlockingWsSurrealConnection(ws.url, auth=ROOT)
+    try:
+        db.connect()
+        for n in range(5):
+            db.query(f"RETURN {n}").execute()
+        # The sign-in, then one renewal that produced nothing newer.
+        assert ws.methods().count("signin") == 2
+    finally:
+        db.close()
+
+
+def test_blocking_ws_a_failed_renewal_waits_before_it_is_tried_again(
+    ws: FakeSurreal,
+) -> None:
+    asked = 0
+
+    def credentials() -> dict[str, Value]:
+        nonlocal asked
+        asked += 1
+        if asked > 1:
+            raise RuntimeError("the credential store is down")
+        return dict(ROOT)
+
+    ws.respond("signin", lambda call: _due())
+    db = BlockingWsSurrealConnection(ws.url, auth=credentials)
+    errors: list[BaseException] = []
+    db.subscribe("error", errors.append)
+    try:
+        db.connect()
+        for n in range(5):
+            db.query(f"RETURN {n}").execute()
+        assert asked == 2
+        assert sum(isinstance(error, RuntimeError) for error in errors) == 1
+    finally:
+        db.close()

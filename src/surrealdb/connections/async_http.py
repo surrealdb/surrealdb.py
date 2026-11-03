@@ -153,6 +153,9 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         # by the caller signing in or out - so that ``auth=`` is applied once,
         # not again after an explicit sign-out.
         self._auth_settled = False
+        # An access token that renewing handed over already due, so it is not
+        # renewed again before every request: renewing produced nothing newer.
+        self._renewed_due: str | None = None
         self._timeout: float | None = check_timeout("timeout", timeout)
         self.raw_url: str = self.url.raw_url
         self.host: str | None = self.url.hostname
@@ -366,7 +369,8 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
 
     def _authorisation_due(self) -> bool:
         first = self._auth_provider is not None and not self._auth_settled
-        return first or (self._renew_access and renewal_due(self.token))
+        renew = self._renew_access and self.token != self._renewed_due
+        return first or (renew and renewal_due(self.token))
 
     async def _authorise(self) -> None:
         """Apply ``auth=`` before the first request, and renew when due.
@@ -380,11 +384,14 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         async with self._auth_lock:
             if not self._authorisation_due():
                 return
+            renewing = renewal_due(self.token)
             reset = _AUTHORISING.set(self)
             try:
                 await self._apply_auth()
             finally:
                 _AUTHORISING.reset(reset)
+            if renewing:
+                self._renewed_due = self.token if renewal_due(self.token) else None
 
     async def _apply_auth(self) -> None:
         due = self._renew_access and renewal_due(self.token)
@@ -405,7 +412,11 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
                         return
                 else:
                     return
-        if self._auth_provider is None:
+        if self._auth_provider is None or (
+            due and not signs_in_afresh(self._auth_provider)
+        ):
+            # A token or Tokens given as they are holds nothing newer to
+            # renew with.
             return
         provided = await self._provided_credentials()
         if isinstance(provided, dict):
