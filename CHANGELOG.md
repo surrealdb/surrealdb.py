@@ -7,32 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- Request timeouts are configurable. Every request waited at most 30 seconds
-  for its reply, and that was hardcoded in all four remote transports, so a
-  query that legitimately ran longer could not finish. `timeout=` on the
-  connection classes and on `Surreal`/`AsyncSurreal` sets the default, in
-  seconds, and `None` waits indefinitely. `with db.timeout(seconds):` overrides
-  it for the requests made inside the block - on sessions and transactions too
-  - without touching anything else using the connection:
-
-  ```python
-  db = AsyncSurreal("ws://localhost:8000", timeout=10)
-  with db.timeout(300):
-      await db.query("SELECT * FROM big_table")
-  ```
-
-  The override is held in a context variable, so it follows `await` and is
-  inherited by tasks started inside the block, but never leaks into a
-  concurrent task or another thread. The default stays at 30 seconds. The
-  embedded engine accepts `timeout()` and ignores it, since its requests never
-  leave the process.
-
 ### Changed
 
 - **Breaking for on-disk embedded databases.** The `surrealdb-embedded`
-  extension now builds against `surrealdb-core` 4.0.0, up from 3.2.4, so
+  extension now builds against `surrealdb-core` 4.0.0, up from 3.3.5, so
   `mem://`, `file://` and `surrealkv://` connections run the SurrealDB 4.0
   engine. SurrealDB 4.0 refuses to open a `file://` or `surrealkv://` directory
   that a 3.x engine wrote: the connection raises `ConnectionUnavailableError`
@@ -56,6 +34,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   embedded engine, now work.
 - Building the extension from source needs Rust 1.95 or later, which a
   transitive dependency of `surrealdb-core` 4.0 requires.
+
+## [3.0.0-beta.11] - 2026-11-03
+
+Upgrading from `3.0.0-beta.10`: nothing to change. Requests still time out
+after 30 seconds unless you set `timeout=`.
+
+### Added
+
+- Request timeouts are configurable. Every request waited at most 30 seconds
+  for its reply, and that was hardcoded in all four remote transports, so a
+  query that legitimately ran longer could not finish. `timeout=` on the
+  connection classes and on `Surreal`/`AsyncSurreal` sets the default, in
+  seconds, and `None` waits indefinitely. `with db.timeout(seconds):` overrides
+  it for the requests made inside the block - on sessions and transactions too
+  - without touching anything else using the connection:
+
+  ```python
+  db = AsyncSurreal("ws://localhost:8000", timeout=10)
+  with db.timeout(300):
+      await db.query("SELECT * FROM big_table")
+  ```
+
+  The override is held in a context variable, so it follows `await` and is
+  inherited by tasks started inside the block, but never leaks into a
+  concurrent task or another thread. The default stays at 30 seconds. The
+  embedded engine accepts `timeout()` and ignores it, since its requests never
+  leave the process (#392).
+
+### Changed
+
+- The embedded extension builds against `tokio` 1.54.1 (from 1.53.2) and
+  `uuid` 1.29.0 (from 1.27.0). This affects the `surrealdb-embedded` wheel
+  only (#409).
+- The lockfile moved to `aiohttp` 3.14.5 (#407), `certifi` 2026.10.19 (#414),
+  `pydantic` 2.14.2 (#419) and `pydantic-core` 2.50.2 (#421). The minimums
+  declared in `pyproject.toml` are unchanged, so this changes the versions
+  that CI tests against, not what `pip install surrealdb` resolves.
+- The development tools moved to `maturin` 1.16.0, `mypy` 2.4.1, `pytest`
+  9.2.0, `pytest-asyncio` 1.4.1, `ruff` 0.17.3 and `types-requests`
+  2.33.0.20261030 (#422).
+- The CI and release workflows moved to `actions/setup-python` 7.1.0,
+  `actions/upload-artifact` 7.0.2, `actions/download-artifact` 8.0.2,
+  `astral-sh/setup-uv` 10.3.3 and `pypa/gh-action-pypi-publish` 1.14.3 (#415).
+
+### Fixed
+
+- A `GeometryCollection` that contains a point renders as a valid SurrealQL
+  literal. `str()` wrote each point member as `(longitude, latitude)`, and
+  SurrealDB 3.x reads a collection with such a member as a plain object, not
+  a geometry. Point members now render as GeoJSON objects
+  (`{ type: 'Point', coordinates: [1.0, 2.0] }`). Other members are unchanged
+  (#417).
 
 ## [3.0.0-beta.10] - 2026-10-08
 
@@ -823,7 +853,8 @@ Follow-up to `3.0.0-alpha.1` that finalises the v3 API surface and fixes a batch
 ### Added
 - Initial stable release of the SurrealDB Python client.
 
-[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.10...HEAD
+[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.11...HEAD
+[3.0.0-beta.11]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.10...v3.0.0-beta.11
 [3.0.0-beta.10]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.9...v3.0.0-beta.10
 [3.0.0-beta.9]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.8...v3.0.0-beta.9
 [3.0.0-beta.8]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.7...v3.0.0-beta.8
