@@ -8,6 +8,11 @@ this type. Over plain ``cbor`` (servers before 4.0) the server widens them, so
 an ``int``, a ``float`` or, for a ``u64`` above the signed 64-bit range, a
 ``Decimal`` is sent and read instead.
 
+An ``F16`` or ``F32`` is rounded to its width when it is made, as a cast to that
+width rounds it: ``F32(0.1)`` is the ``f32`` nearest to 0.1, which is
+0.10000000149011612. A value too large for the width is refused rather than
+made infinite.
+
 ``I8(5) == 5`` holds, as it does in SurrealDB; compare ``type()`` to tell them
 apart.
 """
@@ -96,13 +101,14 @@ class SizedFloat(float):
     FORMAT: ClassVar[str]
 
     def __new__(cls, value: SupportsFloat | SupportsIndex | str = 0.0) -> "SizedFloat":
-        instance = super().__new__(cls, value)
-        if not math.isnan(instance) and cls.narrowed(instance) != instance:
+        wide = float(value)
+        narrowed = cls.narrowed(wide)
+        if math.isinf(narrowed) and not math.isinf(wide):
             raise ValueError(
-                f"{float(instance)!r} cannot be held exactly by {cls.__name__}; "
-                f"pass a value {cls.__name__} can represent, or use a plain float"
+                f"{wide!r} is outside the {cls.__name__} range; use a plain "
+                "float, or F32 for a value too large for F16"
             )
-        return instance
+        return super().__new__(cls, narrowed)
 
     @classmethod
     def narrowed(cls, value: float) -> float:

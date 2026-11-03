@@ -7,6 +7,7 @@ SurrealDB's own tags, each with the payload its spec gives
 :class:`UnexpectedResponseError`.
 """
 
+import math
 import re
 import struct
 import uuid
@@ -283,10 +284,14 @@ class Decoder:
         floating = _SIZED_FLOATS[tag]
         if not isinstance(payload, float):
             _refuse(f"tag {tag} ({floating.__name__}) over {payload!r}, not a float")
-        try:
-            return floating(payload)
-        except ValueError as exc:
-            _refuse(str(exc))
+        # Made by rounding, but a value on the wire has to fit its width as it
+        # is: one that does not was never sent as that kind.
+        if not math.isnan(payload) and floating.narrowed(payload) != payload:
+            _refuse(
+                f"tag {tag} ({floating.__name__}) over {payload!r}, which "
+                f"{floating.__name__} cannot hold exactly"
+            )
+        return floating(payload)
 
 
 def _pair(value: Any, what: str) -> list[Any]:

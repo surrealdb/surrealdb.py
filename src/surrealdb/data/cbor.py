@@ -132,10 +132,13 @@ def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
 def tag_decoder(
     decoder: CBORDecoder | None, tag: CBORTag, shareable_index: int | None = None
 ) -> Any:
-    """The SurrealDB value for a tag cbor2 has already decoded, read as plain cbor."""
-    from surrealdb.cbor import dumps
+    """The SurrealDB value for a tag cbor2 has already decoded, read as plain cbor.
 
-    return decode(dumps(tag))
+    As a ``tag_hook``, the tags inside *tag* reach it already turned into the
+    SDK's types - the points of a line, the bounds of a range - so it is
+    written back out with :func:`encode`, which knows them, before it is read.
+    """
+    return decode(encode(tag))
 
 
 # SurrealDB stores integers as signed 64-bit. A Python int above the signed

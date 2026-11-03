@@ -1,5 +1,6 @@
 import decimal
 import importlib
+import io
 import time
 import uuid
 
@@ -15,7 +16,9 @@ from surrealdb.cbor import (
 )
 from surrealdb.data import cbor
 from surrealdb.data.types import constants
+from surrealdb.data.types.geometry import GeometryLine, GeometryPoint
 from surrealdb.data.types.null import Null
+from surrealdb.data.types.range import BoundExcluded, BoundIncluded, Range
 from surrealdb.errors import UnexpectedResponseError
 
 
@@ -208,3 +211,15 @@ def test_a_large_set_decodes_in_linear_time() -> None:
     decoded = cbor.decode(raw)
     assert time.perf_counter() - started < 1.0
     assert len(decoded) == 20_000
+
+
+def test_tag_decoder_reads_tags_whose_insides_are_already_decoded() -> None:
+    """As a cbor2 `tag_hook`, the points of a line and the bounds of a range
+    reach the hook as the SDK's own types. Written back out with plain `dumps`,
+    which does not know them, they raised `CBOREncodeTypeError`."""
+    line = GeometryLine(GeometryPoint(1.0, 2.0), GeometryPoint(3.0, 4.0))
+    hooked = CBORDecoder(io.BytesIO(cbor.encode(line)), tag_hook=cbor.tag_decoder)
+    assert hooked.decode() == line
+
+    bounds = CBORTag(constants.TAG_RANGE, [BoundIncluded(1), BoundExcluded(5)])
+    assert cbor.tag_decoder(None, bounds) == Range(BoundIncluded(1), BoundExcluded(5))
