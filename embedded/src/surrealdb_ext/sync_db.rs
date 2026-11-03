@@ -5,7 +5,8 @@ use std::sync::Mutex;
 use surrealdb_core::dbs::Session;
 use surrealdb_core::kvs::Datastore;
 use surrealdb_core::rpc::format::cbor;
-use surrealdb_core::rpc::{DbResponse, DbResult, RpcProtocol, Request};
+use surrealdb_core::rpc::RpcProtocol;
+use surrealdb_rpc::{DbResponse, DbResult, Request};
 use surrealdb_types::{HashMap, Value as PublicValue};
 use tokio::runtime::Runtime;
 use tokio::sync::RwLock;
@@ -72,7 +73,7 @@ impl SyncEmbeddedDB {
             ds.bootstrap().await.map_err(|e| {
                 PyErr::new::<PyRuntimeError, _>(format!("Failed to bootstrap datastore: {e}"))
             })?;
-            Ok::<Datastore, PyErr>(ds)
+            Ok::<Arc<Datastore>, PyErr>(ds)
         })?;
         // The embedded engine exposes a single implicit session: `attach`,
         // `detach` and client-side transactions all raise
@@ -95,7 +96,7 @@ impl SyncEmbeddedDB {
         Ok(SyncEmbeddedDB {
             runtime,
             inner: Mutex::new(Some(Arc::new(SyncEmbeddedDBInner {
-                kvs: Arc::new(kvs),
+                kvs,
                 sessions,
                 session_id,
             }))),
@@ -147,7 +148,7 @@ impl SyncEmbeddedDB {
         let result = self.runtime.block_on(async move {
             // Bound request nesting with the same knob the server feeds its
             // parsers (`SURREAL_MAX_OBJECT_PARSING_DEPTH`, default 100).
-            let recursion_limit = inner.kvs.config().max_object_parsing_depth as usize;
+            let recursion_limit = inner.kvs.parser_config().max_object_parsing_depth as usize;
             let value = cbor::decode(&data, recursion_limit).map_err(|e| {
                 PyErr::new::<PyValueError, _>(format!("Failed to decode CBOR request: {e}"))
             })?;
@@ -232,10 +233,6 @@ impl RpcProtocol for SyncEmbeddedDBInner {
         _namespace: Option<String>,
         _database: Option<String>,
     ) -> impl std::future::Future<Output = ()> + Send {
-        async {}
-    }
-
-    fn handle_kill(&self, _lqid: &Uuid) -> impl std::future::Future<Output = ()> + Send {
         async {}
     }
 
