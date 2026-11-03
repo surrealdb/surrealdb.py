@@ -421,9 +421,22 @@ def _set(value: Any) -> SurrealSet:
     if not isinstance(value, list):
         _refuse(f"tag 56 must carry an array, got {value!r}")
     unique: list[Any] = []
+    # Keyed by type as well, so that 1, 1.0 and True stay three members. A
+    # member that cannot be hashed - an object or an array - is compared with
+    # the other such members only, which keeps a large set linear.
+    hashed: set[tuple[type, Any]] = set()
+    unhashable: list[Any] = []
     for item in value:
-        if not any(_identical(item, seen) for seen in unique):
-            unique.append(item)
+        try:
+            key = (type(item), item)
+            if key in hashed:
+                continue
+            hashed.add(key)
+        except TypeError:
+            if any(_identical(item, seen) for seen in unhashable):
+                continue
+            unhashable.append(item)
+        unique.append(item)
     return SurrealSet(unique)
 
 

@@ -1,5 +1,6 @@
 import decimal
 import importlib
+import time
 import uuid
 
 import pytest
@@ -189,3 +190,21 @@ def test_uuid_tag_9_is_refused() -> None:
     raw = dumps(CBORTag(constants.TAG_UUID_STRING, str(uuid.uuid4())))
     with pytest.raises(UnexpectedResponseError, match="tag 9"):
         cbor.decode(raw)
+
+
+def test_a_set_loses_only_its_duplicates() -> None:
+    """Members equal in value but not in type are different members."""
+    members = [1, 1.0, True, "a", "a", 1, {"k": 1}, {"k": 1}, [2], [2], 2]
+    decoded = cbor.decode(dumps(CBORTag(constants.TAG_SET, members)))
+    assert decoded == [1, 1.0, True, "a", {"k": 1}, [2], 2]
+    assert [type(member) for member in decoded[:3]] == [int, float, bool]
+
+
+def test_a_large_set_decodes_in_linear_time() -> None:
+    """De-duplicating compared every member with every other: a set of 20,000
+    strings took ten seconds to decode, and a set of record ids twice that."""
+    raw = dumps(CBORTag(constants.TAG_SET, [f"member-{n}" for n in range(20_000)]))
+    started = time.perf_counter()
+    decoded = cbor.decode(raw)
+    assert time.perf_counter() - started < 1.0
+    assert len(decoded) == 20_000
