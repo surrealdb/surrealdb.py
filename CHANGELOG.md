@@ -36,6 +36,9 @@ after 30 seconds unless you set `timeout=`.
 
 ### Changed
 
+- The embedded extension builds against `surrealdb-core` and `surrealdb-types`
+  3.3.5 (from 3.2.4), so `surrealdb-embedded` now runs the 3.3.5 engine. This
+  affects the `surrealdb-embedded` wheel only (#418, #420).
 - The embedded extension builds against `tokio` 1.54.1 (from 1.53.2) and
   `uuid` 1.29.0 (from 1.27.0). This affects the `surrealdb-embedded` wheel
   only (#409).
@@ -58,6 +61,11 @@ after 30 seconds unless you set `timeout=`.
   a geometry. Point members now render as GeoJSON objects
   (`{ type: 'Point', coordinates: [1.0, 2.0] }`). Other members are unchanged
   (#417).
+- A `PreciseDatetime` keeps its nanoseconds through `copy.copy`,
+  `copy.deepcopy` and `pickle`. All three went through `datetime`'s own
+  reduction, which knows nothing of the extra field, so the copy came back
+  with `nanosecond == 0` and writing it back lost the last three digits of the
+  timestamp (#410).
 
 ## [3.0.0-beta.10] - 2026-10-08
 
