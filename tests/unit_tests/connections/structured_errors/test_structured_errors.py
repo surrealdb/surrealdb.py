@@ -79,7 +79,9 @@ class TestStructuredServerErrors:
         assert result["status"] == "ERR"
         err = parse_query_error(result)
         assert isinstance(err, ServerError)
-        assert err.kind == "Internal"
+        # 4.0 reports a field that will not coerce as a validation error.
+        major = int(conn.version().removeprefix("surrealdb-").split(".")[0])
+        assert err.kind == ("Validation" if major >= 4 else "Internal")
         assert err.code == 0
         assert (
             "age" in str(err)

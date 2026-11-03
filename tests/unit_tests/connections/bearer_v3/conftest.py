@@ -57,6 +57,7 @@ def bearer_v3_root_ws(server_urls: dict[str, str]) -> Iterator[dict[str, Any]]:
             "namespace": namespace,
             "database_name": database_name,
             "connection": connection,
+            "version": version,
         }
     finally:
         if connection.socket:
