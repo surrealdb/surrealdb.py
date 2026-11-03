@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from contextlib import AbstractContextManager, nullcontext
 from typing import Any, overload
 from uuid import UUID
 
@@ -9,12 +10,23 @@ from surrealdb.connections.builders import (
     SyncInsertBuilder,
     SyncQueryBuilder,
 )
+from surrealdb.connections.timeouts import check_timeout
 from surrealdb.data.types.record_id import RecordID, RecordIdType
 from surrealdb.data.types.table import Table
 from surrealdb.types import Tokens, Value
 
 
 class SyncTemplate:
+    def timeout(self, seconds: float | None) -> AbstractContextManager[None]:
+        """Wait *seconds* for each reply to a request made inside the block.
+
+        Remote connections override this. For the embedded engine requests
+        never leave the process, so there is nothing to bound and the block
+        runs unchanged.
+        """
+        check_timeout("timeout", seconds)
+        return nullcontext()
+
     def connect(self, url: str | None = None) -> None:
         """Connects to a local or remote database endpoint.
 
