@@ -219,3 +219,34 @@ def test_copy_preserves_nanoseconds(
     assert restored == value
     assert restored.nanosecond == nanosecond
     assert encode(restored) == encode(value)
+
+
+_BETA_10_PICKLES: dict[int, bytes] = {
+    0: b"csurrealdb.data.types.datetime\nPreciseDatetime\np0\n(c_codecs\nencode\np1\n(V\x07\xea\x01\x01\x0c\x1e-\x01\xe2@\np2\nVlatin1\np3\ntp4\nRp5\ntp6\nRp7\n.",
+    1: b"csurrealdb.data.types.datetime\nPreciseDatetime\nq\x00(c_codecs\nencode\nq\x01(X\x0c\x00\x00\x00\x07\xc3\xaa\x01\x01\x0c\x1e-\x01\xc3\xa2@q\x02X\x06\x00\x00\x00latin1q\x03tq\x04Rq\x05tq\x06Rq\x07.",
+    2: b"\x80\x02csurrealdb.data.types.datetime\nPreciseDatetime\nq\x00c_codecs\nencode\nq\x01X\x0c\x00\x00\x00\x07\xc3\xaa\x01\x01\x0c\x1e-\x01\xc3\xa2@q\x02X\x06\x00\x00\x00latin1q\x03\x86q\x04Rq\x05\x85q\x06Rq\x07.",
+    3: b"\x80\x03csurrealdb.data.types.datetime\nPreciseDatetime\nq\x00C\n\x07\xea\x01\x01\x0c\x1e-\x01\xe2@q\x01\x85q\x02Rq\x03.",
+    4: b"\x80\x04\x95F\x00\x00\x00\x00\x00\x00\x00\x8c\x1dsurrealdb.data.types.datetime\x94\x8c\x0fPreciseDatetime\x94\x93\x94C\n\x07\xea\x01\x01\x0c\x1e-\x01\xe2@\x94\x85\x94R\x94.",
+    5: b"\x80\x05\x95F\x00\x00\x00\x00\x00\x00\x00\x8c\x1dsurrealdb.data.types.datetime\x94\x8c\x0fPreciseDatetime\x94\x93\x94C\n\x07\xea\x01\x01\x0c\x1e-\x01\xe2@\x94\x85\x94R\x94.",
+}
+
+
+@pytest.mark.parametrize("protocol", sorted(_BETA_10_PICKLES))
+def test_a_pickle_written_before_the_remainder_was_pickled_still_loads(
+    protocol: int,
+) -> None:
+    """Pickles from 3.0.0-beta.10 load, with the remainder they never held.
+
+    That release pickled a ``PreciseDatetime`` as a bare ``datetime`` and
+    dropped the remainder. These bytes are what it wrote, at each protocol, for
+    ``PreciseDatetime(2026, 1, 1, 12, 30, 45, 123456, nanosecond=789)``. Caches,
+    queues and files written by it must still load now that the remainder is
+    pickled too: as a ``PreciseDatetime`` with ``nanosecond == 0``, not as an
+    error or an instance missing the attribute.
+    """
+    restored = pickle.loads(_BETA_10_PICKLES[protocol])
+
+    assert type(restored) is PreciseDatetime
+    assert restored == dt.datetime(2026, 1, 1, 12, 30, 45, 123456)
+    assert restored.nanosecond == 0
+    assert encode(restored) == encode(PreciseDatetime(2026, 1, 1, 12, 30, 45, 123456))
