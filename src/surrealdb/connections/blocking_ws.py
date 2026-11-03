@@ -241,6 +241,7 @@ class BlockingWsSurrealConnection(
         self._reconnect_done = threading.Event()
         self._reconnect_done.set()
         self._reconnect_failure: str | None = None
+        self._reconnect_stop: threading.Event | None = None
         self.raw_url: str = f"{self.url.raw_url}/rpc"
         self.host: str | None = self.url.hostname
         self.port: int | None = self.url.port
@@ -669,32 +670,50 @@ class BlockingWsSurrealConnection(
             self._reconnecting = True
             self._reconnect_failure = None
             self._reconnect_done.clear()
+            stop = self._reconnect_stop = threading.Event()
             self._reconnect_worker = threading.Thread(
-                target=self._run_reconnect, name="surrealdb-reconnect", daemon=True
+                target=self._run_reconnect,
+                args=(stop,),
+                name="surrealdb-reconnect",
+                daemon=True,
             )
             self._reconnect_worker.start()
         self._await_reconnect_locked(budget)
 
-    def _run_reconnect(self) -> None:
-        """Make the reconnect attempts, on the thread `_reconnect_locked` starts."""
+    def _run_reconnect(self, stop: threading.Event) -> None:
+        """Make the reconnect attempts, on the thread `_reconnect_locked` starts.
+
+        *stop* is set by :meth:`close`, which ends the reconnect itself; from
+        then on this thread leaves the connection alone.
+        """
         attempt = 0
         try:
             while self._reconnect.allows(attempt + 1):
                 attempt += 1
-                if attempt > 1:
-                    time.sleep(self._reconnect.delay(attempt - 1))
+                if attempt > 1 and stop.wait(self._reconnect.delay(attempt - 1)):
+                    return
                 with self._locked():
-                    if self._reconnect_once_locked(attempt):
-                        self._end_reconnect_locked(None)
+                    if stop.is_set():
                         return
+                    if not self._reconnect_once_locked(attempt):
+                        continue
+                    if stop.is_set():
+                        # Closed while replaying: the socket is not wanted.
+                        self._drop_socket()
+                        return
+                    self._set_status("connected", self._server_version)
+                    self._end_unmanaged_live()
+                    self._end_reconnect(None)
+                    return
             with self._locked():
-                self._end_reconnect_locked(self._give_up_locked(attempt))
+                if not stop.is_set():
+                    self._end_reconnect(self._give_up_locked(attempt))
         finally:
-            if self._reconnecting:
+            if self._reconnecting and not stop.is_set():
                 # Only reached if something above raised unexpectedly; the
                 # threads waiting on the outcome must not wait forever.
                 with self._locked():
-                    self._end_reconnect_locked(
+                    self._end_reconnect(
                         f"reconnecting to {self.raw_url} failed unexpectedly"
                     )
 
@@ -709,8 +728,6 @@ class BlockingWsSurrealConnection(
             logger.debug("reconnect attempt %d failed: %s", attempt, exc)
             self._emit("error", exc)
             return False
-        self._set_status("connected", self._server_version)
-        self._end_unmanaged_live()
         return True
 
     def _give_up_locked(self, attempts: int) -> str:
@@ -731,7 +748,7 @@ class BlockingWsSurrealConnection(
         self._emit("error", error)
         return str(error)
 
-    def _end_reconnect_locked(self, failure: str | None) -> None:
+    def _end_reconnect(self, failure: str | None) -> None:
         self._reconnect_failure = failure
         self._reconnecting = False
         self._reconnect_worker = None
@@ -2705,7 +2722,17 @@ class BlockingWsSurrealConnection(
         The replacement socket is a new server-side session, so it starts
         unauthenticated and with no namespace or database selected; sign in and
         ``use()`` again after reconnecting.
+
+        A reconnect under way is stopped, rather than left to open a socket
+        again after this has closed it; requests waiting for it fail with
+        ``ConnectionUnavailableError``.
         """
+        stop = self._reconnect_stop
+        if self._reconnecting and stop is not None:
+            stop.set()
+            self._end_reconnect(
+                f"the connection to {self.raw_url} was closed while it was reconnecting"
+            )
         self._shut(_LIVE_KILLED_SENTINEL)
 
     def _shut(self, live_end: dict[str, Any] = _LIVE_BROKEN_SENTINEL) -> None:

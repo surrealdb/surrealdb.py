@@ -455,3 +455,49 @@ def test_blocking_kill_after_a_drop_kills_the_restarted_query(
         assert [call.params for call in fake.calls_to("kill")] == [[restarted]]
     finally:
         db.close()
+
+
+async def test_async_close_during_a_reconnect_fails_waiting_requests_cleanly(
+    fake: FakeSurreal,
+) -> None:
+    slow = ReconnectOptions(retry_delay=0.2, retry_delay_jitter=0)
+    db = AsyncWsSurrealConnection(fake.url, reconnect=slow)
+    await db.version()
+    fake.accepting = False
+    fake.drop()
+    await _until(lambda: db.status == "reconnecting")
+    waiting = asyncio.ensure_future(db.version())
+    await asyncio.sleep(0.05)
+    await db.close()
+    with pytest.raises(ConnectionUnavailableError, match="closed while"):
+        await asyncio.wait_for(waiting, 5)
+
+
+def test_blocking_close_during_a_reconnect_stops_it(fake: FakeSurreal) -> None:
+    slow = ReconnectOptions(retry_delay=0.2, retry_delay_jitter=0)
+    db = BlockingWsSurrealConnection(fake.url, reconnect=slow)
+    outcome: list[BaseException | str] = []
+
+    def request() -> None:
+        try:
+            outcome.append(db.version())
+        except BaseException as exc:
+            outcome.append(exc)
+
+    db.version()
+    fake.accepting = False
+    _dropped(db, fake)
+    waiter = threading.Thread(target=request)
+    waiter.start()
+    fake.wait_for(lambda: db.status == "reconnecting")
+    db.close()
+    waiter.join(5)
+    assert isinstance(outcome[0], ConnectionUnavailableError)
+    assert "closed while" in str(outcome[0])
+
+    sockets = fake.sockets_opened
+    fake.accepting = True
+    time.sleep(1.0)
+    assert fake.sockets_opened == sockets
+    assert db.socket is None
+    assert db.status == "disconnected"

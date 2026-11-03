@@ -759,13 +759,18 @@ class AsyncWsSurrealConnection(
         if task is None or task.done() or task is asyncio.current_task():
             return
         budget = self._request_timeout()
-        try:
-            await asyncio.wait_for(asyncio.shield(task), budget)
-        except asyncio.TimeoutError as exc:
+        # `wait` rather than awaiting the task: `close()` cancels it, and that
+        # cancellation must not reach a caller nobody cancelled.
+        done, _ = await asyncio.wait({task}, timeout=budget)
+        if not done:
             raise TransportTimeoutError(
                 f"timed out waiting for the connection to {self.raw_url} to be "
                 f"re-established: not back {describe(budget)}"
-            ) from exc
+            )
+        if self._closing:
+            raise ConnectionUnavailableError(
+                f"the connection to {self.raw_url} was closed while it was reconnecting"
+            )
         if self._status != "connected":
             raise ConnectionUnavailableError(
                 f"the connection to {self.raw_url} dropped and could not be "
