@@ -117,9 +117,12 @@ after 30 seconds unless you set `timeout=`.
   SDK's `authentication` option, lets a connection sign itself in. It takes
   signin credentials, an access token, `Tokens`, or a function returning one
   of those; on `AsyncSurreal` the function may be a coroutine function. A
-  websocket connection applies it when the socket opens and again after every
-  reconnect, instead of replaying a token that may have expired while the
-  socket was down. HTTP applies it before its first request.
+  websocket connection applies it when the socket opens. After a reconnect it
+  signs in with the credentials again, or asks the function again, instead of
+  replaying a token that may have expired while the socket was down; a token
+  or `Tokens` given as they are is not applied again, so the tokens a renewal
+  got in their place are the ones replayed. HTTP applies it before its first
+  request.
 
   With `renew_access=True` (the default), a connection also renews its own
   access token shortly before it expires: with its refresh token if it holds

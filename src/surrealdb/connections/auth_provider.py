@@ -12,9 +12,11 @@ one of:
   connection, a coroutine function - called each time they are needed, so it
   can fetch a fresh token from wherever tokens come from.
 
-The connection applies it when the socket opens and again after every
-reconnect, in place of replaying a token that may have expired while the
-socket was down.
+The connection applies it when the socket opens. After a reconnect it signs
+in again with credentials, or asks the function again, in place of replaying a
+token that may have expired while the socket was down; a token or ``Tokens``
+given as they are is not applied again, since the tokens the connection holds
+by then - renewed, perhaps - are at least as fresh.
 
 With ``renew_access`` on (the default), a connection also renews its own
 access token shortly before it expires: with the refresh token if it holds
@@ -65,6 +67,16 @@ def check_auth_provider(provider: object) -> None:
             "str), Tokens, or a function returning one of those; got "
             f"{type(provider).__name__}"
         )
+
+
+def signs_in_afresh(provider: AuthProvider | None) -> bool:
+    """Whether applying *provider* again gives a fresh sign-in.
+
+    Credentials sign in anew, and a function is asked again. A token or
+    :class:`Tokens` given as they are would only put back what the connection
+    was first given, which renewing may since have replaced.
+    """
+    return callable(provider) or isinstance(provider, dict)
 
 
 def check_credentials(provided: object) -> AuthCredentials:

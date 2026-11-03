@@ -34,6 +34,7 @@ from surrealdb.connections.auth_provider import (
     check_auth_provider,
     check_credentials,
     renew_at,
+    signs_in_afresh,
 )
 from surrealdb.connections.batch import AsyncBatch
 from surrealdb.connections.builders import (
@@ -885,13 +886,15 @@ class AsyncWsSurrealConnection(
     async def _restore(self) -> None:
         """Replay every session, then every live query, on the new socket."""
         registry = self._registry
-        if self._auth_provider is None:
-            await self._restore_session(None, registry.root)
-        else:
+        if signs_in_afresh(self._auth_provider):
             # A fresh sign-in rather than a token that may have expired while
             # the socket was down.
             await self._restore_session(None, registry.root, authenticate=False)
             await self._apply_auth_provider()
+        else:
+            # The tokens held now, which renewing may have replaced since a
+            # static `auth=` gave them.
+            await self._restore_session(None, registry.root)
         for session_id, state in list(registry.sessions.items()):
             await self._request(
                 RequestMessage(RequestMethod.ATTACH, session=session_id),

@@ -34,6 +34,7 @@ from surrealdb.connections.auth_provider import (
     check_auth_provider,
     check_credentials,
     renewal_due,
+    signs_in_afresh,
 )
 from surrealdb.connections.batch import Batch
 from surrealdb.connections.builders import (
@@ -607,11 +608,13 @@ class BlockingWsSurrealConnection(
     def _restore_locked(self) -> None:
         """Replay every session, then every live query, on the new socket."""
         registry = self._registry
-        if self._auth_provider is None:
-            self._restore_session_locked(None, registry.root)
-        else:
+        if signs_in_afresh(self._auth_provider):
             self._restore_session_locked(None, registry.root, authenticate=False)
             self._apply_auth_provider_locked()
+        else:
+            # The tokens held now, which renewing may have replaced since a
+            # static `auth=` gave them.
+            self._restore_session_locked(None, registry.root)
         for session_id, state in list(registry.sessions.items()):
             self._send_locked(
                 RequestMessage(RequestMethod.ATTACH, session=session_id),

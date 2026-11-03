@@ -19,10 +19,11 @@ from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.connections.reconnect import ReconnectOptions
 from surrealdb.errors import ConnectionUnavailableError
+from surrealdb.types import Tokens, Value
 from tests.unit_tests.fake_surreal import Call, FakeSurreal, jwt
 
 FAST = ReconnectOptions(retry_delay=0.01, retry_delay_max=0.02, retry_delay_jitter=0)
-ROOT = {"username": "root", "password": "root"}
+ROOT: dict[str, Value] = {"username": "root", "password": "root"}
 
 
 @pytest.fixture
@@ -197,5 +198,64 @@ def test_blocking_live_query_survives_signing_in_again_as_the_same_user(
         _dropped(db, fake)
         db.version()
         assert "live" in fake.methods(1)
+    finally:
+        db.close()
+
+
+def _renewing(fake: FakeSurreal) -> dict[str, str]:
+    """Answer `refresh` with one known pair of tokens, and return it."""
+    renewed = {"access": jwt("root"), "refresh": "refresh-1"}
+    fake.respond("refresh", lambda call: renewed)
+    return renewed
+
+
+async def test_async_a_reconnect_keeps_the_tokens_renewal_replaced(
+    fake: FakeSurreal,
+) -> None:
+    renewed = _renewing(fake)
+    given = Tokens(access=jwt("root"), refresh="refresh-0")
+    db = AsyncWsSurrealConnection(fake.url, reconnect=FAST, auth=given)
+    try:
+        await db.connect()
+        await db.refresh()
+        await _reconnected(db, fake)
+
+        assert [c.params for c in fake.calls_to("authenticate", socket=1)] == [
+            [renewed["access"]]
+        ]
+        assert db.token == renewed["access"]
+    finally:
+        await db.close()
+
+
+async def test_async_credentials_sign_in_afresh_after_a_reconnect(
+    fake: FakeSurreal,
+) -> None:
+    db = AsyncWsSurrealConnection(fake.url, reconnect=FAST, auth=ROOT)
+    try:
+        await db.connect()
+        await _reconnected(db, fake)
+        assert "signin" in fake.methods(1)
+        assert "authenticate" not in fake.methods(1)
+    finally:
+        await db.close()
+
+
+def test_blocking_a_reconnect_keeps_the_tokens_renewal_replaced(
+    fake: FakeSurreal,
+) -> None:
+    renewed = _renewing(fake)
+    given = Tokens(access=jwt("root"), refresh="refresh-0")
+    db = BlockingWsSurrealConnection(fake.url, reconnect=FAST, auth=given)
+    try:
+        db.connect()
+        db.refresh()
+        _dropped(db, fake)
+        db.version()
+
+        assert [c.params for c in fake.calls_to("authenticate", socket=1)] == [
+            [renewed["access"]]
+        ]
+        assert db.token == renewed["access"]
     finally:
         db.close()
