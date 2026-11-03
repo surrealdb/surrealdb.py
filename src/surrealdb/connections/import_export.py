@@ -134,9 +134,26 @@ def _headers(
     return headers
 
 
+def _check_import_data(data: ImportData) -> None:
+    """Refuse a ``str`` that names a file, which would be imported as SurrealQL.
+
+    A ``str`` is always the SurrealQL itself, and a path has to be path-like,
+    so ``import_("backup.surql")`` - the shape ``export_to("backup.surql")``
+    invites - would send the twelve characters of the name. SurrealDB 2
+    accepts that as a statement and reports the import a success.
+    """
+    if isinstance(data, str) and "\n" not in data and os.path.isfile(data):
+        raise ValueError(
+            f"import_() takes SurrealQL as a str, and {data!r} is the name of "
+            f"a file; to import that file pass its path instead, as "
+            f"pathlib.Path({data!r})"
+        )
+
+
 @contextmanager
 def _payload(data: ImportData) -> Generator[bytes | IO[bytes], None, None]:
     """The request body: a file is passed open, to be streamed, not read."""
+    _check_import_data(data)
     if isinstance(data, bytes):
         yield data
     elif isinstance(data, str):

@@ -111,9 +111,12 @@ after 30 seconds unless you set `timeout=`.
   one that breaks off leaves an existing file - perhaps the last good backup -
   as it was.
 
-  `import_()` takes SurrealQL as `str` or `bytes`, or the path of a file. A
-  failed statement does not stop the rest, so `import_()` reads the server's
-  answer and raises `ImportFailedError` with every failure in `failures`.
+  `import_()` takes SurrealQL as `str` or `bytes`, or the path of a file as a
+  `pathlib.Path` or other path-like. A `str` is always SurrealQL, so one that
+  names an existing file - `import_("backup.surql")` - is refused with
+  `ValueError` rather than imported as the file's name. A failed statement
+  does not stop the rest, so `import_()` reads the server's answer and raises
+  `ImportFailedError` with every failure in `failures`.
   SurrealDB 3.1 and later reports only the failures, with their error kinds;
   older servers report every statement, and the failures are picked out.
   SurrealDB 3 requires an import to start with `OPTION IMPORT;`, as exports

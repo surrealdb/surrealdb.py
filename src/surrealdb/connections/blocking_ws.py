@@ -1223,12 +1223,16 @@ class BlockingWsSurrealConnection(
 
         Args:
             data: The SurrealQL, as ``str`` or ``bytes``, or the path of a
-                file holding it - such as one ``export()`` wrote. SurrealDB 3
-                requires it to start with ``OPTION IMPORT;``, as exports do.
+                file holding it - such as one ``export_to()`` wrote - as a
+                ``pathlib.Path`` or other path-like. A ``str`` is always the
+                SurrealQL itself. SurrealDB 3 requires it to start with
+                ``OPTION IMPORT;``, as exports do.
 
         Raises:
             ImportFailedError: if any statement failed, with each failure in
                 ``failures``. The other statements were still applied.
+            ValueError: if *data* is a ``str`` naming a file, which would
+                otherwise be imported as SurrealQL; pass a path instead.
         """
         with self._locked():
             self._ready_locked()
