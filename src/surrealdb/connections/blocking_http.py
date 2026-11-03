@@ -132,6 +132,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         self._renew_access = renew_access
         self._authorising = False
         self._auth_lock = threading.RLock()
+        # One version request however many first requests race to send it.
+        self._handshake_lock = threading.Lock()
         # Whether this connection's identity has been chosen - by ``auth=`` or
         # by the caller signing in or out - so that ``auth=`` is applied once,
         # not again after an explicit sign-out.
@@ -166,16 +168,19 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
 
     def _handshake(self) -> None:
         """Ask the server for its version, once, before the first request."""
-        try:
-            response = self._send(
-                RequestMessage(RequestMethod.VERSION),
-                "checking the server version",
-                token="",
-            )
-        except ServerError:
-            self._adopt_server_version(None)
-            return
-        self._adopt_server_version(response.get("result"))
+        with self._handshake_lock:
+            if self._version_learned:
+                return
+            try:
+                response = self._send(
+                    RequestMessage(RequestMethod.VERSION),
+                    "checking the server version",
+                    token="",
+                )
+            except ServerError:
+                self._adopt_server_version(None)
+                return
+            self._adopt_server_version(response.get("result"))
 
     def _send(
         self,

@@ -229,6 +229,13 @@ class FakeSurreal(_Scripted):
             pass
 
 
+class _HttpServer(ThreadingHTTPServer):
+    # Room for every request a test sends at once: past the default backlog of
+    # five, the kernel resets the connections it has no room for.
+    request_queue_size = 64
+    daemon_threads = True
+
+
 class FakeSurrealHttp(_Scripted):
     """A fake server answering ``POST /rpc`` in plain ``cbor``.
 
@@ -260,8 +267,7 @@ class FakeSurrealHttp(_Scripted):
             def log_message(self, format: str, *args: Any) -> None:
                 pass
 
-        self._server = ThreadingHTTPServer(("127.0.0.1", 0), _Rpc)
-        self._server.daemon_threads = True
+        self._server = _HttpServer(("127.0.0.1", 0), _Rpc)
         self.port: int = self._server.server_address[1]
         self._thread = threading.Thread(
             target=self._server.serve_forever, args=(0.01,), daemon=True

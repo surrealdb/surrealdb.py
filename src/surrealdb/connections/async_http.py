@@ -149,6 +149,8 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         self._auth_provider: AuthProvider | None = auth
         self._renew_access = renew_access
         self._auth_lock = asyncio.Lock()
+        # One version request however many first requests race to send it.
+        self._handshake_lock = asyncio.Lock()
         # Whether this connection's identity has been chosen - by ``auth=`` or
         # by the caller signing in or out - so that ``auth=`` is applied once,
         # not again after an explicit sign-out.
@@ -183,16 +185,19 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
 
     async def _handshake(self) -> None:
         """Ask the server for its version, once, before the first request."""
-        try:
-            response = await self._send(
-                RequestMessage(RequestMethod.VERSION),
-                "checking the server version",
-                token="",
-            )
-        except ServerError:
-            self._adopt_server_version(None)
-            return
-        self._adopt_server_version(response.get("result"))
+        async with self._handshake_lock:
+            if self._version_learned:
+                return
+            try:
+                response = await self._send(
+                    RequestMessage(RequestMethod.VERSION),
+                    "checking the server version",
+                    token="",
+                )
+            except ServerError:
+                self._adopt_server_version(None)
+                return
+            self._adopt_server_version(response.get("result"))
 
     async def _send(
         self,
