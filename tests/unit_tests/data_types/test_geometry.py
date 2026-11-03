@@ -483,7 +483,16 @@ def test_geometry_collection_str() -> None:
     )
     assert str(gc) == (
         "{ type: 'GeometryCollection', geometries: "
-        "[(1.1, 2.2), { type: 'LineString', coordinates: [[0.0, 0.0], [1.0, 1.0]] }] }"
+        "[{ type: 'Point', coordinates: [1.1, 2.2] }, "
+        "{ type: 'LineString', coordinates: [[0.0, 0.0], [1.0, 1.0]] }] }"
+    )
+
+
+def test_geometry_collection_str_point_only() -> None:
+    gc = GeometryCollection(GeometryPoint(1.0, 2.0))
+    assert str(gc) == (
+        "{ type: 'GeometryCollection', geometries: "
+        "[{ type: 'Point', coordinates: [1.0, 2.0] }] }"
     )
 
 
