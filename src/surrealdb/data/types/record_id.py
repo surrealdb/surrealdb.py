@@ -162,11 +162,20 @@ def escape_identifier(identifier: str) -> str:
     has_no_alpha = _UNQUOTED_IDENTIFIER_ALPHA.isdisjoint(identifier)
 
     if unsafe or starts_with_digit or has_no_alpha:
-        if "\\" not in identifier and "⟩" not in identifier:
-            return f"⟨{identifier}⟩"
-        escaped = identifier.replace("\\", "\\\\").replace("`", "\\`")
-        return f"`{escaped}`"
+        return delimit_identifier(identifier)
     return identifier
+
+
+def delimit_identifier(identifier: str) -> str:
+    """*identifier* delimited, as :func:`escape_identifier` delimits a name it cannot leave bare.
+
+    For a name that must not be read bare even when it could be, such as a
+    field called ``value``, which SurrealQL reads as the keyword.
+    """
+    if "\\" not in identifier and "⟩" not in identifier:
+        return f"⟨{identifier}⟩"
+    escaped = identifier.replace("\\", "\\\\").replace("`", "\\`")
+    return f"`{escaped}`"
 
 
 class RecordID:

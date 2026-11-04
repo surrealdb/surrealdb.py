@@ -100,6 +100,7 @@ from surrealdb.data.types.record_id import (
     RecordID,
     RecordIdType,
     StringRecordId,
+    delimit_identifier,
     escape_identifier,
 )
 from surrealdb.data.types.table import Table
@@ -935,10 +936,10 @@ def render_projection(fields: Sequence[str] | None) -> str:
 
     A field list cannot be parameter-bound - SurrealQL has no ``SELECT $f`` -
     so it is the one part that has to be inlined, and therefore the one part
-    that has to be escaped. Each name goes through
-    :func:`~surrealdb.data.types.record_id.escape_identifier`, so a field
-    containing a space, unicode, or SurrealQL punctuation is quoted rather than
-    concatenated into the statement.
+    that has to be escaped. Every name is delimited, so a field containing a
+    space, unicode, or SurrealQL punctuation is quoted rather than concatenated
+    into the statement, and a field named after a keyword - ``value``,
+    ``before``, ``none`` - is read as the field rather than the keyword.
 
     **Dots separate path segments and are escaped individually.** Escaping a
     whole ``"address.city"`` produces ``⟨address.city⟩``, which the server reads
@@ -984,7 +985,7 @@ def render_projection(fields: Sequence[str] | None) -> str:
             raise ValueError(
                 f"{field!r} is not a valid field path: it has an empty segment"
             )
-        rendered.append(".".join(escape_identifier(segment) for segment in segments))
+        rendered.append(".".join(delimit_identifier(segment) for segment in segments))
     return ", ".join(rendered)
 
 

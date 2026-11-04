@@ -141,7 +141,21 @@ def test_a_dotted_name_walks_into_the_nested_object(
     ).execute()
 
     assert row == {"address": {"city": "Paris"}}
-    assert render_projection(["address.city"]) == "address.city"
+    assert render_projection(["address.city"]) == "⟨address⟩.⟨city⟩"
+
+
+def test_a_field_named_after_a_keyword_is_the_field(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+) -> None:
+    """Bare, ``SELECT value FROM`` reads ``value`` as the keyword, not the field."""
+    table = f"fld_{uuid.uuid4().hex[:8]}"
+    blocking_ws_connection.query(f"CREATE {table}:1 SET value = 7, a = 1").execute()
+
+    row = blocking_ws_connection.select(
+        RecordID(table, 1), fields=["value", "a"]
+    ).execute()
+
+    assert row == {"value": 7, "a": 1}
 
 
 @pytest.mark.parametrize(
