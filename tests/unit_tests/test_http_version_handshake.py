@@ -12,7 +12,7 @@ import pytest
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
-from tests.unit_tests.fake_surreal import FakeSurrealHttp
+from tests.unit_tests.fake_surreal import Call, FakeSurrealHttp, jwt
 
 
 @pytest.fixture
@@ -65,3 +65,50 @@ async def test_async_concurrent_first_requests_ask_the_version_once(
     await asyncio.gather(*(db.query("RETURN 1") for _ in range(8)))
     assert http.methods().count("version") == 1
     assert http.methods().count("query") == 8
+
+
+def _refuse_anonymous(call: Call) -> int | None:
+    return 401 if call.token is None else None
+
+
+def test_blocking_a_proxy_refusing_the_anonymous_version_request_is_not_a_lockout(
+    http: FakeSurrealHttp,
+) -> None:
+    """The version request goes out without a token, which an auth proxy
+    refuses in plain text; the requests that carry one must still get through."""
+    http.proxy = _refuse_anonymous
+    db = BlockingHttpSurrealConnection(http.url)
+    db.token = jwt()
+
+    db.query("RETURN 1").execute()
+    db.query("RETURN 1").execute()
+
+    assert http.methods() == ["version", "query", "query"]
+
+
+async def test_async_a_proxy_refusing_the_anonymous_version_request_is_not_a_lockout(
+    http: FakeSurrealHttp,
+) -> None:
+    http.proxy = _refuse_anonymous
+    db = AsyncHttpSurrealConnection(http.url)
+    db.token = jwt()
+
+    await db.query("RETURN 1")
+    await db.query("RETURN 1")
+
+    assert http.methods() == ["version", "query", "query"]
+
+
+def test_blocking_a_server_error_on_the_version_request_is_asked_again(
+    http: FakeSurrealHttp,
+) -> None:
+    http.proxy = lambda call: 503 if call.method == "version" else None
+    db = BlockingHttpSurrealConnection(http.url)
+
+    db.query("RETURN 1").execute()
+    http.proxy = lambda call: None
+    db.query("RETURN 1").execute()
+    db.query("RETURN 1").execute()
+
+    assert http.methods() == ["version", "query", "version", "query", "query"]
+    assert db.version() == "surrealdb-3.0.0"

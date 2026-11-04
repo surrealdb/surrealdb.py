@@ -73,6 +73,7 @@ from surrealdb.data.types.record_id import RecordID, RecordIdType, StringRecordI
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     ConnectionUnavailableError,
+    HttpStatusError,
     ServerError,
     TransportTimeoutError,
     UnsupportedFeatureError,
@@ -179,6 +180,14 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
                 )
             except ServerError:
                 self._adopt_server_version(None)
+                return
+            except HttpStatusError as exc:
+                # An auth proxy refuses the anonymous request with a plain
+                # 401 or 403 every time, so settle on an unknown version and
+                # let the request carry its own credentials. A 5xx may pass,
+                # so it is asked again next time.
+                if exc.status < 500:
+                    self._adopt_server_version(None)
                 return
             self._adopt_server_version(response.get("result"))
 

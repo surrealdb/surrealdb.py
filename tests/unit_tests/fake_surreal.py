@@ -246,6 +246,9 @@ class FakeSurrealHttp(_Scripted):
     def __init__(self, version: str = "surrealdb-3.0.0") -> None:
         super().__init__(version)
         fake = self
+        # A proxy in front of the server: a status to answer a call with in
+        # plain text instead of passing it on, or None to pass it on.
+        self.proxy: Callable[[Call], int | None] = lambda call: None
 
         class _Rpc(BaseHTTPRequestHandler):
             # Kept alive: the blocking client reads its body in a way an
@@ -258,6 +261,15 @@ class FakeSurrealHttp(_Scripted):
                 token = bearer.removeprefix("Bearer ") or None
                 kind = self.headers.get("Content-Type")
                 reply = fake._answer(body, 0, token, kind)
+                status = fake.proxy(fake.calls[-1])
+                if status is not None:
+                    text = b"refused by the proxy"
+                    self.send_response(status)
+                    self.send_header("Content-Type", "text/plain")
+                    self.send_header("Content-Length", str(len(text)))
+                    self.end_headers()
+                    self.wfile.write(text)
+                    return
                 self.send_response(200)
                 self.send_header("Content-Type", "application/cbor")
                 self.send_header("Content-Length", str(len(reply)))
