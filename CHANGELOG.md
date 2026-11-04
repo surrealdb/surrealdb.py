@@ -9,73 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- SurrealDB 4.0's `date`, `time`, `timestamp`, `interval`, `bigdecimal` and
-  `regex` kinds, as `PlainDate`, `PlainTime`, `Timestamp`, `Interval`,
-  `BigDecimal` and `Regex`. Over `cbor.2`, which every connection asks for,
-  a 4.0 server sends them as tags 100 and 189 to 193; without these types a
-  result holding one of the values failed with `UnexpectedResponseError`.
-  - A date or timestamp holds any year SurrealDB does, -262143 to 262142, with
-    `infinity` and `-infinity` as `PlainDate.INFINITY` and `NEG_INFINITY`.
-  - A time runs to the nanosecond, up to and including `24:00:00`.
-  - `to_date()`, `to_time()` and `to_datetime()` convert to the standard
-    library types where they can hold the value, and `from_date()`,
-    `from_time()` and `from_datetime()` convert back.
-  - An `Interval` keeps its months, days and microseconds apart, and compares
-    equal to another as the server does, a month as 30 days.
-  - `BigDecimal` is a `Decimal` that keeps its scale as written.
-  - `Regex` holds the text of a pattern in Rust's regex syntax.
-
-  Over plain `cbor` (servers before 4.0) each one is sent as the server widens
-  it: a date as a datetime at midnight UTC, a timestamp as a datetime, a time
-  as a duration,
-  an interval as its ISO 8601 text, and a bigdecimal as a decimal, or as its
-  text if it does not fit one. A `Regex` has no plain-cbor form and raises
-  `ValueError` there.
-
-### Changed
-
-- A `datetime.date` is sent as a SurrealDB date, and a naive `datetime.time` as
-  a SurrealDB time. A date used to go out as CBOR tag 1004, which no
-  SurrealDB server reads, and a time raised `TypeError`. A `datetime` is
-  still sent as a datetime.
-- A compiled `re.Pattern` raises `TypeError` and points to `Regex`. cbor2 sent
-  it as IANA tag 35, which names another regex syntax, and which SurrealDB
-  refuses.
-- The conformance vectors and scenarios move to surrealdb-protocol v0.15.0,
-  which covers the 4.0 kinds.
-- **Breaking for on-disk embedded databases.** The `surrealdb-embedded`
-  extension now builds against `surrealdb-core` 4.0.0, up from 3.3.5, so
-  `mem://`, `file://` and `surrealkv://` connections run the SurrealDB 4.0
-  engine. SurrealDB 4.0 refuses to open a `file://` or `surrealkv://` directory
-  that a 3.x engine wrote: the connection raises `ConnectionUnavailableError`
-  saying the directory "holds a SurrealKV v0.x database written by SurrealDB
-  3.x", and leaves the files untouched, so the previous `surrealdb-embedded`
-  release still opens them. The message suggests setting
-  `SURREAL_EXPERIMENTAL_UPGRADE_FROM_3X=true`, but the embedded engine does not
-  read `SURREAL_*` environment variables, so that has no effect here. To carry
-  data across, export it with a 3.x `surreal` binary (`surreal export`) and
-  import it into a new 4.0 datastore. In-memory databases are not affected.
-- SurrealDB 4.0 moved most SurrealQL function families behind cargo features.
-  The extension builds the engine without its defaults, to leave out GraphQL
-  and the PostgreSQL and MySQL wire dialects, so it now names each family the
-  3.x engine always had: `crypto::*` digests and password hashing, `geo::*`,
-  `encoding::*`, `parse::url::*`, `string::slug` and `ORDER BY … COLLATE`,
-  `string::html::sanitize`, Unicode regexes, full-text and HNSW indexes with
-  `search::*`, `DEFINE API` with `api::*`, text patches in `RETURN DIFF`, and the
-  background maintenance tasks. Without them those calls failed with "This
-  build was compiled without the `<feature>` feature". File buckets
-  (`DEFINE BUCKET`, `file::*`), experimental in 3.x and unavailable from the
-  embedded engine, now work.
-- Building the extension from source needs Rust 1.95 or later, which a
-  transitive dependency of `surrealdb-core` 4.0 requires.
-
-## [3.0.0-beta.11] - 2026-11-03
-
-Upgrading from `3.0.0-beta.10`: nothing to change. Requests still time out
-after 30 seconds unless you set `timeout=`.
-
-### Added
-
 - `live()` returns a subscription, as in the JS SDK: an `AsyncLiveSubscription`
   or `LiveSubscription` that is also the live query's UUID, so passing it to
   `subscribe_live()` or `kill()` works as before. Iterate it (`async for` on
@@ -254,6 +187,124 @@ after 30 seconds unless you set `timeout=`.
   server's "method not found". A server older than 3.3 is no longer sent a
   `query_stream` request just to learn it does not stream.
 
+- `cbor.2`, the CBOR format SurrealDB 4.0 adds. Over WebSocket the connection
+  offers `cbor.2` then `cbor` and speaks whichever the server picks. Over HTTP
+  it asks for `application/cbor; v=2` and switches once a response comes back
+  in that format. `db.wire_format` says which one is in use. Servers before 4.0
+  keep plain `cbor`, so nothing changes for them.
+
+- Sized numbers: `I8`, `U8`, `I16`, `U16`, `I32`, `U32`, `U64`, `F16` and `F32`,
+  SurrealDB 4.0's fixed-width number kinds, exported from `surrealdb`. Each is
+  an `int` or `float` subclass that refuses a value outside its range; `F16`
+  and `F32` round to their width when made. Over `cbor.2` they are sent with
+  their tags (180 to 188) and read back as these types. Over plain `cbor` they
+  are sent widened, as the server would widen them: an `int`, a `float`, or a
+  `Decimal` for a `U64` past the signed 64-bit range.
+
+- SurrealDB 4.0's other new kinds, as `PlainDate`, `PlainTime`, `Timestamp`,
+  `Interval`, `BigDecimal` and `Regex`, exported from `surrealdb`. Over `cbor.2`
+  they are sent and read back with their tags, 100 and 189 to 193.
+  - A date or timestamp holds any year SurrealDB does, -262143 to 262142, with
+    `infinity` and `-infinity` as `INFINITY` and `NEG_INFINITY`.
+  - A time runs to the nanosecond, up to and including `24:00:00`.
+  - `to_date()`, `to_time()` and `to_datetime()` convert to the standard
+    library types where they can hold the value, and `from_date()`,
+    `from_time()` and `from_datetime()` convert back.
+  - An `Interval` keeps its months, days and microseconds apart, and compares
+    equal to another as the server does, a month as 30 days.
+  - `BigDecimal` is a `Decimal` that keeps its scale as written.
+  - `Regex` holds the text of a pattern in Rust's regex syntax.
+
+  Over plain `cbor` each one is sent as the server widens it: a date as a
+  datetime at midnight UTC, a timestamp as a datetime, a time as a duration,
+  an interval as its ISO 8601 text, and a bigdecimal as a decimal, or as its
+  text if it does not fit one. A `Regex` has no plain `cbor` form and raises
+  `ValueError` there.
+
+- A driver for the surrealdb-protocol v0.15.0 conformance suite
+  (`conformance/`), run in CI against a SurrealDB nightly, and the protocol's
+  CBOR value vectors as unit tests. The vectors are fetched at test time with
+  `scripts/protocol-vectors.sh` rather than committed; without them those tests
+  skip.
+
+### Changed
+
+- Responses are decoded as strictly as a SurrealDB 4.0 server decodes
+  requests. A payload that holds no SurrealDB value raises
+  `UnexpectedResponseError` instead of decoding to something else: an integer
+  outside the signed 64-bit range, a duplicate or non-text object key, a tag
+  SurrealDB does not use (including 0, 9 and 13, the text forms of datetimes,
+  uuids and durations), tag 6 (NONE) over anything but null, a tag of a 4.0
+  kind (100 or 180 to 193) outside `cbor.2`, or a malformed value of any kind.
+  A record id sent as text under tag 8 decodes to a `RecordID`.
+
+- A `datetime.date` is sent as a SurrealDB date, and a naive `datetime.time` as
+  a SurrealDB time. A date used to go out as CBOR tag 1004, which no
+  SurrealDB server reads, and a time raised `TypeError`. A `datetime` is
+  still sent as a datetime.
+
+- A compiled `re.Pattern` raises `TypeError` and points to `Regex`. cbor2 sent
+  it as IANA tag 35, which names another regex syntax, and which SurrealDB
+  refuses.
+
+- **Behaviour change:** a plain string is always a table name. `"person:1"` and
+  `"person:tobie"` used to be parsed by the SDK into a record id (an `int` key
+  when the part after the colon was all ASCII digits, otherwise a string key),
+  so `db.select("person:1")` read one record. It now reads the table that is
+  literally named `person:1`, as the JS, Go, Ruby and Dart SDKs do. Nothing is
+  parsed, coerced, warned about or refused, because a table can legitimately
+  be named `person:tobie`. The same holds for `"user:1..10"`, which is no
+  longer read as a range, and for the ends of `relate()`, which relates
+  records and now raises a `TypeError` for a plain string.
+
+  To target a record, pass `StringRecordId("person:1")` to have the server
+  parse it, or a `RecordID` (`RecordID("person", 1)` or
+  `RecordID.parse("person:1")`). A bare table name such as `"person"` is not
+  affected.
+
+- **Breaking for on-disk embedded databases.** The `surrealdb-embedded`
+  extension now builds against `surrealdb-core` 4.0.0, up from 3.3.5, so
+  `mem://`, `file://` and `surrealkv://` connections run the SurrealDB 4.0
+  engine. SurrealDB 4.0 refuses to open a `file://` or `surrealkv://` directory
+  that a 3.x engine wrote: the connection raises `ConnectionUnavailableError`
+  saying the directory "holds a SurrealKV v0.x database written by SurrealDB
+  3.x", and leaves the files untouched, so the previous `surrealdb-embedded`
+  release still opens them. The message suggests setting
+  `SURREAL_EXPERIMENTAL_UPGRADE_FROM_3X=true`, but the embedded engine does not
+  read `SURREAL_*` environment variables, so that has no effect here. To carry
+  data across, export it with a 3.x `surreal` binary (`surreal export`) and
+  import it into a new 4.0 datastore. In-memory databases are not affected.
+- SurrealDB 4.0 moved most SurrealQL function families behind cargo features.
+  The extension builds the engine without its defaults, to leave out GraphQL
+  and the PostgreSQL and MySQL wire dialects, so it now names each family the
+  3.x engine always had: `crypto::*` digests and password hashing, `geo::*`,
+  `encoding::*`, `parse::url::*`, `string::slug` and `ORDER BY … COLLATE`,
+  `string::html::sanitize`, Unicode regexes, full-text and HNSW indexes with
+  `search::*`, `DEFINE API` with `api::*`, text patches in `RETURN DIFF`, and the
+  background maintenance tasks. Without them those calls failed with "This
+  build was compiled without the `<feature>` feature". File buckets
+  (`DEFINE BUCKET`, `file::*`), experimental in 3.x and unavailable from the
+  embedded engine, now work.
+- Building the extension from source needs Rust 1.95 or later, which a
+  transitive dependency of `surrealdb-core` 4.0 requires.
+
+### Fixed
+
+- A `Decimal` is sent in plain notation (`0.0000001`, not `1E-7`), which
+  SurrealDB 4.0 requires, and trailing zeros past SurrealDB's 28-digit scale,
+  such as those `Decimal` arithmetic leaves in `Decimal("0E-30")`, are dropped
+  so the server accepts the number.
+- `select(fields=[...])` delimits every field, so a field named after a
+  keyword is read as the field: `fields=["value"]` used to send
+  `SELECT value FROM ...`, which SurrealQL reads as the keyword.
+
+## [3.0.0-beta.11] - 2026-11-03
+
+Upgrading from `3.0.0-beta.10`: nothing to change. Requests still time out
+after 30 seconds unless you set `timeout=`.
+
+### Added
+
 - Request timeouts are configurable. Every request waited at most 30 seconds
   for its reply, and that was hardcoded in all four remote transports, so a
   query that legitimately ran longer could not finish. `timeout=` on the
@@ -306,23 +357,6 @@ after 30 seconds unless you set `timeout=`.
   reduction, which knows nothing of the extra field, so the copy came back
   with `nanosecond == 0` and writing it back lost the last three digits of the
   timestamp (#410).
-
-### Changed
-
-- **Behaviour change:** a plain string is always a table name. `"person:1"` and
-  `"person:tobie"` used to be parsed by the SDK into a record id (an `int` key
-  when the part after the colon was all ASCII digits, otherwise a string key),
-  so `db.select("person:1")` read one record. It now reads the table that is
-  literally named `person:1`, as the JS, Go, Ruby and Dart SDKs do. Nothing is
-  parsed, coerced, warned about or refused, because a table can legitimately
-  be named `person:tobie`. The same holds for `"user:1..10"`, which is no
-  longer read as a range, and for the ends of `relate()`, which relates
-  records and now raises a `TypeError` for a plain string.
-
-  To target a record, pass `StringRecordId("person:1")` to have the server
-  parse it, or a `RecordID` (`RecordID("person", 1)` or
-  `RecordID.parse("person:1")`). A bare table name such as `"person"` is not
-  affected.
 
 ## [3.0.0-beta.10] - 2026-10-08
 
