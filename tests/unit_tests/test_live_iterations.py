@@ -176,3 +176,21 @@ async def test_async_a_killed_subscription_still_ends_cleanly_after_a_drop(
         assert [change async for change in sub] == []
     finally:
         await db.close()
+
+
+def test_blocking_a_live_read_that_finds_the_socket_closed_reports_it(
+    fake: FakeSurreal,
+) -> None:
+    db = BlockingWsSurrealConnection(fake.url, reconnect=False)
+    events: list[str] = []
+    db.subscribe("disconnected", lambda *_: events.append("disconnected"))
+    try:
+        changes = iter(db.live("person"))
+        fake.drop()
+        with pytest.raises(ConnectionUnavailableError):
+            next(changes)
+        assert db.status == "disconnected"
+        assert not db.is_connected
+        assert events == ["disconnected"]
+    finally:
+        db.close()

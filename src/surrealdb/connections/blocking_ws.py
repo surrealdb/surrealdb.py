@@ -2583,6 +2583,13 @@ class BlockingWsSurrealConnection(
                             self._reconnect_locked(None)
                             continue
                         logger.warning("Live subscription socket closed: %s", exc)
+                        if not self._reconnect.enabled:
+                            # Nothing will reopen it, so the connection is
+                            # down now: say so, as the async transport does.
+                            # Raising alone left the status `connected`, with
+                            # no `disconnected` event, until another request
+                            # happened to find the socket dead.
+                            self._shut()
                         raise ConnectionUnavailableError(
                             "WebSocket connection closed while subscribed to a "
                             "live query."
