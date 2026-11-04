@@ -15,6 +15,7 @@ from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+from surrealdb.errors import HttpStatusError
 from surrealdb.types import Tokens, Value
 from tests.unit_tests.fake_surreal import (
     Call,
@@ -285,6 +286,44 @@ async def test_async_http_renews_auth_tokens_whose_access_token_expired(
     await db.query("RETURN 2")
     assert http.methods().count("refresh") == 1
     assert http.calls_to("query")[-1].token == saved.renewed["access"]
+
+
+def _refuse_with_401(http: FakeSurrealHttp, token: str | None) -> None:
+    """Answer any request bearing *token* as a real server does over HTTP: 401, unread."""
+    http.proxy = lambda call: 401 if call.token == token else None
+
+
+def test_blocking_http_renews_auth_tokens_the_server_refuses_with_a_401(
+    http: FakeSurrealHttp,
+) -> None:
+    saved = _SavedTokens(http)
+    _refuse_with_401(http, saved.given.access)
+    db = BlockingHttpSurrealConnection(http.url, auth=saved.given)
+    db.query("RETURN 1").execute()
+    assert http.methods().count("refresh") == 1
+    assert http.calls_to("query")[-1].token == saved.renewed["access"]
+
+
+async def test_async_http_renews_auth_tokens_the_server_refuses_with_a_401(
+    http: FakeSurrealHttp,
+) -> None:
+    saved = _SavedTokens(http)
+    _refuse_with_401(http, saved.given.access)
+    db = AsyncHttpSurrealConnection(http.url, auth=saved.given)
+    await db.query("RETURN 1")
+    assert http.methods().count("refresh") == 1
+    assert http.calls_to("query")[-1].token == saved.renewed["access"]
+
+
+def test_http_does_not_refresh_auth_tokens_on_a_status_other_than_401(
+    http: FakeSurrealHttp,
+) -> None:
+    saved = _SavedTokens(http)
+    http.proxy = lambda call: 503 if call.method == "authenticate" else None
+    db = BlockingHttpSurrealConnection(http.url, auth=saved.given)
+    with pytest.raises(HttpStatusError, match="503"):
+        db.query("RETURN 1").execute()
+    assert "refresh" not in http.methods()
 
 
 async def test_async_ws_renews_auth_tokens_whose_access_token_expired(

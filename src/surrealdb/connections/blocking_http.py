@@ -415,11 +415,15 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         else:
             try:
                 self.authenticate(provided.access)
-            except ServerError:
+            except (ServerError, HttpStatusError) as exc:
                 # Tokens saved past the access token's expiry, say, whose
-                # refresh token is still good.
-                if provided.refresh is None or not self.is_feature_supported(
-                    Features.REFRESH_TOKENS
+                # refresh token is still good. The server refuses an expired
+                # bearer with a 401 before it reads the request.
+                refused = not isinstance(exc, HttpStatusError) or exc.status == 401
+                if (
+                    not refused
+                    or provided.refresh is None
+                    or not self.is_feature_supported(Features.REFRESH_TOKENS)
                 ):
                     raise
                 self.refresh(provided)
