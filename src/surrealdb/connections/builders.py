@@ -708,7 +708,11 @@ class _CrudState(_WarnIfDropped):
             edge_ref = escape_identifier(
                 edge.table_name if isinstance(edge, Table) else edge
             )
-        only = "ONLY " if self._single and self._output != "NONE" else ""
+        # Not with DIFF: `RELATE ONLY` answers with the patch list itself,
+        # which `_extract` then unwrapped as if it were the one-record list,
+        # handing back the first operation where `create()` and `update()`
+        # give the whole patch.
+        only = "ONLY " if self._single and self._output not in ("NONE", "DIFF") else ""
         body = ""
         if self._mode == _Clause.CONTENT:
             variables["_content"] = self._data

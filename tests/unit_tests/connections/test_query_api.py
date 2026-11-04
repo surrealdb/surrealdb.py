@@ -146,6 +146,17 @@ def test_relate_creates_edges(db: Blocking) -> None:
     ]
 
 
+def test_relate_output_diff_is_the_patch_list_as_for_create(db: Blocking) -> None:
+    """`RELATE ONLY` answered with the patch itself, which was unwrapped to its first op."""
+    ada, bob = RecordID("person", "ada"), RecordID("person", "bob")
+    db.query("CREATE person:ada; CREATE person:bob;").execute()
+    created: Any = db.create(RecordID("thing", 1)).output("diff").content({"w": 1})
+    related: Any = db.relate(ada, "rated", bob).output("diff").content({"w": 1})
+    for patch in (created, related):
+        assert isinstance(patch, list), patch
+        assert [op["op"] for op in patch] == ["replace"]
+
+
 def test_insert_takes_output_and_timeout(db: Blocking) -> None:
     rows: Any = (
         db.insert("person")
