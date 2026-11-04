@@ -294,6 +294,9 @@ class BlockingWsSurrealConnection(
         # protocol desync. Queues hold decoded frames plus a ``_ChannelBroken``
         # sentinel, so the value type is ``Any``.
         self._streams: dict[str, queue.Queue[Any]] = {}
+        # How many frames ``_route_foreign`` has handed over, so a stream pump
+        # can tell another reader routed one - perhaps its stream's - meanwhile.
+        self._routed = 0
         # Whether this server knows ``query_stream``: ``None`` until one
         # request settles it. Cached per connection because the answer is a
         # property of the server build.
@@ -1025,6 +1028,7 @@ class BlockingWsSurrealConnection(
         that belong to nobody, and failing an unrelated caller for them would
         turn a tidy-up into an error.
         """
+        self._routed += 1
         response_id = response.get("id")
         if response_id is None:
             if response.get("error") is not None and len(self._streams) == 1:
@@ -1589,13 +1593,19 @@ class BlockingWsSurrealConnection(
         stream idling through a `SLEEP`. Now the wait happens with the lock
         released, so it is available for most of every slice.
 
-        Returns as soon as one frame has been routed, so a frame arriving
-        mid-slice is read within a poll, not at the end of the slice.
+        Returns as soon as a frame has been routed, so a frame arriving
+        mid-slice is read within a poll, not at the end of the slice - and that
+        includes one another reader routed: a live subscription or a request
+        on the same connection reads this stream's frames too, and the pump
+        used to wait out its slice for a frame already in the stream's queue.
         """
         deadline = time.monotonic() + timeout
+        routed = self._routed
         while True:
             poll = min(_STREAM_POLL_TIMEOUT, max(0.0, deadline - time.monotonic()))
             with self._locked():
+                if self._routed != routed:
+                    return
                 if self.socket is None:
                     raise ConnectionUnavailableError(
                         "WebSocket connection is not established."
@@ -2519,7 +2529,8 @@ class BlockingWsSurrealConnection(
         """The body of :meth:`subscribe_live`, split out so registration is eager."""
         try:
             while True:
-                # Hand back anything ``_send`` routed to us while correlating.
+                # Hand back what was routed here - by this loop or by another
+                # reader - in the order it came off the socket.
                 try:
                     routed = notifications.get_nowait()
                 except queue.Empty:
@@ -2541,9 +2552,13 @@ class BlockingWsSurrealConnection(
                 # Held through a whole 0.1s read and taken straight back, the
                 # lock kept every other request on the connection waiting for
                 # the read in progress, about 0.2s each.
-                response: dict[str, Any] | None = None
                 read = False
                 with self._locked():
+                    if not notifications.empty():
+                        # Another reader routed one here while this loop waited
+                        # for the lock. It came off the socket before anything
+                        # read now, so it goes first.
+                        continue
                     if self._reconnecting:
                         # Another thread noticed the drop first. This query
                         # comes back with its replay, or ends if it cannot.
@@ -2574,44 +2589,23 @@ class BlockingWsSurrealConnection(
                         ) from exc
                     if data is not None:
                         read = True
-                        response = self.decode_response(
-                            data if isinstance(data, bytes) else data.encode(),
-                            "reading a live notification",
-                            v2=self._v2,
+                        # Routed inside the same lock hold as the read - this
+                        # query's own notifications too, through its queue - so
+                        # that everything reaches its reader in the order it
+                        # came off the socket. Yielding our own straight away
+                        # let it overtake one another reader had already queued
+                        # here; routing a stream's frames after releasing let
+                        # two readers deliver them out of order.
+                        self._route_foreign(
+                            self.decode_response(
+                                data if isinstance(data, bytes) else data.encode(),
+                                "reading a live notification",
+                                v2=self._v2,
+                            )
                         )
-                        if response.get("id") is not None:
-                            # Not a notification: an RPC reply with no waiter,
-                            # or a frame belonging to a streaming query on this
-                            # connection. Dropping it here lost the stream's
-                            # frames, so hand it on - and do it inside the same
-                            # lock hold as the read, because a stream's frames
-                            # have to reach it in the order they came off the
-                            # socket. Decoding and routing after releasing let
-                            # two readers deliver out of order.
-                            self._route_foreign(response)
-                            response = None
 
                 if not read:
                     time.sleep(_POLL_GAP)
-                    continue
-                if response is None:
-                    continue
-
-                result = response.get("result")
-                if not isinstance(result, dict):
-                    continue
-                rid = result.get("id")
-                if rid is None:
-                    continue
-                rid = self._logical_live(result)
-                if rid == suid:
-                    if result.get("action") == _LIVE_KILLED:
-                        return
-                    yield result
-                else:
-                    # Notification for a different live query; route it onward.
-                    for other in self.live_queues.get(str(rid), []):
-                        other.put(result)
         finally:
             # Deregister this consumer's queue on exit (consumer break, GC,
             # error, or connection close).

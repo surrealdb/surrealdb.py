@@ -1971,6 +1971,60 @@ def test_blocking_a_live_iterator_does_not_starve_other_requests() -> None:
     assert max(waits) < 0.05
 
 
+def test_blocking_a_live_iterator_keeps_the_order_another_reader_queued_in() -> None:
+    """A notification another reader queued here comes out before a later one.
+
+    The live loop checked its queue, waited for the lock, then read the socket
+    and yielded what it read at once: a notification a request had routed to it
+    in that wait came out after the later one, as the 4.0 server showed when
+    writes on the subscribing connection came back as 1, 0, 2.
+    """
+    conn = BlockingWsSurrealConnection(WS_URL)
+    live_id = str(uuid.uuid4())
+    conn.socket = _FakeSyncSocket(  # type: ignore[assignment]
+        [encode({"result": {"id": live_id, "action": "CREATE", "result": {"n": 2}}})]
+    )
+    generator = conn.subscribe_live(live_id)
+    got: list[dict[str, Any]] = []
+    reader = threading.Thread(
+        target=lambda: got.extend([next(generator), next(generator)]), daemon=True
+    )
+    with conn._lock:
+        reader.start()
+        time.sleep(0.05)
+        conn._route_foreign(
+            {"result": {"id": live_id, "action": "CREATE", "result": {"n": 1}}}
+        )
+    reader.join(5)
+    generator.close()
+    assert [change["result"] for change in got] == [{"n": 1}, {"n": 2}]
+
+
+def test_blocking_the_pump_returns_once_another_reader_routed_a_frame() -> None:
+    """A frame another reader routed while the pump waited ends the wait.
+
+    Only a frame the pump read itself did, so when a live subscription or a
+    request on the connection read a stream's frame first, the stream waited out
+    the rest of its 100 ms slice for a frame already in its queue: twenty
+    streamed queries beside a live subscription took 0.56 s instead of 5 ms.
+    """
+    conn = BlockingWsSurrealConnection(WS_URL)
+    frames = _register_sync_stream(conn, "stream-1")
+    entered = threading.Event()
+    conn.socket = _SignallingSocket(entered)  # type: ignore[assignment]
+    pumping = threading.Thread(target=conn._stream_pump, args=(0.5,), daemon=True)
+    started = time.monotonic()
+    pumping.start()
+    assert entered.wait(5)
+    with conn._lock:
+        conn._route_foreign({**rows(0, [1]), "id": "stream-1"})
+    pumping.join(5)
+    elapsed = time.monotonic() - started
+    assert frames.qsize() == 1
+    assert elapsed < 0.1
+    conn._stream_release("stream-1")
+
+
 def test_blocking_the_live_iterator_routes_while_holding_the_lock() -> None:
     """The live loop reads the same socket, so it owes streams the same order."""
     conn = BlockingWsSurrealConnection(WS_URL)
@@ -1997,7 +2051,7 @@ def test_blocking_the_live_iterator_routes_while_holding_the_lock() -> None:
     finally:
         generator.close()
 
-    assert locked_while_routing == [True]
+    assert locked_while_routing == [True, True]
     conn._stream_release("stream-1")
 
 
