@@ -136,6 +136,17 @@ _LIVE_KILLED_SENTINEL: dict[str, Any] = {"action": _LIVE_KILLED, "id": None}
 # reconnect: it ends with ConnectionUnavailableError rather than quietly.
 _LIVE_BROKEN_SENTINEL: dict[str, Any] = {"action": "BROKEN", "id": None}
 
+# The socket is held for the connection's life and closed by the transport,
+# not by a `with` block. websockets 17.1 warns on the first send of such a
+# socket unless `connect()` was given `legacy=True`, which keeps it working
+# once `connect()` stops opening the socket itself; earlier versions have no
+# `legacy` and always open it.
+_OPEN_DIRECTLY: dict[str, Any] = (
+    {"legacy": True}
+    if "legacy" in inspect.signature(ws_sync.connect).parameters
+    else {}
+)
+
 
 def _release_live_queue(
     live_queues: dict[str, list["queue.Queue[dict[str, Any]]"]],
@@ -320,6 +331,7 @@ class BlockingWsSurrealConnection(
                 ],
                 ping_interval=self._ping_interval,
                 ping_timeout=self._ping_timeout,
+                **_OPEN_DIRECTLY,
             )
         except TimeoutError as exc:
             raise TransportTimeoutError(

@@ -297,6 +297,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `select(fields=[...])` delimits every field, so a field named after a
   keyword is read as the field: `fields=["value"]` used to send
   `SELECT value FROM ...`, which SurrealQL reads as the keyword.
+- The blocking WebSocket connection no longer emits websockets 17.1's
+  `DeprecationWarning` ("connect() must be used as a context manager") on its
+  first request. It now asks `connect()` for the socket with `legacy=True`
+  where websockets takes it, so it keeps working when `connect()` stops
+  opening the socket itself.
 
 ## [3.0.0-beta.11] - 2026-11-03
 
