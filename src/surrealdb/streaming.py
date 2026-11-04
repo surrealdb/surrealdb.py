@@ -592,8 +592,13 @@ def _buffered_events(
                 return
             continue
         result: Value = statement.get("result")
-        rows: list[Value] = result if isinstance(result, list) else [result]
         single = not isinstance(result, list)
+        # A NONE value is no row, as on the streamed path (`_value_frame`).
+        # Yielded as a `None` row, a `LET` made `rows(into=Model)` fail here
+        # and nowhere else, over HTTP and on servers before 3.3.
+        rows: list[Value] = (
+            result if isinstance(result, list) else [] if result is None else [result]
+        )
         for row in rows:
             yield _Row(index, row)
         if retain_rows:

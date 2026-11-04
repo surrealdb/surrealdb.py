@@ -1190,6 +1190,22 @@ async def test_a_learned_unsupported_server_skips_the_probe_entirely() -> None:
     assert channel.registry == {}
 
 
+async def test_the_fallback_skips_a_none_valued_statement_as_the_stream_does() -> None:
+    """A `LET` is no row on the buffered path either, so both give the same rows."""
+    buffered = [
+        {"status": "OK", "time": "1ms", "type": None, "result": None},
+        *BUFFERED,
+    ]
+    channel = _AsyncChannel([], buffered=buffered, supported=False)
+    stream = AsyncQueryStream(channel.ops(), "LET $x = 1; SELECT 1")
+    assert [row async for row in stream] == [{"n": 1}, {"n": 2}, 42]
+    statements = AsyncQueryStream(
+        channel.ops(), "LET $x = 1; SELECT 1", statements=True
+    )
+    values = [s.value async for s in statements]
+    assert values == [None, [{"n": 1}, {"n": 2}], 42]
+
+
 async def test_require_streaming_refuses_the_fallback() -> None:
     channel = _AsyncChannel([METHOD_NOT_FOUND], buffered=BUFFERED)
     stream = AsyncQueryStream(channel.ops(), "SELECT 1", require_streaming=True)
