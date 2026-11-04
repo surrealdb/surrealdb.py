@@ -79,10 +79,19 @@ class _Subscription(UUID):
         object.__setattr__(self, "_pending", notifications)
 
     def _take(self) -> Any:
-        """The held notifications, for the first iteration to read."""
+        """The held notifications, for the next iteration to read."""
         pending = self._pending
         object.__setattr__(self, "_pending", None)
         return pending
+
+    def _keep(self, notifications: Any) -> None:
+        """Hold an unfinished iteration's notifications for the next one.
+
+        Only one is kept: a second, from iterations that overlapped, is let
+        go, which deregisters it.
+        """
+        if not self._killed and self._pending is None:
+            object.__setattr__(self, "_pending", notifications)
 
     def __reduce__(self) -> tuple[type[UUID], tuple[str]]:
         return (UUID, (str(self),))
@@ -91,22 +100,91 @@ class _Subscription(UUID):
         return f"{type(self).__name__}('{self}')"
 
 
+class _Pass:
+    """One iteration over a subscription.
+
+    An iteration that stops early, with a ``break``, hands its notifications
+    back to the subscription still registered, so the next iteration carries
+    on from there. Each iteration used to subscribe afresh, and a change made
+    between two of them reached nobody. The hand-back is in ``__del__``,
+    which a ``break`` runs at once; an async generator is finalised only when
+    the event loop gets round to it, so as one an iteration could still be
+    registered, and its replacement not yet, when the change arrived.
+    """
+
+    def __init__(self, subscription: _Subscription, notifications: Any) -> None:
+        self._subscription = subscription
+        self._notifications = notifications
+        self._done = False
+
+    def _end(self) -> None:
+        """The notifications ended: the query was killed, or the connection went."""
+        self._done = True
+        self._notifications = None
+        self._subscription._ended()  # pyright: ignore[reportPrivateUsage]
+
+    def _release(self) -> None:
+        notifications, self._notifications = self._notifications, None
+        if not self._done and notifications is not None:
+            self._subscription._keep(notifications)  # pyright: ignore[reportPrivateUsage]
+        self._done = True
+
+    def __del__(self) -> None:
+        self._release()
+
+
+class _AsyncPass(_Pass):
+    def __aiter__(self) -> "_AsyncPass":
+        return self
+
+    async def __anext__(self) -> dict[str, Value]:
+        subscription = self._subscription
+        if self._done:
+            raise StopAsyncIteration
+        if self._notifications is None:
+            if subscription._killed:  # pyright: ignore[reportPrivateUsage]
+                self._done = True
+                raise StopAsyncIteration
+            self._notifications = (
+                subscription._take()  # pyright: ignore[reportPrivateUsage]
+                or await subscription._connection.subscribe_live(subscription)  # pyright: ignore[reportPrivateUsage]
+            )
+        try:
+            notification: dict[str, Value] = await self._notifications.__anext__()
+        except (StopAsyncIteration, ConnectionUnavailableError):
+            self._end()
+            raise
+        return notification
+
+    async def aclose(self) -> None:
+        """Stop this iteration, leaving the subscription listening for the next."""
+        self._release()
+
+
+class _SyncPass(_Pass):
+    def __iter__(self) -> "_SyncPass":
+        return self
+
+    def __next__(self) -> dict[str, Value]:
+        if self._done:
+            raise StopIteration
+        try:
+            notification: dict[str, Value] = next(self._notifications)
+        except (StopIteration, ConnectionUnavailableError):
+            self._end()
+            raise
+        return notification
+
+    def close(self) -> None:
+        """Stop this iteration, leaving the subscription listening for the next."""
+        self._release()
+
+
 class AsyncLiveSubscription(_Subscription):
     """A live query on an async connection."""
 
-    async def __aiter__(self) -> AsyncIterator[dict[str, Value]]:
-        if self._killed:
-            return
-        notifications = self._take()
-        if notifications is None:
-            notifications = await self._connection.subscribe_live(self)
-        try:
-            async for notification in notifications:
-                yield notification
-        except ConnectionUnavailableError:
-            self._ended()
-            raise
-        self._ended()
+    def __aiter__(self) -> AsyncIterator[dict[str, Value]]:
+        return _AsyncPass(self, None)
 
     async def kill(self) -> None:
         """Stop the live query. Iterators over it end.
@@ -142,17 +220,7 @@ class LiveSubscription(_Subscription):
             # Subscribed here rather than on the first next(), so notifications
             # from changes made after iter() but before reading are kept.
             notifications = self._connection.subscribe_live(self)
-        return self._follow(notifications)
-
-    def _follow(
-        self, notifications: Iterator[dict[str, Value]]
-    ) -> Iterator[dict[str, Value]]:
-        try:
-            yield from notifications
-        except ConnectionUnavailableError:
-            self._ended()
-            raise
-        self._ended()
+        return _SyncPass(self, notifications)
 
     def kill(self) -> None:
         """Stop the live query. Iterators over it end.
