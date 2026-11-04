@@ -8,7 +8,15 @@ from typing import Any
 
 import pytest
 
-from surrealdb import AsyncSurreal, Datetime, RecordID, Surreal, Table
+from surrealdb import (
+    AsyncSurreal,
+    BoundIncluded,
+    Datetime,
+    Range,
+    RecordID,
+    Surreal,
+    Table,
+)
 from surrealdb.connections.api import ApiResponse, build_api_query, graphql_params
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
@@ -265,6 +273,11 @@ def test_relate_refuses_ends_that_are_not_records(db: Blocking) -> None:
         db.relate(Table("person"), "knows", bob)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="relates records"):
         db.relate(ada, "knows", "person")
+    span = RecordID("person", Range(BoundIncluded("a"), BoundIncluded("b")))
+    with pytest.raises(TypeError, match="record range"):
+        db.relate(span, "knows", bob)
+    with pytest.raises(TypeError, match="record range"):
+        db.relate(ada, "knows", [bob, span])
 
 
 def test_version_is_sent_as_a_literal_every_server_parses(db: Blocking) -> None:

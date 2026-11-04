@@ -422,6 +422,15 @@ def _check_relate_end(end: object, side: str) -> None:
         end if isinstance(end, Sequence) and not isinstance(end, str) else [end]
     )
     for item in items:
+        if isinstance(item, RecordID) and isinstance(item.id, Range):
+            # A range names many records, as a table does, but SurrealDB
+            # takes it as one: the edge was stored with the range itself as
+            # its end, linking none of the records in it.
+            raise TypeError(
+                f"relate() relates single records, and {side} is the record "
+                f"range {item}, which names many. Select the records in it and "
+                "pass the list of their ids"
+            )
         if isinstance(item, (RecordID, StringRecordId)):
             continue
         raise TypeError(
