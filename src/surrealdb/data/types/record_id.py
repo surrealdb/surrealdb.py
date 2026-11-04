@@ -54,6 +54,24 @@ _ID_TYPE_IMPOSTORS: tuple[type, ...] = (bool, SurrealSet)
 _ID_TYPE_NAMES = "str, int, uuid.UUID, list, tuple, dict or Range"
 
 
+def _hashable(value: Any) -> Any:
+    """*value* as something hashable that is equal wherever *value* is.
+
+    A dict becomes the frozenset of its items, so key order does not count,
+    and a list or tuple a tuple. Anything else hashable is used as it is,
+    which leaves equal numbers hashing alike, as Python guarantees.
+    """
+    if isinstance(value, dict):
+        return frozenset((key, _hashable(item)) for key, item in value.items())
+    if isinstance(value, (list, tuple)):
+        return tuple(_hashable(item) for item in value)
+    try:
+        hash(value)
+    except TypeError:
+        return repr(value)
+    return value
+
+
 def _id_type_error(identifier: Any) -> TypeError:
     """Build the message for a record id of an unusable type.
 
@@ -303,11 +321,13 @@ class RecordID:
         return False
 
     def __hash__(self) -> int:
-        # ``id`` may be an unhashable value (e.g. a dict or list) for
-        # object/array record ids, so hash its string form to stay total.
-        # This mirrors ``__eq__``: equal RecordIDs have equal ``table_name``
-        # and equal ``id``, hence equal ``str(id)``.
-        return hash((self.table_name, str(self.id)))
+        # ``id`` may be an unhashable value (a dict or list) for object and
+        # array record ids, so it is hashed in a hashable form that keeps
+        # ``__eq__``'s notion of equal. Its string form did not: equal objects
+        # with their keys in another order - the server sorts them - and
+        # ``[1]`` against ``[1.0]`` print differently, so a record read back
+        # was not found in a set holding the one written.
+        return hash((self.table_name, _hashable(self.id)))
 
     @staticmethod
     def parse(record_str: str) -> RecordID:
