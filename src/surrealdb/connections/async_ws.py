@@ -2556,6 +2556,12 @@ class AsyncWsSurrealConnection(
         authentication of *session_id* - the connection's own session by
         default - into a newly attached session. The two are independent from
         then on. Needs SurrealDB 3.0 or later.
+
+        The fork gets the access token but not the refresh token, which the
+        server takes only once: shared, renewing either session spent it for
+        both, and the other's next renewal was refused. Renew the fork by
+        signing it in, or by refreshing the source and authenticating the
+        fork with the new access token.
         """
         if session_id is not None and session_id not in self._registry.sessions:
             raise ValueError(
@@ -2573,7 +2579,7 @@ class AsyncWsSurrealConnection(
         state.namespace, state.database = source.namespace, source.database
         state.variables = source.variables
         if authenticated and source.access is not None:
-            state.access, state.refresh = source.access, source.refresh
+            state.access, state.refresh = source.access, None
         return AsyncSurrealSession(self, forked)
 
     async def begin_transaction(
