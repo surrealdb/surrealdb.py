@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "surrealdb"
-version = "3.0.0-beta.11"
+version = "3.0.0"
 description = "SurrealDB python client"
 readme = "README.md"
 authors = [{ name = "SurrealDB" }]
@@ -12,7 +12,7 @@ license = "Apache-2.0"
 keywords = ["SurrealDB", "Database"]
 requires-python = ">=3.10"
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
@@ -70,7 +70,7 @@ documentation = "https://surrealdb.com/docs/sdk/python"
 
 [project.optional-dependencies]
 embedded = [
-    "surrealdb-embedded==3.0.0-beta.11",
+    "surrealdb-embedded==3.0.0",
 ]
 pydantic = [
     "pydantic>=2.13.5",

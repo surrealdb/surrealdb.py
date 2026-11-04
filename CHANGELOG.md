@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-11-04
+
+The first stable release on the 3.0.0 track. Upgrading from `3.0.0-beta.11`:
+a string such as `"person:1"` is now always a table name, so pass a `RecordID`
+or `StringRecordId` to target a record. `file://` and `surrealkv://`
+directories that the 3.x embedded engine wrote must be exported and imported
+again before the 4.0 engine opens them. In-memory and remote connections need
+no other changes.
+
 ### Added
 
 - `live()` returns a subscription, as in the JS SDK: an `AsyncLiveSubscription`
@@ -295,6 +304,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   embedded engine, now work.
 - Building the extension from source needs Rust 1.95 or later, which a
   transitive dependency of `surrealdb-core` 4.0 requires.
+- Both `surrealdb` and `surrealdb-embedded` now declare
+  `Development Status :: 5 - Production/Stable` instead of `4 - Beta`.
+  Packaging metadata only; no code changes.
 
 ### Fixed
 
@@ -1137,7 +1149,8 @@ Follow-up to `3.0.0-alpha.1` that finalises the v3 API surface and fixes a batch
 ### Added
 - Initial stable release of the SurrealDB Python client.
 
-[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.11...HEAD
+[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.11...v3.0.0
 [3.0.0-beta.11]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.10...v3.0.0-beta.11
 [3.0.0-beta.10]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.9...v3.0.0-beta.10
 [3.0.0-beta.9]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.8...v3.0.0-beta.9
