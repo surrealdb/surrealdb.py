@@ -1,5 +1,6 @@
 import pytest
 
+from surrealdb import StringRecordId
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
@@ -18,7 +19,7 @@ async def test_delete_string(
     await async_http_connection.query("CREATE user:tobie SET name = 'Tobie';")
 
     # Delete operation returns the deleted record
-    outcome = await async_http_connection.delete("user:tobie")
+    outcome = await async_http_connection.delete(StringRecordId("user:tobie"))
     assert outcome is not None
     assert outcome["id"] == record_id
     assert outcome["name"] == "Tobie"
@@ -64,7 +65,7 @@ async def test_delete_string_absent(
     await async_http_connection.query("DELETE user;")
 
     # Deleting an absent "table:id" record returns None (matching select).
-    outcome = await async_http_connection.delete("user:missing")
+    outcome = await async_http_connection.delete(StringRecordId("user:missing"))
     assert outcome is None
 
 

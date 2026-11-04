@@ -156,6 +156,28 @@ async def test_the_async_engine_reconnects_too() -> None:
     await connection.close()
 
 
+def test_a_reopened_engine_forgets_the_session() -> None:
+    connection = BlockingEmbeddedSurrealConnection("memory")
+    connection.use("ns", "db")
+    connection.close()
+
+    connection.connect()
+
+    assert (connection.namespace, connection.database) == (None, None)
+    connection.close()
+
+
+async def test_a_reopened_async_engine_forgets_the_session() -> None:
+    connection = AsyncEmbeddedSurrealConnection("memory")
+    await connection.use("ns", "db")
+    await connection.close()
+
+    await connection.connect()
+
+    assert (connection.namespace, connection.database) == (None, None)
+    await connection.close()
+
+
 # ------------------------------------------------------------- invalidating
 
 

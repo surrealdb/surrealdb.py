@@ -160,6 +160,25 @@ def test_record_id_hashable_with_unhashable_id() -> None:
     )
 
 
+def test_record_ids_that_are_equal_hash_alike() -> None:
+    """Equal ids hash alike however they print.
+
+    The server sorts an object id's keys, so the id read back of a record
+    written as ``{"b": 1, "a": 2}`` prints differently from the one written,
+    and ``[1]`` equals ``[1.0]``: hashing the printed form put them in
+    different buckets, so ``created["id"] in {written}`` was False.
+    """
+    pairs = [
+        (RecordID("t", {"b": 1, "a": 2}), RecordID("t", {"a": 2, "b": 1})),
+        (RecordID("t", [1]), RecordID("t", [1.0])),
+        (RecordID("t", [{"y": [1], "x": 2}]), RecordID("t", [{"x": 2, "y": [1.0]}])),
+    ]
+    for written, read_back in pairs:
+        assert written == read_back
+        assert hash(written) == hash(read_back)
+        assert read_back in {written}
+
+
 def test_record_id_str() -> None:
     """Test RecordID string representation."""
     record_id = RecordID("users", "john")

@@ -4,8 +4,11 @@ from typing import Any
 
 import pytest
 
+from surrealdb.cbor import CBORTag, dumps
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data import cbor
+from surrealdb.data.types import constants
+from surrealdb.errors import UnexpectedResponseError
 from surrealdb.types import Value
 
 
@@ -160,3 +163,28 @@ async def test_decimal_parameter(surrealdb_connection: Any) -> None:
     ).first()
     assert isinstance(second_result[0]["value"], decimal.Decimal)
     assert second_result[0]["value"] == decimal.Decimal("3.141592653589793")
+
+
+def test_trailing_zeros_past_surrealdbs_scale_are_dropped() -> None:
+    """`Decimal("0E-30")` is an ordinary result of Decimal arithmetic; written
+    out as is, its 30 digits after the point are more than any SurrealDB
+    decimal holds, and the SDK's own decoder refused the round trip."""
+    for value, sent in [
+        (decimal.Decimal("0E-30"), "0." + "0" * 28),
+        (decimal.Decimal("1." + "0" * 31), "1." + "0" * 28),
+        (decimal.Decimal("-2.5" + "0" * 30), "-2.5" + "0" * 27),
+    ]:
+        assert cbor.decode(cbor.encode(value)) == value
+        assert sent.encode() in cbor.encode(value)
+
+
+def test_a_decimal_too_long_for_surrealdb_is_refused_as_a_bad_response() -> None:
+    raw = dumps(CBORTag(constants.TAG_DECIMAL_STRING, "9" * 5000))
+    with pytest.raises(UnexpectedResponseError, match="96-bit"):
+        cbor.decode(raw)
+
+
+def test_a_decimal_is_read_from_ascii_digits_only() -> None:
+    raw = dumps(CBORTag(constants.TAG_DECIMAL_STRING, "١٢٣"))
+    with pytest.raises(UnexpectedResponseError, match="decimal number as text"):
+        cbor.decode(raw)

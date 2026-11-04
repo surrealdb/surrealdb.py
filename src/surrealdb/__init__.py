@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from surrealdb.connections.api import ApiResponse
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.async_ws import (
     AsyncSurrealSession,
     AsyncSurrealTransaction,
     AsyncWsSurrealConnection,
 )
+from surrealdb.connections.auth_provider import AuthProvider
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import (
     BlockingSurrealSession,
@@ -26,7 +28,11 @@ from surrealdb.connections.builders import (
     SyncRows,
 )
 from surrealdb.connections.files import AsyncFiles, BlockingFiles, FileMetadata
+from surrealdb.connections.import_export import ExportOptions
+from surrealdb.connections.live import AsyncLiveSubscription, LiveSubscription
+from surrealdb.connections.reconnect import ReconnectOptions
 from surrealdb.connections.url import Url, UrlScheme
+from surrealdb.data.types.big_decimal import BigDecimal
 from surrealdb.data.types.datetime import Datetime, PreciseDatetime
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.file import File
@@ -45,10 +51,26 @@ from surrealdb.data.types.range import Bound, BoundExcluded, BoundIncluded, Rang
 from surrealdb.data.types.record_id import (
     RecordID,
     RecordIdValue,
+    StringRecordId,
     escape_identifier,
 )
+from surrealdb.data.types.regex import Regex
 from surrealdb.data.types.set import SurrealSet
+from surrealdb.data.types.sized import (
+    F16,
+    F32,
+    I8,
+    I16,
+    I32,
+    U8,
+    U16,
+    U32,
+    U64,
+    SizedFloat,
+    SizedInt,
+)
 from surrealdb.data.types.table import Table
+from surrealdb.data.types.temporal import Interval, PlainDate, PlainTime, Timestamp
 from surrealdb.errors import (
     AlreadyExistsDetailKind,
     AlreadyExistsError,
@@ -59,6 +81,7 @@ from surrealdb.errors import (
     ConnectionUnavailableError,
     ErrorKind,
     HttpStatusError,
+    ImportFailedError,
     InternalError,
     InvalidDurationError,
     InvalidGeometryError,
@@ -79,11 +102,19 @@ from surrealdb.errors import (
     ThrownError,
     TransportError,
     TransportTimeoutError,
+    UnavailableFeatureError,
     UnexpectedResponseError,
     UnsupportedEngineError,
     UnsupportedFeatureError,
+    UnsupportedVersionError,
     ValidationDetailKind,
     ValidationError,
+)
+from surrealdb.features import (
+    MAXIMUM_VERSION,
+    MINIMUM_VERSION,
+    Feature,
+    Features,
 )
 from surrealdb.streaming import (
     AsyncQueryStream,
@@ -189,19 +220,47 @@ __all__ = [
     "Bound",
     "BoundIncluded",
     "BoundExcluded",
+    "ApiResponse",
+    "ExportOptions",
+    "AsyncLiveSubscription",
+    "LiveSubscription",
+    "ReconnectOptions",
     "RecordID",
     # The id types SurrealDB accepts. `RecordID.id` is deliberately wider
     # (a decoded value can be anything a server sends), so this is the name to
     # annotate or cast a value you construct against.
     "RecordIdValue",
+    "StringRecordId",
     "Datetime",
     "PreciseDatetime",
+    "I8",
+    "U8",
+    "I16",
+    "U16",
+    "I32",
+    "U32",
+    "U64",
+    "F16",
+    "F32",
+    "SizedInt",
+    "SizedFloat",
+    "PlainDate",
+    "PlainTime",
+    "Timestamp",
+    "Interval",
+    "BigDecimal",
+    "Regex",
     "Null",
     "NullType",
     "SurrealSet",
     "Tokens",
     "Value",
     "escape_identifier",
+    # Server versions and the features gated on them
+    "Feature",
+    "Features",
+    "MAXIMUM_VERSION",
+    "MINIMUM_VERSION",
     # Errors – base
     "SurrealError",
     # Errors – server
@@ -231,9 +290,12 @@ __all__ = [
     "ConnectionUnavailableError",
     "TransportTimeoutError",
     "HttpStatusError",
+    "ImportFailedError",
     # Errors – SDK-side
     "UnsupportedEngineError",
     "UnsupportedFeatureError",
+    "UnavailableFeatureError",
+    "UnsupportedVersionError",
     "UnexpectedResponseError",
     "InvalidRecordIdError",
     "InvalidDurationError",
@@ -296,6 +358,10 @@ def Surreal(
     ping_interval: float | None = 30.0,
     ping_timeout: float | None = 10.0,
     timeout: float | None = 30.0,
+    version_check: bool = True,
+    reconnect: bool | ReconnectOptions = True,
+    auth: AuthProvider | None = None,
+    renew_access: bool = True,
 ) -> BlockingSurrealConnection:
     """Open a connection to *url*, picking the transport from its scheme.
 
@@ -321,6 +387,24 @@ def Surreal(
             indefinitely. Defaults to 30. ``with db.timeout(seconds):`` overrides
             it for the requests made inside the block. Ignored by the embedded
             engine, whose requests never leave the process.
+        version_check: Refuse a server outside the versions this SDK supports
+            (``MINIMUM_VERSION`` up to, but not including, ``MAXIMUM_VERSION``
+            in :mod:`surrealdb.features`). On by default; ``False`` connects
+            anyway. Ignored by the embedded engine.
+        reconnect: Whether a websocket connection reconnects on its own when
+            the socket drops, replaying the namespace and database, variables,
+            authentication, sessions and live queries. ``True`` (the default)
+            uses the default :class:`ReconnectOptions`; pass options to tune the
+            attempts and backoff, or ``False`` to turn it off. Ignored by the
+            transports that have no websocket.
+        auth: How the connection signs itself in: signin credentials, an
+            access token, ``Tokens``, or a function returning one of those
+            (a coroutine function too, for ``AsyncSurreal``). Applied when the
+            connection opens and after every reconnect - see
+            :mod:`surrealdb.connections.auth_provider`. Ignored by the
+            embedded engine.
+        renew_access: Renew the access token shortly before it expires, with
+            the refresh token or else with *auth*. On by default.
     """
     constructed_url = Url(url)
     if constructed_url.scheme in _EMBEDDED_SCHEMES:
@@ -331,7 +415,13 @@ def Surreal(
         constructed_url.scheme == UrlScheme.HTTP
         or constructed_url.scheme == UrlScheme.HTTPS
     ):
-        return BlockingHttpSurrealConnection(url=url, timeout=timeout)
+        return BlockingHttpSurrealConnection(
+            url=url,
+            timeout=timeout,
+            version_check=version_check,
+            auth=auth,
+            renew_access=renew_access,
+        )
     elif (
         constructed_url.scheme == UrlScheme.WS
         or constructed_url.scheme == UrlScheme.WSS
@@ -342,6 +432,10 @@ def Surreal(
             ping_interval=ping_interval,
             ping_timeout=ping_timeout,
             timeout=timeout,
+            version_check=version_check,
+            reconnect=reconnect,
+            auth=auth,
+            renew_access=renew_access,
         )
     else:
         raise UnsupportedEngineError(url)
@@ -354,6 +448,10 @@ def AsyncSurreal(
     ping_interval: float | None = 30.0,
     ping_timeout: float | None = 10.0,
     timeout: float | None = 30.0,
+    version_check: bool = True,
+    reconnect: bool | ReconnectOptions = True,
+    auth: AuthProvider | None = None,
+    renew_access: bool = True,
 ) -> AsyncSurrealConnection:
     """Open a connection to *url*, picking the transport from its scheme.
 
@@ -379,6 +477,24 @@ def AsyncSurreal(
             indefinitely. Defaults to 30. ``with db.timeout(seconds):`` overrides
             it for the requests made inside the block. Ignored by the embedded
             engine, whose requests never leave the process.
+        version_check: Refuse a server outside the versions this SDK supports
+            (``MINIMUM_VERSION`` up to, but not including, ``MAXIMUM_VERSION``
+            in :mod:`surrealdb.features`). On by default; ``False`` connects
+            anyway. Ignored by the embedded engine.
+        reconnect: Whether a websocket connection reconnects on its own when
+            the socket drops, replaying the namespace and database, variables,
+            authentication, sessions and live queries. ``True`` (the default)
+            uses the default :class:`ReconnectOptions`; pass options to tune the
+            attempts and backoff, or ``False`` to turn it off. Ignored by the
+            transports that have no websocket.
+        auth: How the connection signs itself in: signin credentials, an
+            access token, ``Tokens``, or a function returning one of those
+            (a coroutine function too, for ``AsyncSurreal``). Applied when the
+            connection opens and after every reconnect - see
+            :mod:`surrealdb.connections.auth_provider`. Ignored by the
+            embedded engine.
+        renew_access: Renew the access token shortly before it expires, with
+            the refresh token or else with *auth*. On by default.
     """
     constructed_url = Url(url)
     if constructed_url.scheme in _EMBEDDED_SCHEMES:
@@ -389,7 +505,13 @@ def AsyncSurreal(
         constructed_url.scheme == UrlScheme.HTTP
         or constructed_url.scheme == UrlScheme.HTTPS
     ):
-        return AsyncHttpSurrealConnection(url=url, timeout=timeout)
+        return AsyncHttpSurrealConnection(
+            url=url,
+            timeout=timeout,
+            version_check=version_check,
+            auth=auth,
+            renew_access=renew_access,
+        )
     elif (
         constructed_url.scheme == UrlScheme.WS
         or constructed_url.scheme == UrlScheme.WSS
@@ -400,6 +522,10 @@ def AsyncSurreal(
             ping_interval=ping_interval,
             ping_timeout=ping_timeout,
             timeout=timeout,
+            version_check=version_check,
+            reconnect=reconnect,
+            auth=auth,
+            renew_access=renew_access,
         )
     else:
         raise UnsupportedEngineError(url)

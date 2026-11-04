@@ -1,5 +1,6 @@
 import pytest
 
+from surrealdb import StringRecordId
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
@@ -17,7 +18,7 @@ def test_delete_string(
     blocking_ws_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()
 
     # Delete operation returns the deleted record
-    outcome = blocking_ws_connection.delete("user:tobie").execute()
+    outcome = blocking_ws_connection.delete(StringRecordId("user:tobie")).execute()
     assert outcome is not None
     assert outcome["id"] == record_id
     assert outcome["name"] == "Tobie"
@@ -60,7 +61,7 @@ def test_delete_string_absent(
     blocking_ws_connection.query("DELETE user;").execute()
 
     # Deleting an absent "table:id" record returns None (matching select).
-    outcome = blocking_ws_connection.delete("user:missing").execute()
+    outcome = blocking_ws_connection.delete(StringRecordId("user:missing")).execute()
     assert outcome is None
 
 

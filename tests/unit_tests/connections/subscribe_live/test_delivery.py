@@ -36,6 +36,7 @@ from typing import Any
 
 import pytest
 
+from surrealdb import StringRecordId
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
@@ -277,18 +278,24 @@ def test_real_notifications_are_not_mistaken_for_the_end(
     blocking_ws_connection.query(
         "REMOVE TABLE IF EXISTS thing; DEFINE TABLE thing SCHEMALESS;"
     ).execute()
-    blocking_ws_connection_secondary.create("thing:target", {"n": 0})
+    blocking_ws_connection_secondary.create(StringRecordId("thing:target"), {"n": 0})
 
     live_id = blocking_ws_connection.live("thing")
     subscription = blocking_ws_connection.subscribe_live(live_id)
 
     try:
         if action == "CREATE":
-            blocking_ws_connection_secondary.create("thing:fresh", {"n": 1})
+            blocking_ws_connection_secondary.create(
+                StringRecordId("thing:fresh"), {"n": 1}
+            )
         elif action == "UPDATE":
-            blocking_ws_connection_secondary.update("thing:target", {"n": 2})
+            blocking_ws_connection_secondary.update(
+                StringRecordId("thing:target"), {"n": 2}
+            )
         else:
-            blocking_ws_connection_secondary.delete("thing:target").execute()
+            blocking_ws_connection_secondary.delete(
+                StringRecordId("thing:target")
+            ).execute()
 
         notification = _next_within(subscription)
         assert notification["action"] == action

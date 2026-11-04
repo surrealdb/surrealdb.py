@@ -19,6 +19,7 @@ from surrealdb.errors import (
     HttpStatusError,
     SurrealError,
     UnexpectedResponseError,
+    ValidationError,
     parse_query_error,
     parse_rpc_error,
 )
@@ -92,6 +93,46 @@ def merge_query_vars(
 
 # One segment of a function name that needs no quoting: `fn`, `time`, `now`.
 _PLAIN_SEGMENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+
+
+# The variables the server keeps for a session itself, which ``let`` refuses.
+PROTECTED_VARIABLES = frozenset({"access", "auth", "session", "token"})
+
+
+def check_let_name(key: str) -> None:
+    """Refuse a protected variable name at ``let()``, as the server does.
+
+    A websocket's ``let`` is refused by the server. HTTP keeps the variable
+    on the client and sends it with each query, so it was taken, and every
+    query after it was refused instead. The error is the one the server gives.
+    """
+    if key in PROTECTED_VARIABLES:
+        raise ValidationError(
+            ErrorKind.VALIDATION,
+            f"Cannot set protected variable: {key}",
+            code=-32603,
+            details={"kind": "InvalidParams"},
+        )
+
+
+def check_header_name(kind: str, name: object) -> None:
+    """Refuse a namespace or database name HTTP cannot send.
+
+    HTTP carries them in the ``Surreal-NS`` and ``Surreal-DB`` headers, and
+    the server reads a header only if it is printable ASCII. ``use()`` used to
+    take any name and every request after it failed: 401 "There was a problem
+    with authentication" from the server, or a bare ``UnicodeEncodeError``
+    from requests for a name outside latin-1.
+    """
+    if isinstance(name, str) and not all(
+        " " <= char <= "~" or char == "\t" for char in name
+    ):
+        raise ValueError(
+            f"HTTP sends the {kind} in a request header, which carries only "
+            f"printable ASCII, so {name!r} cannot be selected over HTTP: use a "
+            f"websocket connection for it, or an ASCII {kind} name"
+        )
+
 
 # Characters that cannot appear inside a backtick-quoted segment without
 # ending the quoting, so a name containing one cannot be rendered safely.
@@ -217,14 +258,47 @@ __all__ = [
     "RecordIdType",
     "SurrealError",
     "Table",
+    "CBOR",
+    "CBOR2",
+    "CBOR2_MEDIA_TYPE",
     "UtilsMixin",
     "build_run_query",
     "check_keepalive",
+    "is_cbor2_media_type",
     "merge_query_vars",
 ]
 
 
+CBOR = "cbor"
+CBOR2 = "cbor.2"
+CBOR2_MEDIA_TYPE = "application/cbor; v=2"
+
+
+def is_cbor2_media_type(content_type: str | None) -> bool:
+    """Whether a ``Content-Type`` is ``application/cbor`` with ``v=2``."""
+    if not content_type:
+        return False
+    kind, *params = (part.strip() for part in content_type.split(";"))
+    if kind.lower() != "application/cbor":
+        return False
+    return any(p.replace(" ", "").lower() in ("v=2", 'v="2"') for p in params)
+
+
 class UtilsMixin:
+    _v2: bool = False
+
+    @property
+    def wire_format(self) -> str:
+        """The CBOR the connection speaks: ``"cbor.2"`` with SurrealDB 4, ``"cbor"`` otherwise.
+
+        Over WebSocket it is negotiated when the socket opens. Over HTTP the
+        connection asks for ``cbor.2`` and switches once a response comes back
+        in it, so it reads ``"cbor"`` until the first request has been
+        answered. Only ``cbor.2`` carries the sized numbers in
+        :mod:`surrealdb.data.types.sized` at their width.
+        """
+        return CBOR2 if self._v2 else CBOR
+
     @staticmethod
     def check_response_for_error(response: dict[str, Any], process: str) -> None:
         error = response.get("error")
@@ -232,7 +306,9 @@ class UtilsMixin:
             raise parse_rpc_error(error)
 
     @staticmethod
-    def check_status_for_error(status: int, body: bytes, url: str) -> None:
+    def check_status_for_error(
+        status: int, body: bytes, url: str, *, v2: bool = False
+    ) -> None:
         """Raise when an HTTP RPC response carries a non-2xx status.
 
         A non-2xx ``/rpc`` response normally carries an HTTP-layer body — plain
@@ -245,7 +321,7 @@ class UtilsMixin:
         if 200 <= status < 300:
             return
         try:
-            decoded = decode(body)
+            decoded = decode(body, v2=v2)
         except Exception:
             decoded = None
         if isinstance(decoded, dict):
@@ -255,7 +331,9 @@ class UtilsMixin:
         raise HttpStatusError(status, _body_text(body), url)
 
     @staticmethod
-    def decode_response(body: bytes, process: str) -> dict[str, Any]:
+    def decode_response(
+        body: bytes, process: str, *, v2: bool = False
+    ) -> dict[str, Any]:
         """Decode a CBOR RPC envelope, or raise ``UnexpectedResponseError``.
 
         The envelope is always a map, and every caller reads it as one. Handing
@@ -266,7 +344,7 @@ class UtilsMixin:
         neither the operation nor what had actually come back.
         """
         try:
-            decoded = decode(body)
+            decoded = decode(body, v2=v2)
         except Exception as exc:
             raise UnexpectedResponseError(
                 f"could not decode the response while {process}: {exc}"

@@ -98,6 +98,7 @@ dev = [
     "pyright>=1.1.414",
     "ruff>=0.16.10",
     "types-requests>=2.33.0.20261006",   # Type stubs for requests
+    "types-pyyaml>=6.0.12",
 ]
 test = [
     "coverage>=7.16.2",
@@ -105,6 +106,7 @@ test = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
+    "pyyaml>=6.0.2",
     "responses>=0.26.3",
 ]
 
@@ -365,6 +367,7 @@ asyncio_mode = "auto"
 markers = [
     "surrealdb_v3: tests that require a running SurrealDB 3.x server (skipped otherwise)",
     "slow: live-server tests that wait out deliberate delays; deselect with -m 'not slow'",
+    "network: tests that need a running SurrealDB server; deselect with -m 'not network'",
 ]
 addopts = [
     "--strict-markers",

@@ -2,6 +2,7 @@ from typing import Any, cast
 
 import pytest
 
+from surrealdb import StringRecordId
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
@@ -43,7 +44,7 @@ def test_update_string(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
     ).execute()
 
-    outcome = blocking_http_connection.update("user:tobie").execute()
+    outcome = blocking_http_connection.update(StringRecordId("user:tobie")).execute()
     assert outcome["id"] == record_id
     assert outcome["name"] == "Tobie"
     rows = cast(
@@ -64,7 +65,9 @@ def test_update_string_with_data(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
     ).execute()
 
-    first_outcome = blocking_http_connection.update("user:tobie", update_data)
+    first_outcome = blocking_http_connection.update(
+        StringRecordId("user:tobie"), update_data
+    )
     print("DEBUG update_string_with_data result:", first_outcome)
     check_change(cast(dict[str, Any], first_outcome), record_id)
     rows = cast(

@@ -2,6 +2,7 @@ from typing import Any, cast
 
 import pytest
 
+from surrealdb import StringRecordId
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
@@ -44,7 +45,7 @@ async def test_update_string(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
     )
 
-    outcome = await async_ws_connection.update("user:tobie")
+    outcome = await async_ws_connection.update(StringRecordId("user:tobie"))
     assert outcome["id"] == record_id
     assert outcome["name"] == "Tobie"
     rows = cast(
@@ -65,7 +66,9 @@ async def test_update_string_with_data(
         "CREATE user:tobie SET name = 'Tobie', email = 'tobie@example.com', enabled = true, password = 'root';"
     )
 
-    first_outcome = await async_ws_connection.update("user:tobie", update_data)
+    first_outcome = await async_ws_connection.update(
+        StringRecordId("user:tobie"), update_data
+    )
     check_change(cast(dict[str, Any], first_outcome), record_id)
     rows = cast(
         list[dict[str, Any]],

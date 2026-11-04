@@ -90,3 +90,6 @@ manifest/
 .ruff_cache/
 tests/db_snapshots/
 logs/
+
+# surrealdb-protocol vectors, fetched by scripts/protocol-vectors.sh
+tests/unit_tests/conformance/vectors/*.yaml

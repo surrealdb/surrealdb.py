@@ -48,12 +48,42 @@ def _reader(raw: Any) -> Callable[[], bytes]:
     return lambda: raw.read(1 << 12, decode_content=True)
 
 
+def _declared_length(response: requests.Response) -> int | None:
+    """The length *response* declared for its body, to check what is read by.
+
+    Not for a compressed body: the declared length counts the compressed
+    bytes, and what is read has been decoded.
+    """
+    headers = response.headers
+    if headers.get("Content-Encoding", "identity").lower() != "identity":
+        return None
+    try:
+        length = int(headers.get("Content-Length", ""))
+    except ValueError:
+        return None
+    return length if length >= 0 else None
+
+
 def iter_body(response: requests.Response, deadline: float | None) -> Iterator[bytes]:
     """The body of *response* as it arrives, unless *deadline* passes first.
 
     :raises TimeoutError: at the deadline.
-    :raises requests.exceptions.ConnectionError: if the connection breaks.
+    :raises requests.exceptions.ConnectionError: if the connection breaks,
+        including when the body ends short of the length the server declared
+        for it - which urllib3 1.26 lets pass as the end of the body.
     """
+    expected = _declared_length(response)
+    received = 0
+    for chunk in _chunks(response, deadline):
+        received += len(chunk)
+        yield chunk
+    if expected is not None and received < expected:
+        raise requests.exceptions.ConnectionError(
+            f"the reply ended after {received} of the {expected} bytes it declared"
+        )
+
+
+def _chunks(response: requests.Response, deadline: float | None) -> Iterator[bytes]:
     if deadline is None:
         yield from response.iter_content(_CHUNK)
         return
@@ -79,6 +109,4 @@ def iter_body(response: requests.Response, deadline: float | None) -> Iterator[b
 
 def read_body(response: requests.Response, deadline: float | None) -> bytes:
     """The whole body of *response*, unless *deadline* passes first."""
-    if deadline is None:
-        return response.content
     return b"".join(iter_body(response, deadline))

@@ -2,6 +2,7 @@ from typing import Any
 
 import pytest
 
+from surrealdb import StringRecordId
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
@@ -29,7 +30,7 @@ def test_debug_delete(blocking_http_connection: BlockingHttpSurrealConnection) -
 
     # Debug: Check what delete actually returns. delete() runs eagerly and
     # returns the deleted record directly (no builder / .execute()).
-    outcome = blocking_http_connection.delete("user:tobie").execute()
+    outcome = blocking_http_connection.delete(StringRecordId("user:tobie")).execute()
     print(f"DEBUG: Delete outcome: {outcome!r}")
     print(f"DEBUG: Type: {type(outcome)}")
 
@@ -45,7 +46,7 @@ def test_delete_string(
     blocking_http_connection.query("CREATE user:tobie SET name = 'Tobie';").execute()
 
     # Delete operation returns the deleted record
-    outcome = blocking_http_connection.delete("user:tobie").execute()
+    outcome = blocking_http_connection.delete(StringRecordId("user:tobie")).execute()
     assert outcome is not None
     assert outcome["id"] == record_id
     assert outcome["name"] == "Tobie"
@@ -88,7 +89,7 @@ def test_delete_string_absent(
     blocking_http_connection.query("DELETE user;").execute()
 
     # Deleting an absent "table:id" record returns None (matching select).
-    outcome = blocking_http_connection.delete("user:missing").execute()
+    outcome = blocking_http_connection.delete(StringRecordId("user:missing")).execute()
     assert outcome is None
 
 

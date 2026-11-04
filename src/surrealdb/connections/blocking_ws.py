@@ -2,16 +2,17 @@
 A basic blocking connection to a SurrealDB instance.
 """
 
+import inspect
 import logging
 import queue
 import threading
 import time
 import uuid
 import weakref
-from collections.abc import Generator, Sequence
-from contextlib import AbstractContextManager
+from collections.abc import Generator, Mapping, Sequence
+from contextlib import AbstractContextManager, contextmanager
 from types import TracebackType
-from typing import Any, overload
+from typing import Any, cast, overload
 from uuid import UUID
 
 import websockets
@@ -20,15 +21,55 @@ from websockets.exceptions import ConnectionClosed, WebSocketException
 from websockets.protocol import State
 from websockets.sync.client import ClientConnection
 
+from surrealdb.connections.api import (
+    ApiResponse,
+    build_api_query,
+    graphql_params,
+    statement_results,
+)
+from surrealdb.connections.auth_provider import (
+    RENEW_RETRY,
+    RENEW_RETRY_MAX,
+    SENT_WITHOUT_RENEWAL,
+    AuthCredentials,
+    AuthProvider,
+    check_auth_provider,
+    check_credentials,
+    renewal_due,
+    signs_in_afresh,
+)
+from surrealdb.connections.batch import Batch
 from surrealdb.connections.builders import (
     _UNSET,
     M,
+    RelateEdge,
+    RelateEnd,
     SyncCrudBuilder,
     SyncInsertBuilder,
     SyncQueryBuilder,
     _Executor,
+    relate_builder,
 )
 from surrealdb.connections.files import BlockingFiles
+from surrealdb.connections.health import check_health
+from surrealdb.connections.import_export import (
+    ExportOptions,
+    ExportTarget,
+    ImportData,
+    export_sql,
+    export_sql_to,
+    import_sql,
+)
+from surrealdb.connections.live import LiveSubscription, SubscriptionTracker
+from surrealdb.connections.reconnect import (
+    LiveQuery,
+    ReconnectOptions,
+    SessionRegistry,
+    SessionState,
+    SessionTrackingMixin,
+    not_restarted,
+)
+from surrealdb.connections.server_version import ServerVersionMixin, asks_for_refresh
 from surrealdb.connections.sync_template import SyncTemplate
 from surrealdb.connections.timeouts import (
     DEFAULT_TIMEOUT,
@@ -40,22 +81,28 @@ from surrealdb.connections.timeouts import (
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import (
     AUTH_FALLBACK_QUERY,
+    CBOR,
+    CBOR2,
     UtilsMixin,
     check_keepalive,
 )
-from surrealdb.data.types.record_id import RecordID, RecordIdType
+from surrealdb.data.types.null import NullType
+from surrealdb.data.types.record_id import RecordID, RecordIdType, StringRecordId
 from surrealdb.data.types.table import Table
 from surrealdb.errors import (
     ConnectionUnavailableError,
     NotAllowedError,
+    ServerError,
     TransportTimeoutError,
     UnexpectedResponseError,
     parse_query_error,
     parse_rpc_error,
 )
+from surrealdb.features import Features
 from surrealdb.request_message.message import RequestMessage
 from surrealdb.request_message.methods import RequestMethod
 from surrealdb.streaming import (
+    UNSUPPORTED_BY_SERVER,
     QueryStream,
     SyncStreamOps,
     buffered_statements,
@@ -65,15 +112,18 @@ from surrealdb.types import Tokens, Value, parse_auth_result
 
 logger = logging.getLogger(__name__)
 
-# How long ``subscribe_live`` blocks on a single socket read before releasing
-# the connection lock so concurrent RPCs on the same socket can proceed.
-_LIVE_RECV_TIMEOUT = 0.1
-
 # How long `_stream_pump` holds the connection lock looking for a frame. Short
 # because the lock is unavailable for exactly this long each time: the waiting
 # happens outside it, so this is the fairness bound for every other caller on
 # the connection, not a polling interval.
 _STREAM_POLL_TIMEOUT = 0.005
+
+# How long a reader waits, with the lock released, between polls of a quiet
+# socket: long enough that a thread waiting for the lock takes it, short
+# enough that a frame arriving meanwhile is read at once. Sleeping out the
+# rest of a 100 ms slice instead held every streamed query that took the
+# server longer than one poll for up to 95 ms more.
+_POLL_GAP = 0.001
 
 # The `action` SurrealDB puts on the notification it sends when a live query
 # ends. It reports the end of the subscription rather than a change to the
@@ -84,6 +134,21 @@ _LIVE_KILLED = "KILLED"
 # Pushed into a subscriber's queue by `kill()` on this connection, so the
 # generator ends without waiting for a server notification. 2.x never sends one.
 _LIVE_KILLED_SENTINEL: dict[str, Any] = {"action": _LIVE_KILLED, "id": None}
+
+# Pushed to a subscription whose live query could not be restarted after a
+# reconnect: it ends with ConnectionUnavailableError rather than quietly.
+_LIVE_BROKEN_SENTINEL: dict[str, Any] = {"action": "BROKEN", "id": None}
+
+# The socket is held for the connection's life and closed by the transport,
+# not by a `with` block. websockets 17.1 warns on the first send of such a
+# socket unless `connect()` was given `legacy=True`, which keeps it working
+# once `connect()` stops opening the socket itself; earlier versions have no
+# `legacy` and always open it.
+_OPEN_DIRECTLY: dict[str, Any] = (
+    {"legacy": True}
+    if "legacy" in inspect.signature(ws_sync.connect).parameters
+    else {}
+)
 
 
 def _release_live_queue(
@@ -101,7 +166,13 @@ def _release_live_queue(
         live_queues.pop(suid, None)
 
 
-class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
+def _scope(session_id: UUID | None) -> dict[str, Any]:
+    return {} if session_id is None else {"session": session_id}
+
+
+class BlockingWsSurrealConnection(
+    SyncTemplate, UtilsMixin, ServerVersionMixin, SessionTrackingMixin
+):
     """
     A single blocking connection to a SurrealDB instance. To be used once and discarded.
 
@@ -122,6 +193,10 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         ping_interval: float | None = 30.0,
         ping_timeout: float | None = 10.0,
         timeout: float | None = DEFAULT_TIMEOUT,
+        version_check: bool = True,
+        reconnect: bool | ReconnectOptions = True,
+        auth: AuthProvider | None = None,
+        renew_access: bool = True,
     ) -> None:
         """
         The constructor for the BlockingWsSurrealConnection class.
@@ -140,25 +215,73 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         :param timeout: Seconds to wait for each reply, or ``None`` to wait
             indefinitely. Defaults to 30. Override it for a block of requests
             with :meth:`timeout`.
+        :param version_check: Refuse to talk to a server outside the versions
+            this SDK supports - see :mod:`surrealdb.features`. On by default.
+        :param reconnect: Reconnect when the socket has dropped, replaying the
+            session state and live queries - see
+            :mod:`surrealdb.connections.reconnect`. This transport has no
+            background reader, so a dropped socket is noticed by the next
+            request or live subscription that uses it. That request waits for
+            the replacement for at most its own timeout, while the attempts
+            carry on without it; the first attempt is made at once.
+        :param auth: How the connection signs itself in when the socket opens
+            and after every reconnect: signin credentials, an access token,
+            :class:`Tokens`, or a function returning one of those - see
+            :mod:`surrealdb.connections.auth_provider`.
+        :param renew_access: Renew the connection's access token shortly
+            before it expires, with its refresh token or else with *auth*.
+            Checked before each request, as this transport has no background
+            work. On by default.
         """
         self.url: Url = Url(url)
+        self._version_check = version_check
+        check_auth_provider(auth)
+        self._reconnect: ReconnectOptions = ReconnectOptions.coerce(reconnect)
+        self._auth_provider: AuthProvider | None = auth
+        self._renew_access = renew_access
+        self._renewing = False
+        # See `_renew_locked`: a token renewing handed over already due, and
+        # when a failed renewal may be tried again.
+        self._renewed_due: str | None = None
+        self._renew_retry = RENEW_RETRY
+        self._renew_retry_at = 0.0
+        self._registry = SessionRegistry()
+        self._init_events()
+        # A reconnect under way runs on `_reconnect_worker`; `_reconnect_done`
+        # is set once it has ended, and `_reconnect_failure` says why it gave
+        # up, if it did.
+        self._reconnecting = False
+        self._reconnect_worker: threading.Thread | None = None
+        self._reconnect_done = threading.Event()
+        self._reconnect_done.set()
+        self._reconnect_failure: str | None = None
+        self._reconnect_stop: threading.Event | None = None
         self.raw_url: str = f"{self.url.raw_url}/rpc"
         self.host: str | None = self.url.hostname
         self.port: int | None = self.url.port
         self._timeout: float | None = check_timeout("timeout", timeout)
         self.id: str = str(uuid.uuid4())
-        self.token: str | None = None
         self.socket: ClientConnection | None = None
         self._ping_interval: float | None = check_keepalive(
             "ping_interval", ping_interval
         )
         self._ping_timeout: float | None = check_keepalive("ping_timeout", ping_timeout)
         self._lock: threading.Lock = threading.Lock()
+        # The thread holding `_lock`, and the events raised while it did: they
+        # are published once it is released, since a listener that makes a
+        # request on this connection would otherwise wait on the lock forever.
+        self._lock_owner: int | None = None
+        self._pending_events: list[tuple[str, tuple[Any, ...]]] = []
+        # Held across a state-changing request and the registry update that
+        # records it, so concurrent threads record them in the order the
+        # server applied them. Reentrant, so a listener can make one too.
+        self._session_lock: threading.RLock = threading.RLock()
         # Live-query notification queues keyed by live-query UUID string. A
         # ``subscribe_live`` consumer registers its own queue here so that
         # notifications ``_send`` reads while correlating an RPC reply are
         # handed off instead of being lost.
         self.live_queues: dict[str, list[queue.Queue[dict[str, Any]]]] = {}
+        self._live_tracker = SubscriptionTracker()
         # Ids of requests abandoned by a timeout. The server still answers
         # them, and that reply arrives while some later request is waiting, so
         # it has to be recognised and dropped rather than mistaken for the
@@ -171,6 +294,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         # protocol desync. Queues hold decoded frames plus a ``_ChannelBroken``
         # sentinel, so the value type is ``Any``.
         self._streams: dict[str, queue.Queue[Any]] = {}
+        # How many frames ``_route_foreign`` has handed over, so a stream pump
+        # can tell another reader routed one - perhaps its stream's - meanwhile.
+        self._routed = 0
         # Whether this server knows ``query_stream``: ``None`` until one
         # request settles it. Cached per connection because the answer is a
         # property of the server build.
@@ -202,12 +328,16 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     def _connect_socket(self) -> ClientConnection:
         """Open the websocket, mapping transport failures to SDK errors."""
         try:
-            return ws_sync.connect(
+            socket = ws_sync.connect(
                 self.raw_url,
                 max_size=None,
-                subprotocols=[websockets.Subprotocol("cbor")],
+                subprotocols=[
+                    websockets.Subprotocol(CBOR2),
+                    websockets.Subprotocol(CBOR),
+                ],
                 ping_interval=self._ping_interval,
                 ping_timeout=self._ping_timeout,
+                **_OPEN_DIRECTLY,
             )
         except TimeoutError as exc:
             raise TransportTimeoutError(
@@ -217,6 +347,8 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             raise ConnectionUnavailableError(
                 f"could not connect to {self.raw_url}: {exc}"
             ) from exc
+        self._v2 = socket.subprotocol == CBOR2
+        return socket
 
     def connect(self, url: str | None = None) -> None:
         """Open the websocket.
@@ -241,16 +373,18 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         with its ``recv_events`` and ``keepalive`` threads - was overwritten
         and leaked with no reference left to close it.
         """
-        with self._lock:
+        with self._locked():
             self._connect_locked(url)
 
     def _connect_locked(self, url: str | None = None) -> None:
         """The body of :meth:`connect`, called with ``self._lock`` held."""
+        if self._reconnecting:
+            self._await_reconnect_locked(self._request_timeout())
         if url is not None:
             target = Url(url)
             target_raw = f"{target.raw_url}/rpc"
             if self.socket is not None and target_raw != self.raw_url:
-                self.close()
+                self._shut()
             # Applied whether or not the socket had to go: skipping this when
             # the endpoint compares equal means any part of the URL the
             # comparison does not look at gets silently dropped.
@@ -270,79 +404,641 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             # short of building a new connection. The async transport already
             # noticed this through its reader task; the blocking one has no
             # reader, so the socket's own state is what says so.
-            self.close()
+            if self._reconnect.enabled:
+                self._reconnect_locked(self._request_timeout())
+                return
+            self._shut()
 
-        self.socket = self._connect_socket()
+        self._open_locked()
+
+    @contextmanager
+    def _locked(
+        self, budget: float | None = None, process: str = "using the connection"
+    ) -> Generator[None, None, None]:
+        """Hold ``self._lock``, publishing the events raised meanwhile after.
+
+        With a *budget*, wait at most that long for the lock and raise
+        ``TransportTimeoutError`` after it, so a request's timeout covers the
+        time it waits behind another thread's request too.
+        """
+        pending: list[tuple[str, tuple[Any, ...]]] = []
+        if budget is None:
+            self._lock.acquire()
+        elif not self._lock.acquire(timeout=max(0.0, budget)):
+            raise TransportTimeoutError(
+                f"timed out while {process} on {self.raw_url}: another request "
+                f"held the connection {describe(budget)}"
+            )
+        try:
+            try:
+                self._lock_owner = threading.get_ident()
+                try:
+                    yield
+                finally:
+                    self._lock_owner = None
+                    pending, self._pending_events = self._pending_events, []
+            finally:
+                self._lock.release()
+        finally:
+            for event, payload in pending:
+                super()._emit(event, *payload)
+
+    @contextmanager
+    def _released(self) -> Generator[None, None, None]:
+        """Let go of ``self._lock`` for the body, from inside :meth:`_locked`.
+
+        The events raised so far are published first, as :meth:`_locked`
+        would on its way out.
+        """
+        pending, self._pending_events = self._pending_events, []
+        self._lock_owner = None
+        self._lock.release()
+        try:
+            for event, payload in pending:
+                super()._emit(event, *payload)
+            yield
+        finally:
+            self._lock.acquire()
+            self._lock_owner = threading.get_ident()
+
+    def _emit(self, event: str, *payload: Any) -> None:
+        if self._lock_owner == threading.get_ident():
+            self._pending_events.append((event, payload))
+            return
+        super()._emit(event, *payload)
 
     def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
     ) -> dict[str, Any]:
         # Use a lock to ensure thread-safe send/recv operations
         # This prevents race conditions when multiple threads share the same connection
-        with self._lock:
-            if self.socket is None:
-                self.socket = self._connect_socket()
+        # The request's timeout starts now, not once it has the lock: waiting
+        # behind another thread's request counts against it.
+        budget = self._request_timeout()
+        deadline = None if budget is None else time.monotonic() + budget
+        with self._locked(budget, process):
+            return self._send_locked(message, process, bypass, deadline)
 
-            # Correlate the reply to this request. Live-query notifications
-            # carry no top-level "id" and may be delivered between our send and
-            # our reply; route those to their live queue (if a subscriber is
-            # registered, else drop) and keep reading, so a notification is
-            # never returned as an RPC result.
-            budget = self._request_timeout()
+    def _ready_locked(self, renew: bool = True) -> None:
+        """Make sure there is an open socket to send on, with the lock held.
+
+        A socket the peer dropped is replaced: by reconnecting, which replays
+        the session, or - with reconnecting off - by a fresh one, since the
+        server forgot the session along with the old socket. While another
+        thread's reconnect is under way, this waits for it.
+        """
+        if (
+            self._reconnecting
+            and self._reconnect_worker is not threading.current_thread()
+        ):
+            self._await_reconnect_locked(self._request_timeout())
+        if self.socket is None:
+            self._open_locked()
+        elif self.socket.state is not State.OPEN and not self._reconnecting:
+            if self._reconnect.enabled:
+                self._reconnect_locked(self._request_timeout())
+            else:
+                self._shut()
+                self._open_locked()
+        if renew and not self._reconnecting:
+            self._renew_locked()
+
+    def _send_frame_locked(self, message: RequestMessage) -> None:
+        """Send *message*, reconnecting first if the socket turns out closed.
+
+        The socket can close between the check in :meth:`_ready_locked` and
+        the send. A send that raises ``ConnectionClosed`` wrote nothing, so the
+        request cannot have run, and sending it again on the new socket is
+        safe.
+        """
+        assert self.socket is not None
+        try:
+            self.socket.send(message.encoded(v2=self._v2))
+        except ConnectionClosed:
+            if not self._reconnect.enabled or self._reconnecting:
+                raise
+            # A stream registered for this very request has not started yet,
+            # so it is spared when the reconnect breaks the open ones.
+            unsent = self._streams.pop(message.id, None)
             try:
-                self.socket.send(message.WS_CBOR_DESCRIPTOR)
-                deadline = None if budget is None else time.monotonic() + budget
-                while True:
-                    remaining = (
-                        None if deadline is None else deadline - time.monotonic()
-                    )
-                    if remaining is not None and remaining <= 0:
-                        # The request was sent, so a reply is still coming.
-                        # Remember it, or the next call reads this reply,
-                        # mismatches the id and fails - and so does every call
-                        # after it, permanently out of step by one.
-                        self._abandoned.add(message.id)
-                        raise TransportTimeoutError(
-                            f"timed out while {process} on {self.raw_url}: no "
-                            f"reply {describe(budget)}"
-                        )
-                    data = self.socket.recv(timeout=remaining)
-                    response = self.decode_response(
-                        data if isinstance(data, bytes) else data.encode(), process
-                    )
-                    response_id = response.get("id")
-                    if response_id == message.id:
-                        break
-                    if response_id is None and response.get("error") is not None:
-                        # A frame with no `id` is normally a live-query
-                        # notification. A protocol-level error - a request the
-                        # server could not parse or correlate - also arrives
-                        # without one, and routing that to the notification
-                        # path discarded the only reply this call would ever
-                        # get, leaving the loop blocked on recv() forever.
-                        self.check_response_for_error(response, process)
-                    # Anything else belongs to a live subscription, to a
-                    # streaming query, or to a request that timed out and was
-                    # abandoned. Hand it over and keep reading for our own.
-                    self._route_foreign(response)
-            except TimeoutError as exc:
-                # `recv(timeout=...)` expiring is the path that actually fires;
-                # the deadline check above only catches the next iteration.
-                # Both have to record the id, or the abandoned reply is still
-                # waiting in the socket for the next caller to trip over.
-                self._abandoned.add(message.id)
-                raise TransportTimeoutError(
-                    f"timed out while {process} on {self.raw_url}: no reply "
-                    f"{describe(budget)}"
-                ) from exc
-            except (WebSocketException, OSError) as exc:
-                raise ConnectionUnavailableError(
-                    f"the connection to {self.raw_url} failed while {process}: {exc}"
-                ) from exc
+                self._reconnect_locked(self._request_timeout())
+            finally:
+                if unsent is not None:
+                    self._streams[message.id] = unsent
+            assert self.socket is not None
+            self.socket.send(message.encoded(v2=self._v2))
 
-            if bypass is False:
-                self.check_response_for_error(response, process)
-            return response
+    def _ensure_open(self) -> None:
+        """Open the socket if there is none, as the next request would."""
+        with self._locked():
+            if self._reconnecting:
+                self._await_reconnect_locked(self._request_timeout())
+            elif self.socket is None:
+                self._open_locked()
+
+    def _open_locked(self) -> None:
+        """Open the socket and check the server version, with the lock held."""
+        self._set_status("connecting")
+        try:
+            self.socket = self._connect_socket()
+        except BaseException:
+            self._set_status("disconnected")
+            raise
+        try:
+            self._handshake_locked()
+            if self._auth_provider is not None:
+                self._apply_auth_provider_locked()
+        except BaseException:
+            self._shut()
+            raise
+        self._set_status("connected", self._server_version)
+
+    def _provided_credentials(self) -> AuthCredentials:
+        provider = self._auth_provider
+        if callable(provider):
+            provided = provider()
+            if inspect.iscoroutine(provided):
+                provided.close()
+                raise TypeError(
+                    "auth is a coroutine function, which only an async "
+                    "connection can call; pass a plain function here"
+                )
+            return check_credentials(provided)
+        assert provider is not None
+        return provider
+
+    def _apply_auth_provider_locked(self) -> None:
+        """Sign the connection's own session in with ``auth=``."""
+        provided = self._provided_credentials()
+        if isinstance(provided, dict):
+            response = self._send_locked(
+                RequestMessage(RequestMethod.SIGN_IN, params=provided), "signing in"
+            )
+            self.check_response_for_result(response, "signing in")
+            self._note_tokens(None, parse_auth_result(response["result"]))
+            return
+        token = provided if isinstance(provided, str) else provided.access
+        if token is None:
+            raise ValueError("auth gave Tokens with no access token to sign in with")
+        try:
+            self._send_locked(
+                RequestMessage(RequestMethod.AUTHENTICATE, token=token),
+                "authenticating",
+            )
+        except ServerError:
+            # Tokens saved past the access token's expiry, say, whose refresh
+            # token is still good.
+            if isinstance(provided, Tokens) and self._refreshed_locked(None, provided):
+                return
+            raise
+        if isinstance(provided, Tokens):
+            self._note_tokens(None, provided)
+        else:
+            self._note_authenticated(None, token)
+
+    def _refreshed_locked(self, session_id: UUID | None, tokens: Tokens) -> bool:
+        """Renew *tokens* with their refresh token, with the lock held.
+
+        Whether the server took it; it then holds the session signed in with
+        the new access token.
+        """
+        if tokens.refresh is None or not self.is_feature_supported(
+            Features.REFRESH_TOKENS
+        ):
+            return False
+        pair = self._token_pair(tokens, session_id, "refreshing")
+        try:
+            response = self._send_locked(
+                RequestMessage(
+                    RequestMethod.REFRESH, params=[pair], **_scope(session_id)
+                ),
+                "refreshing the tokens",
+            )
+            self.check_response_for_result(response, "refreshing the tokens")
+        except ServerError as exc:
+            logger.debug("refreshing the tokens failed: %s", exc)
+            return False
+        self._note_tokens(session_id, parse_auth_result(response["result"]))
+        return True
+
+    def _renew_locked(self) -> None:
+        """Replace the access token before it expires, if it is about to.
+
+        A token that renewing hands over already due is not renewed again, as
+        renewing produced nothing newer; and a failed attempt is not tried
+        again before a delay that doubles each time, up to a bound - as on the
+        async transport. Either would otherwise repeat before every request.
+        """
+        root = self._registry.root
+        if (
+            not self._renew_access
+            or self._renewing
+            or root.access == self._renewed_due
+            or time.monotonic() < self._renew_retry_at
+            or not renewal_due(root.access)
+        ):
+            return
+        self._renewing = True
+        try:
+            if (
+                not self._renew_with_refresh_token_locked()
+                and signs_in_afresh(self._auth_provider)
+                and not root.auth_chosen
+            ):
+                self._apply_auth_provider_locked()
+        except Exception as exc:
+            logger.debug("renewing the access token failed: %s", exc)
+            self._emit("error", exc)
+            self._renew_retry_at = time.monotonic() + self._renew_retry
+            self._renew_retry = min(self._renew_retry * 2, RENEW_RETRY_MAX)
+            return
+        finally:
+            self._renewing = False
+        self._renew_retry = RENEW_RETRY
+        self._renewed_due = root.access if renewal_due(root.access) else None
+
+    def _renew_with_refresh_token_locked(self) -> bool:
+        """Renew with the refresh token, if there is one the server can take.
+
+        One the server refuses - expired, revoked or already spent - is
+        dropped and reported, so the renewal falls back to ``auth=`` rather
+        than trying it again before every request.
+        """
+        refresh = self._registry.root.refresh
+        if refresh is None or not self.is_feature_supported(Features.REFRESH_TOKENS):
+            return False
+        pair = self._token_pair(None, None, "refresh()")
+        try:
+            response = self._send_locked(
+                RequestMessage(RequestMethod.REFRESH, params=[pair]),
+                "refreshing the tokens",
+            )
+            self.check_response_for_result(response, "refreshing the tokens")
+        except ServerError as exc:
+            logger.debug("renewing with the refresh token failed: %s", exc)
+            self._emit("error", exc)
+            self._note_revoked(None, refresh)
+            return False
+        self._note_tokens(None, parse_auth_result(response["result"]))
+        return True
+
+    def _reconnect_locked(self, budget: float | None) -> None:
+        """Replace a dropped socket and replay what the server forgot.
+
+        The attempts run on a thread of their own, which holds the lock only
+        while it opens a socket and replays onto it, and sleeps out the backoff
+        without it. The caller - and any other thread that needs the socket
+        meanwhile - waits for the outcome with the lock released, for at most
+        *budget* seconds, so other threads wait for the replay rather than
+        racing it, and nobody waits past their own timeout. The first attempt
+        is immediate, since the drop is only noticed when the socket is next
+        needed; later ones back off.
+
+        :raises TransportTimeoutError: if the connection is not back within
+            *budget*. The attempts carry on, and later requests wait for them.
+        :raises ConnectionUnavailableError: once every attempt has failed. The
+            session state is forgotten then, so the request after that starts
+            on a fresh, unauthenticated session.
+        """
+        if not self._reconnecting:
+            self._set_status("reconnecting")
+            self._break_streams(
+                ConnectionUnavailableError(
+                    "the connection dropped while a streaming query was open."
+                )
+            )
+            self._reconnecting = True
+            self._reconnect_failure = None
+            self._reconnect_done.clear()
+            stop = self._reconnect_stop = threading.Event()
+            self._reconnect_worker = threading.Thread(
+                target=self._run_reconnect,
+                args=(stop,),
+                name="surrealdb-reconnect",
+                daemon=True,
+            )
+            self._reconnect_worker.start()
+        self._await_reconnect_locked(budget)
+
+    def _run_reconnect(self, stop: threading.Event) -> None:
+        """Make the reconnect attempts, on the thread `_reconnect_locked` starts.
+
+        *stop* is set by :meth:`close`, which ends the reconnect itself; from
+        then on this thread leaves the connection alone.
+        """
+        attempt = 0
+        try:
+            while self._reconnect.allows(attempt + 1):
+                attempt += 1
+                if attempt > 1 and stop.wait(self._reconnect.delay(attempt - 1)):
+                    return
+                with self._locked():
+                    if stop.is_set():
+                        return
+                    if not self._reconnect_once_locked(attempt):
+                        continue
+                    if stop.is_set():
+                        # Closed while replaying: the socket is not wanted.
+                        self._drop_socket()
+                        return
+                    self._set_status("connected", self._server_version)
+                    self._end_unmanaged_live()
+                    self._end_reconnect(None)
+                    return
+            with self._locked():
+                if not stop.is_set():
+                    self._end_reconnect(self._give_up_locked(attempt))
+        finally:
+            if self._reconnecting and not stop.is_set():
+                # Only reached if something above raised unexpectedly; the
+                # threads waiting on the outcome must not wait forever.
+                with self._locked():
+                    self._end_reconnect(
+                        f"reconnecting to {self.raw_url} failed unexpectedly"
+                    )
+
+    def _reconnect_once_locked(self, attempt: int) -> bool:
+        """One attempt: a new socket, the handshake, then the replay."""
+        self._drop_socket()
+        try:
+            self.socket = self._connect_socket()
+            self._handshake_locked()
+            self._restore_locked()
+        except Exception as exc:
+            logger.debug("reconnect attempt %d failed: %s", attempt, exc)
+            self._emit("error", exc)
+            return False
+        return True
+
+    def _give_up_locked(self, attempts: int) -> str:
+        """Stop reconnecting: end every subscription and forget the state."""
+        self._drop_socket()
+        # The next request opens a fresh socket that carries none of these
+        # queries, so a subscriber still iterating would wait on it forever.
+        for queues in list(self.live_queues.values()):
+            for notifications in list(queues):
+                notifications.put(_LIVE_BROKEN_SENTINEL)
+        self._registry.clear()
+        self._live_tracker.ended(broken=True)
+        error = ConnectionUnavailableError(
+            f"the connection to {self.raw_url} dropped and could not be "
+            f"re-established after {attempts} attempt(s)"
+        )
+        self._set_status("disconnected")
+        self._emit("error", error)
+        return str(error)
+
+    def _end_reconnect(self, failure: str | None) -> None:
+        self._reconnect_failure = failure
+        self._reconnecting = False
+        self._reconnect_worker = None
+        self._reconnect_done.set()
+
+    def _await_reconnect_locked(self, budget: float | None) -> None:
+        """Wait, with the lock released, for the reconnect under way to end.
+
+        :raises TransportTimeoutError: if it has not ended within *budget*.
+        :raises ConnectionUnavailableError: if it ended by giving up.
+        """
+        deadline = None if budget is None else time.monotonic() + budget
+        while self._reconnecting:
+            remaining = None if deadline is None else deadline - time.monotonic()
+            if remaining is not None and remaining <= 0:
+                raise TransportTimeoutError(
+                    f"timed out waiting for the connection to {self.raw_url} to "
+                    f"be re-established: not back {describe(budget)}"
+                )
+            with self._released():
+                self._reconnect_done.wait(remaining)
+        if self._reconnect_failure is not None:
+            raise ConnectionUnavailableError(self._reconnect_failure)
+
+    def _end_unmanaged_live(self) -> None:
+        """Break the subscriptions a reconnect did not restart.
+
+        A query attached with ``live_of()`` belongs to whoever started it, so
+        it is not replayed; its subscribers would otherwise wait on a socket
+        that will never carry it.
+        """
+        managed = self._registry.live.keys()
+        for logical, queues in self.live_queues.items():
+            if logical not in managed:
+                for notifications in queues:
+                    notifications.put(_LIVE_BROKEN_SENTINEL)
+        self._live_tracker.ended(keep=managed, broken=True)
+
+    def _drop_socket(self) -> None:
+        """Close and forget the socket, if any, keeping the session state."""
+        if self.socket is not None:
+            try:
+                self.socket.close()
+            except Exception:
+                pass
+            finally:
+                self.socket = None
+
+    def _restore_locked(self) -> None:
+        """Replay every session, then every live query, on the new socket."""
+        registry = self._registry
+        if signs_in_afresh(self._auth_provider) and not registry.root.auth_chosen:
+            self._restore_session_locked(None, registry.root, authenticate=False)
+            self._apply_auth_provider_locked()
+        else:
+            # The tokens held now: the caller's own, or ones renewing may have
+            # replaced since a static `auth=` gave them.
+            self._restore_session_locked(None, registry.root, renew=True)
+        for session_id, state in list(registry.sessions.items()):
+            self._send_locked(
+                RequestMessage(RequestMethod.ATTACH, session=session_id),
+                "re-attaching a session",
+            )
+            self._restore_session_locked(session_id, state, renew=True)
+        for live in list(registry.live.values()):
+            self._restore_live_locked(live)
+
+    def _restore_session_locked(
+        self,
+        session_id: UUID | None,
+        state: SessionState,
+        authenticate: bool = True,
+        renew: bool = False,
+    ) -> bool:
+        """Replay *state* onto *session_id*: whether it ended up signed in.
+
+        With *renew*, an access token the server refuses - most often one
+        that expired while the socket was down - is renewed with the
+        session's refresh token, if it holds one. Only for the session's own
+        state: a refresh token is spent by renewing with it.
+        """
+        scope: dict[str, Any] = {} if session_id is None else {"session": session_id}
+        if state.namespace is not None or state.database is not None:
+            self._send_locked(
+                RequestMessage(
+                    RequestMethod.USE,
+                    namespace=state.namespace,
+                    database=state.database,
+                    **scope,
+                ),
+                "re-selecting the namespace and database",
+            )
+        for key, value in list(state.variables.items()):
+            self._send_locked(
+                RequestMessage(RequestMethod.LET, key=key, value=value, **scope),
+                "re-setting a variable",
+            )
+        if authenticate and state.access is not None:
+            try:
+                self._send_locked(
+                    RequestMessage(
+                        RequestMethod.AUTHENTICATE, token=state.access, **scope
+                    ),
+                    "re-authenticating",
+                )
+            except ServerError as exc:
+                tokens = state.tokens()
+                if (
+                    renew
+                    and tokens is not None
+                    and self._refreshed_locked(session_id, tokens)
+                ):
+                    return True
+                self._emit("error", exc)
+                self._note_signed_out(session_id)
+                return False
+        return True
+
+    def _restore_live_locked(self, live: LiveQuery) -> None:
+        if self._live_identity_changed(live):
+            self._emit("error", not_restarted(live))
+            self._break_live(live)
+            return
+        selection = self._live_selection(live)
+        kwargs: dict[str, Any] = {"table": live.table, "diff": live.diff}
+        if live.session_id is not None:
+            kwargs["session"] = live.session_id
+        try:
+            if selection is not None:
+                self._send_locked(
+                    selection[0], "re-selecting a live query's namespace and database"
+                )
+            response = self._send_locked(
+                RequestMessage(RequestMethod.LIVE, **kwargs), "restarting a live query"
+            )
+            self.check_response_for_result(response, "restarting a live query")
+            restarted: UUID | ServerError = UUID(str(response["result"]))
+        except ServerError as exc:
+            restarted = exc
+        if selection is not None:
+            self._send_locked(selection[1], "re-selecting the namespace and database")
+        if isinstance(restarted, ServerError):
+            self._emit("error", restarted)
+            self._break_live(live)
+            return
+        self._registry.move_live(live, restarted)
+
+    def _break_live(self, live: LiveQuery) -> None:
+        """Stop tracking a live query a reconnect could not restart."""
+        logical = str(live.logical)
+        self._registry.drop_live(logical)
+        self._live_tracker.ended(logical, broken=True)
+        for notifications in self.live_queues.get(logical, []):
+            notifications.put(_LIVE_BROKEN_SENTINEL)
+
+    def _handshake_locked(self) -> None:
+        """Ask a freshly opened socket's server for its version."""
+        self._forget_server_version()
+        self._streaming_supported = None
+        self._streaming_refusal = None
+        try:
+            response = self._send_locked(
+                RequestMessage(RequestMethod.VERSION), "checking the server version"
+            )
+        except ServerError:
+            # A server whose capabilities deny `version` still serves
+            # everything else; nothing can be gated, but nothing is refused.
+            self._adopt_server_version(None)
+            return
+        self._adopt_server_version(response.get("result"))
+        if not self._version_allows_streaming():
+            self._streaming_supported = False
+            self._streaming_refusal = UNSUPPORTED_BY_SERVER
+
+    def _send_locked(
+        self,
+        message: RequestMessage,
+        process: str,
+        bypass: bool = False,
+        deadline: float | None = None,
+    ) -> dict[str, Any]:
+        """The body of :meth:`_send`, called with ``self._lock`` held.
+
+        The reply is awaited until *deadline*, if given, and otherwise for the
+        request timeout from when it is sent.
+        """
+        self._ready_locked(renew=message.method not in SENT_WITHOUT_RENEWAL)
+        assert self.socket is not None
+
+        # Correlate the reply to this request. Live-query notifications
+        # carry no top-level "id" and may be delivered between our send and
+        # our reply; route those to their live queue (if a subscriber is
+        # registered, else drop) and keep reading, so a notification is
+        # never returned as an RPC result.
+        budget = self._request_timeout()
+        try:
+            self._send_frame_locked(message)
+            if deadline is None and budget is not None:
+                deadline = time.monotonic() + budget
+            while True:
+                remaining = None if deadline is None else deadline - time.monotonic()
+                if remaining is not None and remaining <= 0:
+                    # The request was sent, so a reply is still coming.
+                    # Remember it, or the next call reads this reply,
+                    # mismatches the id and fails - and so does every call
+                    # after it, permanently out of step by one.
+                    self._abandoned.add(message.id)
+                    raise TransportTimeoutError(
+                        f"timed out while {process} on {self.raw_url}: no "
+                        f"reply {describe(budget)}"
+                    )
+                data = self.socket.recv(timeout=remaining)
+                response = self.decode_response(
+                    data if isinstance(data, bytes) else data.encode(),
+                    process,
+                    v2=self._v2,
+                )
+                response_id = response.get("id")
+                if response_id == message.id:
+                    break
+                if response_id is None and response.get("error") is not None:
+                    # A frame with no `id` is normally a live-query
+                    # notification. A protocol-level error - a request the
+                    # server could not parse or correlate - also arrives
+                    # without one, and routing that to the notification
+                    # path discarded the only reply this call would ever
+                    # get, leaving the loop blocked on recv() forever.
+                    self.check_response_for_error(response, process)
+                # Anything else belongs to a live subscription, to a
+                # streaming query, or to a request that timed out and was
+                # abandoned. Hand it over and keep reading for our own.
+                self._route_foreign(response)
+        except TimeoutError as exc:
+            # `recv(timeout=...)` expiring is the path that actually fires;
+            # the deadline check above only catches the next iteration.
+            # Both have to record the id, or the abandoned reply is still
+            # waiting in the socket for the next caller to trip over.
+            self._abandoned.add(message.id)
+            raise TransportTimeoutError(
+                f"timed out while {process} on {self.raw_url}: no reply "
+                f"{describe(budget)}"
+            ) from exc
+        except (WebSocketException, OSError) as exc:
+            raise ConnectionUnavailableError(
+                f"the connection to {self.raw_url} failed while {process}: {exc}"
+            ) from exc
+
+        if bypass is False:
+            self.check_response_for_error(response, process)
+        return response
 
     def _route_foreign(self, response: dict[str, Any]) -> None:
         """Hand a response this reader was not waiting for to whoever wants it.
@@ -361,6 +1057,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         that belong to nobody, and failing an unrelated caller for them would
         turn a tidy-up into an error.
         """
+        self._routed += 1
         response_id = response.get("id")
         if response_id is None:
             if response.get("error") is not None and len(self._streams) == 1:
@@ -413,8 +1110,25 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         live_id = result.get("id")
         if live_id is None:
             return
-        for notifications in self.live_queues.get(str(live_id), []):
+        logical = self._logical_live(result)
+        for notifications in self.live_queues.get(logical, []):
             notifications.put(result)
+
+    def _logical_live(self, result: dict[str, Any]) -> str:
+        """The id the caller holds for a notification's live query.
+
+        Rewrites the notification to carry it, so a subscriber sees the id it
+        was given even after a reconnect started the query under a new one. A
+        ``KILLED`` notification also stops the query being replayed.
+        """
+        current = str(result["id"])
+        logical = self._registry.logical_of(current)
+        if logical != current:
+            result["id"] = UUID(logical)
+        if result.get("action") == _LIVE_KILLED:
+            self._registry.drop_live(logical)
+            self._live_tracker.ended(logical)
+        return logical
 
     def authenticate(self, token: str, session_id: UUID | None = None) -> None:
         kwargs: dict[str, Any] = {"token": token}
@@ -422,11 +1136,12 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.AUTHENTICATE, **kwargs)
         self.id = message.id
-        self._send(message, "authenticating")
-        # Record the token as the connection identity so new_session() can
-        # replay it — only when authenticating the connection, not a sub-session.
-        if session_id is None:
-            self.token = token
+        with self._session_lock:
+            self._send(message, "authenticating")
+            # Record the token as the session's identity so a reconnect - and,
+            # for the connection's own, new_session() - can replay it.
+            self._note_chosen_auth(session_id)
+            self._note_authenticated(session_id, token)
 
     def invalidate(self, session_id: UUID | None = None) -> None:
         kwargs: dict[str, Any] = {}
@@ -434,9 +1149,239 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.INVALIDATE, **kwargs)
         self.id = message.id
-        self._send(message, "invalidating")
-        if session_id is None:
-            self.token = None
+        with self._session_lock:
+            self._send(message, "invalidating")
+            self._note_chosen_auth(session_id)
+            self._note_signed_out(session_id)
+
+    def refresh(
+        self, tokens: Tokens | None = None, session_id: UUID | None = None
+    ) -> Tokens:
+        """Exchange a refresh token for a new access and refresh token.
+
+        Uses the session's own tokens unless *tokens* is given, authenticates
+        the session with the new access token and returns the new pair. The
+        old refresh token is spent. Needs SurrealDB 3.0 or later and an access
+        method defined ``WITH REFRESH``.
+        """
+        self._ensure_open()
+        self._require(Features.REFRESH_TOKENS)
+        pair = self._token_pair(tokens, session_id, "refresh()")
+        message = RequestMessage(
+            RequestMethod.REFRESH, params=[pair], **_scope(session_id)
+        )
+        with self._session_lock:
+            response = self._send(message, "refreshing the tokens")
+            self.check_response_for_result(response, "refreshing the tokens")
+            renewed = parse_auth_result(response["result"])
+            self._note_tokens(session_id, renewed)
+        return renewed
+
+    def revoke(
+        self, tokens: Tokens | None = None, session_id: UUID | None = None
+    ) -> None:
+        """Revoke a refresh token, so it can never be exchanged again.
+
+        Uses the session's own tokens unless *tokens* is given. The session
+        stays signed in with its access token until that expires or
+        :meth:`invalidate` is called. Needs SurrealDB 3.0 or later.
+        """
+        self._ensure_open()
+        self._require(Features.REFRESH_TOKENS)
+        pair = self._token_pair(tokens, session_id, "revoke()")
+        message = RequestMessage(
+            RequestMethod.REVOKE, params=[pair], **_scope(session_id)
+        )
+        with self._session_lock:
+            self._send(message, "revoking a refresh token")
+            self._note_revoked(session_id, pair["refresh"])
+
+    def reset(self, session_id: UUID | None = None) -> None:
+        """Return the session to how it started: no namespace, database,
+        variables or authentication. Needs SurrealDB 3.0 or later."""
+        self._ensure_open()
+        self._require(Features.SESSIONS)
+        message = RequestMessage(RequestMethod.RESET, **_scope(session_id))
+        with self._session_lock:
+            self._send(message, "resetting the session")
+            self._note_chosen_auth(session_id)
+            self._note_reset(session_id)
+            self._end_session_live(session_id)
+
+    def sessions(self) -> list[UUID]:
+        """The ids of the sessions attached to this connection on the server,
+        not counting its own. Needs SurrealDB 3.0 or later."""
+        self._ensure_open()
+        self._require(Features.SESSIONS)
+        response = self._send(
+            RequestMessage(RequestMethod.SESSIONS), "listing the sessions"
+        )
+        self.check_response_for_result(response, "listing the sessions")
+        return [UUID(str(session)) for session in response["result"] or []]
+
+    def export(self, options: ExportOptions | None = None) -> str:
+        """Export the selected database as SurrealQL.
+
+        Args:
+            options: What to include; the server's default without it.
+                SurrealDB 2.0 takes no options.
+
+        Example:
+            sql = db.export(ExportOptions(tables=["person"], records=False))
+        """
+        options = options or ExportOptions()
+        with self._locked():
+            self._ready_locked()
+        options.check(self._server_version)
+        return export_sql(
+            self.url,
+            options,
+            effective_timeout(self, None),
+            self.token,
+            self.namespace,
+            self.database,
+        )
+
+    def export_to(
+        self, target: ExportTarget, options: ExportOptions | None = None
+    ) -> None:
+        """Export the selected database as SurrealQL into *target*.
+
+        Writes the export as it arrives, so one too large to hold in memory
+        can still be saved.
+
+        Args:
+            target: The path of a file to write, or a binary file object.
+            options: What to include, as for :meth:`export`.
+
+        Example:
+            db.export_to("backup.surql")
+        """
+        options = options or ExportOptions()
+        with self._locked():
+            self._ready_locked()
+        options.check(self._server_version)
+        export_sql_to(
+            self.url,
+            options,
+            target,
+            effective_timeout(self, None),
+            self.token,
+            self.namespace,
+            self.database,
+        )
+
+    def import_(self, data: ImportData) -> None:
+        """Import SurrealQL into the selected database.
+
+        Args:
+            data: The SurrealQL, as ``str`` or ``bytes``, or the path of a
+                file holding it - such as one ``export_to()`` wrote - as a
+                ``pathlib.Path`` or other path-like. A ``str`` is always the
+                SurrealQL itself. SurrealDB 3 requires it to start with
+                ``OPTION IMPORT;``, as exports do.
+
+        Raises:
+            ImportFailedError: if any statement failed, with each failure in
+                ``failures``. The other statements were still applied.
+            ValueError: if *data* is a ``str`` naming a file, which would
+                otherwise be imported as SurrealQL; pass a path instead.
+        """
+        with self._locked():
+            self._ready_locked()
+        import_sql(
+            self.url,
+            data,
+            effective_timeout(self, None),
+            self.token,
+            self.namespace,
+            self.database,
+        )
+
+    def health(self) -> None:
+        """Ask the server's ``/health`` endpoint whether it is healthy.
+
+        :raises ConnectionUnavailableError: if it is not, or cannot be reached.
+        """
+        check_health(self.url, self._request_timeout())
+
+    def api(
+        self,
+        path: str,
+        *,
+        method: str = "get",
+        body: Value = None,
+        headers: Mapping[str, str] | None = None,
+        query: Mapping[str, str] | None = None,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> ApiResponse:
+        """Call an endpoint defined with ``DEFINE API``.
+
+        Sent as ``RETURN api::invoke(path, request)``. Needs SurrealDB 3.0 or
+        later, started with the ``define_api`` experimental capability.
+
+        Args:
+            path: The endpoint's path, starting with ``/``.
+            method: The HTTP method to invoke it with.
+            body: The request body.
+            headers: Request headers.
+            query: Query-string parameters.
+
+        Example:
+            response = db.api("/greet", method="post", body={"name": "Ada"})
+            assert response.ok
+        """
+        self._ensure_open()
+        self._require(Features.API)
+        sql, variables = build_api_query(path, method, body, headers, query)
+        result = self.query(
+            sql, variables, session_id=session_id, txn_id=txn_id
+        ).first()
+        return ApiResponse.from_result(result)
+
+    def gql(
+        self,
+        query: str,
+        vars: Mapping[str, Value] | None = None,
+        *,
+        session_id: UUID | None = None,
+    ) -> list[Value]:
+        """Run an ISO GQL query, such as ``MATCH (p:person) RETURN p.name``.
+
+        Returns each statement's result, and raises the first statement that
+        failed. Needs a server with the ``gql`` RPC method.
+        """
+        self._ensure_open()
+        params: list[Value] = [query] if vars is None else [query, dict(vars)]
+        message = RequestMessage(RequestMethod.GQL, params=params, **_scope(session_id))
+        response = self._send(message, "gql")
+        self.check_response_for_result(response, "gql")
+        return statement_results(response["result"], "gql")
+
+    def graphql(
+        self,
+        query: str,
+        variables: Mapping[str, Value] | None = None,
+        operation_name: str | None = None,
+        *,
+        session_id: UUID | None = None,
+    ) -> dict[str, Value]:
+        """Run a GraphQL query and return the server's ``{data, errors}``.
+
+        Needs a server with the ``graphql`` RPC method and GraphQL enabled for
+        the database, for example with ``DEFINE CONFIG GRAPHQL AUTO``.
+        """
+        self._ensure_open()
+        message = RequestMessage(
+            RequestMethod.GRAPHQL,
+            params=graphql_params(query, variables, operation_name),
+            **_scope(session_id),
+        )
+        response = self._send(message, "graphql")
+        self.check_response_for_result(response, "graphql")
+        result = response["result"]
+        return dict(result) if isinstance(result, dict) else {"data": result}
 
     def signup(self, vars: dict[str, Value], session_id: UUID | None = None) -> Tokens:
         kwargs: dict[str, Any] = {"data": vars}
@@ -444,24 +1389,29 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.SIGN_UP, **kwargs)
         self.id = message.id
-        response = self._send(message, "signup")
-        self.check_response_for_result(response, "signup")
-        tokens = parse_auth_result(response["result"])
-        if session_id is None:
-            self.token = tokens.access
+        with self._session_lock:
+            response = self._send(message, "signup")
+            self.check_response_for_result(response, "signup")
+            tokens = parse_auth_result(response["result"])
+            self._note_chosen_auth(session_id)
+            self._note_tokens(session_id, tokens)
         return tokens
 
     def signin(self, vars: dict[str, Value], session_id: UUID | None = None) -> Tokens:
+        if not self._version_learned and asks_for_refresh(vars):
+            self._ensure_open()
+        self._require_signin(vars)
         kwargs: dict[str, Any] = {"params": vars}
         if session_id is not None:
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.SIGN_IN, **kwargs)
         self.id = message.id
-        response = self._send(message, "signing in")
-        self.check_response_for_result(response, "signing in")
-        tokens = parse_auth_result(response["result"])
-        if session_id is None:
-            self.token = tokens.access
+        with self._session_lock:
+            response = self._send(message, "signing in")
+            self.check_response_for_result(response, "signing in")
+            tokens = parse_auth_result(response["result"])
+            self._note_chosen_auth(session_id)
+            self._note_tokens(session_id, tokens)
         return tokens
 
     def info(self, session_id: UUID | None = None) -> Value:
@@ -488,10 +1438,16 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
 
     def use(
         self,
-        namespace: str,
-        database: str,
+        namespace: str | NullType | None = None,
+        database: str | NullType | None = None,
         session_id: UUID | None = None,
     ) -> None:
+        """Select a namespace and database.
+
+        Either may be left out, or ``None``, to keep the current one, or
+        ``Null`` to clear it - ``use(database="other")`` changes only the
+        database, and ``use(Null, Null)`` selects neither.
+        """
         kwargs: dict[str, Any] = {
             "namespace": namespace,
             "database": database,
@@ -500,7 +1456,9 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.USE, **kwargs)
         self.id = message.id
-        self._send(message, "use")
+        with self._session_lock:
+            self._send(message, "use")
+            self._note_use(session_id, namespace, database)
 
     def query(
         self,
@@ -521,6 +1479,14 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             query=query,
             variables=vars,
         )
+
+    def batch(self) -> Batch:
+        """Statements to send together as one transaction, in one request.
+
+        Add them with ``.query(sql, vars)`` and run them with ``.execute()``.
+        They all apply or none do. Works on every transport and version.
+        """
+        return Batch(self)
 
     def query_raw(
         self,
@@ -613,15 +1579,10 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         loops that route into these queues, so a bounded queue could only be
         made to wait by stopping the reads that drain it.
         """
-        with self._lock:
-            if self.socket is None:
-                # Lazily, exactly as `_send` connects. Going through
-                # `connect()` instead pulled in `_connect_locked`, which closes
-                # and reopens a socket whose state is not OPEN - a new
-                # server-side session, unauthenticated - so a query on a stale
-                # connection would have failed differently than it used to for
-                # no reason the caller asked for.
-                self.socket = self._connect_socket()
+        with self._locked():
+            # Exactly as `_send` does, so a query on a dropped connection is
+            # handled the same whichever path it takes.
+            self._ready_locked()
         frames: queue.Queue[Any] = queue.Queue()
         self._streams[request_id] = frames
         return frames
@@ -636,12 +1597,10 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         Not :meth:`_send`: that reads until it sees one response for this id
         and would consume the stream's first frame as the whole answer.
         """
-        with self._lock:
-            if self.socket is None:
-                self.socket = self._connect_socket()
-            assert self.socket is not None
+        with self._locked():
+            self._ready_locked()
             try:
-                self.socket.send(message.WS_CBOR_DESCRIPTOR)
+                self._send_frame_locked(message)
             except (WebSocketException, OSError) as exc:
                 raise ConnectionUnavailableError(
                     f"the connection to {self.raw_url} failed while starting a "
@@ -662,42 +1621,58 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         statement runs, and CI measured an ordinary query waiting 2.4s behind a
         stream idling through a `SLEEP`. Now the wait happens with the lock
         released, so it is available for most of every slice.
+
+        Returns as soon as a frame has been routed, so a frame arriving
+        mid-slice is read within a poll, not at the end of the slice - and that
+        includes one another reader routed: a live subscription or a request
+        on the same connection reads this stream's frames too, and the pump
+        used to wait out its slice for a frame already in the stream's queue.
         """
-        poll = min(_STREAM_POLL_TIMEOUT, timeout)
-        with self._lock:
-            if self.socket is None:
-                raise ConnectionUnavailableError(
-                    "WebSocket connection is not established."
-                )
-            try:
-                data = self.socket.recv(timeout=poll)
-            except TimeoutError:
-                data = None
-            except (ConnectionClosed, WebSocketException, OSError) as exc:
-                error = ConnectionUnavailableError(
-                    "WebSocket connection closed while a streaming query was "
-                    f"open: {exc}"
-                )
-                self._break_streams(error)
-                raise error from exc
-            if data is not None:
-                # Decoded and routed while still holding the lock, which the
-                # read order depends on. Two threads pumping - one per stream,
-                # or a stream beside a live subscription - each read one message
-                # and then raced to route it, so a stream could be handed frame
-                # two before frame one: rows out of order, or a terminal frame
-                # ahead of the rows it terminates. Routing only puts to an
-                # unbounded queue, so nothing here can block under the lock.
-                self._route_foreign(
-                    self.decode_response(
-                        data if isinstance(data, bytes) else data.encode(),
-                        "reading a streaming query frame",
+        deadline = time.monotonic() + timeout
+        routed = self._routed
+        while True:
+            poll = min(_STREAM_POLL_TIMEOUT, max(0.0, deadline - time.monotonic()))
+            with self._locked():
+                if self._routed != routed:
+                    return
+                if self.socket is None:
+                    raise ConnectionUnavailableError(
+                        "WebSocket connection is not established."
                     )
-                )
+                try:
+                    data = self.socket.recv(timeout=poll)
+                except TimeoutError:
+                    data = None
+                except (ConnectionClosed, WebSocketException, OSError) as exc:
+                    error = ConnectionUnavailableError(
+                        "WebSocket connection closed while a streaming query was "
+                        f"open: {exc}"
+                    )
+                    self._break_streams(error)
+                    raise error from exc
+                if data is not None:
+                    # Decoded and routed while still holding the lock, which the
+                    # read order depends on. Two threads pumping - one per
+                    # stream, or a stream beside a live subscription - each read
+                    # one message and then raced to route it, so a stream could
+                    # be handed frame two before frame one: rows out of order, or
+                    # a terminal frame ahead of the rows it terminates. Routing
+                    # only puts to an unbounded queue, so nothing here can block
+                    # under the lock.
+                    self._route_foreign(
+                        self.decode_response(
+                            data if isinstance(data, bytes) else data.encode(),
+                            "reading a streaming query frame",
+                            v2=self._v2,
+                        )
+                    )
+                    return
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
                 return
-        # Nothing was waiting. Sleep out the rest of the caller's slice with the
-        # lock released, so anyone else on this connection can take it.
-        time.sleep(max(0.0, timeout - poll))
+            # Nothing was waiting. Wait with the lock released, so anyone else
+            # on this connection can take it, then poll again.
+            time.sleep(min(_POLL_GAP, remaining))
 
     def _stream_cancel(self, request_id: str) -> None:
         """Ask the server to stop the stream *request_id* opened.
@@ -756,7 +1731,20 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             kwargs["txn"] = txn_id
         message = RequestMessage(RequestMethod.LET, **kwargs)
         self.id = message.id
-        self._send(message, "letting")
+        with self._session_lock:
+            self._send(message, "letting")
+            if txn_id is None:
+                self._note_let(session_id, key, value)
+
+    def set(
+        self,
+        key: str,
+        value: Value,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> None:
+        """Set a variable for the session; ``let`` by its JS name."""
+        self.let(key, value, session_id=session_id, txn_id=txn_id)
 
     def unset(
         self,
@@ -771,12 +1759,15 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             kwargs["txn"] = txn_id
         message = RequestMessage(RequestMethod.UNSET, **kwargs)
         self.id = message.id
-        self._send(message, "unsetting")
+        with self._session_lock:
+            self._send(message, "unsetting")
+            if txn_id is None:
+                self._note_unset(session_id, key)
 
     @overload
     def select(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         *,
         fields: Sequence[str] | None = None,
         into: type[M],
@@ -806,7 +1797,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def select(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         *,
         fields: Sequence[str] | None = None,
         session_id: UUID | None = None,
@@ -841,7 +1832,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     ) -> Any:
         """Select records, returning a builder.
 
-        A ``RecordID`` (or ``"table:id"``) returns the record dict, or ``None``
+        A ``RecordID`` (or ``StringRecordId``) returns the record dict, or ``None``
         when it is absent. A ``Table`` (or bare table-name string) returns the
         list of records. Pass ``into=Model`` to map each record onto ``Model``.
 
@@ -975,7 +1966,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def update(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         *,
         into: type[M],
         session_id: UUID | None = None,
@@ -1002,7 +1993,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def update(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         data: Value,
         *,
         into: type[M],
@@ -1032,7 +2023,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def update(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
@@ -1056,7 +2047,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def update(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         data: Value,
         *,
         session_id: UUID | None = None,
@@ -1112,7 +2103,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def upsert(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         *,
         into: type[M],
         session_id: UUID | None = None,
@@ -1139,7 +2130,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def upsert(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         data: Value,
         *,
         into: type[M],
@@ -1169,7 +2160,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def upsert(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
@@ -1193,7 +2184,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def upsert(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         data: Value,
         *,
         session_id: UUID | None = None,
@@ -1249,7 +2240,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def delete(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         *,
         into: type[M],
         session_id: UUID | None = None,
@@ -1276,7 +2267,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
     @overload
     def delete(
         self,
-        record: RecordID,
+        record: RecordID | StringRecordId,
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
@@ -1308,7 +2299,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         """Delete records, returning a builder.
 
         ``.execute()`` gives the deleted record(s) - a ``RecordID`` (or
-        ``"table:id"``) the deleted record, or ``None`` when none was deleted,
+        ``StringRecordId``) the deleted record, or ``None`` when none was deleted,
         matching select; a ``Table`` (or bare name) the list. ``.rows()`` reads
         them as the server produces them, since ``DELETE ... RETURN BEFORE``
         does return rows. Pass ``into=Model`` to map them onto ``Model``.
@@ -1419,8 +2410,12 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         table: str | Table,
         diff: bool = False,
         session_id: UUID | None = None,
-    ) -> UUID:
-        """Start a live query on *table* and return its UUID.
+    ) -> LiveSubscription:
+        """Start a live query on *table* and return its subscription.
+
+        The subscription is also the query's UUID. Iterate it for
+        notifications, and ``kill()`` it, or use it with ``with``, to stop the
+        query.
 
         Pass ``diff=True`` for JSON-Patch notifications. Consume notifications
         with :meth:`subscribe_live` and stop the query with :meth:`kill`.
@@ -1430,9 +2425,31 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.LIVE, **kwargs)
         self.id = message.id
-        response = self._send(message, "live")
-        self.check_response_for_result(response, "live")
-        return response["result"]
+        with self._session_lock:
+            response = self._send(message, "live")
+            self.check_response_for_result(response, "live")
+            live_id = UUID(str(response["result"]))
+            self._track_live(live_id, table, diff, session_id)
+        subscription = LiveSubscription(live_id, self, session_id, managed=True)
+        self._live_tracker.add(subscription)
+        # Listening from now, so nothing that changes before the caller starts
+        # iterating is lost.
+        subscription._hold(self.subscribe_live(subscription))  # pyright: ignore[reportPrivateUsage]
+        return subscription
+
+    def live_of(
+        self, live_id: str | UUID, session_id: UUID | None = None
+    ) -> LiveSubscription:
+        """Attach to a live query started some other way, by its id.
+
+        For example one started with ``LIVE SELECT`` through :meth:`query`.
+        Its notifications are delivered from now on; the query is not
+        restarted after a reconnect, since the connection does not know it.
+        """
+        subscription = LiveSubscription(live_id, self, session_id, managed=False)
+        self._live_tracker.add(subscription)
+        subscription._hold(self.subscribe_live(subscription))  # pyright: ignore[reportPrivateUsage]
+        return subscription
 
     def kill(
         self,
@@ -1449,14 +2466,27 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         sentinel below is pushed locally, which is what the async transport has
         always done.
         """
-        kwargs: dict[str, Any] = {"uuid": query_uuid}
-        if session_id is not None:
-            kwargs["session"] = session_id
-        message = RequestMessage(RequestMethod.KILL, **kwargs)
-        self.id = message.id
-        self._send(message, "kill")
-
         suid = str(query_uuid)
+        with self._session_lock:
+            if self.socket is not None:
+                # A dropped socket is replaced first, so that a reconnect has
+                # restarted the query before its id is read below.
+                with self._locked():
+                    self._ready_locked(renew=False)
+            # The caller holds the id the query was started under; after a
+            # reconnect the server knows it by another.
+            current = self._registry.resolve(suid)
+            kwargs: dict[str, Any] = {
+                "uuid": query_uuid if current == suid else UUID(current)
+            }
+            if session_id is not None:
+                kwargs["session"] = session_id
+            message = RequestMessage(RequestMethod.KILL, **kwargs)
+            self.id = message.id
+            self._send(message, "kill")
+            self._registry.drop_live(suid)
+
+        self._live_tracker.ended(suid)
         for notifications in self.live_queues.get(suid, []):
             notifications.put(_LIVE_KILLED_SENTINEL)
 
@@ -1491,9 +2521,16 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         notification whose ``result`` was ``None``, and the generator then ran
         on forever waiting for a query that no longer existed.
 
+        A subscription from :meth:`live` already holds a registered generator,
+        which is handed over rather than registering a second one.
+
         :raises ConnectionUnavailableError: if the socket is not established or
             is closed while the subscription is active.
         """
+        if isinstance(query_uuid, LiveSubscription):
+            held = query_uuid._take()  # pyright: ignore[reportPrivateUsage]
+            if held is not None:
+                return cast(Generator[dict[str, Value], None, None], held)
         suid = str(query_uuid)
         notifications: queue.Queue[dict[str, Any]] = queue.Queue()
         self.live_queues.setdefault(suid, []).append(notifications)
@@ -1521,70 +2558,90 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         """The body of :meth:`subscribe_live`, split out so registration is eager."""
         try:
             while True:
-                # Hand back anything ``_send`` routed to us while correlating.
+                # Hand back what was routed here - by this loop or by another
+                # reader - in the order it came off the socket.
                 try:
                     routed = notifications.get_nowait()
                 except queue.Empty:
                     pass
                 else:
+                    if routed is _LIVE_BROKEN_SENTINEL:
+                        raise ConnectionUnavailableError(
+                            "WebSocket connection closed while subscribed to "
+                            f"live query {suid}, and it could not be restarted."
+                        )
                     if routed.get("action") == _LIVE_KILLED:
                         return
                     yield routed
                     continue
 
                 # Otherwise read from the socket ourselves, under the lock so
-                # we never race ``_send``. The short timeout releases the lock
-                # between reads to keep concurrent RPCs responsive.
-                response: dict[str, Any] | None = None
-                with self._lock:
+                # we never race ``_send``: one short poll, as the stream pump
+                # polls, then a wait with the lock released when nothing came.
+                # Held through a whole 0.1s read and taken straight back, the
+                # lock kept every other request on the connection waiting for
+                # the read in progress, about 0.2s each.
+                read = False
+                with self._locked():
+                    if not notifications.empty():
+                        # Another reader routed one here while this loop waited
+                        # for the lock. It came off the socket before anything
+                        # read now, so it goes first.
+                        continue
+                    if self._reconnecting:
+                        # Another thread noticed the drop first. This query
+                        # comes back with its replay, or ends if it cannot.
+                        self._await_reconnect_locked(None)
+                        continue
                     if self.socket is None:
                         raise ConnectionUnavailableError(
                             "WebSocket connection is not established."
                         )
                     try:
-                        data = self.socket.recv(timeout=_LIVE_RECV_TIMEOUT)
+                        data = self.socket.recv(timeout=_STREAM_POLL_TIMEOUT)
                     except TimeoutError:
                         data = None
                     except (ConnectionClosed, WebSocketException, OSError) as exc:
+                        if not notifications.empty():
+                            # close() left the end-of-subscription marker.
+                            continue
+                        if self._reconnect.enabled and suid in self._registry.live:
+                            # Replays this query under a new server-side id
+                            # that still routes to `suid`; carry on reading. A
+                            # subscriber has no request timeout to keep to.
+                            self._reconnect_locked(None)
+                            continue
                         logger.warning("Live subscription socket closed: %s", exc)
+                        if not self._reconnect.enabled:
+                            # Nothing will reopen it, so the connection is
+                            # down now: say so, as the async transport does.
+                            # Raising alone left the status `connected`, with
+                            # no `disconnected` event, until another request
+                            # happened to find the socket dead.
+                            self._shut()
                         raise ConnectionUnavailableError(
                             "WebSocket connection closed while subscribed to a "
                             "live query."
                         ) from exc
                     if data is not None:
-                        response = self.decode_response(
-                            data if isinstance(data, bytes) else data.encode(),
-                            "reading a live notification",
+                        read = True
+                        # Routed inside the same lock hold as the read - this
+                        # query's own notifications too, through its queue - so
+                        # that everything reaches its reader in the order it
+                        # came off the socket. Yielding our own straight away
+                        # let it overtake one another reader had already queued
+                        # here; routing a stream's frames after releasing let
+                        # two readers deliver them out of order.
+                        self._route_foreign(
+                            self.decode_response(
+                                data if isinstance(data, bytes) else data.encode(),
+                                "reading a live notification",
+                                v2=self._v2,
+                            )
                         )
-                        if response.get("id") is not None:
-                            # Not a notification: an RPC reply with no waiter,
-                            # or a frame belonging to a streaming query on this
-                            # connection. Dropping it here lost the stream's
-                            # frames, so hand it on - and do it inside the same
-                            # lock hold as the read, because a stream's frames
-                            # have to reach it in the order they came off the
-                            # socket. Decoding and routing after releasing let
-                            # two readers deliver out of order.
-                            self._route_foreign(response)
-                            response = None
 
-                if response is None:
-                    continue
-
-                result = response.get("result")
-                if not isinstance(result, dict):
-                    continue
-                rid = result.get("id")
-                if rid is None:
-                    continue
-                if str(rid) == suid:
-                    if result.get("action") == _LIVE_KILLED:
-                        return
-                    yield result
-                else:
-                    # Notification for a different live query; route it onward.
-                    for other in self.live_queues.get(str(rid), []):
-                        other.put(result)
+                if not read:
+                    time.sleep(_POLL_GAP)
         finally:
             # Deregister this consumer's queue on exit (consumer break, GC,
             # error, or connection close).
@@ -1595,18 +2652,36 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 self.live_queues.pop(suid, None)
 
     def attach(self) -> UUID:
+        self._ensure_open()
+        self._require(Features.SESSIONS)
         session_id = UUID(str(uuid.uuid4()))
         message = RequestMessage(RequestMethod.ATTACH, session=session_id)
         self.id = message.id
-        self._send(message, "attach")
+        with self._session_lock:
+            self._send(message, "attach")
+            self._registry.state(session_id)
         return session_id
 
     def detach(self, session_id: UUID) -> None:
         message = RequestMessage(RequestMethod.DETACH, session=session_id)
         self.id = message.id
-        self._send(message, "detach")
+        with self._session_lock:
+            self._send(message, "detach")
+            self._end_session_live(session_id)
+            self._registry.forget_session(session_id)
+
+    def _end_session_live(self, session_id: UUID | None) -> None:
+        """End the live queries the server dropped with *session_id*'s state."""
+        for logical, live in list(self._registry.live.items()):
+            if live.session_id == session_id:
+                self._registry.drop_live(logical)
+                self._live_tracker.ended(logical)
+                for notifications in self.live_queues.get(logical, []):
+                    notifications.put(_LIVE_KILLED_SENTINEL)
 
     def begin(self, session_id: UUID | None = None) -> UUID:
+        self._ensure_open()
+        self._require(Features.TRANSACTIONS)
         kwargs: dict[str, Any] = {}
         if session_id is not None:
             kwargs["session"] = session_id
@@ -1647,6 +2722,54 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         self.id = message.id
         self._send(message, "cancel")
 
+    def fork_session(self, session_id: UUID | None = None) -> "BlockingSurrealSession":
+        """A new session that starts as a copy of another.
+
+        Copies the namespace and database, the variables and the
+        authentication of *session_id* - the connection's own session by
+        default - into a newly attached session. The two are independent from
+        then on. Needs SurrealDB 3.0 or later.
+
+        The fork gets the access token but not the refresh token, which the
+        server takes only once: shared, renewing either session spent it for
+        both, and the other's next renewal was refused. Renew the fork by
+        signing it in, or by refreshing the source and authenticating the
+        fork with the new access token.
+        """
+        with self._session_lock:
+            if session_id is not None and session_id not in self._registry.sessions:
+                raise ValueError(
+                    f"session {session_id} is not attached to this connection, "
+                    "so there is nothing to fork; fork a session that is still "
+                    "open"
+                )
+            source = self._registry.state(session_id).fork()
+            forked = self.attach()
+            try:
+                with self._locked():
+                    authenticated = self._restore_session_locked(forked, source)
+            except BaseException:
+                self.detach(forked)
+                raise
+            state = self._registry.state(forked)
+            state.namespace, state.database = source.namespace, source.database
+            state.variables = source.variables
+            if authenticated and source.access is not None:
+                state.access, state.refresh = source.access, None
+        return BlockingSurrealSession(self, forked)
+
+    def begin_transaction(
+        self, session_id: UUID | None = None
+    ) -> "BlockingSurrealTransaction":
+        """Begin a transaction on a session - the connection's own by default.
+
+        Commit or cancel it, or use it as a context manager, which commits
+        when the block finishes and cancels if it raises. Needs SurrealDB 3.0
+        or later; :meth:`batch` works on every version.
+        """
+        txn_id = self.begin(session_id=session_id)
+        return BlockingSurrealTransaction(self, session_id, txn_id)
+
     def new_session(self) -> "BlockingSurrealSession":
         session_id = self.attach()
         # A freshly attached session starts unauthenticated on the server -
@@ -1662,7 +2785,7 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
                 if not e.is_token_expired:
                     self.detach(session_id)
                     raise
-                self.token = None
+                self._note_signed_out(None)
         return BlockingSurrealSession(self, session_id)
 
     def close(self) -> None:
@@ -1678,22 +2801,46 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         The replacement socket is a new server-side session, so it starts
         unauthenticated and with no namespace or database selected; sign in and
         ``use()`` again after reconnecting.
+
+        A reconnect under way is stopped, rather than left to open a socket
+        again after this has closed it; requests waiting for it fail with
+        ``ConnectionUnavailableError``.
         """
+        stop = self._reconnect_stop
+        if self._reconnecting and stop is not None:
+            stop.set()
+            self._end_reconnect(
+                f"the connection to {self.raw_url} was closed while it was reconnecting"
+            )
+        self._shut(_LIVE_KILLED_SENTINEL)
+
+    def _shut(self, live_end: dict[str, Any] = _LIVE_BROKEN_SENTINEL) -> None:
+        """Drop the socket and the session state behind it.
+
+        Live subscribers are sent *live_end*: :meth:`close` ends them cleanly,
+        as on the async transport, while a dead socket found elsewhere breaks
+        them, so a subscriber hears of the failure.
+        """
+        for queues in self.live_queues.values():
+            for notifications in queues:
+                notifications.put(live_end)
         # Streams get an error rather than a clean end: a caller iterating rows
         # asked for all of them, and a socket taken away mid-stream means it
-        # will not get them. `_connect_locked` calls `close()` itself when it
-        # finds a dead socket, so this is reachable without the caller closing
-        # anything.
+        # will not get them. `_connect_locked` shuts a dead socket itself, so
+        # this is reachable without the caller closing anything.
         self._break_streams(
             ConnectionUnavailableError(
                 "the connection was closed while a streaming query was open."
             )
         )
+        self._live_tracker.ended(broken=live_end is _LIVE_BROKEN_SENTINEL)
         if self.socket is not None:
             try:
                 self.socket.close()
             finally:
                 self.socket = None
+        self._registry.clear()
+        self._set_status("disconnected")
 
     def __del__(self) -> None:
         """Close the socket if the connection is dropped without ``close()``.
@@ -1761,6 +2908,32 @@ class BlockingWsSurrealConnection(SyncTemplate, UtilsMixin):
         """Typed helpers over the ``file::*`` functions - see `surrealdb.connections.files`."""
         return BlockingFiles(self)
 
+    def relate(
+        self,
+        from_: RelateEnd,
+        edge: RelateEdge,
+        to: RelateEnd,
+        data: Value = _UNSET,
+        *,
+        session_id: UUID | None = None,
+        txn_id: UUID | None = None,
+    ) -> Any:
+        """Relate *from_* to *to* through *edge*: ``RELATE from->edge->to``.
+
+        *edge* is the edge table (a name or ``Table``), or a ``RecordID`` for
+        an edge with a chosen id. *from_* and *to* are records, or lists of
+        records to relate every pair. Pass *data* to set the edge's content.
+        With *data* the edge is created at once and returned; without it, a
+        builder is returned, taking ``.output()`` and ``.timeout()``, to
+        finish with ``.execute()`` or ``.content(data)``.
+        """
+        builder: SyncCrudBuilder[Any] = relate_builder(
+            SyncCrudBuilder, self._make_executor(session_id, txn_id), from_, edge, to
+        )
+        if data is _UNSET:
+            return builder
+        return builder.content(data)
+
 
 class BlockingSurrealSession:
     def __init__(
@@ -1775,8 +2948,35 @@ class BlockingSurrealSession:
         """Wait *seconds* for each reply inside the block - see the connection's."""
         return self._connection.timeout(seconds)
 
-    def use(self, namespace: str, database: str) -> None:
+    @property
+    def id(self) -> UUID:
+        """The session's id on the server."""
+        return self._session_id
+
+    @property
+    def server_version(self) -> str | None:
+        """The version the connected server reported."""
+        return self._connection.server_version
+
+    def use(
+        self,
+        namespace: str | NullType | None = None,
+        database: str | NullType | None = None,
+    ) -> None:
         self._connection.use(namespace, database, session_id=self._session_id)
+
+    def refresh(self, tokens: Tokens | None = None) -> Tokens:
+        return self._connection.refresh(tokens, session_id=self._session_id)
+
+    def revoke(self, tokens: Tokens | None = None) -> None:
+        self._connection.revoke(tokens, session_id=self._session_id)
+
+    def reset(self) -> None:
+        self._connection.reset(session_id=self._session_id)
+
+    def fork(self) -> "BlockingSurrealSession":
+        """A new session that starts as a copy of this one."""
+        return self._connection.fork_session(self._session_id)
 
     def query(
         self,
@@ -1784,6 +2984,14 @@ class BlockingSurrealSession:
         vars: dict[str, Value] | None = None,
     ) -> SyncQueryBuilder:
         return self._connection.query(query, vars, session_id=self._session_id)
+
+    def batch(self) -> Batch:
+        """Statements to send together as one transaction, in one request.
+
+        Add them with ``.query(sql, vars)`` and run them with ``.execute()``.
+        They all apply or none do. Works on every transport and version.
+        """
+        return Batch(self)
 
     def query_raw(
         self,
@@ -1813,12 +3021,16 @@ class BlockingSurrealSession:
     def let(self, key: str, value: Value) -> None:
         self._connection.let(key, value, session_id=self._session_id)
 
+    def set(self, key: str, value: Value) -> None:
+        """Set a session variable; ``let`` by its JS name."""
+        self.let(key, value)
+
     def unset(self, key: str) -> None:
         self._connection.unset(key, session_id=self._session_id)
 
     @overload
     def select(
-        self, record: RecordID, *, into: type[M]
+        self, record: RecordID | StringRecordId, *, into: type[M]
     ) -> SyncCrudBuilder[M | None]: ...
     @overload
     def select(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
@@ -1827,7 +3039,9 @@ class BlockingSurrealSession:
         self, record: str, *, into: type[M]
     ) -> SyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    def select(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value] | None]: ...
+    def select(
+        self, record: RecordID | StringRecordId
+    ) -> SyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def select(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
@@ -1871,25 +3085,33 @@ class BlockingSurrealSession:
         )
 
     @overload
-    def update(self, record: RecordID, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    def update(
+        self, record: RecordID | StringRecordId, *, into: type[M]
+    ) -> SyncCrudBuilder[M]: ...
     @overload
     def update(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
     @overload
     def update(self, record: str, *, into: type[M]) -> SyncCrudBuilder[M | list[M]]: ...
     @overload
-    def update(self, record: RecordID, data: Value, *, into: type[M]) -> M: ...
+    def update(
+        self, record: RecordID | StringRecordId, data: Value, *, into: type[M]
+    ) -> M: ...
     @overload
     def update(self, record: Table, data: Value, *, into: type[M]) -> list[M]: ...
     @overload
     def update(self, record: str, data: Value, *, into: type[M]) -> M | list[M]: ...
     @overload
-    def update(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def update(
+        self, record: RecordID | StringRecordId
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def update(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
     def update(self, record: str) -> SyncCrudBuilder[Value]: ...
     @overload
-    def update(self, record: RecordID, data: Value) -> dict[str, Value]: ...
+    def update(
+        self, record: RecordID | StringRecordId, data: Value
+    ) -> dict[str, Value]: ...
     @overload
     def update(self, record: Table, data: Value) -> list[Value]: ...
     @overload
@@ -1908,25 +3130,33 @@ class BlockingSurrealSession:
         )
 
     @overload
-    def upsert(self, record: RecordID, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    def upsert(
+        self, record: RecordID | StringRecordId, *, into: type[M]
+    ) -> SyncCrudBuilder[M]: ...
     @overload
     def upsert(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
     @overload
     def upsert(self, record: str, *, into: type[M]) -> SyncCrudBuilder[M | list[M]]: ...
     @overload
-    def upsert(self, record: RecordID, data: Value, *, into: type[M]) -> M: ...
+    def upsert(
+        self, record: RecordID | StringRecordId, data: Value, *, into: type[M]
+    ) -> M: ...
     @overload
     def upsert(self, record: Table, data: Value, *, into: type[M]) -> list[M]: ...
     @overload
     def upsert(self, record: str, data: Value, *, into: type[M]) -> M | list[M]: ...
     @overload
-    def upsert(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def upsert(
+        self, record: RecordID | StringRecordId
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def upsert(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
     def upsert(self, record: str) -> SyncCrudBuilder[Value]: ...
     @overload
-    def upsert(self, record: RecordID, data: Value) -> dict[str, Value]: ...
+    def upsert(
+        self, record: RecordID | StringRecordId, data: Value
+    ) -> dict[str, Value]: ...
     @overload
     def upsert(self, record: Table, data: Value) -> list[Value]: ...
     @overload
@@ -1946,7 +3176,7 @@ class BlockingSurrealSession:
 
     @overload
     def delete(
-        self, record: RecordID, *, into: type[M]
+        self, record: RecordID | StringRecordId, *, into: type[M]
     ) -> SyncCrudBuilder[M | None]: ...
     @overload
     def delete(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
@@ -1955,7 +3185,9 @@ class BlockingSurrealSession:
         self, record: str, *, into: type[M]
     ) -> SyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    def delete(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value] | None]: ...
+    def delete(
+        self, record: RecordID | StringRecordId
+    ) -> SyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def delete(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
@@ -1997,6 +3229,37 @@ class BlockingSurrealSession:
             table, data, into=into, relation=relation, session_id=self._session_id
         )
 
+    def api(
+        self,
+        path: str,
+        *,
+        method: str = "get",
+        body: Value = None,
+        headers: Mapping[str, str] | None = None,
+        query: Mapping[str, str] | None = None,
+    ) -> ApiResponse:
+        return self._connection.api(
+            path,
+            method=method,
+            body=body,
+            headers=headers,
+            query=query,
+            session_id=self._session_id,
+        )
+
+    def gql(self, query: str, vars: Mapping[str, Value] | None = None) -> list[Value]:
+        return self._connection.gql(query, vars, session_id=self._session_id)
+
+    def graphql(
+        self,
+        query: str,
+        variables: Mapping[str, Value] | None = None,
+        operation_name: str | None = None,
+    ) -> dict[str, Value]:
+        return self._connection.graphql(
+            query, variables, operation_name, session_id=self._session_id
+        )
+
     def run(
         self,
         name: str,
@@ -2009,8 +3272,11 @@ class BlockingSurrealSession:
         self,
         table: str | Table,
         diff: bool = False,
-    ) -> UUID:
+    ) -> LiveSubscription:
         return self._connection.live(table, diff, session_id=self._session_id)
+
+    def live_of(self, live_id: str | UUID) -> LiveSubscription:
+        return self._connection.live_of(live_id, session_id=self._session_id)
 
     def kill(self, query_uuid: str | UUID) -> None:
         self._connection.kill(query_uuid, session_id=self._session_id)
@@ -2040,17 +3306,31 @@ class BlockingSurrealSession:
         """Typed helpers over the ``file::*`` functions - see `surrealdb.connections.files`."""
         return BlockingFiles(self)
 
+    def relate(
+        self,
+        from_: RelateEnd,
+        edge: RelateEdge,
+        to: RelateEnd,
+        data: Value = _UNSET,
+    ) -> Any:
+        return self._connection.relate(
+            from_, edge, to, data, session_id=self._session_id
+        )
+
 
 class BlockingSurrealTransaction:
     def __init__(
         self,
         connection: BlockingWsSurrealConnection,
-        session_id: UUID,
+        session_id: UUID | None,
         txn_id: UUID,
     ) -> None:
         self._connection = connection
         self._session_id = session_id
         self._txn_id = txn_id
+        # Set once commit() or cancel() succeeds: the transaction is gone, so
+        # leaving a `with` block must not try to finish it again.
+        self._finished = False
 
     def timeout(self, seconds: float | None) -> AbstractContextManager[None]:
         """Wait *seconds* for each reply inside the block - see the connection's."""
@@ -2088,7 +3368,7 @@ class BlockingSurrealTransaction:
 
     @overload
     def select(
-        self, record: RecordID, *, into: type[M]
+        self, record: RecordID | StringRecordId, *, into: type[M]
     ) -> SyncCrudBuilder[M | None]: ...
     @overload
     def select(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
@@ -2097,7 +3377,9 @@ class BlockingSurrealTransaction:
         self, record: str, *, into: type[M]
     ) -> SyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    def select(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value] | None]: ...
+    def select(
+        self, record: RecordID | StringRecordId
+    ) -> SyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def select(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
@@ -2148,25 +3430,33 @@ class BlockingSurrealTransaction:
         )
 
     @overload
-    def update(self, record: RecordID, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    def update(
+        self, record: RecordID | StringRecordId, *, into: type[M]
+    ) -> SyncCrudBuilder[M]: ...
     @overload
     def update(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
     @overload
     def update(self, record: str, *, into: type[M]) -> SyncCrudBuilder[M | list[M]]: ...
     @overload
-    def update(self, record: RecordID, data: Value, *, into: type[M]) -> M: ...
+    def update(
+        self, record: RecordID | StringRecordId, data: Value, *, into: type[M]
+    ) -> M: ...
     @overload
     def update(self, record: Table, data: Value, *, into: type[M]) -> list[M]: ...
     @overload
     def update(self, record: str, data: Value, *, into: type[M]) -> M | list[M]: ...
     @overload
-    def update(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def update(
+        self, record: RecordID | StringRecordId
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def update(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
     def update(self, record: str) -> SyncCrudBuilder[Value]: ...
     @overload
-    def update(self, record: RecordID, data: Value) -> dict[str, Value]: ...
+    def update(
+        self, record: RecordID | StringRecordId, data: Value
+    ) -> dict[str, Value]: ...
     @overload
     def update(self, record: Table, data: Value) -> list[Value]: ...
     @overload
@@ -2187,25 +3477,33 @@ class BlockingSurrealTransaction:
         )
 
     @overload
-    def upsert(self, record: RecordID, *, into: type[M]) -> SyncCrudBuilder[M]: ...
+    def upsert(
+        self, record: RecordID | StringRecordId, *, into: type[M]
+    ) -> SyncCrudBuilder[M]: ...
     @overload
     def upsert(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
     @overload
     def upsert(self, record: str, *, into: type[M]) -> SyncCrudBuilder[M | list[M]]: ...
     @overload
-    def upsert(self, record: RecordID, data: Value, *, into: type[M]) -> M: ...
+    def upsert(
+        self, record: RecordID | StringRecordId, data: Value, *, into: type[M]
+    ) -> M: ...
     @overload
     def upsert(self, record: Table, data: Value, *, into: type[M]) -> list[M]: ...
     @overload
     def upsert(self, record: str, data: Value, *, into: type[M]) -> M | list[M]: ...
     @overload
-    def upsert(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value]]: ...
+    def upsert(
+        self, record: RecordID | StringRecordId
+    ) -> SyncCrudBuilder[dict[str, Value]]: ...
     @overload
     def upsert(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
     def upsert(self, record: str) -> SyncCrudBuilder[Value]: ...
     @overload
-    def upsert(self, record: RecordID, data: Value) -> dict[str, Value]: ...
+    def upsert(
+        self, record: RecordID | StringRecordId, data: Value
+    ) -> dict[str, Value]: ...
     @overload
     def upsert(self, record: Table, data: Value) -> list[Value]: ...
     @overload
@@ -2227,7 +3525,7 @@ class BlockingSurrealTransaction:
 
     @overload
     def delete(
-        self, record: RecordID, *, into: type[M]
+        self, record: RecordID | StringRecordId, *, into: type[M]
     ) -> SyncCrudBuilder[M | None]: ...
     @overload
     def delete(self, record: Table, *, into: type[M]) -> SyncCrudBuilder[list[M]]: ...
@@ -2236,7 +3534,9 @@ class BlockingSurrealTransaction:
         self, record: str, *, into: type[M]
     ) -> SyncCrudBuilder[M | list[M] | None]: ...
     @overload
-    def delete(self, record: RecordID) -> SyncCrudBuilder[dict[str, Value] | None]: ...
+    def delete(
+        self, record: RecordID | StringRecordId
+    ) -> SyncCrudBuilder[dict[str, Value] | None]: ...
     @overload
     def delete(self, record: Table) -> SyncCrudBuilder[list[Value]]: ...
     @overload
@@ -2291,6 +3591,25 @@ class BlockingSurrealTransaction:
             txn_id=self._txn_id,
         )
 
+    def api(
+        self,
+        path: str,
+        *,
+        method: str = "get",
+        body: Value = None,
+        headers: Mapping[str, str] | None = None,
+        query: Mapping[str, str] | None = None,
+    ) -> ApiResponse:
+        return self._connection.api(
+            path,
+            method=method,
+            body=body,
+            headers=headers,
+            query=query,
+            session_id=self._session_id,
+            txn_id=self._txn_id,
+        )
+
     def run(
         self,
         name: str,
@@ -2315,11 +3634,44 @@ class BlockingSurrealTransaction:
 
     def commit(self) -> None:
         self._connection.commit(self._txn_id, session_id=self._session_id)
+        self._finished = True
 
     def cancel(self) -> None:
         self._connection.cancel(self._txn_id, session_id=self._session_id)
+        self._finished = True
+
+    def set(self, key: str, value: Value) -> None:
+        """Set a variable for the rest of the transaction; ``let`` by its JS name."""
+        self.let(key, value)
+
+    def __enter__(self) -> "BlockingSurrealTransaction":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        if self._finished:
+            return
+        if exc_type is None:
+            self.commit()
+        else:
+            self.cancel()
 
     @property
     def files(self) -> BlockingFiles:
         """Typed helpers over the ``file::*`` functions - see `surrealdb.connections.files`."""
         return BlockingFiles(self)
+
+    def relate(
+        self,
+        from_: RelateEnd,
+        edge: RelateEdge,
+        to: RelateEnd,
+        data: Value = _UNSET,
+    ) -> Any:
+        return self._connection.relate(
+            from_, edge, to, data, session_id=self._session_id, txn_id=self._txn_id
+        )

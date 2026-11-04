@@ -177,14 +177,17 @@ The builder is **typed** via `@overload`:
 
 - `RecordID` target -> `dict[str, Value]`
 - `Table` target   -> `list[Value]`
-- `str` target     -> `Value` (a record-id string returns a dict; a table-name
-  string returns a list - the type checker can't tell them apart, so falls back to `Value`)
+- `StringRecordId` target -> a record, sent for the server to parse
+- `str` target     -> `list[Value]`: a plain string is always a table name, even
+  one containing a colon (`"person:tobie"` is a table of that name). It is never
+  parsed as a record id; pass `StringRecordId("person:tobie")` or a `RecordID`
+  for a record
 
 `select()` returns a builder, like every other CRUD method - `await` it on the
 async client, `.execute()` it on the blocking one - and it unwraps single
 records:
 
-- `select(RecordID(...))` (or a `"table:id"` string) -> `dict[str, Value] | None`
+- `select(RecordID(...))` (or a `StringRecordId`) -> `dict[str, Value] | None`
   (`None` when the record does not exist)
 - `select(Table(...))` (or a bare table-name string) -> `list[Value]`
 

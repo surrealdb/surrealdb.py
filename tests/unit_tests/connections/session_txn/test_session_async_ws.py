@@ -2,6 +2,7 @@ from collections.abc import AsyncGenerator
 
 import pytest
 
+from surrealdb import StringRecordId
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 
 
@@ -41,11 +42,11 @@ async def test_new_session_use_query_create_select(
     assert len(result) == 0
 
     await session.create(
-        "session_txn_test:one",
+        StringRecordId("session_txn_test:one"),
         {"name": "session-created", "value": 1},
     )
 
-    selected = await session.select("session_txn_test:one")
+    selected = await session.select(StringRecordId("session_txn_test:one"))
     assert selected is not None
     if isinstance(selected, list) and len(selected) >= 1:
         rec = selected[0] if isinstance(selected[0], dict) else selected

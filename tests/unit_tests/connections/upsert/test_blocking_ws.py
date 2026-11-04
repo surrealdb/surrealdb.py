@@ -3,6 +3,7 @@ from typing import Any
 
 import pytest
 
+from surrealdb import StringRecordId
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
@@ -46,7 +47,7 @@ def test_upsert_string(
     existing_data: dict[str, Any],
 ) -> None:
     record_id = RecordID("user", "tobie")
-    outcome = blocking_ws_connection.upsert("user:tobie", existing_data)
+    outcome = blocking_ws_connection.upsert(StringRecordId("user:tobie"), existing_data)
     assert outcome["id"] == record_id
     assert outcome["name"] == "Tobie"
     assert outcome["email"] == "tobie@example.com"
@@ -64,7 +65,9 @@ def test_upsert_string_with_data(
     setup_user: None,
 ) -> None:
     record_id = RecordID("user", "tobie")
-    first_outcome = blocking_ws_connection.upsert("user:tobie", upsert_data)
+    first_outcome = blocking_ws_connection.upsert(
+        StringRecordId("user:tobie"), upsert_data
+    )
     assert first_outcome["id"] == record_id
     assert first_outcome["name"] == "Jaime"
     assert first_outcome["email"] == "jaime@example.com"

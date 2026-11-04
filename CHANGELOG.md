@@ -7,7 +7,268 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `live()` returns a subscription, as in the JS SDK: an `AsyncLiveSubscription`
+  or `LiveSubscription` that is also the live query's UUID, so passing it to
+  `subscribe_live()` or `kill()` works as before. Iterate it (`async for` on
+  async connections) for notifications; `kill()` it, or use it with
+  `async with`/`with`, to stop the query. Iteration ends cleanly when the
+  query is killed, by this client or another, or the connection closes.
+  `sub.id`, `sub.is_alive` and `sub.managed` describe it.
+
+- `live_of(live_id)` attaches to a live query started some other way, such as
+  a `LIVE SELECT` sent with `query()`. It is not restarted after a reconnect,
+  since the connection does not know its definition.
+
+- `db.batch()` sends several statements as one transaction, in one request:
+  `db.batch().query(sql, vars).query(sql, vars).execute()` returns each
+  statement's result, or raises the statement that failed, with none of them
+  applied. Nothing is held open on the server, so it works on every transport
+  and version, sessions included.
+
+- JS names for transactions and variables: `db.begin_transaction()` begins a
+  transaction on the connection's own session (or on `session_id`), and a
+  transaction works as a context manager, committing when the block finishes
+  and cancelling if it raises. `set(key, value)` is `let` by its JS name, on
+  connections, sessions and transactions.
+
+- `StringRecordId("person:⟨a:b⟩")`, as in the JS SDK: a record id written as
+  SurrealQL, sent for the server to parse. It works wherever a `RecordID`
+  does, including as a query variable, and reaches every id the server can
+  read, including ones `RecordID.parse` refuses. It is also how to pass a record id
+  as text, since a plain string is always a table name.
+
+- Builder modifiers, compiled into the SurrealQL statement:
+  `.where(condition, variables)` on `select`, `update`, `upsert` and
+  `delete`; `.fetch(*paths)`, `.limit(n)`, `.start(n)` and `.version(at)` on
+  `select`; `.output(mode)` (`"none"`, `"null"`, `"diff"`, `"before"`,
+  `"after"` or a list of fields) on writes and inserts; and `.timeout(d)`,
+  SurrealQL's `TIMEOUT`, on all of them. A modifier a statement does not take
+  raises at once.
+
+- `db.relate(from_, edge, to, data=None)` sends `RELATE from_->edge->to`.
+  `edge` is a table or a `RecordID`; either end may be a list of records.
+  With `data`, the edge is created and returned at once (awaited on async
+  connections); without it, a builder taking `.output()`, `.timeout()` and
+  `.content(data)` is returned.
+
+- `db.api(path, method=..., body=..., headers=..., query=...)` calls an
+  endpoint defined with `DEFINE API` and returns an `ApiResponse` (`status`,
+  `body`, `headers`, `ok`). It is sent as `RETURN api::invoke(...)`, so it
+  works in sessions and transactions, and needs SurrealDB 3.0 or later with
+  the `define_api` capability.
+
+- `db.gql(query, vars=None)` runs an ISO GQL query and returns each
+  statement's result. `db.graphql(query, variables=None, operation_name=None)`
+  runs a GraphQL query and returns `{data, errors}`.
+
+- `db.export(options=None)` and `db.import_(data)` on every remote transport,
+  over the server's `/export` and `/import` endpoints with the connection's
+  token, namespace and database. `export()` returns the SurrealQL.
+  `ExportOptions(users=..., accesses=..., params=..., functions=...,
+  analyzers=..., tables=..., versions=..., records=..., sequences=...)`
+  chooses what it includes; `tables` takes `True`/`False`, a list of names or
+  `{"exclude": [...]}`. SurrealDB 2.0 takes no options and says so with
+  `UnsupportedFeatureError`.
+
+  `db.export_to(target, options=None)` writes the export into a file, or a
+  binary file object, as it arrives, so one too large to hold in memory can
+  still be saved. A file is replaced only once the export has arrived in full:
+  one that breaks off leaves an existing file - perhaps the last good backup -
+  as it was.
+
+  `import_()` takes SurrealQL as `str` or `bytes`, or the path of a file as a
+  `pathlib.Path` or other path-like. A `str` is always SurrealQL, so one that
+  names an existing file - `import_("backup.surql")` - is refused with
+  `ValueError` rather than imported as the file's name. A failed statement
+  does not stop the rest, so `import_()` reads the server's answer and raises
+  `ImportFailedError` with every failure in `failures`.
+  SurrealDB 3.1 and later reports only the failures, with their error kinds;
+  older servers report every statement, and the failures are picked out.
+  SurrealDB 3 requires an import to start with `OPTION IMPORT;`, as exports
+  do.
+
+- `auth=` on the connections and on `Surreal`/`AsyncSurreal`, like the JS
+  SDK's `authentication` option, lets a connection sign itself in. It takes
+  signin credentials, an access token, `Tokens`, or a function returning one
+  of those; on `AsyncSurreal` the function may be a coroutine function. A
+  websocket connection applies it when the socket opens. After a reconnect it
+  signs in with the credentials again, or asks the function again, instead of
+  replaying a token that may have expired while the socket was down; a token
+  or `Tokens` given as they are is not applied again, so the tokens a renewal
+  got in their place are the ones replayed. HTTP applies it before its first
+  request. `Tokens` whose access token the server refuses - saved past its
+  expiry, say - are renewed with their refresh token instead.
+
+  With `renew_access=True` (the default), a connection also renews its own
+  access token shortly before it expires: with its refresh token if it holds
+  one and the server supports them, otherwise by applying `auth=` again. The
+  async websocket does this on a timer. The blocking and HTTP connections
+  have no background work, so they renew before the next request that finds
+  the token due. A renewal that fails is reported as an `"error"` event. A
+  refresh token the server refuses is dropped rather than tried again, and
+  the connection signs in with `auth=` instead - or, with no credentials or
+  function to sign in with, carries on with the access token it has.
+
+  Signing the connection's own session in, up or out with `signin()`,
+  `signup()`, `authenticate()`, `invalidate()` or `reset()` takes over from
+  `auth=`, as an explicit sign-in does in the JS SDK: renewing then uses only
+  the refresh token the session holds, and a reconnect replays what the
+  caller chose. `auth=` applies again once the connection starts over:
+  re-pointed with `connect(url)`, or, on a websocket, closed or dropped
+  without a reconnect.
+
+- Token and session management to match the JS SDK:
+  - `db.refresh(tokens=None)` exchanges a refresh token for a new pair over
+    the `refresh` RPC, authenticates with the new access token and returns
+    both. It defaults to the tokens the connection signed in with.
+  - `db.revoke(tokens=None)` revokes a refresh token so it can never be
+    exchanged again.
+  - `db.reset()` returns a session to how it started, with no namespace,
+    database, variables or authentication.
+  - `db.sessions()` lists the ids of the sessions attached on the server.
+  - `db.fork_session()` and `session.fork()` start a new session as a copy of
+    an existing one. `session.id` is the session's id.
+  - `use()` takes either argument alone: `use(database="other")` changes only
+    the database. `None` keeps the current value and `Null` clears it.
+  - `db.health()` asks the server's `/health` endpoint, raising
+    `ConnectionUnavailableError` if the server is unhealthy or unreachable.
+    There is no health RPC, so websocket connections ask over HTTP.
+
+  `refresh`, `revoke`, `reset`, `sessions` and `fork_session` need SurrealDB
+  3.0 and raise `UnavailableFeatureError` on 2.x. Over HTTP, `refresh`,
+  `revoke`, `reset`, `health` and partial `use` work; sessions do not.
+
+- Websocket connections reconnect on their own. When the socket drops, the
+  connection opens a new one, with backoff, and replays what the server forgot
+  with the old one: the namespace and database, the variables from `let`, the
+  authentication, every session from `new_session()`, and every live query.
+  An access token that expired while the socket was down is renewed with the
+  session's refresh token, if it holds one.
+  A live query is started again under a new server-side id, and its
+  notifications keep arriving on the subscription the caller already holds,
+  with the original id. It is started again in the namespace and database it
+  was first started in, even if its session has selected others since; if the
+  session has since signed in as someone else, the subscription ends with
+  `ConnectionUnavailableError` instead. A request in flight when the socket
+  dropped fails with `ConnectionUnavailableError` rather than being sent twice;
+  one made while the async connection is reconnecting waits for the replay. The
+  blocking connection has no background reader, so it reconnects when the next
+  request or live subscription uses the socket. Its first attempt is made at
+  once, and a request waits for the reconnect for at most its own timeout,
+  while the attempts carry on without holding up other threads.
+
+  On by default. `reconnect=False` turns it off, on the connection classes and
+  on `Surreal`/`AsyncSurreal`; `reconnect=ReconnectOptions(attempts=...,
+  retry_delay=..., retry_delay_max=..., retry_delay_multiplier=...,
+  retry_delay_jitter=...)` tunes it, with the JS SDK's defaults. Once the
+  attempts run out the session state is forgotten, live subscriptions end with
+  `ConnectionUnavailableError`, and the next request starts afresh.
+
+- Connection status and events. `db.status` is `"disconnected"`,
+  `"connecting"`, `"reconnecting"` or `"connected"`, and
+  `db.subscribe(event, listener)` calls *listener* on `"connecting"`,
+  `"connected"` (with the server version), `"reconnecting"`, `"disconnected"`,
+  `"error"` (with the exception), `"auth"` (with the new tokens, or `None` once
+  signed out) and `"using"` (with the namespace and database), returning the
+  function that unsubscribes it. `db.namespace` and `db.database` say what is
+  selected.
+
+- A declared server range, checked on connect. Every remote connection now asks
+  the server for its version as the first thing it does - on websocket
+  connections when the socket opens, and over HTTP before the first request -
+  and refuses a server outside `MINIMUM_VERSION` (2.0.0) up to, but not
+  including, `MAXIMUM_VERSION` (5.0.0) with `UnsupportedVersionError`. Pass
+  `version_check=False` to a connection or to `Surreal`/`AsyncSurreal` to
+  connect anyway. 4.x servers are accepted. Pre-release and nightly builds
+  count as the release they lead up to.
+
+  The version is kept on the connection as `db.server_version`, and features
+  that need a newer server are gated on it the way the JS SDK gates them:
+  `Features.SESSIONS`, `API`, `REFRESH_TOKENS` and `TRANSACTIONS` need 3.0,
+  `IMPORT_FAILURE_REPORTING` 3.1 and `QUERY_STREAMING` 3.3.
+  `db.is_feature_supported(Features.SESSIONS)` asks, and using a feature the
+  server lacks raises `UnavailableFeatureError` (a subclass of
+  `UnsupportedFeatureError`) before anything is sent - so `new_session()` and
+  `begin()` on a 2.x server now say what they need instead of passing on the
+  server's "method not found". A server older than 3.3 is no longer sent a
+  `query_stream` request just to learn it does not stream.
+
+- `cbor.2`, the CBOR format SurrealDB 4.0 adds. Over WebSocket the connection
+  offers `cbor.2` then `cbor` and speaks whichever the server picks. Over HTTP
+  it asks for `application/cbor; v=2` and switches once a response comes back
+  in that format. `db.wire_format` says which one is in use. Servers before 4.0
+  keep plain `cbor`, so nothing changes for them.
+
+- Sized numbers: `I8`, `U8`, `I16`, `U16`, `I32`, `U32`, `U64`, `F16` and `F32`,
+  SurrealDB 4.0's fixed-width number kinds, exported from `surrealdb`. Each is
+  an `int` or `float` subclass that refuses a value outside its range; `F16`
+  and `F32` round to their width when made. Over `cbor.2` they are sent with
+  their tags (180 to 188) and read back as these types. Over plain `cbor` they
+  are sent widened, as the server would widen them: an `int`, a `float`, or a
+  `Decimal` for a `U64` past the signed 64-bit range.
+
+- SurrealDB 4.0's other new kinds, as `PlainDate`, `PlainTime`, `Timestamp`,
+  `Interval`, `BigDecimal` and `Regex`, exported from `surrealdb`. Over `cbor.2`
+  they are sent and read back with their tags, 100 and 189 to 193.
+  - A date or timestamp holds any year SurrealDB does, -262143 to 262142, with
+    `infinity` and `-infinity` as `INFINITY` and `NEG_INFINITY`.
+  - A time runs to the nanosecond, up to and including `24:00:00`.
+  - `to_date()`, `to_time()` and `to_datetime()` convert to the standard
+    library types where they can hold the value, and `from_date()`,
+    `from_time()` and `from_datetime()` convert back.
+  - An `Interval` keeps its months, days and microseconds apart, and compares
+    equal to another as the server does, a month as 30 days.
+  - `BigDecimal` is a `Decimal` that keeps its scale as written.
+  - `Regex` holds the text of a pattern in Rust's regex syntax.
+
+  Over plain `cbor` each one is sent as the server widens it: a date as a
+  datetime at midnight UTC, a timestamp as a datetime, a time as a duration,
+  an interval as its ISO 8601 text, and a bigdecimal as a decimal, or as its
+  text if it does not fit one. A `Regex` has no plain `cbor` form and raises
+  `ValueError` there.
+
+- A driver for the surrealdb-protocol v0.15.0 conformance suite
+  (`conformance/`), run in CI against a SurrealDB nightly, and the protocol's
+  CBOR value vectors as unit tests. The vectors are fetched at test time with
+  `scripts/protocol-vectors.sh` rather than committed; without them those tests
+  skip.
+
 ### Changed
+
+- Responses are decoded as strictly as a SurrealDB 4.0 server decodes
+  requests. A payload that holds no SurrealDB value raises
+  `UnexpectedResponseError` instead of decoding to something else: an integer
+  outside the signed 64-bit range, a duplicate or non-text object key, a tag
+  SurrealDB does not use (including 0, 9 and 13, the text forms of datetimes,
+  uuids and durations), tag 6 (NONE) over anything but null, a tag of a 4.0
+  kind (100 or 180 to 193) outside `cbor.2`, or a malformed value of any kind.
+  A record id sent as text under tag 8 decodes to a `RecordID`.
+
+- A `datetime.date` is sent as a SurrealDB date, and a naive `datetime.time` as
+  a SurrealDB time. A date used to go out as CBOR tag 1004, which no
+  SurrealDB server reads, and a time raised `TypeError`. A `datetime` is
+  still sent as a datetime.
+
+- A compiled `re.Pattern` raises `TypeError` and points to `Regex`. cbor2 sent
+  it as IANA tag 35, which names another regex syntax, and which SurrealDB
+  refuses.
+
+- **Behaviour change:** a plain string is always a table name. `"person:1"` and
+  `"person:tobie"` used to be parsed by the SDK into a record id (an `int` key
+  when the part after the colon was all ASCII digits, otherwise a string key),
+  so `db.select("person:1")` read one record. It now reads the table that is
+  literally named `person:1`, as the JS, Go, Ruby and Dart SDKs do. Nothing is
+  parsed, coerced, warned about or refused, because a table can legitimately
+  be named `person:tobie`. The same holds for `"user:1..10"`, which is no
+  longer read as a range, and for the ends of `relate()`, which relates
+  records and now raises a `TypeError` for a plain string.
+
+  To target a record, pass `StringRecordId("person:1")` to have the server
+  parse it, or a `RecordID` (`RecordID("person", 1)` or
+  `RecordID.parse("person:1")`). A bare table name such as `"person"` is not
+  affected.
 
 - **Breaking for on-disk embedded databases.** The `surrealdb-embedded`
   extension now builds against `surrealdb-core` 4.0.0, up from 3.3.5, so
@@ -34,6 +295,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   embedded engine, now work.
 - Building the extension from source needs Rust 1.95 or later, which a
   transitive dependency of `surrealdb-core` 4.0 requires.
+
+### Fixed
+
+- A `Decimal` is sent in plain notation (`0.0000001`, not `1E-7`), which
+  SurrealDB 4.0 requires, and trailing zeros past SurrealDB's 28-digit scale,
+  such as those `Decimal` arithmetic leaves in `Decimal("0E-30")`, are dropped
+  so the server accepts the number.
+- `select(fields=[...])` delimits every field, so a field named after a
+  keyword is read as the field: `fields=["value"]` used to send
+  `SELECT value FROM ...`, which SurrealQL reads as the keyword.
+- The blocking WebSocket connection no longer emits websockets 17.1's
+  `DeprecationWarning` ("connect() must be used as a context manager") on its
+  first request. It now asks `connect()` for the socket with `legacy=True`
+  where websockets takes it, so it keeps working when `connect()` stops
+  opening the socket itself.
 
 ## [3.0.0-beta.11] - 2026-11-03
 

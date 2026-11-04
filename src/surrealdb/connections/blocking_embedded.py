@@ -12,6 +12,12 @@ from surrealdb.connections.blocking_ws import (
     BlockingSurrealSession,
     BlockingWsSurrealConnection,
 )
+from surrealdb.connections.import_export import (
+    ExportOptions,
+    ExportTarget,
+    ImportData,
+)
+from surrealdb.connections.live import LiveSubscription
 from surrealdb.connections.url import Url
 from surrealdb.connections.utils_mixin import mapped_engine_errors
 from surrealdb.data.cbor import decode
@@ -58,6 +64,9 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
         # Embedded URLs address a local engine, not an HTTP endpoint, so they
         # keep their original form instead of the parent's ``/rpc`` suffix.
         self.raw_url = url
+        # The engine is compiled in, and has no handshake to report its
+        # version: an unknown version, so nothing is gated.
+        self._version_learned = True
 
         # Embedded database handle
         with mapped_engine_errors("opening the database"):
@@ -108,6 +117,7 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
             with mapped_engine_errors("opening the database"):
                 self._db = SyncEmbeddedDB(url)
             self._closed = False
+            self._registry.clear()
         elif self._closed:
             with mapped_engine_errors("opening the database"):
                 self._db = SyncEmbeddedDB(self.raw_url)
@@ -128,7 +138,13 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
         with mapped_engine_errors("closing"):
             self._db.close()
         self._closed = True
+        # The engine forgot the session with the close, so forget it here too.
+        self._registry.clear()
         self.socket = None
+
+    def _ensure_open(self) -> None:
+        """Open the engine if it is closed, in place of opening a socket."""
+        self.connect()
 
     def _send(
         self, message: RequestMessage, process: str, bypass: bool = False
@@ -168,6 +184,32 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
 
         return response
 
+    def export(self, options: ExportOptions | None = None) -> str:
+        raise UnsupportedFeatureError(
+            "an embedded database has no /export or /import endpoint; run "
+            "the export and import statements through query() instead"
+        )
+
+    def export_to(
+        self, target: ExportTarget, options: ExportOptions | None = None
+    ) -> None:
+        raise UnsupportedFeatureError(
+            "an embedded database has no /export or /import endpoint; run "
+            "the export and import statements through query() instead"
+        )
+
+    def import_(self, data: ImportData) -> None:
+        raise UnsupportedFeatureError(
+            "an embedded database has no /export or /import endpoint; run "
+            "the export and import statements through query() instead"
+        )
+
+    def health(self) -> None:
+        raise UnsupportedFeatureError(
+            "health() asks a server's /health endpoint; an embedded database has "
+            "none, so a request that succeeds is the check that it is up"
+        )
+
     def attach(self) -> UUID:
         raise UnsupportedFeatureError(
             "Multi-session and client-side transactions are only supported for WebSocket connections"
@@ -198,6 +240,11 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
             "Multi-session and client-side transactions are only supported for WebSocket connections"
         )
 
+    def sessions(self) -> list[UUID]:
+        raise UnsupportedFeatureError(
+            "Multi-session and client-side transactions are only supported for WebSocket connections"
+        )
+
     # Live queries -----------------------------------------------------------
     #
     # Refused up front rather than inherited. ``live`` and ``kill`` reached the
@@ -223,7 +270,12 @@ class BlockingEmbeddedSurrealConnection(BlockingWsSurrealConnection):
         table: str | Table,
         diff: bool = False,
         session_id: UUID | None = None,
-    ) -> UUID:
+    ) -> LiveSubscription:
+        raise UnsupportedFeatureError(_NO_LIVE_QUERIES)
+
+    def live_of(
+        self, live_id: str | UUID, session_id: UUID | None = None
+    ) -> LiveSubscription:
         raise UnsupportedFeatureError(_NO_LIVE_QUERIES)
 
     def kill(

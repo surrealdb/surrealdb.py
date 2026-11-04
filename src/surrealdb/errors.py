@@ -429,6 +429,24 @@ class InternalError(ServerError):
 # ------------------------------------------------------------------ #
 
 
+class ImportFailedError(SurrealError):
+    """Statements in an import failed; the rest were applied.
+
+    Attributes:
+        failures: The error each failed statement gave, in order.
+    """
+
+    def __init__(self, failures: list[ServerError]) -> None:
+        shown = "; ".join(str(failure) for failure in failures[:3])
+        more = f" (and {len(failures) - 3} more)" if len(failures) > 3 else ""
+        super().__init__(
+            f"{len(failures)} statement(s) in the import failed: {shown}{more}"
+            if failures
+            else "the import failed, and the server did not say which statements"
+        )
+        self.failures: list[ServerError] = failures
+
+
 class TransportError(SurrealError):
     """Transport-level failure that produced no structured server response.
 
@@ -480,6 +498,43 @@ class UnsupportedEngineError(SurrealError):
 
 class UnsupportedFeatureError(SurrealError):
     """Feature not supported by this connection type."""
+
+
+class UnavailableFeatureError(UnsupportedFeatureError):
+    """The connected server is too old (or too new) for a feature.
+
+    A subclass of :class:`UnsupportedFeatureError`, so code catching that still
+    catches this. Raised before anything is sent, from the version the server
+    reported when the connection opened.
+    """
+
+    def __init__(self, feature: str, version: str, since: str | None) -> None:
+        needs = f"SurrealDB {since} or later" if since else "a different server"
+        super().__init__(
+            f"{feature} needs {needs}, but this server is {version}. Upgrade "
+            "the server, or avoid this feature on this connection."
+        )
+        self.feature = feature
+        self.version = version
+        self.since = since
+
+
+class UnsupportedVersionError(SurrealError):
+    """The server's version is outside the range this SDK supports.
+
+    Raised when a connection opens. Build the connection with
+    ``version_check=False`` to connect anyway, at your own risk.
+    """
+
+    def __init__(self, version: str, minimum: str, maximum: str) -> None:
+        super().__init__(
+            f"SurrealDB {version} is not supported by this SDK, which supports "
+            f"{minimum} up to, but not including, {maximum}. Use a supported "
+            "server, or pass version_check=False to connect anyway."
+        )
+        self.version = version
+        self.minimum = minimum
+        self.maximum = maximum
 
 
 class UnexpectedResponseError(SurrealError):

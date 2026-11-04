@@ -17,17 +17,17 @@ def test_use_fail() -> None:
     message = RequestMessage(RequestMethod.USE, namespace="ns", database=1)
     with pytest.raises(ValueError) as context:
         _ = message.WS_CBOR_DESCRIPTOR
-    assert (
-        "Invalid schema for Cbor WS encoding for use: params.1: Input should be a valid string"
-        == str(context.value)
+    assert str(context.value).startswith(
+        "Invalid schema for Cbor WS encoding for use: params.1"
     )
+    assert "Input should be a valid string" in str(context.value)
+
+
+def test_use_takes_either_argument_alone() -> None:
     message = RequestMessage(RequestMethod.USE, namespace="ns")
-    with pytest.raises(ValueError) as context:
-        _ = message.WS_CBOR_DESCRIPTOR
-    assert (
-        "Invalid schema for Cbor WS encoding for use: params.1: Input should be a valid string"
-        == str(context.value)
-    )
+    assert isinstance(message.WS_CBOR_DESCRIPTOR, bytes)
+    message = RequestMessage(RequestMethod.USE, database="db")
+    assert isinstance(message.WS_CBOR_DESCRIPTOR, bytes)
 
 
 def test_info_pass() -> None:

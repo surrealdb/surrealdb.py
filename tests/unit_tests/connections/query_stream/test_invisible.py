@@ -20,7 +20,8 @@ import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
-from surrealdb.errors import NotFoundError, ServerError
+from surrealdb.errors import NotFoundError, ServerError, UnavailableFeatureError
+from surrealdb.features import Features
 
 MIXED_SQL = (
     "SELECT * FROM inv ORDER BY id LIMIT 3; RETURN 42; "
@@ -69,7 +70,9 @@ async def test_query_returns_the_same_answer_either_way(
         # that the streaming path was taken: attempting it settles the
         # capability either way, and never attempting leaves it unknown.
         assert streamed._streaming_supported is not None
-        assert buffered._streaming_supported is None
+        # Unless the server's version already said it cannot stream.
+        if buffered.is_feature_supported(Features.QUERY_STREAMING):
+            assert buffered._streaming_supported is None
     finally:
         await streamed.close()
         await buffered.close()
@@ -139,7 +142,7 @@ async def test_a_query_in_a_transaction_is_never_streamed(
     # opens one arrived in 3.x - on 2.x `begin` is itself Method not found.
     try:
         txn = await async_ws_connection.begin()
-    except NotFoundError:
+    except (NotFoundError, UnavailableFeatureError):
         pytest.skip("client-side transactions over RPC need SurrealDB 3.x")
     try:
         assert async_ws_connection._may_stream(txn) is False
@@ -212,7 +215,9 @@ def test_blocking_query_returns_the_same_answer_either_way(
         # stream learns whether it can (True here, False on a server too old),
         # while one that never tries still knows nothing.
         assert streamed._streaming_supported is not None
-        assert buffered._streaming_supported is None
+        # Unless the server's version already said it cannot stream.
+        if buffered.is_feature_supported(Features.QUERY_STREAMING):
+            assert buffered._streaming_supported is None
         # The off switch reaches the blocking transport as well.
         assert buffered._may_stream(None) is False
         assert buffered._streams == {}
@@ -235,7 +240,7 @@ def test_a_blocking_query_in_a_transaction_is_never_streamed(
         blocking_ws_connection._streaming_supported = was_supported
     try:
         txn = blocking_ws_connection.begin()
-    except NotFoundError:
+    except (NotFoundError, UnavailableFeatureError):
         pytest.skip("client-side transactions over RPC need SurrealDB 3.x")
     try:
         assert blocking_ws_connection._may_stream(txn) is False

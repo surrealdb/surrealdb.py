@@ -88,6 +88,40 @@ def test_map_row_to_pydantic() -> None:
     assert out.name == "Tobie"
 
 
+def test_map_statement_results_to_pydantic() -> None:
+    """`query().into(Model)` maps statement results onto a model's fields in order.
+
+    `BaseModel.__init__` takes only `**data`, so reading its parameters found
+    none and every query raised "expects 0 statement results".
+    """
+    pytest.importorskip("pydantic")
+    import pydantic
+
+    from surrealdb.connections.builders import _map_to_class
+    from surrealdb.errors import UnexpectedResponseError
+
+    class Counts(pydantic.BaseModel):
+        people: int
+        names: list[str]
+        note: str = "none"
+
+    out = _map_to_class(Counts, [2, ["a", "b"], "ok"])
+    assert out == Counts(people=2, names=["a", "b"], note="ok")
+    with pytest.raises(UnexpectedResponseError, match="expects 3 statement results"):
+        _map_to_class(Counts, [2])
+
+
+def test_map_statement_results_to_a_plain_class() -> None:
+    from surrealdb.connections.builders import _map_to_class
+
+    class Pair:
+        def __init__(self, first: int, second: int) -> None:
+            self.first, self.second = first, second
+
+    out = _map_to_class(Pair, [1, 2])
+    assert (out.first, out.second) == (1, 2)
+
+
 # ---------------------------------------------------------------------------
 # Async CRUD builders map through into=
 # ---------------------------------------------------------------------------

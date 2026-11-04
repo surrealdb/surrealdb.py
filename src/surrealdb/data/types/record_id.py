@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import uuid as uuid_module
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Union, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from pydantic_core import core_schema
 from pydantic_core.core_schema import ValidationInfo
@@ -19,8 +19,6 @@ from surrealdb.errors import InvalidRecordIdError
 if TYPE_CHECKING:
     from pydantic import GetJsonSchemaHandler
     from pydantic.json_schema import JsonSchemaValue
-
-RecordIdType = Union[str, "RecordID", Table]
 
 #: What SurrealDB accepts as a record id. Exported so callers have a name to
 #: annotate or cast against - ``RecordID.id`` is deliberately wider (see the
@@ -54,6 +52,24 @@ _ID_TYPES: tuple[type, ...] = (str, int, uuid_module.UUID, list, tuple, dict, Ra
 _ID_TYPE_IMPOSTORS: tuple[type, ...] = (bool, SurrealSet)
 
 _ID_TYPE_NAMES = "str, int, uuid.UUID, list, tuple, dict or Range"
+
+
+def _hashable(value: Any) -> Any:
+    """*value* as something hashable that is equal wherever *value* is.
+
+    A dict becomes the frozenset of its items, so key order does not count,
+    and a list or tuple a tuple. Anything else hashable is used as it is,
+    which leaves equal numbers hashing alike, as Python guarantees.
+    """
+    if isinstance(value, dict):
+        return frozenset((key, _hashable(item)) for key, item in value.items())
+    if isinstance(value, (list, tuple)):
+        return tuple(_hashable(item) for item in value)
+    try:
+        hash(value)
+    except TypeError:
+        return repr(value)
+    return value
 
 
 def _id_type_error(identifier: Any) -> TypeError:
@@ -164,11 +180,20 @@ def escape_identifier(identifier: str) -> str:
     has_no_alpha = _UNQUOTED_IDENTIFIER_ALPHA.isdisjoint(identifier)
 
     if unsafe or starts_with_digit or has_no_alpha:
-        if "\\" not in identifier and "⟩" not in identifier:
-            return f"⟨{identifier}⟩"
-        escaped = identifier.replace("\\", "\\\\").replace("`", "\\`")
-        return f"`{escaped}`"
+        return delimit_identifier(identifier)
     return identifier
+
+
+def delimit_identifier(identifier: str) -> str:
+    """*identifier* delimited, as :func:`escape_identifier` delimits a name it cannot leave bare.
+
+    For a name that must not be read bare even when it could be, such as a
+    field called ``value``, which SurrealQL reads as the keyword.
+    """
+    if "\\" not in identifier and "⟩" not in identifier:
+        return f"⟨{identifier}⟩"
+    escaped = identifier.replace("\\", "\\\\").replace("`", "\\`")
+    return f"`{escaped}`"
 
 
 class RecordID:
@@ -296,11 +321,13 @@ class RecordID:
         return False
 
     def __hash__(self) -> int:
-        # ``id`` may be an unhashable value (e.g. a dict or list) for
-        # object/array record ids, so hash its string form to stay total.
-        # This mirrors ``__eq__``: equal RecordIDs have equal ``table_name``
-        # and equal ``id``, hence equal ``str(id)``.
-        return hash((self.table_name, str(self.id)))
+        # ``id`` may be an unhashable value (a dict or list) for object and
+        # array record ids, so it is hashed in a hashable form that keeps
+        # ``__eq__``'s notion of equal. Its string form did not: equal objects
+        # with their keys in another order - the server sorts them - and
+        # ``[1]`` against ``[1.0]`` print differently, so a record read back
+        # was not found in a set holding the one written.
+        return hash((self.table_name, _hashable(self.id)))
 
     @staticmethod
     def parse(record_str: str) -> RecordID:
@@ -366,3 +393,130 @@ class RecordID:
         cls, _core_schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
     ) -> JsonSchemaValue:
         return handler(core_schema.str_schema())
+
+
+_QUOTE_CLOSERS = {"⟨": "⟩", "`": "`", '"': '"', "'": "'"}
+_OPENERS = frozenset("[{(")
+_CLOSERS = frozenset("]})")
+
+
+def _top_level(text: str) -> str:
+    """*text* without its quoted or bracketed parts.
+
+    So neither ``person:⟨a..b⟩`` nor the array key ``person:[1..2]`` reads as
+    a range, while ``person:[1]..[3]`` still does.
+    """
+    kept: list[str] = []
+    closer: str | None = None
+    escaped = False
+    depth = 0
+    for char in text:
+        if closer is None:
+            if char in _QUOTE_CLOSERS:
+                closer = _QUOTE_CLOSERS[char]
+            elif char in _OPENERS:
+                depth += 1
+            elif char in _CLOSERS:
+                depth = max(depth - 1, 0)
+            elif depth == 0:
+                kept.append(char)
+        elif escaped:
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == closer:
+            closer = None
+    return "".join(kept)
+
+
+class StringRecordId:
+    """A record id written as SurrealQL, such as ``"person:tobie"`` or
+    ``"person:⟨a:b⟩"``, for the server to parse.
+
+    It names one record. A range is refused: SurrealDB 2 read one as a range,
+    3.x up to 3.3 read only its start, and later servers refuse it, so the
+    same string meant three different things.
+
+    A plain string is always a table name (``"person:tobie"`` names a table
+    called that), so this is how to give a record id as text. The SDK never
+    parses it, so every id the server can read works, and its meaning cannot
+    shift with the SDK's own parsing rules. Use :class:`RecordID` to build an
+    id from its parts.
+    """
+
+    __slots__ = ("_value",)
+
+    def __init__(self, value: str) -> None:
+        if not isinstance(value, str):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise TypeError(
+                f"StringRecordId takes a string such as 'person:tobie'; got "
+                f"{type(value).__name__}"
+            )
+        if ":" not in value:
+            raise InvalidRecordIdError(
+                f"StringRecordId takes a 'table:id' string; {value!r} has no ':'"
+            )
+        if ".." in _top_level(value):
+            raise InvalidRecordIdError(
+                f"StringRecordId names one record, and {value!r} is a range; "
+                "use RecordID(table, Range(...)) to target a range of records"
+            )
+        self._value = value
+
+    @property
+    def value(self) -> str:
+        """The record id as SurrealQL."""
+        return self._value
+
+    def __str__(self) -> str:
+        return self._value
+
+    def __repr__(self) -> str:
+        return f"StringRecordId({self._value!r})"
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, StringRecordId) and other._value == self._value
+
+    def __hash__(self) -> int:
+        return hash(("StringRecordId", self._value))
+
+    @classmethod
+    def _unchecked(cls, value: str) -> StringRecordId:
+        """A StringRecordId for *value* as received, without validating it."""
+        instance = cls.__new__(cls)
+        instance._value = value
+        return instance
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls,
+        _source_type: Any,  # pyright: ignore[reportExplicitAny, reportAny]
+        _handler: Callable[[Any], core_schema.CoreSchema],  # pyright: ignore[reportExplicitAny]
+    ) -> core_schema.CoreSchema:
+        from_str_schema = core_schema.chain_schema(
+            [
+                core_schema.str_schema(),
+                core_schema.no_info_plain_validator_function(StringRecordId),
+            ]
+        )
+        return core_schema.json_or_python_schema(
+            json_schema=from_str_schema,
+            python_schema=core_schema.union_schema(
+                [core_schema.is_instance_schema(StringRecordId), from_str_schema]
+            ),
+            serialization=core_schema.wrap_serializer_function_ser_schema(
+                lambda value, _handler, info: (
+                    value if info.mode == "python" else str(value)
+                ),
+                info_arg=True,
+            ),
+        )
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls, _core_schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
+        return handler(core_schema.str_schema())
+
+
+RecordIdType = str | RecordID | StringRecordId | Table

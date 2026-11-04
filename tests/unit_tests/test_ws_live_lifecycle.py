@@ -21,6 +21,7 @@ import weakref
 from typing import Any
 
 import pytest
+from websockets.protocol import State
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection, _read_frames
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
@@ -39,6 +40,8 @@ WS_URL = "ws://localhost:8000"
 
 class _FakeSyncSocket:
     """Minimal stand-in for a ``websockets.sync`` client connection."""
+
+    state = State.OPEN
 
     def __init__(self, frames: list[bytes]) -> None:
         self._frames = list(frames)

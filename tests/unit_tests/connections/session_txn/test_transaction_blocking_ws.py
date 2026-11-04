@@ -2,7 +2,7 @@ from collections.abc import Generator
 
 import pytest
 
-from surrealdb import UnexpectedResponseError
+from surrealdb import StringRecordId, UnexpectedResponseError
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 
@@ -29,7 +29,7 @@ def test_transaction_commit(
     txn = session.begin_transaction()
 
     txn.create(
-        "session_txn_test:committed",
+        StringRecordId("session_txn_test:committed"),
         {"name": "txn-commit", "value": 42},
     )
 
@@ -65,7 +65,7 @@ def test_transaction_cancel(
     txn = session.begin_transaction()
 
     txn.create(
-        "session_txn_test:cancelled",
+        StringRecordId("session_txn_test:cancelled"),
         {"name": "txn-cancel", "value": 99},
     )
 
@@ -93,7 +93,7 @@ def test_transaction_query_select(
     txn = session.begin_transaction()
 
     txn.create(
-        "session_txn_test:txn_query",
+        StringRecordId("session_txn_test:txn_query"),
         {"name": "txn-query", "value": 1},
     )
     result = txn.query("SELECT * FROM session_txn_test:txn_query;").first()
@@ -101,7 +101,7 @@ def test_transaction_query_select(
     assert len(result) == 1
     assert result[0].get("name") == "txn-query"
 
-    selected = txn.select("session_txn_test:txn_query").execute()
+    selected = txn.select(StringRecordId("session_txn_test:txn_query")).execute()
     assert selected is not None
     assert selected.get("name") == "txn-query"
 

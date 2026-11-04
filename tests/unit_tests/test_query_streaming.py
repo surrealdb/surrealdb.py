@@ -26,6 +26,7 @@ import pytest
 from websockets.protocol import State
 
 from surrealdb import DoneFrame, ErrorFrame, ValueFrame, streaming
+from surrealdb.connections import blocking_ws
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
@@ -708,9 +709,11 @@ async def test_breaking_without_closing_does_not_raise_from_the_loop() -> None:
         channel = _AsyncChannel([begin(1), rows(0, [1, 2, 3])])
         async for _ in AsyncQueryStream(channel.ops(), "SELECT 1"):
             break
-        for _ in range(3):
+        for _ in range(50):
             gc.collect()
-            await asyncio.sleep(0)
+            await asyncio.sleep(0.01)
+            if not channel.registry:
+                break
         assert caught == []
         assert channel.registry == {}
     finally:
@@ -732,6 +735,34 @@ def test_sync_breaking_without_closing_still_cancels_at_once() -> None:
             break
         assert channel.cancelled == [channel.sent[0].id]
         assert channel.sync_registry == {}
+    finally:
+        gc.enable()
+
+
+async def test_an_abandoned_async_stream_is_cancelled_without_a_collection() -> None:
+    """Breaking out of ``async for`` cancels the stream within a few loop turns.
+
+    The stream held its view, and the view's generator held the stream, so
+    only the cyclic collector could free them: the query went on running on
+    the server, with one of the connection's stream slots, until a collection
+    came along. The collector is disabled here so that only refcount
+    finalisation, through the event loop's async generator hooks, can pass.
+    """
+    gc.disable()
+    try:
+        channel = _AsyncChannel([begin(1), rows(0, [1, 2, 3])])
+
+        async def take_one() -> None:
+            async for _ in AsyncQueryStream(channel.ops(), "SELECT 1"):
+                break
+
+        await take_one()
+        for _ in range(50):
+            if channel.cancelled:
+                break
+            await asyncio.sleep(0.01)
+        assert channel.cancelled == [channel.sent[0].id]
+        assert channel.registry == {}
     finally:
         gc.enable()
 
@@ -1159,6 +1190,22 @@ async def test_a_learned_unsupported_server_skips_the_probe_entirely() -> None:
     assert channel.registry == {}
 
 
+async def test_the_fallback_skips_a_none_valued_statement_as_the_stream_does() -> None:
+    """A `LET` is no row on the buffered path either, so both give the same rows."""
+    buffered = [
+        {"status": "OK", "time": "1ms", "type": None, "result": None},
+        *BUFFERED,
+    ]
+    channel = _AsyncChannel([], buffered=buffered, supported=False)
+    stream = AsyncQueryStream(channel.ops(), "LET $x = 1; SELECT 1")
+    assert [row async for row in stream] == [{"n": 1}, {"n": 2}, 42]
+    statements = AsyncQueryStream(
+        channel.ops(), "LET $x = 1; SELECT 1", statements=True
+    )
+    values = [s.value async for s in statements]
+    assert values == [None, [{"n": 1}, {"n": 2}], 42]
+
+
 async def test_require_streaming_refuses_the_fallback() -> None:
     channel = _AsyncChannel([METHOD_NOT_FOUND], buffered=BUFFERED)
     stream = AsyncQueryStream(channel.ops(), "SELECT 1", require_streaming=True)
@@ -1213,6 +1260,29 @@ def test_sync_rows_and_statements_agree_with_the_async_views() -> None:
     channel = _SyncChannel(frames)
     statements = list(QueryStream(channel.ops(), "SELECT 1", statements=True))
     assert [(s.single, s.value) for s in statements] == [(False, [1, 2]), (True, 9)]
+
+
+class _DyingSyncChannel(_SyncChannel):
+    """A blocking transport whose socket dies once the frames it already had are read."""
+
+    def _pump(self, timeout: float) -> None:
+        raise ConnectionUnavailableError(
+            "WebSocket connection closed while a streaming query was open"
+        )
+
+
+def test_sync_a_stream_whose_socket_died_raises_without_cancelling() -> None:
+    """The stream ended with the socket, on the server too, so there is nothing to cancel.
+
+    Cancelling sent `query_cancel` the ordinary way, which waited out the whole
+    request timeout for a reconnect before the stream's own error got through.
+    """
+    channel = _DyingSyncChannel([begin(1), rows(0, [1])])
+    stream = QueryStream(channel.ops(), "SELECT 1")
+    with pytest.raises(ConnectionUnavailableError):
+        list(stream)
+    assert channel.cancelled == []
+    assert channel.released == [channel.sent[0].id]
 
 
 def test_sync_stopping_early_cancels_and_deregisters() -> None:
@@ -1832,6 +1902,145 @@ def test_blocking_the_pump_does_not_hold_the_lock_while_waiting() -> None:
     )
 
 
+class _LateSocket:
+    """A socket whose one frame arrives *delay* seconds after it is first read.
+
+    Like a real one, a read returns as soon as the frame is there, and a read
+    whose timeout runs out first raises ``TimeoutError``.
+    """
+
+    def __init__(self, frame: bytes, delay: float) -> None:
+        self._frame: bytes | None = frame
+        self._delay = delay
+        self._due: float | None = None
+        self.state = State.OPEN
+
+    def send(self, data: Any) -> None:
+        pass
+
+    def recv(self, timeout: float | None = None, decode: bool | None = None) -> bytes:
+        now = time.monotonic()
+        if self._due is None:
+            self._due = now + self._delay
+        wait = self._due - now if self._frame is not None else float("inf")
+        if timeout is not None and wait > timeout:
+            time.sleep(timeout)
+            raise TimeoutError
+        time.sleep(max(0.0, wait))
+        frame, self._frame = self._frame, None
+        assert frame is not None
+        return frame
+
+    def close(self) -> None:
+        pass
+
+
+def test_blocking_the_pump_reads_a_frame_as_soon_as_it_arrives() -> None:
+    """A frame arriving while the pump waits is read then, not at the end of its slice.
+
+    The pump polled for 5 ms and then slept out the rest of its slice, so a
+    frame that arrived during the sleep waited for up to 95 ms of a 100 ms
+    slice: every streamed query the server took longer than 5 ms over came back
+    that much later than it could have.
+    """
+    conn = BlockingWsSurrealConnection(WS_URL)
+    frames = _register_sync_stream(conn, "stream-1")
+    frame = encode({**rows(0, [1]), "id": "stream-1"})
+    conn.socket = _LateSocket(frame, delay=0.03)  # type: ignore[assignment]
+    started = time.monotonic()
+    conn._stream_pump(0.5)
+    elapsed = time.monotonic() - started
+    assert frames.qsize() == 1
+    assert elapsed < 0.1
+    conn._stream_release("stream-1")
+
+
+def test_blocking_a_live_iterator_does_not_starve_other_requests() -> None:
+    """While a live iterator waits, other threads take the lock within a poll.
+
+    The live loop held the lock through each whole 0.1 s read, so while one
+    thread iterated a subscription, every request on its connection waited for
+    the read in progress: twenty of them took 3.7 s. Each acquisition here
+    follows a little work done without the lock, as a request's encoding and
+    decoding is, which is when the live loop took the lock back.
+    """
+    conn = BlockingWsSurrealConnection(WS_URL)
+    entered = threading.Event()
+    conn.socket = _SignallingSocket(entered)  # type: ignore[assignment]
+    live_id = str(uuid.uuid4())
+    generator = conn.subscribe_live(live_id)
+    reader = threading.Thread(target=lambda: next(generator, None), daemon=True)
+    reader.start()
+    waits: list[float] = []
+    try:
+        assert entered.wait(5)
+        for _ in range(20):
+            time.sleep(0.002)
+            started = time.monotonic()
+            assert conn._lock.acquire(timeout=2)
+            waits.append(time.monotonic() - started)
+            conn._lock.release()
+    finally:
+        for notifications in conn.live_queues.get(live_id, []):
+            notifications.put(blocking_ws._LIVE_KILLED_SENTINEL)
+        reader.join(5)
+    assert max(waits) < 0.05
+
+
+def test_blocking_a_live_iterator_keeps_the_order_another_reader_queued_in() -> None:
+    """A notification another reader queued here comes out before a later one.
+
+    The live loop checked its queue, waited for the lock, then read the socket
+    and yielded what it read at once: a notification a request had routed to it
+    in that wait came out after the later one, as the 4.0 server showed when
+    writes on the subscribing connection came back as 1, 0, 2.
+    """
+    conn = BlockingWsSurrealConnection(WS_URL)
+    live_id = str(uuid.uuid4())
+    conn.socket = _FakeSyncSocket(  # type: ignore[assignment]
+        [encode({"result": {"id": live_id, "action": "CREATE", "result": {"n": 2}}})]
+    )
+    generator = conn.subscribe_live(live_id)
+    got: list[dict[str, Any]] = []
+    reader = threading.Thread(
+        target=lambda: got.extend([next(generator), next(generator)]), daemon=True
+    )
+    with conn._lock:
+        reader.start()
+        time.sleep(0.05)
+        conn._route_foreign(
+            {"result": {"id": live_id, "action": "CREATE", "result": {"n": 1}}}
+        )
+    reader.join(5)
+    generator.close()
+    assert [change["result"] for change in got] == [{"n": 1}, {"n": 2}]
+
+
+def test_blocking_the_pump_returns_once_another_reader_routed_a_frame() -> None:
+    """A frame another reader routed while the pump waited ends the wait.
+
+    Only a frame the pump read itself did, so when a live subscription or a
+    request on the connection read a stream's frame first, the stream waited out
+    the rest of its 100 ms slice for a frame already in its queue: twenty
+    streamed queries beside a live subscription took 0.56 s instead of 5 ms.
+    """
+    conn = BlockingWsSurrealConnection(WS_URL)
+    frames = _register_sync_stream(conn, "stream-1")
+    entered = threading.Event()
+    conn.socket = _SignallingSocket(entered)  # type: ignore[assignment]
+    pumping = threading.Thread(target=conn._stream_pump, args=(0.5,), daemon=True)
+    started = time.monotonic()
+    pumping.start()
+    assert entered.wait(5)
+    with conn._lock:
+        conn._route_foreign({**rows(0, [1]), "id": "stream-1"})
+    pumping.join(5)
+    elapsed = time.monotonic() - started
+    assert frames.qsize() == 1
+    assert elapsed < 0.1
+    conn._stream_release("stream-1")
+
+
 def test_blocking_the_live_iterator_routes_while_holding_the_lock() -> None:
     """The live loop reads the same socket, so it owes streams the same order."""
     conn = BlockingWsSurrealConnection(WS_URL)
@@ -1858,7 +2067,7 @@ def test_blocking_the_live_iterator_routes_while_holding_the_lock() -> None:
     finally:
         generator.close()
 
-    assert locked_while_routing == [True]
+    assert locked_while_routing == [True, True]
     conn._stream_release("stream-1")
 
 

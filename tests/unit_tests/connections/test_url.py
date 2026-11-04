@@ -96,6 +96,13 @@ def test_unsupported_scheme_raises_surreal_error(url: str) -> None:
         ("http://localhost:8000", "http://localhost:8000"),
         ("ws://localhost:8000/", "ws://localhost:8000"),
         ("http://localhost:8000/rpc", "http://localhost:8000"),
+        ("http://localhost:8000/rpc/", "http://localhost:8000"),
+        # Only the last path segment: a host or path that merely contains
+        # "/rpc" used to lose it.
+        ("ws://rpc.localhost:8000", "ws://rpc.localhost:8000"),
+        ("wss://rpc.example.com/rpc", "wss://rpc.example.com"),
+        ("https://h/rpcproxy/rpc", "https://h/rpcproxy"),
+        ("https://h/api/rpc/", "https://h/api"),
         # Embedded forms have no netloc to strip, and collapsing `mem://` to
         # `mem:` would corrupt the endpoint handed to the engine.
         ("mem://", "mem://"),

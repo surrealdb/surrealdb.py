@@ -1,5 +1,7 @@
 import decimal
 import importlib
+import io
+import time
 import uuid
 
 import pytest
@@ -14,7 +16,10 @@ from surrealdb.cbor import (
 )
 from surrealdb.data import cbor
 from surrealdb.data.types import constants
+from surrealdb.data.types.geometry import GeometryLine, GeometryPoint
 from surrealdb.data.types.null import Null
+from surrealdb.data.types.range import BoundExcluded, BoundIncluded, Range
+from surrealdb.errors import UnexpectedResponseError
 
 
 def test_public_cbor_api_exports() -> None:
@@ -183,10 +188,54 @@ def test_uuid_roundtrip_via_native_tag() -> None:
     assert decoded == original
 
 
-def test_uuid_tag_9_defensive_decode() -> None:
-    """A hand-built string-tagged UUID (tag 9) is decoded defensively."""
-    original = uuid.uuid4()
-    raw = dumps(CBORTag(constants.TAG_UUID_STRING, str(original)))
+def test_uuid_tag_9_is_refused() -> None:
+    """SurrealDB 4 refuses a uuid as text (tag 9), so the decoder does too."""
+    raw = dumps(CBORTag(constants.TAG_UUID_STRING, str(uuid.uuid4())))
+    with pytest.raises(UnexpectedResponseError, match="tag 9"):
+        cbor.decode(raw)
+
+
+def test_a_set_loses_only_its_duplicates() -> None:
+    """Members equal in value but not in type are different members."""
+    members = [1, 1.0, True, "a", "a", 1, {"k": 1}, {"k": 1}, [2], [2], 2]
+    decoded = cbor.decode(dumps(CBORTag(constants.TAG_SET, members)))
+    assert decoded == [1, 1.0, True, "a", {"k": 1}, [2], 2]
+    assert [type(member) for member in decoded[:3]] == [int, float, bool]
+
+
+def test_a_large_set_decodes_in_linear_time() -> None:
+    """De-duplicating compared every member with every other: a set of 20,000
+    strings took ten seconds to decode, and a set of record ids twice that."""
+    raw = dumps(CBORTag(constants.TAG_SET, [f"member-{n}" for n in range(20_000)]))
+    started = time.perf_counter()
     decoded = cbor.decode(raw)
-    assert isinstance(decoded, uuid.UUID)
-    assert decoded == original
+    assert time.perf_counter() - started < 1.0
+    assert len(decoded) == 20_000
+
+
+def test_tag_decoder_reads_tags_whose_insides_are_already_decoded() -> None:
+    """As a cbor2 `tag_hook`, the points of a line and the bounds of a range
+    reach the hook as the SDK's own types. Written back out with plain `dumps`,
+    which does not know them, they raised `CBOREncodeTypeError`."""
+    line = GeometryLine(GeometryPoint(1.0, 2.0), GeometryPoint(3.0, 4.0))
+    hooked = CBORDecoder(io.BytesIO(cbor.encode(line)), tag_hook=cbor.tag_decoder)
+    assert hooked.decode() == line
+
+    bounds = CBORTag(constants.TAG_RANGE, [BoundIncluded(1), BoundExcluded(5)])
+    assert cbor.tag_decoder(None, bounds) == Range(BoundIncluded(1), BoundExcluded(5))
+
+
+@pytest.mark.parametrize(
+    ("raw", "refusal"),
+    [
+        (b"\x65ab", "ends inside an item"),
+        (b"\x62\xff\xfe", "not UTF-8"),
+        (b"\x78\x05abc", "ends inside an item"),
+        (b"", "ends inside an item"),
+    ],
+)
+def test_short_and_long_text_are_refused_alike(raw: bytes, refusal: str) -> None:
+    """Short text is read on a path of its own, for speed; it refuses what the
+    general one does."""
+    with pytest.raises(UnexpectedResponseError, match=refusal):
+        cbor.decode(raw)

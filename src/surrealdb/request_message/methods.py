@@ -32,6 +32,12 @@ class RequestMethod(Enum):
     COMMIT = "commit"
     CANCEL = "cancel"
     RUN = "run"
+    REFRESH = "refresh"
+    REVOKE = "revoke"
+    RESET = "reset"
+    SESSIONS = "sessions"
+    GQL = "gql"
+    GRAPHQL = "graphql"
 
     @staticmethod
     def from_string(method: str) -> "RequestMethod":

@@ -29,6 +29,7 @@ predates the field and speaks revision 1.
 from __future__ import annotations
 
 import asyncio
+import copy
 import queue
 import time
 import weakref
@@ -46,6 +47,7 @@ from uuid import UUID
 
 from surrealdb.connections.timeouts import describe
 from surrealdb.errors import (
+    ConnectionUnavailableError,
     NotAllowedError,
     NotFoundError,
     ServerError,
@@ -590,8 +592,13 @@ def _buffered_events(
                 return
             continue
         result: Value = statement.get("result")
-        rows: list[Value] = result if isinstance(result, list) else [result]
         single = not isinstance(result, list)
+        # A NONE value is no row, as on the streamed path (`_value_frame`).
+        # Yielded as a `None` row, a `LET` made `rows(into=Model)` fail here
+        # and nowhere else, over HTTP and on servers before 3.3.
+        rows: list[Value] = (
+            result if isinstance(result, list) else [] if result is None else [result]
+        )
         for row in rows:
             yield _Row(index, row)
         if retain_rows:
@@ -1051,7 +1058,9 @@ class AsyncQueryStream(_StreamBase):
         # generator's finalisation is handed to the event loop, so dropping the
         # only strong reference defers the cancel to a later loop turn. Holding
         # it is what lets `aclose()` and `async with` stop the query *before*
-        # they return, which is what this class documents.
+        # they return, which is what this class documents. The view drives a
+        # copy of this stream rather than the stream itself (see `__aiter__`),
+        # so holding it closes no cycle.
         self._view: _AsyncView | None = None
         self._statements = statements
         self._frames = frames
@@ -1063,12 +1072,20 @@ class AsyncQueryStream(_StreamBase):
         # the one that had - holding a stream on the server - open. It also
         # reports the mistake at the call that made it.
         self._claim()
+        # The driver runs on a copy, which shares everything but the view. Run
+        # on `self`, its suspended frame held the stream that held the view
+        # that held it: a cycle only the cyclic collector could free, so an
+        # abandoned `async for ...: break` went on running on the server until
+        # a collection came along. Now letting go of the stream and its view
+        # finalises the driver by refcount, and the event loop's async
+        # generator hooks run its teardown, which cancels the query.
+        driver = copy.copy(self)
         if self._frames:
-            self._view = _AsyncView(self._drive(retain_rows=True), _pick_frame)
+            self._view = _AsyncView(driver._drive(retain_rows=True), _pick_frame)
         elif self._statements:
-            self._view = _AsyncView(self._drive(retain_rows=True), _pick_statement)
+            self._view = _AsyncView(driver._drive(retain_rows=True), _pick_statement)
         else:
-            self._view = _AsyncView(self._drive(retain_rows=False), _pick_row)
+            self._view = _AsyncView(driver._drive(retain_rows=False), _pick_row)
         return self._view
 
     async def __aenter__(self) -> AsyncQueryStream:
@@ -1107,6 +1124,16 @@ class AsyncQueryStream(_StreamBase):
         request_id = message.id
         self._open_timeout = ops.request_timeout()
         frames = await ops.open(request_id)
+        if ops.supported() is False:
+            # Opening connected, and the handshake found a server that
+            # predates streaming; the check above ran before it knew.
+            _release_stream(ops.registry, request_id)
+            if self._require_streaming:
+                raise self._unsupported(ops.refusal())
+            for event in await self._buffered(retain_rows=retain_rows):
+                self._apply(event)
+                yield event
+            return
         # The finaliser only deregisters. Telling the server to stop needs the
         # socket, which is what `aclose` is for; this is the backstop that
         # keeps a stream abandoned without closing from leaving an entry - and
@@ -1183,6 +1210,9 @@ class AsyncQueryStream(_StreamBase):
         request_id = message.id
         self._open_timeout = ops.request_timeout()
         frames = await ops.open(request_id)
+        if ops.supported() is False:
+            _release_stream(ops.registry, request_id)
+            return None
         finalizer = weakref.finalize(self, _release_stream, ops.registry, request_id)
         # The whole exchange is bounded by the deadline a buffered call had, not
         # just its opening frame - see `_next_payload`.
@@ -1456,6 +1486,14 @@ class QueryStream(_StreamBase):
         request_id = message.id
         self._open_timeout = ops.request_timeout()
         frames = ops.open(request_id)
+        if ops.supported() is False:
+            # Opening connected, and the handshake found a server that
+            # predates streaming; the check above ran before it knew.
+            _release_stream(ops.registry, request_id)
+            if self._require_streaming:
+                raise self._unsupported(ops.refusal())
+            yield from self._replay(self._buffered(retain_rows=retain_rows))
+            return
         finalizer = weakref.finalize(self, _release_stream, ops.registry, request_id)
         try:
             ops.send(message)
@@ -1512,6 +1550,9 @@ class QueryStream(_StreamBase):
         request_id = message.id
         self._open_timeout = ops.request_timeout()
         frames = ops.open(request_id)
+        if ops.supported() is False:
+            _release_stream(ops.registry, request_id)
+            return None
         finalizer = weakref.finalize(self, _release_stream, ops.registry, request_id)
         # Bounded by the deadline a buffered call had - see `_next_payload`.
         deadline = (
@@ -1576,7 +1617,7 @@ class QueryStream(_StreamBase):
             except queue.Empty:
                 pass
             if deadline is None:
-                self._ops.pump(_SYNC_PUMP_SLICE)
+                self._pump(_SYNC_PUMP_SLICE)
                 continue
             remaining = deadline - time.monotonic()
             if remaining <= 0:
@@ -1589,7 +1630,21 @@ class QueryStream(_StreamBase):
                     "timed out waiting for a streaming query to start: no "
                     f"frame {describe(open_timeout)}"
                 )
-            self._ops.pump(min(_SYNC_PUMP_SLICE, remaining))
+            self._pump(min(_SYNC_PUMP_SLICE, remaining))
+
+    def _pump(self, timeout: float) -> None:
+        """Read the socket for up to *timeout* seconds, for frames to arrive.
+
+        A connection that dropped took the stream with it, on the server too,
+        so there is nothing left to cancel. Asking would go the ordinary way,
+        which waits out the whole request timeout for a reconnect before the
+        stream's own error reaches the caller.
+        """
+        try:
+            self._ops.pump(timeout)
+        except ConnectionUnavailableError:
+            self._cancellable = False
+            raise
 
     def _buffered(self, *, retain_rows: bool) -> list[_Event]:
         statements = self._ops.buffered(

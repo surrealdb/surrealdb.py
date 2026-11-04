@@ -17,6 +17,7 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
+from websockets.protocol import State
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection, _read_frames
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
@@ -72,6 +73,8 @@ def _make_responder(
 
 class _FakeBlockingWsSocket:
     """Minimal stand-in for ``websockets.sync.client.ClientConnection``."""
+
+    state = State.OPEN
 
     def __init__(self, responder: Responder) -> None:
         self._responder = responder
