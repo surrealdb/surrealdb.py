@@ -203,6 +203,12 @@ class _SyncPass(_Pass):
     def __next__(self) -> dict[str, Value]:
         if self._done:
             raise StopIteration
+        if self._notifications is None:
+            # Over a subscription that had already ended.
+            self._done = True
+            if self._subscription._broken:  # pyright: ignore[reportPrivateUsage]
+                raise self._subscription._lost()  # pyright: ignore[reportPrivateUsage]
+            raise StopIteration
         try:
             notification: dict[str, Value] = next(self._notifications)
         except StopIteration:
@@ -252,9 +258,9 @@ class LiveSubscription(_Subscription):
 
     def __iter__(self) -> Iterator[dict[str, Value]]:
         if self._killed:
-            if self._broken:
-                raise self._lost()
-            return iter(())
+            # Read, not iter(), raises for one the lost connection ended, as
+            # on the async subscription.
+            return _SyncPass(self, None)
         notifications = self._take()
         if notifications is None:
             # Subscribed here rather than on the first next(), so notifications

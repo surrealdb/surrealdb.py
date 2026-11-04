@@ -158,6 +158,9 @@ def test_blocking_a_subscription_the_drop_ended_raises_when_read_later(
         fake.wait_for(lambda: db.socket is not None and db.socket.state.name != "OPEN")
         db.version()
         assert not sub.is_alive
+        changes = iter(sub)
+        with pytest.raises(ConnectionUnavailableError, match="was lost"):
+            next(changes)
         with pytest.raises(ConnectionUnavailableError, match="was lost"):
             list(sub)
     finally:
