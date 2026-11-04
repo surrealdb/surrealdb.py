@@ -12,6 +12,7 @@ import pytest
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
+from surrealdb.types import Value
 from tests.unit_tests.fake_surreal import FakeSurrealHttp
 
 
@@ -52,3 +53,25 @@ def test_use_takes_any_printable_ascii_name(http: FakeSurrealHttp) -> None:
     db = BlockingHttpSurrealConnection(http.url)
     db.use("my ns-1", "db~`x`")
     assert (db.namespace, db.database) == ("my ns-1", "db~`x`")
+
+
+def test_blocking_let_binds_the_value_it_was_given(http: FakeSurrealHttp) -> None:
+    db = BlockingHttpSurrealConnection(http.url)
+    document: dict[str, Value] = {"tags": ["a"]}
+    db.let("document", document)
+    tags = document["tags"]
+    assert isinstance(tags, list)
+    tags.append("b")
+    db.query("RETURN $document").execute()
+    assert http.calls_to("query")[-1].params[1]["document"] == {"tags": ["a"]}
+
+
+async def test_async_let_binds_the_value_it_was_given(http: FakeSurrealHttp) -> None:
+    db = AsyncHttpSurrealConnection(http.url)
+    document: dict[str, Value] = {"tags": ["a"]}
+    await db.let("document", document)
+    tags = document["tags"]
+    assert isinstance(tags, list)
+    tags.append("b")
+    await db.query("RETURN $document")
+    assert http.calls_to("query")[-1].params[1]["document"] == {"tags": ["a"]}

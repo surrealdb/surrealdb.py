@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import inspect
 import logging
 import uuid
@@ -1060,7 +1061,9 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         return response["result"]
 
     async def let(self, key: str, value: Value) -> None:
-        self.vars[key] = value
+        # A copy, as a websocket sends the value at let(): keeping the
+        # caller's object let a later change to it reach every query.
+        self.vars[key] = copy.deepcopy(value)
 
     async def unset(self, key: str) -> None:
         # Unsetting a name that was never set is not an error: the websocket
