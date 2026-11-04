@@ -112,10 +112,6 @@ from surrealdb.types import Tokens, Value, parse_auth_result
 
 logger = logging.getLogger(__name__)
 
-# How long ``subscribe_live`` blocks on a single socket read before releasing
-# the connection lock so concurrent RPCs on the same socket can proceed.
-_LIVE_RECV_TIMEOUT = 0.1
-
 # How long `_stream_pump` holds the connection lock looking for a frame. Short
 # because the lock is unavailable for exactly this long each time: the waiting
 # happens outside it, so this is the fairness bound for every other caller on
@@ -2533,9 +2529,13 @@ class BlockingWsSurrealConnection(
                     continue
 
                 # Otherwise read from the socket ourselves, under the lock so
-                # we never race ``_send``. The short timeout releases the lock
-                # between reads to keep concurrent RPCs responsive.
+                # we never race ``_send``: one short poll, as the stream pump
+                # polls, then a wait with the lock released when nothing came.
+                # Held through a whole 0.1s read and taken straight back, the
+                # lock kept every other request on the connection waiting for
+                # the read in progress, about 0.2s each.
                 response: dict[str, Any] | None = None
+                read = False
                 with self._locked():
                     if self._reconnecting:
                         # Another thread noticed the drop first. This query
@@ -2547,7 +2547,7 @@ class BlockingWsSurrealConnection(
                             "WebSocket connection is not established."
                         )
                     try:
-                        data = self.socket.recv(timeout=_LIVE_RECV_TIMEOUT)
+                        data = self.socket.recv(timeout=_STREAM_POLL_TIMEOUT)
                     except TimeoutError:
                         data = None
                     except (ConnectionClosed, WebSocketException, OSError) as exc:
@@ -2566,6 +2566,7 @@ class BlockingWsSurrealConnection(
                             "live query."
                         ) from exc
                     if data is not None:
+                        read = True
                         response = self.decode_response(
                             data if isinstance(data, bytes) else data.encode(),
                             "reading a live notification",
@@ -2583,6 +2584,9 @@ class BlockingWsSurrealConnection(
                             self._route_foreign(response)
                             response = None
 
+                if not read:
+                    time.sleep(_POLL_GAP)
+                    continue
                 if response is None:
                     continue
 

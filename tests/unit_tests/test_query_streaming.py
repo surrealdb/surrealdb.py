@@ -26,6 +26,7 @@ import pytest
 from websockets.protocol import State
 
 from surrealdb import DoneFrame, ErrorFrame, ValueFrame, streaming
+from surrealdb.connections import blocking_ws
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
@@ -1936,6 +1937,38 @@ def test_blocking_the_pump_reads_a_frame_as_soon_as_it_arrives() -> None:
     assert frames.qsize() == 1
     assert elapsed < 0.1
     conn._stream_release("stream-1")
+
+
+def test_blocking_a_live_iterator_does_not_starve_other_requests() -> None:
+    """While a live iterator waits, other threads take the lock within a poll.
+
+    The live loop held the lock through each whole 0.1 s read, so while one
+    thread iterated a subscription, every request on its connection waited for
+    the read in progress: twenty of them took 3.7 s. Each acquisition here
+    follows a little work done without the lock, as a request's encoding and
+    decoding is, which is when the live loop took the lock back.
+    """
+    conn = BlockingWsSurrealConnection(WS_URL)
+    entered = threading.Event()
+    conn.socket = _SignallingSocket(entered)  # type: ignore[assignment]
+    live_id = str(uuid.uuid4())
+    generator = conn.subscribe_live(live_id)
+    reader = threading.Thread(target=lambda: next(generator, None), daemon=True)
+    reader.start()
+    waits: list[float] = []
+    try:
+        assert entered.wait(5)
+        for _ in range(20):
+            time.sleep(0.002)
+            started = time.monotonic()
+            assert conn._lock.acquire(timeout=2)
+            waits.append(time.monotonic() - started)
+            conn._lock.release()
+    finally:
+        for notifications in conn.live_queues.get(live_id, []):
+            notifications.put(blocking_ws._LIVE_KILLED_SENTINEL)
+        reader.join(5)
+    assert max(waits) < 0.05
 
 
 def test_blocking_the_live_iterator_routes_while_holding_the_lock() -> None:
