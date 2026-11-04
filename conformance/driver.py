@@ -200,6 +200,12 @@ class Driver:
 
     async def call(self, op: str, args: dict[str, Any]) -> Any:
         if op == "connect":
+            if args.get("format") == "cbor":
+                raise DriverError(
+                    "Unsupported",
+                    "surrealdb.py asks every server for cbor.2, so it cannot keep "
+                    "to plain cbor",
+                )
             await self.shutdown()
             self.sessions.clear()
             self.txns.clear()
@@ -208,6 +214,11 @@ class Driver:
             self.transport = args["transport"]
             self.db = AsyncSurreal(args["url"], reconnect=False, version_check=False)
             await self.db.connect()
+            if args.get("format") == "cbor.2" and self.db.wire_format != "cbor.2":
+                raise DriverError(
+                    "Unsupported",
+                    f"the server speaks {self.db.wire_format}, not cbor.2",
+                )
             return None
         if op == "close":
             await self.db.close()

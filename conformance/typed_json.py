@@ -13,6 +13,7 @@ from decimal import Decimal
 from typing import Any
 
 from surrealdb import (
+    BigDecimal,
     Datetime,
     Duration,
     File,
@@ -23,9 +24,14 @@ from surrealdb import (
     GeometryMultiPolygon,
     GeometryPoint,
     GeometryPolygon,
+    Interval,
+    PlainDate,
+    PlainTime,
     RecordID,
+    Regex,
     SurrealSet,
     Table,
+    Timestamp,
 )
 from surrealdb.data.types.geometry import Geometry
 from surrealdb.data.types.null import Null, NullType
@@ -77,6 +83,11 @@ _TYPED = {
     "$file",
     "$geometry",
     "$regex",
+    "$date",
+    "$time",
+    "$timestamp",
+    "$interval",
+    "$bigdecimal",
     *SIZED,
 }
 
@@ -168,6 +179,19 @@ def to_native(value: Any) -> Any:
         return File(raw["bucket"], raw["key"])
     if key == "$geometry":
         return _geometry(raw)
+    if key == "$date":
+        return PlainDate.parse(raw)
+    if key == "$time":
+        return PlainTime.parse(raw)
+    if key == "$timestamp":
+        return Timestamp.parse(raw)
+    if key == "$interval":
+        months, days, microseconds = raw
+        return Interval(int(months), int(days), int(microseconds))
+    if key == "$bigdecimal":
+        return BigDecimal(raw)
+    if key == "$regex":
+        return Regex(raw)
     raise NotImplementedError(f"typed JSON {key} has no value in this SDK")
 
 
@@ -219,6 +243,8 @@ def to_json(value: Any) -> Any:
         return value if abs(value) <= 2**53 else {"$int": str(value)}
     if isinstance(value, float):
         return {"$float": _float_json(value)}
+    if isinstance(value, BigDecimal):
+        return {"$bigdecimal": format(value, "f")}
     if isinstance(value, Decimal):
         text = format(value, "f")
         if "." in text:
@@ -261,6 +287,16 @@ def to_json(value: Any) -> Any:
         }
     if isinstance(value, File):
         return {"$file": {"bucket": value.bucket, "key": value.key}}
+    if isinstance(value, PlainDate):
+        return {"$date": str(value)}
+    if isinstance(value, PlainTime):
+        return {"$time": str(value)}
+    if isinstance(value, Timestamp):
+        return {"$timestamp": str(value)}
+    if isinstance(value, Interval):
+        return {"$interval": [value.months, value.days, _int_json(value.microseconds)]}
+    if isinstance(value, Regex):
+        return {"$regex": value.pattern}
     if isinstance(value, GeometryCollection):
         return {
             "$geometry": {

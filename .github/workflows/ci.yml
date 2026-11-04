@@ -372,13 +372,13 @@ jobs:
       # The release is spelled out, not read from vectors/VERSION, so the code
       # this job runs is fixed in the workflow; this step keeps the two in step.
       - name: Check the surrealdb-protocol release
-        run: test "$(cat tests/unit_tests/conformance/vectors/VERSION)" = v0.14.0
+        run: test "$(cat tests/unit_tests/conformance/vectors/VERSION)" = v0.15.0
 
       - name: Checkout surrealdb-protocol
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: surrealdb/surrealdb-protocol
-          ref: v0.14.0
+          ref: v0.15.0
           path: surrealdb-protocol
           persist-credentials: false
 

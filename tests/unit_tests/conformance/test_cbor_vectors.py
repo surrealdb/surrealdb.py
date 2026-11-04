@@ -11,6 +11,12 @@ For each vector (spec/README.md, "Using the vectors from an SDK"):
   that decode back to it.
 - decode: the bytes decode to the value.
 - reject: decoding the bytes raises.
+
+A value holding a datetime outside the years 1 to 9999 is the exception: the
+spec lets an SDK document how it represents a value its native type cannot
+hold, and this one refuses such a datetime rather than change it (see
+``surrealdb.data._decoder``), so for those vectors the refusal is what is
+checked.
 """
 
 from pathlib import Path
@@ -20,6 +26,7 @@ import pytest
 
 from conformance.typed_json import same, to_json, to_native
 from surrealdb.data.cbor import decode, encode
+from surrealdb.errors import UnexpectedResponseError
 
 _VECTORS = Path(__file__).parent / "vectors"
 
@@ -48,6 +55,17 @@ def _cases() -> list[Any]:
     return cases
 
 
+def _beyond_python_datetime(value: Any) -> bool:
+    """Whether typed JSON *value* holds a datetime in a year past 9999 or before 0."""
+    if isinstance(value, dict):
+        if set(value) == {"$datetime"}:
+            return str(value["$datetime"]).startswith(("+", "-"))
+        return any(_beyond_python_datetime(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_beyond_python_datetime(item) for item in value)
+    return False
+
+
 def test_the_vectors_are_pinned_to_a_release() -> None:
     assert (_VECTORS / "VERSION").read_text().strip().startswith("v")
 
@@ -57,6 +75,11 @@ def test_vector(vector: dict[str, Any], v2: bool) -> None:
     data = bytes.fromhex(vector["cbor"])
     if vector["kind"] == "reject":
         with pytest.raises(Exception):  # noqa: B017
+            decode(data, v2=v2)
+        return
+
+    if _beyond_python_datetime(vector["value"]):
+        with pytest.raises(UnexpectedResponseError, match="years 1 to 9999"):
             decode(data, v2=v2)
         return
 

@@ -41,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A compiled `re.Pattern` raises `TypeError` and points to `Regex`. cbor2 sent
   it as IANA tag 35, which names another regex syntax, and which SurrealDB
   refuses.
+- The conformance vectors and scenarios move to surrealdb-protocol v0.15.0,
+  which covers the 4.0 kinds.
 - **Breaking for on-disk embedded databases.** The `surrealdb-embedded`
   extension now builds against `surrealdb-core` 4.0.0, up from 3.3.5, so
   `mem://`, `file://` and `surrealkv://` connections run the SurrealDB 4.0
