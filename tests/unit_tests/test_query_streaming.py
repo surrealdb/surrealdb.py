@@ -1215,6 +1215,29 @@ def test_sync_rows_and_statements_agree_with_the_async_views() -> None:
     assert [(s.single, s.value) for s in statements] == [(False, [1, 2]), (True, 9)]
 
 
+class _DyingSyncChannel(_SyncChannel):
+    """A blocking transport whose socket dies once the frames it already had are read."""
+
+    def _pump(self, timeout: float) -> None:
+        raise ConnectionUnavailableError(
+            "WebSocket connection closed while a streaming query was open"
+        )
+
+
+def test_sync_a_stream_whose_socket_died_raises_without_cancelling() -> None:
+    """The stream ended with the socket, on the server too, so there is nothing to cancel.
+
+    Cancelling sent `query_cancel` the ordinary way, which waited out the whole
+    request timeout for a reconnect before the stream's own error got through.
+    """
+    channel = _DyingSyncChannel([begin(1), rows(0, [1])])
+    stream = QueryStream(channel.ops(), "SELECT 1")
+    with pytest.raises(ConnectionUnavailableError):
+        list(stream)
+    assert channel.cancelled == []
+    assert channel.released == [channel.sent[0].id]
+
+
 def test_sync_stopping_early_cancels_and_deregisters() -> None:
     channel = _SyncChannel([begin(1), rows(0, [1, 2, 3])])
     stream = QueryStream(channel.ops(), "SELECT 1")

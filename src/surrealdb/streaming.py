@@ -46,6 +46,7 @@ from uuid import UUID
 
 from surrealdb.connections.timeouts import describe
 from surrealdb.errors import (
+    ConnectionUnavailableError,
     NotAllowedError,
     NotFoundError,
     ServerError,
@@ -1600,7 +1601,7 @@ class QueryStream(_StreamBase):
             except queue.Empty:
                 pass
             if deadline is None:
-                self._ops.pump(_SYNC_PUMP_SLICE)
+                self._pump(_SYNC_PUMP_SLICE)
                 continue
             remaining = deadline - time.monotonic()
             if remaining <= 0:
@@ -1613,7 +1614,21 @@ class QueryStream(_StreamBase):
                     "timed out waiting for a streaming query to start: no "
                     f"frame {describe(open_timeout)}"
                 )
-            self._ops.pump(min(_SYNC_PUMP_SLICE, remaining))
+            self._pump(min(_SYNC_PUMP_SLICE, remaining))
+
+    def _pump(self, timeout: float) -> None:
+        """Read the socket for up to *timeout* seconds, for frames to arrive.
+
+        A connection that dropped took the stream with it, on the server too,
+        so there is nothing left to cancel. Asking would go the ordinary way,
+        which waits out the whole request timeout for a reconnect before the
+        stream's own error reaches the caller.
+        """
+        try:
+            self._ops.pump(timeout)
+        except ConnectionUnavailableError:
+            self._cancellable = False
+            raise
 
     def _buffered(self, *, retain_rows: bool) -> list[_Event]:
         statements = self._ops.buffered(
