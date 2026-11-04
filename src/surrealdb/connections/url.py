@@ -37,12 +37,20 @@ class Url:
         except ValueError as error:
             raise InvalidUrlError(f"Could not parse URL {url!r}: {error}") from error
 
-        cleaned = url.replace("/rpc", "")
-        # Every remote transport appends `/rpc` to this, so a trailing slash on
-        # the endpoint doubles up: `http://host/` became `http://host//rpc`,
-        # which surfaced in connection error messages. Only strip when there is
-        # a netloc, so `mem://` does not collapse to `mem:`.
-        self.raw_url = cleaned.rstrip("/") if parsed_url.netloc else cleaned
+        # Every remote transport appends `/rpc` to this, so a trailing slash or
+        # `/rpc` on the endpoint doubles up: `http://host/` became
+        # `http://host//rpc`, which surfaced in connection error messages. Only
+        # the path's last segment is taken off - removing every "/rpc" in the
+        # string took the host from `ws://rpc.example.com` and the proxy path
+        # from `https://h/rpcproxy/rpc` - and only when there is a netloc, so
+        # `mem://` does not collapse to `mem:`.
+        if parsed_url.netloc:
+            path = parsed_url.path.rstrip("/")
+            if path.endswith("/rpc"):
+                path = path[: -len("/rpc")]
+            self.raw_url = parsed_url._replace(path=path).geturl()
+        else:
+            self.raw_url = url
 
         scheme = url if url in _BARE_SCHEMES else parsed_url.scheme
         try:
