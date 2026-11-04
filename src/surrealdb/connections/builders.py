@@ -1035,7 +1035,10 @@ def _map_to_class(cls: type[T], values: list[Any] | Mapping[str, Any]) -> T:
         return cls(**kwargs)
 
     try:
-        sig = inspect.signature(cls.__init__)
+        # The class's own signature, not its `__init__`'s: pydantic declares
+        # a model's fields there, while `BaseModel.__init__` takes only
+        # `**data`, so a model was given no statement results at all.
+        sig = inspect.signature(cls)
     except (ValueError, TypeError) as exc:
         raise UnexpectedResponseError(
             f"query().into({cls.__name__}) cannot inspect constructor: {exc}"
