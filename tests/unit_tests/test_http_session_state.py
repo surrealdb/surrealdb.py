@@ -12,6 +12,7 @@ import pytest
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
+from surrealdb.errors import ValidationError
 from surrealdb.types import Value
 from tests.unit_tests.fake_surreal import FakeSurrealHttp
 
@@ -75,3 +76,27 @@ async def test_async_let_binds_the_value_it_was_given(http: FakeSurrealHttp) -> 
     tags.append("b")
     await db.query("RETURN $document")
     assert http.calls_to("query")[-1].params[1]["document"] == {"tags": ["a"]}
+
+
+@pytest.mark.parametrize("name", ["token", "auth", "session", "access"])
+def test_blocking_let_refuses_a_protected_name_as_the_server_does(
+    http: FakeSurrealHttp, name: str
+) -> None:
+    db = BlockingHttpSurrealConnection(http.url)
+    with pytest.raises(
+        ValidationError, match="Cannot set protected variable"
+    ) as caught:
+        db.let(name, "abc")
+    assert caught.value.details == {"kind": "InvalidParams"}
+    assert name not in db.vars
+    db.let("scope", "fine")
+    assert db.vars == {"scope": "fine"}
+
+
+async def test_async_let_refuses_a_protected_name_as_the_server_does(
+    http: FakeSurrealHttp,
+) -> None:
+    db = AsyncHttpSurrealConnection(http.url)
+    with pytest.raises(ValidationError, match="protected variable: token"):
+        await db.let("token", "abc")
+    assert db.vars == {}

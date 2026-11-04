@@ -67,6 +67,7 @@ from surrealdb.connections.utils_mixin import (
     UtilsMixin,
     build_run_query,
     check_header_name,
+    check_let_name,
     is_cbor2_media_type,
     merge_query_vars,
 )
@@ -1049,6 +1050,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         return response["result"]
 
     def let(self, key: str, value: Value) -> None:
+        check_let_name(key)
         # A copy, as a websocket sends the value at let(): keeping the
         # caller's object let a later change to it reach every query.
         self.vars[key] = copy.deepcopy(value)

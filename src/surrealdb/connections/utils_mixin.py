@@ -19,6 +19,7 @@ from surrealdb.errors import (
     HttpStatusError,
     SurrealError,
     UnexpectedResponseError,
+    ValidationError,
     parse_query_error,
     parse_rpc_error,
 )
@@ -92,6 +93,26 @@ def merge_query_vars(
 
 # One segment of a function name that needs no quoting: `fn`, `time`, `now`.
 _PLAIN_SEGMENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+
+
+# The variables the server keeps for a session itself, which ``let`` refuses.
+PROTECTED_VARIABLES = frozenset({"access", "auth", "session", "token"})
+
+
+def check_let_name(key: str) -> None:
+    """Refuse a protected variable name at ``let()``, as the server does.
+
+    A websocket's ``let`` is refused by the server. HTTP keeps the variable
+    on the client and sends it with each query, so it was taken, and every
+    query after it was refused instead. The error is the one the server gives.
+    """
+    if key in PROTECTED_VARIABLES:
+        raise ValidationError(
+            ErrorKind.VALIDATION,
+            f"Cannot set protected variable: {key}",
+            code=-32603,
+            details={"kind": "InvalidParams"},
+        )
 
 
 def check_header_name(kind: str, name: object) -> None:
