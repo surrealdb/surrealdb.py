@@ -316,7 +316,14 @@ def test_a_listener_can_make_a_request_on_its_own_connection(
     """Events raised while the request lock is held are published after it."""
     db = BlockingWsSurrealConnection(proxy.ws_url, reconnect=_FAST)
     versions: list[str] = []
-    db.subscribe("connected", lambda _version: versions.append(db.version()))
+    reconnected = threading.Event()
+
+    def on_connected(_version: str) -> None:
+        versions.append(db.version())
+        if len(versions) == 2:
+            reconnected.set()
+
+    db.subscribe("connected", on_connected)
 
     def connect_then_reconnect() -> None:
         db.signin(connection_params["vars_params"])
@@ -327,6 +334,9 @@ def test_a_listener_can_make_a_request_on_its_own_connection(
     worker.start()
     worker.join(10)
     assert not worker.is_alive(), "a listener's request deadlocked the connection"
+    # The reconnect thread publishes the event once it lets go of the lock,
+    # which can be after the query it unblocked has returned.
+    assert reconnected.wait(5), "the reconnect's listener never made its request"
     db.close()
     assert len(versions) == 2
 
