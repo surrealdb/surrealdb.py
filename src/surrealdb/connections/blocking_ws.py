@@ -759,7 +759,7 @@ class BlockingWsSurrealConnection(
             for notifications in list(queues):
                 notifications.put(_LIVE_BROKEN_SENTINEL)
         self._registry.clear()
-        self._live_tracker.ended()
+        self._live_tracker.ended(broken=True)
         error = ConnectionUnavailableError(
             f"the connection to {self.raw_url} dropped and could not be "
             f"re-established after {attempts} attempt(s)"
@@ -805,7 +805,7 @@ class BlockingWsSurrealConnection(
             if logical not in managed:
                 for notifications in queues:
                     notifications.put(_LIVE_BROKEN_SENTINEL)
-        self._live_tracker.ended(keep=managed)
+        self._live_tracker.ended(keep=managed, broken=True)
 
     def _drop_socket(self) -> None:
         """Close and forget the socket, if any, keeping the session state."""
@@ -920,7 +920,7 @@ class BlockingWsSurrealConnection(
         """Stop tracking a live query a reconnect could not restart."""
         logical = str(live.logical)
         self._registry.drop_live(logical)
-        self._live_tracker.ended(logical)
+        self._live_tracker.ended(logical, broken=True)
         for notifications in self.live_queues.get(logical, []):
             notifications.put(_LIVE_BROKEN_SENTINEL)
 
@@ -2791,7 +2791,7 @@ class BlockingWsSurrealConnection(
                 "the connection was closed while a streaming query was open."
             )
         )
-        self._live_tracker.ended()
+        self._live_tracker.ended(broken=live_end is _LIVE_BROKEN_SENTINEL)
         if self.socket is not None:
             try:
                 self.socket.close()

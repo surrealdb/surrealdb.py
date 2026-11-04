@@ -8,6 +8,7 @@ first iteration; on blocking, once any request read the socket in the gap.
 
 import asyncio
 import threading
+import uuid
 from collections.abc import Iterator
 from typing import Any
 
@@ -15,7 +16,11 @@ import pytest
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+from surrealdb.connections.reconnect import ReconnectOptions
+from surrealdb.errors import ConnectionUnavailableError
 from tests.unit_tests.fake_surreal import FakeSurreal
+
+FAST = ReconnectOptions(retry_delay=0.01, retry_delay_max=0.02, retry_delay_jitter=0)
 
 
 @pytest.fixture
@@ -101,5 +106,73 @@ async def test_async_an_iteration_after_a_kill_yields_nothing(
         await sub.kill()
         assert [change async for change in sub] == []
         assert not sub.is_alive
+    finally:
+        await db.close()
+
+
+async def _until(predicate: Any, timeout: float = 5.0) -> None:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while not predicate():
+        assert asyncio.get_running_loop().time() < deadline, "timed out"
+        await asyncio.sleep(0.01)
+
+
+async def test_async_a_subscription_the_drop_ended_raises_when_read_later(
+    fake: FakeSurreal,
+) -> None:
+    db = AsyncWsSurrealConnection(fake.url, reconnect=False)
+    try:
+        sub = await db.live("person")
+        fake.drop()
+        await _until(lambda: db.status == "disconnected")
+        assert not sub.is_alive
+        with pytest.raises(ConnectionUnavailableError, match="was lost"):
+            [change async for change in sub]
+    finally:
+        await db.close()
+
+
+async def test_async_a_live_of_subscription_a_reconnect_left_raises_when_read(
+    fake: FakeSurreal,
+) -> None:
+    db = AsyncWsSurrealConnection(fake.url, reconnect=FAST)
+    try:
+        await db.connect()
+        sub = db.live_of(uuid.uuid4())
+        sockets = fake.sockets_opened
+        fake.drop()
+        await _until(lambda: fake.sockets_opened > sockets and db.status == "connected")
+        with pytest.raises(ConnectionUnavailableError, match="was lost"):
+            [change async for change in sub]
+    finally:
+        await db.close()
+
+
+def test_blocking_a_subscription_the_drop_ended_raises_when_read_later(
+    fake: FakeSurreal,
+) -> None:
+    db = BlockingWsSurrealConnection(fake.url, reconnect=False)
+    try:
+        sub = db.live("person")
+        fake.drop()
+        fake.wait_for(lambda: db.socket is not None and db.socket.state.name != "OPEN")
+        db.version()
+        assert not sub.is_alive
+        with pytest.raises(ConnectionUnavailableError, match="was lost"):
+            list(sub)
+    finally:
+        db.close()
+
+
+async def test_async_a_killed_subscription_still_ends_cleanly_after_a_drop(
+    fake: FakeSurreal,
+) -> None:
+    db = AsyncWsSurrealConnection(fake.url, reconnect=False)
+    try:
+        sub = await db.live("person")
+        await sub.kill()
+        fake.drop()
+        await _until(lambda: db.status == "disconnected")
+        assert [change async for change in sub] == []
     finally:
         await db.close()

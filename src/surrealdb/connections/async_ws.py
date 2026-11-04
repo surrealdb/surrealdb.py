@@ -683,7 +683,9 @@ class AsyncWsSurrealConnection(
                 continue
             for queue in queues:
                 queue.put_nowait(_LIVE_QUEUE_BROKEN)
-        self._live_tracker.ended(keep=self._registry.live.keys() if replaying else ())
+        self._live_tracker.ended(
+            keep=self._registry.live.keys() if replaying else (), broken=True
+        )
         if not unexpected:
             return
         if not replaying:
@@ -748,7 +750,7 @@ class AsyncWsSurrealConnection(
         for queues in self.live_queues.values():
             for queue in queues:
                 queue.put_nowait(_LIVE_QUEUE_BROKEN)
-        self._live_tracker.ended()
+        self._live_tracker.ended(broken=True)
         self._registry.clear()
         self._set_status("disconnected")
         self._emit("error", error)
@@ -1051,7 +1053,7 @@ class AsyncWsSurrealConnection(
     def _end_live(self, logical: str, sentinel: object) -> None:
         """Stop tracking a live query and end its subscriptions with *sentinel*."""
         self._registry.drop_live(logical)
-        self._live_tracker.ended(logical)
+        self._live_tracker.ended(logical, broken=sentinel is _LIVE_QUEUE_BROKEN)
         for queue in self.live_queues.pop(logical, []):
             queue.put_nowait(sentinel)
 

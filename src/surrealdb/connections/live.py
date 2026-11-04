@@ -15,7 +15,9 @@ query's definition, so unlike one from ``live()`` it is not restarted after a
 reconnect.
 
 A subscription ends cleanly when the query is killed, by this client or any
-other, and when the connection closes.
+other, and when the connection closes. One the connection lost, and did not
+restart, raises ``ConnectionUnavailableError`` when it is read, however long
+afterwards.
 """
 
 import weakref
@@ -31,13 +33,21 @@ from surrealdb.types import Value
 class _Subscription(UUID):
     """The shared part: a UUID that also knows its connection and session."""
 
-    __slots__ = ("_connection", "_killed", "_managed", "_pending", "_session_id")
+    __slots__ = (
+        "_broken",
+        "_connection",
+        "_killed",
+        "_managed",
+        "_pending",
+        "_session_id",
+    )
 
     _connection: Any  # pyright: ignore[reportUninitializedInstanceVariable]
     _session_id: UUID | None  # pyright: ignore[reportUninitializedInstanceVariable]
     _managed: bool  # pyright: ignore[reportUninitializedInstanceVariable]
     _killed: bool  # pyright: ignore[reportUninitializedInstanceVariable]
     _pending: Any  # pyright: ignore[reportUninitializedInstanceVariable]
+    _broken: bool  # pyright: ignore[reportUninitializedInstanceVariable]
 
     def __init__(
         self,
@@ -52,6 +62,7 @@ class _Subscription(UUID):
         object.__setattr__(self, "_managed", managed)
         object.__setattr__(self, "_killed", False)
         object.__setattr__(self, "_pending", None)
+        object.__setattr__(self, "_broken", False)
 
     @property
     def id(self) -> UUID:
@@ -71,8 +82,27 @@ class _Subscription(UUID):
         connection - its notifications have ended, or the connection closed."""
         return not self._killed
 
-    def _ended(self) -> None:
+    def _ended(self, broken: bool = False) -> None:
+        """The query ended: *broken* when the connection was lost under it.
+
+        The first end counts, so a query killed before its connection went
+        still reads as killed.
+        """
+        if not self._killed:
+            object.__setattr__(self, "_broken", broken)
         object.__setattr__(self, "_killed", True)
+
+    def _lost(self) -> ConnectionUnavailableError:
+        """What reading a subscription the lost connection ended raises.
+
+        It used to end cleanly, as a killed one does, so a caller reading it
+        only after the connection dropped could not tell that changes may
+        have been missed.
+        """
+        return ConnectionUnavailableError(
+            f"live query {self} ended when the connection to the server was "
+            "lost, and was not restarted"
+        )
 
     def _hold(self, notifications: Any) -> None:
         """Keep the notifications that arrive before anyone iterates."""
@@ -117,11 +147,11 @@ class _Pass:
         self._notifications = notifications
         self._done = False
 
-    def _end(self) -> None:
+    def _end(self, broken: bool = False) -> None:
         """The notifications ended: the query was killed, or the connection went."""
         self._done = True
         self._notifications = None
-        self._subscription._ended()  # pyright: ignore[reportPrivateUsage]
+        self._subscription._ended(broken)  # pyright: ignore[reportPrivateUsage]
 
     def _release(self) -> None:
         notifications, self._notifications = self._notifications, None
@@ -144,6 +174,8 @@ class _AsyncPass(_Pass):
         if self._notifications is None:
             if subscription._killed:  # pyright: ignore[reportPrivateUsage]
                 self._done = True
+                if subscription._broken:  # pyright: ignore[reportPrivateUsage]
+                    raise subscription._lost()  # pyright: ignore[reportPrivateUsage]
                 raise StopAsyncIteration
             self._notifications = (
                 subscription._take()  # pyright: ignore[reportPrivateUsage]
@@ -151,8 +183,11 @@ class _AsyncPass(_Pass):
             )
         try:
             notification: dict[str, Value] = await self._notifications.__anext__()
-        except (StopAsyncIteration, ConnectionUnavailableError):
+        except StopAsyncIteration:
             self._end()
+            raise
+        except ConnectionUnavailableError:
+            self._end(broken=True)
             raise
         return notification
 
@@ -170,8 +205,11 @@ class _SyncPass(_Pass):
             raise StopIteration
         try:
             notification: dict[str, Value] = next(self._notifications)
-        except (StopIteration, ConnectionUnavailableError):
+        except StopIteration:
             self._end()
+            raise
+        except ConnectionUnavailableError:
+            self._end(broken=True)
             raise
         return notification
 
@@ -214,6 +252,8 @@ class LiveSubscription(_Subscription):
 
     def __iter__(self) -> Iterator[dict[str, Value]]:
         if self._killed:
+            if self._broken:
+                raise self._lost()
             return iter(())
         notifications = self._take()
         if notifications is None:
@@ -259,11 +299,16 @@ class SubscriptionTracker:
     def add(self, subscription: _Subscription) -> None:
         self._subscriptions[id(subscription)] = subscription
 
-    def ended(self, live_id: str | None = None, keep: Container[str] = ()) -> None:
+    def ended(
+        self,
+        live_id: str | None = None,
+        keep: Container[str] = (),
+        broken: bool = False,
+    ) -> None:
         """Mark the subscriptions to *live_id*, or to every query but those in
-        *keep*, ended."""
+        *keep*, ended - *broken* when the connection was lost under them."""
         for key, subscription in list(self._subscriptions.items()):
             name = str(subscription)
             if (live_id is None and name not in keep) or name == live_id:
                 self._subscriptions.pop(key, None)
-                subscription._ended()  # pyright: ignore[reportPrivateUsage]
+                subscription._ended(broken)  # pyright: ignore[reportPrivateUsage]
