@@ -64,6 +64,7 @@ from surrealdb.connections.utils_mixin import (
     CBOR2_MEDIA_TYPE,
     UtilsMixin,
     build_run_query,
+    check_header_name,
     is_cbor2_media_type,
     merge_query_vars,
 )
@@ -375,7 +376,12 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
 
         Either may be left out, or ``None``, to keep the current one, or
         ``Null`` to clear it.
+
+        :raises ValueError: for a name that is not printable ASCII, which the
+            request headers HTTP sends it in cannot carry.
         """
+        check_header_name("namespace", namespace)
+        check_header_name("database", database)
         message = RequestMessage(
             RequestMethod.USE,
             namespace=namespace,

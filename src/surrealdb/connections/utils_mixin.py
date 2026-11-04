@@ -93,6 +93,26 @@ def merge_query_vars(
 # One segment of a function name that needs no quoting: `fn`, `time`, `now`.
 _PLAIN_SEGMENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 
+
+def check_header_name(kind: str, name: object) -> None:
+    """Refuse a namespace or database name HTTP cannot send.
+
+    HTTP carries them in the ``Surreal-NS`` and ``Surreal-DB`` headers, and
+    the server reads a header only if it is printable ASCII. ``use()`` used to
+    take any name and every request after it failed: 401 "There was a problem
+    with authentication" from the server, or a bare ``UnicodeEncodeError``
+    from requests for a name outside latin-1.
+    """
+    if isinstance(name, str) and not all(
+        " " <= char <= "~" or char == "\t" for char in name
+    ):
+        raise ValueError(
+            f"HTTP sends the {kind} in a request header, which carries only "
+            f"printable ASCII, so {name!r} cannot be selected over HTTP: use a "
+            f"websocket connection for it, or an ASCII {kind} name"
+        )
+
+
 # Characters that cannot appear inside a backtick-quoted segment without
 # ending the quoting, so a name containing one cannot be rendered safely.
 _UNQUOTABLE = ("`", "\n", "\r")
