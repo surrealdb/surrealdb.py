@@ -12,9 +12,9 @@ import pytest
 
 from surrealdb.connections.async_http import AsyncHttpSurrealConnection
 from surrealdb.connections.blocking_http import BlockingHttpSurrealConnection
-from surrealdb.errors import ValidationError
+from surrealdb.errors import InternalError, ValidationError
 from surrealdb.types import Value
-from tests.unit_tests.fake_surreal import FakeSurrealHttp
+from tests.unit_tests.fake_surreal import Call, FakeSurrealHttp, RpcFailure
 
 
 @pytest.fixture
@@ -100,3 +100,32 @@ async def test_async_let_refuses_a_protected_name_as_the_server_does(
     with pytest.raises(ValidationError, match="protected variable: token"):
         await db.let("token", "abc")
     assert db.vars == {}
+
+
+def _unknown_function(call: Call) -> None:
+    raise RpcFailure("Unknown function 'string::nope'", kind="Internal")
+
+
+def test_blocking_run_sends_a_builtin_as_the_rpc_with_variables_bound(
+    http: FakeSurrealHttp,
+) -> None:
+    """Only a custom function can read a let() variable, so only it goes as a query."""
+    http.respond("run", _unknown_function)
+    db = BlockingHttpSurrealConnection(http.url)
+    db.let("factor", 10)
+    with pytest.raises(InternalError, match="Unknown function 'string::nope'"):
+        db.run("string::nope", ["a"])
+    db.run("fn::scaled", [2])
+    assert [m for m in http.methods() if m in ("run", "query")] == ["run", "query"]
+
+
+async def test_async_run_sends_a_builtin_as_the_rpc_with_variables_bound(
+    http: FakeSurrealHttp,
+) -> None:
+    http.respond("run", _unknown_function)
+    db = AsyncHttpSurrealConnection(http.url)
+    await db.let("factor", 10)
+    with pytest.raises(InternalError, match="Unknown function 'string::nope'"):
+        await db.run("string::nope", ["a"])
+    await db.run("fn::scaled", [2])
+    assert [m for m in http.methods() if m in ("run", "query")] == ["run", "query"]

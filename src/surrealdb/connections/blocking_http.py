@@ -1013,19 +1013,25 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
     ) -> Value:
         """Call a SurrealDB function and return its result.
 
-        When variables are bound with :meth:`let`, this is sent as a query
-        rather than as the ``run`` RPC. HTTP has no server-side session, so the
-        RPC - which carries no parameters - left a function reading a
-        ``let()``-bound variable seeing nothing, and the call quietly returned
-        ``None`` where the websocket transports returned the value. Query
-        parameters do reach a function body, so replaying the bindings that way
-        makes the two agree.
+        When variables are bound with :meth:`let`, a custom ``fn::`` function
+        is called with a query rather than the ``run`` RPC. HTTP has no
+        server-side session, so the RPC - which carries no parameters - left a
+        function reading a ``let()``-bound variable seeing nothing, and the
+        call quietly returned ``None`` where the websocket transports returned
+        the value. Query parameters do reach a function body, so replaying the
+        bindings that way makes the two agree.
 
-        :raises UnsupportedFeatureError: if *version* is given while session
-            variables are bound. SurrealQL has no syntax for calling a specific
-            function version, so the two cannot be combined over HTTP.
+        Any other function reads no session variable, so it still goes as the
+        RPC. As a query, an unknown built-in such as ``string::nope`` failed
+        to parse, and was reported as a ``ValidationError`` quoting the
+        generated query instead of the RPC's ``InternalError``.
+
+        :raises UnsupportedFeatureError: if *version* is given for a custom
+            function while session variables are bound. SurrealQL has no
+            syntax for calling a specific function version, so the two cannot
+            be combined over HTTP.
         """
-        if self.vars:
+        if self.vars and name.startswith("fn::"):
             if version is not None:
                 raise UnsupportedFeatureError(
                     "run() cannot combine a function version with let() "
