@@ -29,9 +29,9 @@ from tests.unit_tests.fake_surreal import (
 ROOT: dict[str, Value] = {"username": "root", "password": "root"}
 
 
-def _due() -> str:
+def _due(subject: str = "root") -> str:
     """An access token that is still good but due for renewal."""
-    return jwt("root", lifetime=30, iat=time.time() - 3600)
+    return jwt(subject, lifetime=30, iat=time.time() - 3600)
 
 
 def _refused(call: Call) -> None:
@@ -348,3 +348,79 @@ def test_blocking_ws_renews_auth_tokens_whose_access_token_expired(
         assert db.token == saved.renewed["access"]
     finally:
         db.close()
+
+
+OWNER: dict[str, Value] = {"username": "owner", "password": "owner"}
+VIEWER: dict[str, Value] = {"username": "viewer", "password": "viewer"}
+
+
+def _owner_or_due_viewer(call: Call) -> str:
+    """The owner's token is good for an hour; the viewer's is due already."""
+    user = call.params[0]["user"]
+    return _due(user) if user == "viewer" else jwt(user)
+
+
+def test_blocking_http_renewal_keeps_an_explicit_signin(http: FakeSurrealHttp) -> None:
+    http.respond("signin", _owner_or_due_viewer)
+    db = BlockingHttpSurrealConnection(http.url, auth=OWNER)
+    viewer = db.signin(VIEWER)
+
+    db.query("RETURN 1").execute()
+
+    assert http.methods().count("signin") == 2
+    assert http.calls_to("query")[-1].token == viewer.access
+
+
+async def test_async_http_renewal_keeps_an_explicit_signin(
+    http: FakeSurrealHttp,
+) -> None:
+    http.respond("signin", _owner_or_due_viewer)
+    db = AsyncHttpSurrealConnection(http.url, auth=OWNER)
+    viewer = await db.signin(VIEWER)
+
+    await db.query("RETURN 1")
+
+    assert http.methods().count("signin") == 2
+    assert http.calls_to("query")[-1].token == viewer.access
+
+
+async def test_async_ws_renewal_keeps_an_explicit_signin(ws: FakeSurreal) -> None:
+    ws.respond("signin", _owner_or_due_viewer)
+    db = AsyncWsSurrealConnection(ws.url, auth=OWNER)
+    try:
+        await db.connect()
+        viewer = await db.signin(VIEWER)
+        await asyncio.sleep(0.2)
+
+        assert ws.methods().count("signin") == 2
+        assert db.token == viewer.access
+    finally:
+        await db.close()
+
+
+def test_blocking_ws_renewal_keeps_an_explicit_signin(ws: FakeSurreal) -> None:
+    ws.respond("signin", _owner_or_due_viewer)
+    db = BlockingWsSurrealConnection(ws.url, auth=OWNER)
+    try:
+        db.connect()
+        viewer = db.signin(VIEWER)
+        db.query("RETURN 1").execute()
+
+        assert ws.methods().count("signin") == 2
+        assert db.token == viewer.access
+    finally:
+        db.close()
+
+
+def test_blocking_http_auth_applies_again_after_re_pointing(
+    http: FakeSurrealHttp,
+) -> None:
+    http.respond("signin", _owner_or_due_viewer)
+    db = BlockingHttpSurrealConnection(http.url, auth=OWNER)
+    db.signin(VIEWER)
+    db.connect(http.url)
+
+    db.query("RETURN 1").execute()
+
+    signed_in = [call.params[0]["user"] for call in http.calls_to("signin")]
+    assert signed_in == ["owner", "viewer", "owner"]

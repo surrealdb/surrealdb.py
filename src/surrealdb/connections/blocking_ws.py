@@ -617,8 +617,10 @@ class BlockingWsSurrealConnection(
             return
         self._renewing = True
         try:
-            if not self._renew_with_refresh_token_locked() and signs_in_afresh(
-                self._auth_provider
+            if (
+                not self._renew_with_refresh_token_locked()
+                and signs_in_afresh(self._auth_provider)
+                and not root.auth_chosen
             ):
                 self._apply_auth_provider_locked()
         except Exception as exc:
@@ -815,12 +817,12 @@ class BlockingWsSurrealConnection(
     def _restore_locked(self) -> None:
         """Replay every session, then every live query, on the new socket."""
         registry = self._registry
-        if signs_in_afresh(self._auth_provider):
+        if signs_in_afresh(self._auth_provider) and not registry.root.auth_chosen:
             self._restore_session_locked(None, registry.root, authenticate=False)
             self._apply_auth_provider_locked()
         else:
-            # The tokens held now, which renewing may have replaced since a
-            # static `auth=` gave them.
+            # The tokens held now: the caller's own, or ones renewing may have
+            # replaced since a static `auth=` gave them.
             self._restore_session_locked(None, registry.root, renew=True)
         for session_id, state in list(registry.sessions.items()):
             self._send_locked(
@@ -1105,6 +1107,7 @@ class BlockingWsSurrealConnection(
             self._send(message, "authenticating")
             # Record the token as the session's identity so a reconnect - and,
             # for the connection's own, new_session() - can replay it.
+            self._note_chosen_auth(session_id)
             self._note_authenticated(session_id, token)
 
     def invalidate(self, session_id: UUID | None = None) -> None:
@@ -1115,6 +1118,7 @@ class BlockingWsSurrealConnection(
         self.id = message.id
         with self._session_lock:
             self._send(message, "invalidating")
+            self._note_chosen_auth(session_id)
             self._note_signed_out(session_id)
 
     def refresh(
@@ -1167,6 +1171,7 @@ class BlockingWsSurrealConnection(
         message = RequestMessage(RequestMethod.RESET, **_scope(session_id))
         with self._session_lock:
             self._send(message, "resetting the session")
+            self._note_chosen_auth(session_id)
             self._note_reset(session_id)
             self._end_session_live(session_id)
 
@@ -1355,6 +1360,7 @@ class BlockingWsSurrealConnection(
             response = self._send(message, "signup")
             self.check_response_for_result(response, "signup")
             tokens = parse_auth_result(response["result"])
+            self._note_chosen_auth(session_id)
             self._note_tokens(session_id, tokens)
         return tokens
 
@@ -1371,6 +1377,7 @@ class BlockingWsSurrealConnection(
             response = self._send(message, "signing in")
             self.check_response_for_result(response, "signing in")
             tokens = parse_auth_result(response["result"])
+            self._note_chosen_auth(session_id)
             self._note_tokens(session_id, tokens)
         return tokens
 

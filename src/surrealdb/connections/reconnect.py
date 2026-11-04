@@ -121,6 +121,9 @@ class SessionState:
     # Credentials, so left out of the repr.
     access: str | None = field(default=None, repr=False)
     refresh: str | None = field(default=None, repr=False)
+    # Whether the caller set this session's auth itself, which on the
+    # connection's own session takes over from ``auth=``.
+    auth_chosen: bool = False
 
     def tokens(self) -> Tokens | None:
         if self.access is None and self.refresh is None:
@@ -395,6 +398,19 @@ class SessionTrackingMixin(EventsMixin):
         state.refresh = None
         self._auth_changed(session_id)
         self._emit("auth", None, session_id)
+
+    def _note_chosen_auth(self, session_id: UUID | None) -> None:
+        """The caller signed *session_id* in, up or out, or reset it.
+
+        On the connection's own session that takes over from ``auth=``, as an
+        explicit sign-in does in the JS SDK: renewing and reconnecting keep
+        what the caller chose. They used to sign in with ``auth=`` again, so a
+        connection narrowed to a less privileged user went back to the
+        ``auth=`` user as soon as its token was due. Called before the auth
+        itself is noted, since noting it re-arms renewal.
+        """
+        if session_id is None:
+            self._registry.root.auth_chosen = True
 
     def _auth_changed(self, session_id: UUID | None) -> None:
         if session_id is None:

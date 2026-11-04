@@ -855,7 +855,7 @@ class AsyncWsSurrealConnection(
         self._cancel_renewal()
         root = self._registry.root
         if not self._renew_access or (
-            root.refresh is None and self._auth_provider is None
+            root.refresh is None and (self._auth_provider is None or root.auth_chosen)
         ):
             return
         when = renew_at(root.access)
@@ -899,8 +899,10 @@ class AsyncWsSurrealConnection(
         """
         self._renewing = True
         try:
-            if not await self._renew_with_refresh_token() and signs_in_afresh(
-                self._auth_provider
+            if (
+                not await self._renew_with_refresh_token()
+                and signs_in_afresh(self._auth_provider)
+                and not self._registry.root.auth_chosen
             ):
                 await self.connect()
                 async with self._connect_guard():
@@ -940,14 +942,14 @@ class AsyncWsSurrealConnection(
     async def _restore(self) -> None:
         """Replay every session, then every live query, on the new socket."""
         registry = self._registry
-        if signs_in_afresh(self._auth_provider):
+        if signs_in_afresh(self._auth_provider) and not registry.root.auth_chosen:
             # A fresh sign-in rather than a token that may have expired while
             # the socket was down.
             await self._restore_session(None, registry.root, authenticate=False)
             await self._apply_auth_provider()
         else:
-            # The tokens held now, which renewing may have replaced since a
-            # static `auth=` gave them.
+            # The tokens held now: the caller's own, or ones renewing may have
+            # replaced since a static `auth=` gave them.
             await self._restore_session(None, registry.root, renew=True)
         for session_id, state in list(registry.sessions.items()):
             await self._request(
@@ -1264,6 +1266,7 @@ class AsyncWsSurrealConnection(
         await self._send(message, "authenticating")
         # Record the token as the session's identity so a reconnect - and, for
         # the connection's own, new_session() - can replay it.
+        self._note_chosen_auth(session_id)
         self._note_authenticated(session_id, token)
 
     async def invalidate(self, session_id: UUID | None = None) -> None:
@@ -1272,6 +1275,7 @@ class AsyncWsSurrealConnection(
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.INVALIDATE, **kwargs)
         await self._send(message, "invalidating")
+        self._note_chosen_auth(session_id)
         self._note_signed_out(session_id)
 
     async def refresh(
@@ -1321,6 +1325,7 @@ class AsyncWsSurrealConnection(
         self._require(Features.SESSIONS)
         message = RequestMessage(RequestMethod.RESET, **_scope(session_id))
         await self._send(message, "resetting the session")
+        self._note_chosen_auth(session_id)
         self._note_reset(session_id)
         self._end_session_live(session_id)
 
@@ -1506,6 +1511,7 @@ class AsyncWsSurrealConnection(
         response = await self._send(message, "signup")
         self.check_response_for_result(response, "signup")
         tokens = parse_auth_result(response["result"])
+        self._note_chosen_auth(session_id)
         self._note_tokens(session_id, tokens)
         return tokens
 
@@ -1522,6 +1528,7 @@ class AsyncWsSurrealConnection(
         response = await self._send(message, "signing in")
         self.check_response_for_result(response, "signing in")
         tokens = parse_auth_result(response["result"])
+        self._note_chosen_auth(session_id)
         self._note_tokens(session_id, tokens)
         return tokens
 

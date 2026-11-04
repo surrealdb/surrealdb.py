@@ -262,6 +262,66 @@ def test_blocking_a_reconnect_keeps_the_tokens_renewal_replaced(
         db.close()
 
 
+VIEWER: dict[str, Value] = {"username": "viewer", "password": "viewer"}
+
+
+async def test_async_a_reconnect_keeps_an_explicit_signin_over_auth(
+    fake: FakeSurreal,
+) -> None:
+    fake.respond("signin", _signin_as_user)
+    db = AsyncWsSurrealConnection(fake.url, reconnect=FAST, auth=ROOT)
+    try:
+        await db.connect()
+        viewer = await db.signin(VIEWER)
+        await _reconnected(db, fake)
+
+        assert "signin" not in fake.methods(1)
+        assert [c.params for c in fake.calls_to("authenticate", socket=1)] == [
+            [viewer.access]
+        ]
+        assert db.token == viewer.access
+    finally:
+        await db.close()
+
+
+def test_blocking_a_reconnect_keeps_an_explicit_signin_over_auth(
+    fake: FakeSurreal,
+) -> None:
+    fake.respond("signin", _signin_as_user)
+    db = BlockingWsSurrealConnection(fake.url, reconnect=FAST, auth=ROOT)
+    try:
+        db.connect()
+        viewer = db.signin(VIEWER)
+        _dropped(db, fake)
+        db.version()
+
+        assert "signin" not in fake.methods(1)
+        assert [c.params for c in fake.calls_to("authenticate", socket=1)] == [
+            [viewer.access]
+        ]
+        assert db.token == viewer.access
+    finally:
+        db.close()
+
+
+async def test_async_auth_signs_in_again_once_the_connection_is_closed(
+    fake: FakeSurreal,
+) -> None:
+    fake.respond("signin", _signin_as_user)
+    db = AsyncWsSurrealConnection(fake.url, reconnect=FAST, auth=ROOT)
+    try:
+        await db.connect()
+        await db.signin(VIEWER)
+        await db.close()
+        await db.connect()
+
+        assert [c.params[0]["user"] for c in fake.calls_to("signin", socket=1)] == [
+            "root"
+        ]
+    finally:
+        await db.close()
+
+
 def test_blocking_giving_up_ends_a_live_iterator_already_running(
     fake: FakeSurreal,
 ) -> None:

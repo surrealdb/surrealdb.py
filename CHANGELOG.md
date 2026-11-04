@@ -111,6 +111,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the connection signs in with `auth=` instead - or, with no credentials or
   function to sign in with, carries on with the access token it has.
 
+  Signing the connection's own session in, up or out with `signin()`,
+  `signup()`, `authenticate()`, `invalidate()` or `reset()` takes over from
+  `auth=`, as an explicit sign-in does in the JS SDK: renewing then uses only
+  the refresh token the session holds, and a reconnect replays what the
+  caller chose. `auth=` applies again once the connection starts over:
+  re-pointed with `connect(url)`, or, on a websocket, closed or dropped
+  without a reconnect.
+
 - Token and session management to match the JS SDK:
   - `db.refresh(tokens=None)` exchanges a refresh token for a new pair over
     the `refresh` RPC, authenticates with the new access token and returns

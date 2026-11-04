@@ -23,6 +23,14 @@ access token shortly before it expires: with the refresh token if it holds
 one and the server supports them, otherwise by applying ``auth=`` again. The
 async connection does this on a timer; the blocking and HTTP connections have
 no background work, so they do it before the next request that needs it.
+
+Signing the connection's own session in, up or out - ``signin()``,
+``signup()``, ``authenticate()``, ``invalidate()`` or ``reset()`` - takes
+over from ``auth=``, as an explicit sign-in does in the JS SDK: renewing then
+uses only the refresh token the session holds, and a reconnect replays what
+the caller chose. ``auth=`` applies again once the connection starts over:
+re-pointed with ``connect(url)``, or, on a websocket, closed or dropped
+without a reconnect.
 """
 
 import base64
