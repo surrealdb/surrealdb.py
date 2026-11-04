@@ -29,6 +29,7 @@ predates the field and speaks revision 1.
 from __future__ import annotations
 
 import asyncio
+import copy
 import queue
 import time
 import weakref
@@ -1052,7 +1053,9 @@ class AsyncQueryStream(_StreamBase):
         # generator's finalisation is handed to the event loop, so dropping the
         # only strong reference defers the cancel to a later loop turn. Holding
         # it is what lets `aclose()` and `async with` stop the query *before*
-        # they return, which is what this class documents.
+        # they return, which is what this class documents. The view drives a
+        # copy of this stream rather than the stream itself (see `__aiter__`),
+        # so holding it closes no cycle.
         self._view: _AsyncView | None = None
         self._statements = statements
         self._frames = frames
@@ -1064,12 +1067,20 @@ class AsyncQueryStream(_StreamBase):
         # the one that had - holding a stream on the server - open. It also
         # reports the mistake at the call that made it.
         self._claim()
+        # The driver runs on a copy, which shares everything but the view. Run
+        # on `self`, its suspended frame held the stream that held the view
+        # that held it: a cycle only the cyclic collector could free, so an
+        # abandoned `async for ...: break` went on running on the server until
+        # a collection came along. Now letting go of the stream and its view
+        # finalises the driver by refcount, and the event loop's async
+        # generator hooks run its teardown, which cancels the query.
+        driver = copy.copy(self)
         if self._frames:
-            self._view = _AsyncView(self._drive(retain_rows=True), _pick_frame)
+            self._view = _AsyncView(driver._drive(retain_rows=True), _pick_frame)
         elif self._statements:
-            self._view = _AsyncView(self._drive(retain_rows=True), _pick_statement)
+            self._view = _AsyncView(driver._drive(retain_rows=True), _pick_statement)
         else:
-            self._view = _AsyncView(self._drive(retain_rows=False), _pick_row)
+            self._view = _AsyncView(driver._drive(retain_rows=False), _pick_row)
         return self._view
 
     async def __aenter__(self) -> AsyncQueryStream:

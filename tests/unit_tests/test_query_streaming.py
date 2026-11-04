@@ -708,9 +708,11 @@ async def test_breaking_without_closing_does_not_raise_from_the_loop() -> None:
         channel = _AsyncChannel([begin(1), rows(0, [1, 2, 3])])
         async for _ in AsyncQueryStream(channel.ops(), "SELECT 1"):
             break
-        for _ in range(3):
+        for _ in range(50):
             gc.collect()
-            await asyncio.sleep(0)
+            await asyncio.sleep(0.01)
+            if not channel.registry:
+                break
         assert caught == []
         assert channel.registry == {}
     finally:
@@ -732,6 +734,34 @@ def test_sync_breaking_without_closing_still_cancels_at_once() -> None:
             break
         assert channel.cancelled == [channel.sent[0].id]
         assert channel.sync_registry == {}
+    finally:
+        gc.enable()
+
+
+async def test_an_abandoned_async_stream_is_cancelled_without_a_collection() -> None:
+    """Breaking out of ``async for`` cancels the stream within a few loop turns.
+
+    The stream held its view, and the view's generator held the stream, so
+    only the cyclic collector could free them: the query went on running on
+    the server, with one of the connection's stream slots, until a collection
+    came along. The collector is disabled here so that only refcount
+    finalisation, through the event loop's async generator hooks, can pass.
+    """
+    gc.disable()
+    try:
+        channel = _AsyncChannel([begin(1), rows(0, [1, 2, 3])])
+
+        async def take_one() -> None:
+            async for _ in AsyncQueryStream(channel.ops(), "SELECT 1"):
+                break
+
+        await take_one()
+        for _ in range(50):
+            if channel.cancelled:
+                break
+            await asyncio.sleep(0.01)
+        assert channel.cancelled == [channel.sent[0].id]
+        assert channel.registry == {}
     finally:
         gc.enable()
 
