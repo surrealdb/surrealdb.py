@@ -122,6 +122,13 @@ _LIVE_RECV_TIMEOUT = 0.1
 # the connection, not a polling interval.
 _STREAM_POLL_TIMEOUT = 0.005
 
+# How long a reader waits, with the lock released, between polls of a quiet
+# socket: long enough that a thread waiting for the lock takes it, short
+# enough that a frame arriving meanwhile is read at once. Sleeping out the
+# rest of a 100 ms slice instead held every streamed query that took the
+# server longer than one poll for up to 95 ms more.
+_POLL_GAP = 0.001
+
 # The `action` SurrealDB puts on the notification it sends when a live query
 # ends. It reports the end of the subscription rather than a change to the
 # table - it carries no record and its `result` is None - so it terminates the
@@ -1578,43 +1585,52 @@ class BlockingWsSurrealConnection(
         statement runs, and CI measured an ordinary query waiting 2.4s behind a
         stream idling through a `SLEEP`. Now the wait happens with the lock
         released, so it is available for most of every slice.
+
+        Returns as soon as one frame has been routed, so a frame arriving
+        mid-slice is read within a poll, not at the end of the slice.
         """
-        poll = min(_STREAM_POLL_TIMEOUT, timeout)
-        with self._locked():
-            if self.socket is None:
-                raise ConnectionUnavailableError(
-                    "WebSocket connection is not established."
-                )
-            try:
-                data = self.socket.recv(timeout=poll)
-            except TimeoutError:
-                data = None
-            except (ConnectionClosed, WebSocketException, OSError) as exc:
-                error = ConnectionUnavailableError(
-                    "WebSocket connection closed while a streaming query was "
-                    f"open: {exc}"
-                )
-                self._break_streams(error)
-                raise error from exc
-            if data is not None:
-                # Decoded and routed while still holding the lock, which the
-                # read order depends on. Two threads pumping - one per stream,
-                # or a stream beside a live subscription - each read one message
-                # and then raced to route it, so a stream could be handed frame
-                # two before frame one: rows out of order, or a terminal frame
-                # ahead of the rows it terminates. Routing only puts to an
-                # unbounded queue, so nothing here can block under the lock.
-                self._route_foreign(
-                    self.decode_response(
-                        data if isinstance(data, bytes) else data.encode(),
-                        "reading a streaming query frame",
-                        v2=self._v2,
+        deadline = time.monotonic() + timeout
+        while True:
+            poll = min(_STREAM_POLL_TIMEOUT, max(0.0, deadline - time.monotonic()))
+            with self._locked():
+                if self.socket is None:
+                    raise ConnectionUnavailableError(
+                        "WebSocket connection is not established."
                     )
-                )
+                try:
+                    data = self.socket.recv(timeout=poll)
+                except TimeoutError:
+                    data = None
+                except (ConnectionClosed, WebSocketException, OSError) as exc:
+                    error = ConnectionUnavailableError(
+                        "WebSocket connection closed while a streaming query was "
+                        f"open: {exc}"
+                    )
+                    self._break_streams(error)
+                    raise error from exc
+                if data is not None:
+                    # Decoded and routed while still holding the lock, which the
+                    # read order depends on. Two threads pumping - one per
+                    # stream, or a stream beside a live subscription - each read
+                    # one message and then raced to route it, so a stream could
+                    # be handed frame two before frame one: rows out of order, or
+                    # a terminal frame ahead of the rows it terminates. Routing
+                    # only puts to an unbounded queue, so nothing here can block
+                    # under the lock.
+                    self._route_foreign(
+                        self.decode_response(
+                            data if isinstance(data, bytes) else data.encode(),
+                            "reading a streaming query frame",
+                            v2=self._v2,
+                        )
+                    )
+                    return
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
                 return
-        # Nothing was waiting. Sleep out the rest of the caller's slice with the
-        # lock released, so anyone else on this connection can take it.
-        time.sleep(max(0.0, timeout - poll))
+            # Nothing was waiting. Wait with the lock released, so anyone else
+            # on this connection can take it, then poll again.
+            time.sleep(min(_POLL_GAP, remaining))
 
     def _stream_cancel(self, request_id: str) -> None:
         """Ask the server to stop the stream *request_id* opened.

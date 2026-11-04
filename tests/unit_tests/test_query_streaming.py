@@ -1885,6 +1885,59 @@ def test_blocking_the_pump_does_not_hold_the_lock_while_waiting() -> None:
     )
 
 
+class _LateSocket:
+    """A socket whose one frame arrives *delay* seconds after it is first read.
+
+    Like a real one, a read returns as soon as the frame is there, and a read
+    whose timeout runs out first raises ``TimeoutError``.
+    """
+
+    def __init__(self, frame: bytes, delay: float) -> None:
+        self._frame: bytes | None = frame
+        self._delay = delay
+        self._due: float | None = None
+        self.state = State.OPEN
+
+    def send(self, data: Any) -> None:
+        pass
+
+    def recv(self, timeout: float | None = None, decode: bool | None = None) -> bytes:
+        now = time.monotonic()
+        if self._due is None:
+            self._due = now + self._delay
+        wait = self._due - now if self._frame is not None else float("inf")
+        if timeout is not None and wait > timeout:
+            time.sleep(timeout)
+            raise TimeoutError
+        time.sleep(max(0.0, wait))
+        frame, self._frame = self._frame, None
+        assert frame is not None
+        return frame
+
+    def close(self) -> None:
+        pass
+
+
+def test_blocking_the_pump_reads_a_frame_as_soon_as_it_arrives() -> None:
+    """A frame arriving while the pump waits is read then, not at the end of its slice.
+
+    The pump polled for 5 ms and then slept out the rest of its slice, so a
+    frame that arrived during the sleep waited for up to 95 ms of a 100 ms
+    slice: every streamed query the server took longer than 5 ms over came back
+    that much later than it could have.
+    """
+    conn = BlockingWsSurrealConnection(WS_URL)
+    frames = _register_sync_stream(conn, "stream-1")
+    frame = encode({**rows(0, [1]), "id": "stream-1"})
+    conn.socket = _LateSocket(frame, delay=0.03)  # type: ignore[assignment]
+    started = time.monotonic()
+    conn._stream_pump(0.5)
+    elapsed = time.monotonic() - started
+    assert frames.qsize() == 1
+    assert elapsed < 0.1
+    conn._stream_release("stream-1")
+
+
 def test_blocking_the_live_iterator_routes_while_holding_the_lock() -> None:
     """The live loop reads the same socket, so it owes streams the same order."""
     conn = BlockingWsSurrealConnection(WS_URL)
