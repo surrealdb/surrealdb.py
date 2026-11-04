@@ -412,17 +412,33 @@ class BlockingWsSurrealConnection(
         self._open_locked()
 
     @contextmanager
-    def _locked(self) -> Generator[None, None, None]:
-        """Hold ``self._lock``, publishing the events raised meanwhile after."""
+    def _locked(
+        self, budget: float | None = None, process: str = "using the connection"
+    ) -> Generator[None, None, None]:
+        """Hold ``self._lock``, publishing the events raised meanwhile after.
+
+        With a *budget*, wait at most that long for the lock and raise
+        ``TransportTimeoutError`` after it, so a request's timeout covers the
+        time it waits behind another thread's request too.
+        """
         pending: list[tuple[str, tuple[Any, ...]]] = []
+        if budget is None:
+            self._lock.acquire()
+        elif not self._lock.acquire(timeout=max(0.0, budget)):
+            raise TransportTimeoutError(
+                f"timed out while {process} on {self.raw_url}: another request "
+                f"held the connection {describe(budget)}"
+            )
         try:
-            with self._lock:
+            try:
                 self._lock_owner = threading.get_ident()
                 try:
                     yield
                 finally:
                     self._lock_owner = None
                     pending, self._pending_events = self._pending_events, []
+            finally:
+                self._lock.release()
         finally:
             for event, payload in pending:
                 super()._emit(event, *payload)
@@ -456,8 +472,12 @@ class BlockingWsSurrealConnection(
     ) -> dict[str, Any]:
         # Use a lock to ensure thread-safe send/recv operations
         # This prevents race conditions when multiple threads share the same connection
-        with self._locked():
-            return self._send_locked(message, process, bypass)
+        # The request's timeout starts now, not once it has the lock: waiting
+        # behind another thread's request counts against it.
+        budget = self._request_timeout()
+        deadline = None if budget is None else time.monotonic() + budget
+        with self._locked(budget, process):
+            return self._send_locked(message, process, bypass, deadline)
 
     def _ready_locked(self, renew: bool = True) -> None:
         """Make sure there is an open socket to send on, with the lock held.
@@ -944,9 +964,17 @@ class BlockingWsSurrealConnection(
             self._streaming_refusal = UNSUPPORTED_BY_SERVER
 
     def _send_locked(
-        self, message: RequestMessage, process: str, bypass: bool = False
+        self,
+        message: RequestMessage,
+        process: str,
+        bypass: bool = False,
+        deadline: float | None = None,
     ) -> dict[str, Any]:
-        """The body of :meth:`_send`, called with ``self._lock`` held."""
+        """The body of :meth:`_send`, called with ``self._lock`` held.
+
+        The reply is awaited until *deadline*, if given, and otherwise for the
+        request timeout from when it is sent.
+        """
         self._ready_locked(renew=message.method not in SENT_WITHOUT_RENEWAL)
         assert self.socket is not None
 
@@ -958,7 +986,8 @@ class BlockingWsSurrealConnection(
         budget = self._request_timeout()
         try:
             self._send_frame_locked(message)
-            deadline = None if budget is None else time.monotonic() + budget
+            if deadline is None and budget is not None:
+                deadline = time.monotonic() + budget
             while True:
                 remaining = None if deadline is None else deadline - time.monotonic()
                 if remaining is not None and remaining <= 0:
