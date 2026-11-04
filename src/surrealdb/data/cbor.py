@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+import re
+from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from io import BytesIO
 from typing import Any, cast
@@ -11,6 +12,7 @@ from surrealdb.cbor import (
 )
 from surrealdb.data._decoder import Decoder
 from surrealdb.data.types import constants
+from surrealdb.data.types.big_decimal import BigDecimal
 from surrealdb.data.types.datetime import Datetime, PreciseDatetime, parse_instant
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.file import File
@@ -26,6 +28,7 @@ from surrealdb.data.types.geometry import (
 from surrealdb.data.types.null import NullType
 from surrealdb.data.types.range import BoundExcluded, BoundIncluded, Range
 from surrealdb.data.types.record_id import RecordID, StringRecordId
+from surrealdb.data.types.regex import Regex
 from surrealdb.data.types.set import SurrealSet
 from surrealdb.data.types.sized import (
     F16,
@@ -41,6 +44,7 @@ from surrealdb.data.types.sized import (
     SizedInt,
 )
 from surrealdb.data.types.table import Table
+from surrealdb.data.types.temporal import Interval, PlainDate, PlainTime, Timestamp
 
 # Plain CBOR null: major type 7, subtype 22.
 _CBOR_NULL_SUBTYPE = 22
@@ -113,6 +117,13 @@ def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
         encoder.encode_length(7, _CBOR_NULL_SUBTYPE)
         return
 
+    elif isinstance(obj, re.Pattern):
+        raise TypeError(
+            f"cannot encode the compiled pattern {obj.pattern!r}: SurrealQL regexes "
+            "use the syntax of Rust's regex crate, not Python's re. Wrap the "
+            "pattern's text in Regex(...) to send it as a SurrealQL regex"
+        )
+
     else:
         # `BufferError` means a buffer operation failed; this is "you handed me
         # a value I have no encoder for", which is a type problem. Raising the
@@ -121,9 +132,10 @@ def default_encoder(encoder: CBOREncoder, obj: Any) -> None:
         # unserialisable arguments.
         raise TypeError(
             f"cannot encode {type(obj).__name__} for SurrealDB; supported types "
-            "are the JSON scalars, list, dict, set, bytes, and the surrealdb "
-            "data types (RecordID, Table, Datetime, Duration, Range, Geometry, "
-            "Decimal, UUID)"
+            "are the JSON scalars, list, dict, set, bytes, date, time, and the "
+            "surrealdb data types (RecordID, Table, Datetime, Duration, Range, "
+            "Geometry, Decimal, UUID, the sized numbers, PlainDate, PlainTime, "
+            "Timestamp, Interval, BigDecimal, Regex)"
         )
 
     encoder.encode(tagged)
@@ -242,6 +254,114 @@ def _encode_datetime(encoder: CBOREncoder, value: datetime) -> None:
     encoder.encode(CBORTag(constants.TAG_DATETIME_COMPACT, _seconds_and_nanos(value)))
 
 
+_SECONDS_PER_DAY = 86_400
+_DECIMAL_MANTISSA_MAX = 2**96 - 1
+_DECIMAL_DIGITS_MAX = len(str(_DECIMAL_MANTISSA_MAX))
+
+
+def _speaks_v2(encoder: CBOREncoder) -> bool:
+    return cast(_SurrealEncoder, encoder).v2
+
+
+def _encode_plain_date(encoder: CBOREncoder, value: PlainDate) -> None:
+    """Tag 100 over ``cbor.2``, and midnight UTC of the date, as tag 12, otherwise."""
+    if _speaks_v2(encoder):
+        encoder.encode_length(6, constants.TAG_DATE)
+        encoder.encode_int(value.days)
+        return
+    seconds = value.days * _SECONDS_PER_DAY
+    encoder.encode(CBORTag(constants.TAG_DATETIME_COMPACT, [seconds, 0]))
+
+
+def _encode_date(encoder: CBOREncoder, value: date) -> None:
+    """A ``datetime.date`` as a SurrealDB date, where cbor2 wrote tag 1004, which no server reads.
+
+    Registered over cbor2's own ``date`` encoder, so it keeps that one's place
+    after ``datetime`` in the encoder lookup, and a ``datetime`` subclass still
+    finds the ``datetime`` encoder first.
+    """
+    _encode_plain_date(encoder, PlainDate.from_date(value))
+
+
+def _encode_plain_time(encoder: CBOREncoder, value: PlainTime) -> None:
+    """Tag 189 over ``cbor.2``, and the duration since midnight, as tag 14, otherwise."""
+    if _speaks_v2(encoder):
+        encoder.encode_length(6, constants.TAG_TIME)
+        encoder.encode_length(0, value.nanoseconds)
+        return
+    _encode_duration(encoder, Duration(value.nanoseconds))
+
+
+def _encode_time(encoder: CBOREncoder, value: time) -> None:
+    """A naive ``datetime.time`` as a SurrealDB time, which has no zone."""
+    _encode_plain_time(encoder, PlainTime.from_time(value))
+
+
+def _encode_timestamp(encoder: CBOREncoder, value: Timestamp) -> None:
+    """Tag 190 over ``cbor.2``, and the wall-clock time read as UTC, as tag 12, otherwise."""
+    tag = (
+        constants.TAG_TIMESTAMP
+        if _speaks_v2(encoder)
+        else constants.TAG_DATETIME_COMPACT
+    )
+    encoder.encode(CBORTag(tag, list(value.seconds_and_nanos)))
+
+
+def _encode_interval(encoder: CBOREncoder, value: Interval) -> None:
+    """Tag 191 over ``cbor.2``, and the ISO 8601 text otherwise, as the server widens one."""
+    if _speaks_v2(encoder):
+        parts = [value.months, value.days, value.microseconds]
+        encoder.encode(CBORTag(constants.TAG_INTERVAL, parts))
+        return
+    encoder.encode_string(str(value))
+
+
+def _as_decimal(value: Decimal) -> Decimal | None:
+    """*value* as SurrealDB's ``decimal`` holds it, or ``None`` if it does not fit one."""
+    sign, digits, exponent = value.as_tuple()
+    if not isinstance(exponent, int):
+        return None
+    kept = list(digits)
+    while exponent < 0 and len(kept) > 1 and kept[-1] == 0:
+        kept.pop()
+        exponent += 1
+    if len(kept) + max(exponent, 0) > _DECIMAL_DIGITS_MAX:
+        return None
+    if exponent > 0:
+        kept.extend([0] * exponent)
+        exponent = 0
+    if -exponent > _DECIMAL_SCALE_MAX:
+        return None
+    if int("".join(map(str, kept))) > _DECIMAL_MANTISSA_MAX:
+        return None
+    return Decimal((sign, tuple(kept), exponent))
+
+
+def _encode_big_decimal(encoder: CBOREncoder, value: BigDecimal) -> None:
+    """Tag 192 over ``cbor.2``, its scale as written, and as the server widens one otherwise.
+
+    The server sends a bigdecimal that fits a decimal as tag 10, and one that
+    does not as its text, so plain ``cbor`` sends it the same way.
+    """
+    text = format(value, "f")
+    if _speaks_v2(encoder):
+        encoder.encode(CBORTag(constants.TAG_BIGDECIMAL, text))
+    elif (fitting := _as_decimal(value)) is not None:
+        encoder.encode(CBORTag(constants.TAG_DECIMAL_STRING, format(fitting, "f")))
+    else:
+        encoder.encode_string(text)
+
+
+def _encode_regex(encoder: CBOREncoder, value: Regex) -> None:
+    """Tag 193, over ``cbor.2`` only: plain ``cbor`` has no form for a regex."""
+    if not _speaks_v2(encoder):
+        raise ValueError(
+            f"{value!r} cannot be sent over plain cbor, which has no form for a "
+            "regex; it needs cbor.2, which SurrealDB 4.0 servers speak"
+        )
+    encoder.encode(CBORTag(constants.TAG_REGEX, value.pattern))
+
+
 class _SurrealEncoder(CBOREncoder):
     """CBOR encoder that routes Python sets through SurrealDB's set tag.
 
@@ -251,7 +371,9 @@ class _SurrealEncoder(CBOREncoder):
     which emits ``constants.TAG_SET``.
 
     It also refuses an integer SurrealDB cannot represent, rather than letting
-    it wrap silently on the server.
+    it wrap silently on the server, and a compiled ``re.Pattern``, which cbor2
+    would write as IANA tag 35: that names another regex syntax, and SurrealDB
+    refuses it.
     """
 
     def __init__(self, *args: Any, v2: bool = False, **kwargs: Any) -> None:
@@ -288,6 +410,16 @@ class _SurrealEncoder(CBOREncoder):
         for sized in _SIZED_TAGS:
             self._encoders[sized] = _encode_sized
 
+        self._encoders[PlainDate] = _encode_plain_date
+        self._encoders[date] = _encode_date
+        self._encoders[PlainTime] = _encode_plain_time
+        self._encoders[time] = _encode_time
+        self._encoders[Timestamp] = _encode_timestamp
+        self._encoders[Interval] = _encode_interval
+        self._encoders[BigDecimal] = _encode_big_decimal
+        self._encoders[Regex] = _encode_regex
+        self._encoders.pop(re.Pattern, None)
+
         encode_int = self._encoders[int]
 
         def _encode_checked_int(encoder: CBOREncoder, value: int) -> None:
@@ -305,8 +437,11 @@ class _SurrealEncoder(CBOREncoder):
 def encode(obj: Any, *, v2: bool = False) -> bytes:
     """Encode *obj* for SurrealDB, as ``cbor.2`` when *v2* and as plain ``cbor`` otherwise.
 
-    The two differ only in sized numbers (:mod:`surrealdb.data.types.sized`):
-    ``cbor.2`` tags them, and plain ``cbor`` widens them as the server would.
+    The two differ only in SurrealDB 4.0's kinds that plain ``cbor`` has no tag
+    for: the sized numbers (:mod:`surrealdb.data.types.sized`), and the date,
+    time, timestamp, interval (:mod:`surrealdb.data.types.temporal`),
+    bigdecimal and regex. ``cbor.2`` tags them; plain ``cbor`` widens them as
+    the server would, and refuses a regex, which it has no form for.
     """
     with BytesIO() as fp:
         encoder = _SurrealEncoder(

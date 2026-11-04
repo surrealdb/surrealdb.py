@@ -18,6 +18,7 @@ from typing import Any, NoReturn
 
 from surrealdb.data._record_id_text import parse_record_id
 from surrealdb.data.types import constants
+from surrealdb.data.types.big_decimal import BigDecimal
 from surrealdb.data.types.datetime import PreciseDatetime
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.file import File
@@ -34,6 +35,7 @@ from surrealdb.data.types.geometry import (
 from surrealdb.data.types.null import Null
 from surrealdb.data.types.range import Bound, BoundExcluded, BoundIncluded, Range
 from surrealdb.data.types.record_id import RecordID
+from surrealdb.data.types.regex import Regex
 from surrealdb.data.types.set import SurrealSet
 from surrealdb.data.types.sized import (
     F16,
@@ -49,6 +51,7 @@ from surrealdb.data.types.sized import (
     SizedInt,
 )
 from surrealdb.data.types.table import Table
+from surrealdb.data.types.temporal import Interval, PlainDate, PlainTime, Timestamp
 from surrealdb.errors import InvalidGeometryError, UnexpectedResponseError
 
 _I64_MIN = -(2**63)
@@ -68,6 +71,9 @@ _PYTHON_MAX = 253402300799
 _DECIMAL = re.compile(r"-?[0-9]+(?:\.([0-9]+))?")
 _DECIMAL_MANTISSA_MAX = 2**96 - 1
 _DECIMAL_SCALE_MAX = 28
+# A bigdecimal in positional notation, as the server sends one, or with the
+# exponent it also reads.
+_BIG_DECIMAL = re.compile(r"-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
@@ -83,6 +89,16 @@ _SIZED_INTS: dict[int, type[SizedInt]] = {
 _SIZED_FLOATS: dict[int, type[SizedFloat]] = {
     constants.TAG_F16: F16,
     constants.TAG_F32: F32,
+}
+
+# SurrealDB 4.0's other kinds that only cbor.2 tags; plain cbor widens them.
+_CBOR2_KINDS = {
+    constants.TAG_DATE: "a date",
+    constants.TAG_TIME: "a time",
+    constants.TAG_TIMESTAMP: "a timestamp",
+    constants.TAG_INTERVAL: "an interval",
+    constants.TAG_BIGDECIMAL: "a bigdecimal",
+    constants.TAG_REGEX: "a regex",
 }
 
 _REFUSED_TAGS = {
@@ -277,6 +293,8 @@ class Decoder:
             if not self._v2:
                 _refuse(f"tag {tag} (a sized number) outside cbor.2")
             return self._sized(tag)
+        if tag in _CBOR2_KINDS and not self._v2:
+            _refuse(f"tag {tag} ({_CBOR2_KINDS[tag]}) outside cbor.2")
         if tag == constants.TAG_DURATION_COMPACT:
             return _duration(self._wide_array())
         reader = _TAGS.get(tag)
@@ -428,6 +446,60 @@ def _duration(value: Any) -> Duration:
     return Duration(int(seconds) * _NANOS + nanoseconds)
 
 
+def _plain_date(value: Any) -> PlainDate:
+    if not _is_int(value):
+        _refuse(f"tag 100 (a date) must carry a count of days, got {value!r}")
+    try:
+        return PlainDate.from_days(value)
+    except ValueError as exc:
+        _refuse(f"tag 100 (a date): {exc}")
+
+
+def _plain_time(value: Any) -> PlainTime:
+    if not _is_int(value):
+        _refuse(
+            f"tag 189 (a time) must carry nanoseconds since midnight, got {value!r}"
+        )
+    try:
+        return PlainTime.from_nanoseconds(value)
+    except ValueError as exc:
+        _refuse(f"tag 189 (a time): {exc}")
+
+
+def _timestamp(value: Any) -> Timestamp:
+    seconds, nanoseconds = _pair(value, "a timestamp")
+    if not _is_int(seconds) or not _is_int(nanoseconds):
+        _refuse(f"a timestamp must be [seconds, nanoseconds], got {value!r}")
+    try:
+        return Timestamp.from_seconds_and_nanos(seconds, nanoseconds)
+    except ValueError as exc:
+        _refuse(f"tag 190 (a timestamp): {exc}")
+
+
+def _interval(value: Any) -> Interval:
+    if not isinstance(value, list) or len(value) != 3 or not all(map(_is_int, value)):
+        _refuse(f"an interval must be [months, days, microseconds], got {value!r}")
+    try:
+        return Interval(*value)
+    except ValueError as exc:
+        _refuse(f"tag 191 (an interval): {exc}")
+
+
+def _big_decimal(value: Any) -> BigDecimal:
+    if not isinstance(value, str) or _BIG_DECIMAL.fullmatch(value) is None:
+        _refuse(f"tag 192 must carry a decimal number as text, got {value!r}")
+    try:
+        return BigDecimal(value)
+    except ValueError as exc:
+        _refuse(f"tag 192 (a bigdecimal): {exc}")
+
+
+def _regex(value: Any) -> Regex:
+    if not isinstance(value, str):
+        _refuse(f"tag 193 (a regex) must carry its pattern as text, got {value!r}")
+    return Regex(value)
+
+
 def _uuid(value: Any) -> uuid.UUID:
     if not isinstance(value, bytes) or len(value) != 16:
         _refuse(f"tag 37 must carry 16 bytes, got {value!r}")
@@ -553,4 +625,10 @@ _TAGS: dict[int, Callable[[Any], Any]] = {
     constants.TAG_GEOMETRY_MULTI_LINE: _multi_line,
     constants.TAG_GEOMETRY_MULTI_POLYGON: _multi_polygon,
     constants.TAG_GEOMETRY_COLLECTION: _collection,
+    constants.TAG_DATE: _plain_date,
+    constants.TAG_TIME: _plain_time,
+    constants.TAG_TIMESTAMP: _timestamp,
+    constants.TAG_INTERVAL: _interval,
+    constants.TAG_BIGDECIMAL: _big_decimal,
+    constants.TAG_REGEX: _regex,
 }

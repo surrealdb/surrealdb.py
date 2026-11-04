@@ -8,10 +8,12 @@ responses (access and refresh tokens).
 """
 
 from dataclasses import dataclass
+from datetime import date, time
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from surrealdb.data.types.big_decimal import BigDecimal
 from surrealdb.data.types.datetime import Datetime
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.file import File
@@ -27,8 +29,10 @@ from surrealdb.data.types.geometry import (
 from surrealdb.data.types.null import NullType
 from surrealdb.data.types.range import Range
 from surrealdb.data.types.record_id import RecordID, StringRecordId
+from surrealdb.data.types.regex import Regex
 from surrealdb.data.types.set import SurrealSet
 from surrealdb.data.types.table import Table
+from surrealdb.data.types.temporal import Interval, PlainDate, PlainTime, Timestamp
 
 # Define recursive Value type that represents all possible SurrealDB values
 Value = (
@@ -55,6 +59,17 @@ Value = (
     | File
     | Duration
     | Datetime
+    # SurrealDB 4.0's kinds, which only `cbor.2` carries. `BigDecimal` is a
+    # `Decimal` and so already covered, but named like `SurrealSet` below. A
+    # `date` or `time` is sent as a SurrealDB date or time.
+    | BigDecimal
+    | PlainDate
+    | PlainTime
+    | Timestamp
+    | Interval
+    | Regex
+    | date
+    | time
     | GeometryPoint
     | GeometryLine
     | GeometryPolygon

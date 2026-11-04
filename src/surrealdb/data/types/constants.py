@@ -37,3 +37,11 @@ TAG_U32 = 185
 TAG_U64 = 186
 TAG_F16 = 187
 TAG_F32 = 188
+
+# SurrealDB 4.0's other kinds that only `cbor.2` carries.
+TAG_DATE = 100
+TAG_TIME = 189
+TAG_TIMESTAMP = 190
+TAG_INTERVAL = 191
+TAG_BIGDECIMAL = 192
+TAG_REGEX = 193

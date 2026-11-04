@@ -7,8 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- SurrealDB 4.0's `date`, `time`, `timestamp`, `interval`, `bigdecimal` and
+  `regex` kinds, as `PlainDate`, `PlainTime`, `Timestamp`, `Interval`,
+  `BigDecimal` and `Regex`. Over `cbor.2`, which every connection asks for,
+  a 4.0 server sends them as tags 100 and 189 to 193; without these types a
+  result holding one of the values failed with `UnexpectedResponseError`.
+  - A date or timestamp holds any year SurrealDB does, -262143 to 262142, with
+    `infinity` and `-infinity` as `PlainDate.INFINITY` and `NEG_INFINITY`.
+  - A time runs to the nanosecond, up to and including `24:00:00`.
+  - `to_date()`, `to_time()` and `to_datetime()` convert to the standard
+    library types where they can hold the value, and `from_date()`,
+    `from_time()` and `from_datetime()` convert back.
+  - An `Interval` keeps its months, days and microseconds apart, and compares
+    equal to another as the server does, a month as 30 days.
+  - `BigDecimal` is a `Decimal` that keeps its scale as written.
+  - `Regex` holds the text of a pattern in Rust's regex syntax.
+
+  Over plain `cbor` (servers before 4.0) each one is sent as the server widens
+  it: a date as a datetime at midnight UTC, a timestamp as a datetime, a time
+  as a duration,
+  an interval as its ISO 8601 text, and a bigdecimal as a decimal, or as its
+  text if it does not fit one. A `Regex` has no plain-cbor form and raises
+  `ValueError` there.
+
 ### Changed
 
+- A `datetime.date` is sent as a SurrealDB date, and a naive `datetime.time` as
+  a SurrealDB time. A date used to go out as CBOR tag 1004, which no
+  SurrealDB server reads, and a time raised `TypeError`. A `datetime` is
+  still sent as a datetime.
+- A compiled `re.Pattern` raises `TypeError` and points to `Regex`. cbor2 sent
+  it as IANA tag 35, which names another regex syntax, and which SurrealDB
+  refuses.
 - **Breaking for on-disk embedded databases.** The `surrealdb-embedded`
   extension now builds against `surrealdb-core` 4.0.0, up from 3.3.5, so
   `mem://`, `file://` and `surrealkv://` connections run the SurrealDB 4.0

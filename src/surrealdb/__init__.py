@@ -32,6 +32,7 @@ from surrealdb.connections.import_export import ExportOptions
 from surrealdb.connections.live import AsyncLiveSubscription, LiveSubscription
 from surrealdb.connections.reconnect import ReconnectOptions
 from surrealdb.connections.url import Url, UrlScheme
+from surrealdb.data.types.big_decimal import BigDecimal
 from surrealdb.data.types.datetime import Datetime, PreciseDatetime
 from surrealdb.data.types.duration import Duration
 from surrealdb.data.types.file import File
@@ -53,6 +54,7 @@ from surrealdb.data.types.record_id import (
     StringRecordId,
     escape_identifier,
 )
+from surrealdb.data.types.regex import Regex
 from surrealdb.data.types.set import SurrealSet
 from surrealdb.data.types.sized import (
     F16,
@@ -68,6 +70,7 @@ from surrealdb.data.types.sized import (
     SizedInt,
 )
 from surrealdb.data.types.table import Table
+from surrealdb.data.types.temporal import Interval, PlainDate, PlainTime, Timestamp
 from surrealdb.errors import (
     AlreadyExistsDetailKind,
     AlreadyExistsError,
@@ -241,6 +244,12 @@ __all__ = [
     "F32",
     "SizedInt",
     "SizedFloat",
+    "PlainDate",
+    "PlainTime",
+    "Timestamp",
+    "Interval",
+    "BigDecimal",
+    "Regex",
     "Null",
     "NullType",
     "SurrealSet",
