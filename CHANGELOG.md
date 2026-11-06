@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-11-06
+
 ### Changed
 
 - Escaped record ids and identifiers use backticks rather than `⟨ ⟩`, matching
@@ -1158,7 +1160,8 @@ Follow-up to `3.0.0-alpha.1` that finalises the v3 API surface and fixes a batch
 ### Added
 - Initial stable release of the SurrealDB Python client.
 
-[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.1...HEAD
+[3.0.1]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.11...v3.0.0
 [3.0.0-beta.11]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.10...v3.0.0-beta.11
 [3.0.0-beta.10]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.9...v3.0.0-beta.10

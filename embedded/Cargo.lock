@@ -4439,7 +4439,7 @@ dependencies = [
 
 [[package]]
 name = "surrealdb-embedded"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "pyo3",
  "pyo3-async-runtimes",
