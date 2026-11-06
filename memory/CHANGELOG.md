@@ -12,6 +12,11 @@ plain `v<version>` tag releases the SDK and leaves this package alone.
 
 ## [Unreleased]
 
+### Fixed
+
+- Send the service's `X-Spectron-On-Behalf-Of` header for `on_behalf_of`
+  requests so delegation is recognized (#390).
+
 ## [1.0.0-beta.1] - 2026-08-16
 
 First release as a separate distribution. The code is not new — it shipped

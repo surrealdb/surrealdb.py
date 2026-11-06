@@ -44,7 +44,7 @@ def quote_path(value: str) -> str:
 
 
 def on_behalf_of_header(on_behalf_of: str | None) -> dict[str, str]:
-    """Build the optional `X-Memory-On-Behalf-Of` delegation header.
+    """Build the optional `X-Spectron-On-Behalf-Of` delegation header.
 
     The server accepts the target as either `principal:<id>` or a bare `<id>`
     (it strips the `principal:` prefix), so the caller-supplied value is sent
@@ -52,7 +52,7 @@ def on_behalf_of_header(on_behalf_of: str | None) -> dict[str, str]:
     """
     if not on_behalf_of:
         return {}
-    return {"X-Memory-On-Behalf-Of": on_behalf_of}
+    return {"X-Spectron-On-Behalf-Of": on_behalf_of}
 
 
 def _decode_json(body: bytes | str | None) -> Any:
