@@ -6,7 +6,8 @@ one place a condition or a field name is written into the query.
 
 import pytest
 
-from surrealdb.connections.builders import _CrudState
+from surrealdb.connections.builders import _CrudState, _InsertState
+from surrealdb.data.types.record_id import RecordID
 from surrealdb.data.types.table import Table
 
 
@@ -28,14 +29,40 @@ def test_a_second_statement_in_where_stays_inside_the_condition() -> None:
 def test_output_fields_named_after_keywords_stay_fields() -> None:
     builder = _statement("UPDATE").output(["before", "value", "none", "name"])
     sql, _ = builder._build()
-    assert sql.endswith("RETURN ⟨before⟩, ⟨value⟩, ⟨none⟩, ⟨name⟩")
+    assert sql.endswith("RETURN `before`, `value`, `none`, `name`")
 
 
 def test_output_and_fetch_delimit_each_segment_of_a_path() -> None:
     sql, _ = _statement("UPDATE").output(["author.name"])._build()
-    assert sql.endswith("RETURN ⟨author⟩.⟨name⟩")
+    assert sql.endswith("RETURN `author`.`name`")
     sql, _ = _statement("SELECT").fetch("author", "author.friends")._build()
-    assert sql.endswith("FETCH ⟨author⟩, ⟨author⟩.⟨friends⟩")
+    assert sql.endswith("FETCH `author`, `author`.`friends`")
+
+
+def test_an_insert_target_that_needs_quoting_is_delimited_with_backticks() -> None:
+    sql, _ = _InsertState(Table("my-table"), {"a": 1}, False)._build()
+    assert sql == "INSERT INTO `my-table` $_data"
+
+
+def test_an_insert_target_escapes_a_backtick_and_a_backslash() -> None:
+    sql, _ = _InsertState(Table("a`b\\c"), {"a": 1}, False)._build()
+    assert sql == "INSERT INTO `a\\`b\\\\c` $_data"
+
+
+def test_a_plain_insert_target_stays_bare() -> None:
+    sql, _ = _InsertState(Table("person"), {"a": 1}, True)._build()
+    assert sql == "INSERT RELATION INTO person $_data"
+
+
+@pytest.mark.parametrize("edge", ["my-edge", Table("my-edge")])
+def test_a_relate_edge_table_that_needs_quoting_is_delimited_with_backticks(
+    edge: str | Table,
+) -> None:
+    state = _CrudState("RELATE", RecordID("a", 1), "relate", True)
+    state.relating(edge, RecordID("b", 1), True)
+    sql, _ = state._build()
+    assert "->`my-edge`->" in sql
+    assert "⟨" not in sql
 
 
 @pytest.mark.parametrize("path", ["author\n", "first-name", "author.", "*"])

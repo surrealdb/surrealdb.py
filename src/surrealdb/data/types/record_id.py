@@ -116,7 +116,7 @@ def _id_type_error(identifier: Any) -> TypeError:
 # SurrealDB's parser rejects every one of them unquoted (verified on 2.0.5,
 # 2.3.10 and 3.2.3). Judging them safe left them unwrapped, so a table with a
 # non-ASCII name could not be inserted into at all: `INSERT INTO héllo` came
-# back ``Parse error: Invalid token `é```, while the same name in ⟨...⟩ works on
+# back ``Parse error: Invalid token `é```, while the same name delimited works on
 # every version.
 #
 # Emoji and punctuation were never affected - they are symbols, so `isalnum()`
@@ -134,16 +134,14 @@ def escape_identifier(identifier: str) -> str:
 
     A name of ASCII letters, digits and underscores containing at least one
     letter and not starting with a digit is returned bare. Anything else is
-    delimited, with the delimiter chosen by what the name contains:
+    wrapped in backticks, with ``\\`` escaped as ``\\\\`` and ``` ` ``` as
+    ``` \\` ```, so ``users:john-doe`` renders as ``users:`john-doe```.
 
-    * ``⟨...⟩`` when the name holds neither ``\\`` nor ``⟩`` - spaces, unicode,
-      emoji, backticks and a lone ``⟨`` are all literal inside it;
-    * ``` `...` ``` otherwise, escaping ``\\`` as ``\\\\`` and ``` ` ``` as
-      ``` \\` ```.
-
-    The second form exists because ``⟨...⟩`` is *not* the universal wrapper this
-    function once claimed. Inside it there is no escape that every supported
-    version reads the same way, verified against live servers:
+    Backticks are what SurrealDB itself displays from 2.6.0 on, so the output
+    matches Surrealist, the CLI and the other SDKs. Every supported server,
+    2.0.5 included, parses them the same way. ``⟨...⟩`` is still read by the
+    server and by this SDK, but is not emitted: inside it there is no escape
+    that every supported version reads alike, verified against live servers:
 
     ======================  ==========  =========
     emitted                 2.3.10      3.2.3
@@ -153,20 +151,13 @@ def escape_identifier(identifier: str) -> str:
     ``⟨trailing\\⟩``          internal    Unexpected end of file
     ======================  ==========  =========
 
-    The last is the worst of them: a trailing backslash escapes the closing
-    delimiter, so the identifier never terminates and swallows whatever follows
-    it. Backticks with doubled backslashes are read identically by both.
-
-    Names that already worked keep their exact previous output, so this only
-    changes what was broken.
-
     Used by :meth:`RecordID.__str__` for record-id rendering and by the
     v3 CRUD builders for ``INSERT`` target inlining (SurrealDB rejects
     parameter binding such as ``type::table($x)`` on INSERT targets, so
     the SDK escapes the target identifier instead).
     """
     if not identifier:
-        return f"⟨{identifier}⟩"
+        return delimit_identifier(identifier)
 
     unsafe = not _UNQUOTED_IDENTIFIER_CHARS.issuperset(identifier)
     # A leading digit is not a bare identifier either: the parser has already
@@ -185,13 +176,11 @@ def escape_identifier(identifier: str) -> str:
 
 
 def delimit_identifier(identifier: str) -> str:
-    """*identifier* delimited, as :func:`escape_identifier` delimits a name it cannot leave bare.
+    """*identifier* in backticks, as :func:`escape_identifier` delimits a name it cannot leave bare.
 
     For a name that must not be read bare even when it could be, such as a
     field called ``value``, which SurrealQL reads as the keyword.
     """
-    if "\\" not in identifier and "⟩" not in identifier:
-        return f"⟨{identifier}⟩"
     escaped = identifier.replace("\\", "\\\\").replace("`", "\\`")
     return f"`{escaped}`"
 
@@ -431,7 +420,7 @@ def _top_level(text: str) -> str:
 
 class StringRecordId:
     """A record id written as SurrealQL, such as ``"person:tobie"`` or
-    ``"person:⟨a:b⟩"``, for the server to parse.
+    ``"person:`a:b`"``, for the server to parse.
 
     It names one record. A range is refused: SurrealDB 2 read one as a range,
     3.x up to 3.3 read only its start, and later servers refuse it, so the
