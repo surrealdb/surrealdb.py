@@ -296,7 +296,7 @@ class Memory:
         result = self._transport.request(
             "POST",
             f"{self._base}/consolidate",
-            json=payload or None,
+            json=payload,
             headers=on_behalf_of_header(on_behalf_of) or None,
         )
         return ConsolidateResponse.from_dict(result)
@@ -360,7 +360,7 @@ class Memory:
         result = self._transport.request(
             "POST",
             f"{self._base}/elaborate",
-            json=payload or None,
+            json=payload,
             headers=on_behalf_of_header(on_behalf_of) or None,
         )
         return ElaborateResponse.from_dict(result)
@@ -690,7 +690,7 @@ class AsyncMemory:
         result = await self._transport.request(
             "POST",
             f"{self._base}/consolidate",
-            json=payload or None,
+            json=payload,
             headers=on_behalf_of_header(on_behalf_of) or None,
         )
         return ConsolidateResponse.from_dict(result)
@@ -754,7 +754,7 @@ class AsyncMemory:
         result = await self._transport.request(
             "POST",
             f"{self._base}/elaborate",
-            json=payload or None,
+            json=payload,
             headers=on_behalf_of_header(on_behalf_of) or None,
         )
         return ElaborateResponse.from_dict(result)

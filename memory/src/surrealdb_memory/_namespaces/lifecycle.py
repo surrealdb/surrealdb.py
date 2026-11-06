@@ -53,7 +53,7 @@ class BlockingLifecycle:
         result = self._transport.request(
             "POST",
             f"{self._base}/fsck",
-            json=payload or None,
+            json=payload,
             headers=on_behalf_of_header(on_behalf_of) or None,
         )
         return FsckReport.from_dict(result)
@@ -98,7 +98,7 @@ class AsyncLifecycle:
         result = await self._transport.request(
             "POST",
             f"{self._base}/fsck",
-            json=payload or None,
+            json=payload,
             headers=on_behalf_of_header(on_behalf_of) or None,
         )
         return FsckReport.from_dict(result)

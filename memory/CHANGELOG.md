@@ -12,6 +12,12 @@ plain `v<version>` tag releases the SDK and leaves this package alone.
 
 ## [Unreleased]
 
+### Fixed
+
+- Send an empty JSON object when optional payload fields are omitted from
+  `consolidate`, `elaborate`, `sessions.create`, `keys.create`, `lifecycle.fsck`,
+  and `scopes.forget`, in both synchronous and asynchronous clients (#377).
+
 ## [1.0.0-beta.1] - 2026-08-16
 
 First release as a separate distribution. The code is not new — it shipped

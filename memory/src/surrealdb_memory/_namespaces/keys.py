@@ -36,7 +36,7 @@ class BlockingKeys:
         result = self._transport.request(
             "POST",
             self._base,
-            json=payload or None,
+            json=payload,
             params={"ttlSeconds": ttl_seconds},
             headers=on_behalf_of_header(on_behalf_of) or None,
         )
@@ -92,7 +92,7 @@ class AsyncKeys:
         result = await self._transport.request(
             "POST",
             self._base,
-            json=payload or None,
+            json=payload,
             params={"ttlSeconds": ttl_seconds},
             headers=on_behalf_of_header(on_behalf_of) or None,
         )
