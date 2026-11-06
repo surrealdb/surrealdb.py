@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Escaped record ids and identifiers use backticks rather than `⟨ ⟩`, matching
+  what SurrealDB displays from 2.6.0 on: `str(RecordID("users", "john-doe"))`
+  is now ``users:`john-doe` ``, and `escape_identifier()` and the query
+  builders' table names and field paths follow suit. Every supported server,
+  2.0.5 included, parses backticks the same way, so the generated queries do
+  not change meaning. Text written with `⟨ ⟩` is still parsed (#427).
+
 ## [3.0.0] - 2026-11-04
 
 The first stable release on the 3.0.0 track. Upgrading from `3.0.0-beta.11`:

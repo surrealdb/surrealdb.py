@@ -141,7 +141,7 @@ def test_a_dotted_name_walks_into_the_nested_object(
     ).execute()
 
     assert row == {"address": {"city": "Paris"}}
-    assert render_projection(["address.city"]) == "⟨address⟩.⟨city⟩"
+    assert render_projection(["address.city"]) == "`address`.`city`"
 
 
 def test_a_field_named_after_a_keyword_is_the_field(
@@ -193,7 +193,7 @@ def test_a_field_list_cannot_smuggle_in_surrealql(
 
     assert row["a"] == 1
     assert row[hostile] is None, "the injected text was not treated as a field name"
-    assert "⟨" in render_projection([hostile])
+    assert render_projection([hostile]) == f"`{hostile}`"
 
 
 # --------------------------------------------------------------- refusals

@@ -4,9 +4,12 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from surrealdb.connections.async_ws import AsyncWsSurrealConnection
 from surrealdb.data import cbor
+from surrealdb.data._record_id_text import parse_record_id
 from surrealdb.data.models import table_or_record_id
 from surrealdb.data.types.record_id import RecordID, escape_identifier
 from surrealdb.data.types.table import Table
@@ -188,43 +191,43 @@ def test_record_id_str() -> None:
 def test_record_id_str_with_numeric_string() -> None:
     """Test RecordID string representation with long numeric string (issue #171)."""
     record_id = RecordID("foo", "125813199042576601589342522460260755")
-    assert str(record_id) == "foo:⟨125813199042576601589342522460260755⟩"
+    assert str(record_id) == "foo:`125813199042576601589342522460260755`"
 
 
 def test_record_id_str_with_short_numeric_string() -> None:
     """Test RecordID string representation with short numeric string."""
     record_id = RecordID("users", "123")
-    assert str(record_id) == "users:⟨123⟩"
+    assert str(record_id) == "users:`123`"
 
 
 def test_record_id_str_with_underscore_only() -> None:
     """Test RecordID string representation with only underscores."""
     record_id = RecordID("test", "_")
-    assert str(record_id) == "test:⟨_⟩"
+    assert str(record_id) == "test:`_`"
 
 
 def test_record_id_str_with_digits_and_underscores() -> None:
     """Test RecordID string representation with digits and underscores."""
     record_id = RecordID("test", "123_456")
-    assert str(record_id) == "test:⟨123_456⟩"
+    assert str(record_id) == "test:`123_456`"
 
 
 def test_record_id_str_with_special_chars() -> None:
     """Test RecordID string representation with special characters."""
     record_id = RecordID("users", "john-doe")
-    assert str(record_id) == "users:⟨john-doe⟩"
+    assert str(record_id) == "users:`john-doe`"
 
 
 def test_record_id_str_with_spaces() -> None:
     """Test RecordID string representation with spaces."""
     record_id = RecordID("users", "john doe")
-    assert str(record_id) == "users:⟨john doe⟩"
+    assert str(record_id) == "users:`john doe`"
 
 
 def test_record_id_str_with_empty_string() -> None:
     """Test RecordID string representation with empty string."""
     record_id = RecordID("users", "")
-    assert str(record_id) == "users:⟨⟩"
+    assert str(record_id) == "users:``"
 
 
 def test_record_id_str_alphanumeric_no_escape() -> None:
@@ -246,12 +249,48 @@ def test_record_id_str_with_integer_id() -> None:
 
 
 def test_record_id_str_with_angle_bracket_escape() -> None:
-    """A ``⟩`` in the id moves that half to backtick delimiters.
+    """A ``⟩`` in the id is literal inside backticks.
 
     Previously ``test:⟨foo\⟩bar⟩``, which SurrealDB 3.x refuses to parse.
     """
     record_id = RecordID("test", "foo⟩bar")
     assert str(record_id) == "test:`foo⟩bar`"
+
+
+@pytest.mark.parametrize(
+    ("record_id", "expected"),
+    [
+        pytest.param(RecordID("users", "john-doe"), "users:`john-doe`", id="hyphen"),
+        pytest.param(RecordID("users", "123"), "users:`123`", id="digits"),
+        pytest.param(RecordID("my-table", "x"), "`my-table`:x", id="table"),
+        pytest.param(RecordID("my-table", "a b"), "`my-table`:`a b`", id="both"),
+        pytest.param(RecordID("héllo", "wörld"), "`héllo`:`wörld`", id="unicode"),
+        pytest.param(RecordID("t", "a`b"), "t:`a\\`b`", id="backtick"),
+        pytest.param(RecordID("t", "a:b"), "t:`a:b`", id="colon"),
+    ],
+)
+def test_record_id_str_matches_what_the_server_displays(
+    record_id: RecordID, expected: str
+) -> None:
+    """Issue #427: the server shows ``users:`john-doe```, not ``users:⟨john-doe⟩``.
+
+    Each expected string is what SurrealDB 2.6.0 to 4.0.0 return for
+    ``<string>`` of the same record.
+    """
+    assert str(record_id) == expected
+    assert "⟨" not in str(record_id)
+
+
+@given(table=st.text(), key=st.text())
+def test_record_id_str_reads_back_as_the_same_record(table: str, key: str) -> None:
+    """Whatever ``str()`` emits, the SDK's own record-id text parser reads back."""
+    assert parse_record_id(str(RecordID(table, key))) == (table, key)
+
+
+def test_angle_bracket_record_ids_still_parse() -> None:
+    """Only the output changed: text written with ``⟨ ⟩`` is still read."""
+    assert parse_record_id("users:⟨john-doe⟩") == ("users", "john-doe")
+    assert parse_record_id("⟨my-table⟩:x") == ("my-table", "x")
 
 
 def test_record_id_direct_id_interpolation_is_unsafe() -> None:
@@ -276,8 +315,8 @@ def test_record_id_direct_id_interpolation_is_unsafe() -> None:
     assert unsafe == "company:231"  # indistinguishable from the numeric id 231
 
     # The safe text renderings, for when binding isn't possible:
-    assert str(record_id) == "company:⟨231⟩"
-    assert f"company:{escape_identifier(str(record_id.id))}" == "company:⟨231⟩"
+    assert str(record_id) == "company:`231`"
+    assert f"company:{escape_identifier(str(record_id.id))}" == "company:`231`"
 
 
 def test_record_id_equality() -> None:
@@ -712,7 +751,7 @@ class TestEscapeIdentifierTopLevelExport:
         import surrealdb
 
         assert surrealdb.escape_identifier is escape_identifier
-        assert surrealdb.escape_identifier("231") == "⟨231⟩"
+        assert surrealdb.escape_identifier("231") == "`231`"
 
 
 # ---------------------------------------------------------------------------
@@ -727,7 +766,8 @@ class TestEscapeIdentifier:
 
     These tests document what the function does on the inputs the SDK
     actually generates (alphanumerics, hyphens, spaces, ``⟨/⟩`` from
-    pathological ``Table(...)`` names). Anything that changes the output
+    pathological ``Table(...)`` names). Every delimited name is wrapped in
+    backticks, the form SurrealDB itself displays from 2.6.0 on. Anything that changes the output
     here breaks ``RecordID.__str__`` and the INSERT-target rendering.
     """
 
@@ -736,37 +776,31 @@ class TestEscapeIdentifier:
         assert escape_identifier("user_table") == "user_table"
 
     def test_empty_string_wrapped(self) -> None:
-        assert escape_identifier("") == "⟨⟩"
+        assert escape_identifier("") == "``"
 
     def test_hyphen_wrapped(self) -> None:
-        assert escape_identifier("hyphen-table") == "⟨hyphen-table⟩"
+        assert escape_identifier("hyphen-table") == "`hyphen-table`"
 
     def test_space_wrapped(self) -> None:
-        assert escape_identifier("with space") == "⟨with space⟩"
+        assert escape_identifier("with space") == "`with space`"
 
     def test_all_digits_wrapped(self) -> None:
         # All-digit names must be escaped to disambiguate from numeric
         # ids in SurrealQL's record-id literal grammar.
-        assert escape_identifier("123") == "⟨123⟩"
+        assert escape_identifier("123") == "`123`"
 
     def test_digits_and_underscores_only_wrapped(self) -> None:
-        assert escape_identifier("_") == "⟨_⟩"
-        assert escape_identifier("123_456") == "⟨123_456⟩"
+        assert escape_identifier("_") == "`_`"
+        assert escape_identifier("123_456") == "`123_456`"
 
-    def test_a_closing_bracket_switches_to_backtick_delimiters(self) -> None:
-        # This used to assert ``⟨foo\⟩bar⟩``, which was right about the intent -
-        # ``⟩`` must not close the wrapper early - and wrong about the server.
-        # SurrealDB 3.x answers ``Parse error: Invalid escape sequence`` for
-        # ``\⟩`` inside ``⟨...⟩``; 2.3.10 accepts it. Backticks are read the same
-        # by both, so a name holding ``⟩`` is delimited with those instead.
+    def test_a_closing_bracket_is_literal_inside_backticks(self) -> None:
+        # This used to assert ``⟨foo\⟩bar⟩``, which SurrealDB 3.x answers with
+        # ``Parse error: Invalid escape sequence``. Inside backticks ``⟩`` is
+        # an ordinary character on every supported version.
         assert escape_identifier("foo⟩bar") == "`foo⟩bar`"
 
-    def test_opening_bracket_inside_is_left_unescaped(self) -> None:
-        # ``⟨`` inside a name is not escaped; SurrealQL's parser
-        # matches the first unescaped ``⟩`` so this round-trips, but
-        # only because there's no nested-bracket interpretation. Pin
-        # the current behaviour so callers know what we emit.
-        assert escape_identifier("foo⟨bar") == "⟨foo⟨bar⟩"
+    def test_an_opening_bracket_is_literal_inside_backticks(self) -> None:
+        assert escape_identifier("foo⟨bar") == "`foo⟨bar`"
 
     def test_a_backslash_is_doubled_inside_backtick_delimiters(self) -> None:
         # This used to assert that backslashes were passed through untouched,

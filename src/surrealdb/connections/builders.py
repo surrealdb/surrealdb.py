@@ -166,7 +166,7 @@ _UNSET: Any = object()
 
 
 # Conservative identifier patterns. SurrealDB allows broader syntax (escaped
-# identifiers ``⟨...⟩`` etc.) but we deliberately accept only the common safe
+# identifiers ``` `...` ``` etc.) but we deliberately accept only the common safe
 # subsets for inline use; anything else is parameter-bound through ``RecordID``
 # / ``type::table()`` so user-supplied strings can never be concatenated into
 # the generated SurrealQL.
@@ -461,7 +461,10 @@ def _field_paths(method: str, fields: Sequence[str]) -> list[str]:
                 f"{method} takes field paths such as 'author' or "
                 f"'author.friends'; got {path!r}. Use query() for anything else."
             )
-    return [".".join(f"⟨{segment}⟩" for segment in path.split(".")) for path in paths]
+    return [
+        ".".join(delimit_identifier(segment) for segment in path.split("."))
+        for path in paths
+    ]
 
 
 def _duration_literal(duration: Duration | timedelta | str | int) -> str:
@@ -872,10 +875,9 @@ class _InsertState(_WarnIfDropped):
         # binding) for the INSERT target across the supported server
         # versions - the parser rejects ``INSERT INTO type::table($x)`` at
         # the ``::``. So we inline the table name, but for ``Table`` we
-        # trust the typed boundary and use the same ``⟨...⟩`` escape as
+        # trust the typed boundary and use the same backtick escape as
         # ``RecordID.__str__`` to safely pass through hyphens, spaces, and
-        # other non-ASCII-identifier characters (any ``⟩`` inside the name
-        # is escaped as ``\⟩``).
+        # other non-ASCII-identifier characters.
         if isinstance(self._table, Table):
             escaped = escape_identifier(self._table.table_name)
             return f"INSERT {rel}INTO {escaped} $_data{self._clauses()}", variables
@@ -888,7 +890,7 @@ class _InsertState(_WarnIfDropped):
                 f"INSERT requires a simple identifier for a raw string target "
                 f"(got {self._table!r}). Wrap the name in `Table(...)` for "
                 "non-trivial names, or use `query()` with an escaped "
-                "identifier `INSERT INTO ⟨...⟩ $data`."
+                "identifier ``INSERT INTO `...` $data``."
             )
         return f"INSERT {rel}INTO {self._table} $_data{self._clauses()}", variables
 
@@ -955,10 +957,10 @@ def render_projection(fields: Sequence[str] | None) -> str:
     ``before``, ``none`` - is read as the field rather than the keyword.
 
     **Dots separate path segments and are escaped individually.** Escaping a
-    whole ``"address.city"`` produces ``⟨address.city⟩``, which the server reads
+    whole ``"address.city"`` produces ``` `address.city` ```, which the server reads
     as one field of that literal name and answers ``{"address.city": None}`` -
     a silent null rather than an error, which is the worst way to be wrong.
-    ``⟨address⟩.⟨city⟩`` selects the nested value, so that is what this emits.
+    ``` `address`.`city` ``` selects the nested value, so that is what this emits.
     The cost is that a field whose name genuinely contains a dot cannot be
     expressed here; use :meth:`query` for that.
 
@@ -967,7 +969,7 @@ def render_projection(fields: Sequence[str] | None) -> str:
         string is refused rather than spread, the same way ``run()`` refuses
         one for its arguments.
     :raises ValueError: if the list is empty, or a name is empty or has an
-        empty path segment. ``SELECT  FROM t`` and ``SELECT ⟨⟩ FROM t`` are not
+        empty path segment. ``SELECT  FROM t`` and ``` SELECT `` FROM t ``` are not
         what any caller meant.
     """
     if fields is None:
