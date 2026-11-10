@@ -142,11 +142,11 @@ class SyncTemplate:
         """Invalidate the authentication for the current connection."""
         raise NotImplementedError(f"invalidate not implemented for: {self}")
 
-    def signup(self, vars: dict[str, Value]) -> Tokens:
+    def signup(self, vars: Mapping[str, Value]) -> Tokens:
         """Sign this connection up to a specific authentication scope."""
         raise NotImplementedError(f"signup not implemented for: {self}")
 
-    def signin(self, vars: dict[str, Value]) -> Tokens:
+    def signin(self, vars: Mapping[str, Value]) -> Tokens:
         """Sign this connection in to a specific authentication scope."""
         raise NotImplementedError(f"signin not implemented for: {self}")
 
@@ -163,7 +163,7 @@ class SyncTemplate:
         raise NotImplementedError(f"unset not implemented for: {self}")
 
     def query(
-        self, query: str, vars: dict[str, Value] | None = None
+        self, query: str, vars: Mapping[str, Value] | None = None
     ) -> SyncQueryBuilder:
         """Run one or more SurrealQL statements against the database.
 

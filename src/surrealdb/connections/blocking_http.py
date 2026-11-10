@@ -298,8 +298,8 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         self._auth_settled = True
         self._note_chosen_auth()
 
-    def signup(self, vars: dict[str, Value]) -> Tokens:
-        message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
+    def signup(self, vars: Mapping[str, Value]) -> Tokens:
+        message = RequestMessage(RequestMethod.SIGN_UP, data=dict(vars))
         self.id = message.id
         response = self._send(message, "signup", token="")
         self.check_response_for_result(response, "signup")
@@ -310,11 +310,11 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         self._note_chosen_auth()
         return tokens
 
-    def signin(self, vars: dict[str, Value]) -> Tokens:
+    def signin(self, vars: Mapping[str, Value]) -> Tokens:
         if not self._version_learned and asks_for_refresh(vars):
             self._handshake()
         self._require_signin(vars)
-        message = RequestMessage(RequestMethod.SIGN_IN, params=vars)
+        message = RequestMessage(RequestMethod.SIGN_IN, params=dict(vars))
         self.id = message.id
         response = self._send(message, "signing in", token="")
         self.check_response_for_result(response, "signing in")
@@ -705,7 +705,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         return pair
 
     def query(
-        self, query: str, vars: dict[str, Value] | None = None
+        self, query: str, vars: Mapping[str, Value] | None = None
     ) -> SyncQueryBuilder:
         """Run SurrealQL and return a builder; trigger it explicitly.
 
@@ -739,7 +739,7 @@ class BlockingHttpSurrealConnection(SyncTemplate, UtilsMixin, ServerVersionMixin
         return Batch(self)
 
     def query_raw(
-        self, query: str, vars: dict[str, Value] | None = None
+        self, query: str, vars: Mapping[str, Value] | None = None
     ) -> dict[str, Any]:
         message = RequestMessage(
             RequestMethod.QUERY,
