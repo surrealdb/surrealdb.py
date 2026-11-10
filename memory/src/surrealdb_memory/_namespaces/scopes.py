@@ -60,7 +60,7 @@ class BlockingScopes:
         result = self._transport.request(
             "POST",
             f"{self._base}/forget",
-            json=drop_none({"path": path}) or None,
+            json=drop_none({"path": path}),
             headers=on_behalf_of_header(on_behalf_of) or None,
         )
         return ForgetScopeResponse.from_dict(result)
@@ -112,7 +112,7 @@ class AsyncScopes:
         result = await self._transport.request(
             "POST",
             f"{self._base}/forget",
-            json=drop_none({"path": path}) or None,
+            json=drop_none({"path": path}),
             headers=on_behalf_of_header(on_behalf_of) or None,
         )
         return ForgetScopeResponse.from_dict(result)

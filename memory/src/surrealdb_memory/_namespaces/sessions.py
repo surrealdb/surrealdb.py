@@ -39,7 +39,7 @@ class BlockingSessions:
         result = self._transport.request(
             "POST",
             self._base,
-            json=payload or None,
+            json=payload,
             headers=on_behalf_of_header(on_behalf_of) or None,
         )
         return Session.from_dict(result)
@@ -97,7 +97,7 @@ class AsyncSessions:
         result = await self._transport.request(
             "POST",
             self._base,
-            json=payload or None,
+            json=payload,
             headers=on_behalf_of_header(on_behalf_of) or None,
         )
         return Session.from_dict(result)

@@ -14,6 +14,9 @@ plain `v<version>` tag releases the SDK and leaves this package alone.
 
 ### Fixed
 
+- Send an empty JSON object when optional payload fields are omitted from
+  `consolidate`, `elaborate`, `sessions.create`, `keys.create`, `lifecycle.fsck`,
+  and `scopes.forget`, in both synchronous and asynchronous clients (#377).
 - Send the service's `X-Spectron-On-Behalf-Of` header for `on_behalf_of`
   requests so delegation is recognized (#390).
 
