@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.2] - 2026-11-10
+
 ### Changed
 
 - `SurrealSet` takes a type argument: annotate a `SurrealSet[str]` and a type
@@ -1179,7 +1181,8 @@ Follow-up to `3.0.0-alpha.1` that finalises the v3 API surface and fixes a batch
 ### Added
 - Initial stable release of the SurrealDB Python client.
 
-[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.1...HEAD
+[Unreleased]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.2...HEAD
+[3.0.2]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.1...v3.0.2
 [3.0.1]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.11...v3.0.0
 [3.0.0-beta.11]: https://github.com/surrealdb/surrealdb.py/compare/v3.0.0-beta.10...v3.0.0-beta.11
