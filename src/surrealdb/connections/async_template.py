@@ -160,7 +160,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"invalidate not implemented for: {self}")
 
-    async def signup(self, vars: dict[str, Value]) -> Tokens:
+    async def signup(self, vars: Mapping[str, Value]) -> Tokens:
         """Sign this connection up to a specific authentication scope.
         [See the docs](https://surrealdb.com/docs/sdk/python/methods/signup)
 
@@ -173,7 +173,7 @@ class AsyncTemplate:
         """
         raise NotImplementedError(f"signup not implemented for: {self}")
 
-    async def signin(self, vars: dict[str, Value]) -> Tokens:
+    async def signin(self, vars: Mapping[str, Value]) -> Tokens:
         """Sign this connection in to a specific authentication scope.
         [See the docs](https://surrealdb.com/docs/sdk/python/methods/signin)
 
@@ -214,7 +214,7 @@ class AsyncTemplate:
         raise NotImplementedError(f"unset not implemented for: {self}")
 
     def query(
-        self, query: str, vars: dict[str, Value] | None = None
+        self, query: str, vars: Mapping[str, Value] | None = None
     ) -> AsyncQueryBuilder:
         """Run one or more SurrealQL statements against the database.
 

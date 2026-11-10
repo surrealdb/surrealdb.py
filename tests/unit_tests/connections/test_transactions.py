@@ -2,7 +2,7 @@
 websocket connections, against a real server."""
 
 import uuid
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Iterator, Mapping
 from typing import Any
 
 import pytest
@@ -262,7 +262,7 @@ def test_an_rpc_error_keeps_its_type() -> None:
         server_version = "3.0.0"
 
         def query_raw(
-            self, query: str, vars: dict[str, Any] | None = None
+            self, query: str, vars: Mapping[str, Any] | None = None
         ) -> dict[str, Any]:
             return {
                 "error": {

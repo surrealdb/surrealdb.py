@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The `vars` argument of `query()`, `query_raw()`, `signin()`, `signup()` and
+  `batch().query()` is typed `Mapping[str, Value]` rather than
+  `dict[str, Value]`, on every connection, session and transaction. A `dict`
+  is still accepted, and so is any other mapping, such as a
+  `types.MappingProxyType`; because `Mapping` is covariant, a `dict[str, str]`
+  or `dict[str, int]` now type-checks too, where the invariant `dict` refused
+  it. The SDK copies what it is given and never changes it.
+
 ## [3.0.1] - 2026-11-06
 
 ### Changed
