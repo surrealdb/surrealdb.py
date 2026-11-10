@@ -321,8 +321,8 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         self._auth_settled = True
         self._note_chosen_auth()
 
-    async def signup(self, vars: dict[str, Value]) -> Tokens:
-        message = RequestMessage(RequestMethod.SIGN_UP, data=vars)
+    async def signup(self, vars: Mapping[str, Value]) -> Tokens:
+        message = RequestMessage(RequestMethod.SIGN_UP, data=dict(vars))
         self.id = message.id
         response = await self._send(message, "signup", token="")
         self.check_response_for_result(response, "signup")
@@ -333,11 +333,11 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         self._note_chosen_auth()
         return tokens
 
-    async def signin(self, vars: dict[str, Value]) -> Tokens:
+    async def signin(self, vars: Mapping[str, Value]) -> Tokens:
         if not self._version_learned and asks_for_refresh(vars):
             await self._handshake()
         self._require_signin(vars)
-        message = RequestMessage(RequestMethod.SIGN_IN, params=vars)
+        message = RequestMessage(RequestMethod.SIGN_IN, params=dict(vars))
         self.id = message.id
         response = await self._send(message, "signing in", token="")
         self.check_response_for_result(response, "signing in")
@@ -728,7 +728,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         return pair
 
     def query(
-        self, query: str, vars: dict[str, Value] | None = None
+        self, query: str, vars: Mapping[str, Value] | None = None
     ) -> AsyncQueryBuilder:
         """Run SurrealQL and return an awaitable builder.
 
@@ -763,7 +763,7 @@ class AsyncHttpSurrealConnection(AsyncTemplate, UtilsMixin, ServerVersionMixin):
         return AsyncBatch(self)
 
     async def query_raw(
-        self, query: str, vars: dict[str, Value] | None = None
+        self, query: str, vars: Mapping[str, Value] | None = None
     ) -> dict[str, Any]:
         message = RequestMessage(
             RequestMethod.QUERY,
