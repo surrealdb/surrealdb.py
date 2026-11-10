@@ -44,7 +44,12 @@ dependencies = [
     # `Buffer` (PEP 688) lands in 4.6.0. The import is `TYPE_CHECKING`-only, so
     # an older version still runs - but this package ships `py.typed`, and a
     # type checker resolving the SDK against 4.0.0 cannot find the name.
-    "typing_extensions>=4.6.0; python_version<'3.12'",
+    # `SurrealSet` is generic with a default type argument (PEP 696), which
+    # needs `TypeVar(default=...)`: `typing` has it from 3.13, and
+    # `typing_extensions` from 4.4.0, so the 4.6.0 floor already covers it. The
+    # marker is `<3.13` because that is where `typing` stops being enough at run
+    # time; `Buffer` alone only needed it below 3.12.
+    "typing_extensions>=4.6.0; python_version<'3.13'",
     # `websockets.sync`, which the whole blocking transport is built on, only
     # exists from 11.0 - so the declared floor of 10.0 was another version at
     # which importing the package failed. 11.0 imports but deadlocks: its
