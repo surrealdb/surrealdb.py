@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `SurrealSet` takes a type argument: annotate a `SurrealSet[str]` and a type
+  checker reads its elements as `str` rather than `Any`. A bare `SurrealSet`
+  is still `SurrealSet[Any]`, so existing annotations need no change, and the
+  type argument has no effect at run time. One effect on pyright: narrowing a
+  `Value` with `isinstance(value, SurrealSet)` now also yields
+  `SurrealSet[Value]`, the `list[Value]` member of the union, so elements read
+  from the narrowed value are no longer plain `Any`. On Python 3.12 the
+  package now also depends on `typing_extensions`, which supplies the type
+  variable's default (PEP 696) until Python 3.13.
+
 ## [3.0.1] - 2026-11-06
 
 ### Changed

@@ -1829,7 +1829,7 @@ dependencies = [
     { name = "aiohttp" },
     { name = "pydantic-core" },
     { name = "requests" },
-    { name = "typing-extensions", marker = "python_full_version < '3.12'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
     { name = "websockets", version = "16.1.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "websockets", version = "17.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
@@ -1880,7 +1880,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.25.0" },
     { name = "surrealdb-embedded", marker = "extra == 'embedded'", editable = "embedded" },
     { name = "surrealdb-memory", marker = "extra == 'memory'", editable = "memory" },
-    { name = "typing-extensions", marker = "python_full_version < '3.12'", specifier = ">=4.6.0" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'", specifier = ">=4.6.0" },
     { name = "websockets", specifier = ">=15.0" },
 ]
 provides-extras = ["embedded", "pydantic", "memory"]

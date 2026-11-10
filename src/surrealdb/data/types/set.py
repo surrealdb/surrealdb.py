@@ -39,11 +39,24 @@ as it is for any list. Writing a plain Python ``set`` still works and is still
 sent as a set; that path never changed.
 """
 
+import sys
 from typing import Any
 
+if sys.version_info >= (3, 13):
+    from typing import TypeVar
+else:
+    from typing_extensions import TypeVar
 
-class SurrealSet(list[Any]):
-    """A SurrealDB ``set<T>``. See the module docstring for why it exists."""
+_T = TypeVar("_T", default=Any)
+
+
+class SurrealSet(list[_T]):
+    """A SurrealDB ``set<T>``. See the module docstring for why it exists.
+
+    ``SurrealSet[str]`` carries the element type to a type checker. A bare
+    ``SurrealSet`` is ``SurrealSet[Any]``, as it was before the class took a
+    type argument. At run time the argument changes nothing.
+    """
 
     __slots__ = ()
 
