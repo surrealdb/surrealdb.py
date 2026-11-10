@@ -907,7 +907,7 @@ class _QueryState(_WarnIfDropped):
     # sees a streamed builder as used - see `_claim_for_stream`.
     _streamed: bool = False
 
-    def __init__(self, query: str, variables: dict[str, Value] | None) -> None:
+    def __init__(self, query: str, variables: Mapping[str, Value] | None) -> None:
         self._query = query
         self._variables: dict[str, Any] = dict(variables) if variables else {}
 
@@ -1727,7 +1727,7 @@ class AsyncQueryBuilder(_QueryState):
         self,
         executor: AsyncExecutor,
         query: str,
-        variables: dict[str, Value] | None = None,
+        variables: Mapping[str, Value] | None = None,
     ) -> None:
         super().__init__(query, variables)
         self._executor = executor
@@ -2203,7 +2203,7 @@ class SyncQueryBuilder(_SyncBuilderGuards, _QueryState):
         self,
         executor: SyncExecutor,
         query: str,
-        variables: dict[str, Value] | None = None,
+        variables: Mapping[str, Value] | None = None,
     ) -> None:
         super().__init__(query, variables)
         self._executor = executor

@@ -40,6 +40,7 @@ from collections.abc import (
     Callable,
     Generator,
     Iterator,
+    Mapping,
 )
 from dataclasses import dataclass
 from typing import Any
@@ -784,7 +785,7 @@ class _StreamBase:
     def __init__(
         self,
         query: str,
-        variables: dict[str, Value] | None,
+        variables: Mapping[str, Value] | None,
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
@@ -1034,7 +1035,7 @@ class AsyncQueryStream(_StreamBase):
         self,
         ops: AsyncStreamOps,
         query: str,
-        variables: dict[str, Value] | None = None,
+        variables: Mapping[str, Value] | None = None,
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
@@ -1414,7 +1415,7 @@ class QueryStream(_StreamBase):
         self,
         ops: SyncStreamOps,
         query: str,
-        variables: dict[str, Value] | None = None,
+        variables: Mapping[str, Value] | None = None,
         *,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
