@@ -338,7 +338,7 @@ Every request carries `Authorization: Bearer <api_key>`.
 ### Delegation (on-behalf-of)
 
 Every verb takes an optional `on_behalf_of` argument. When set, the request
-carries `X-Memory-On-Behalf-Of: <principal>` and the server runs it as that
+carries `X-Spectron-On-Behalf-Of: <principal>` and the server runs it as that
 principal, with effective grants narrowed to `caller ∩ target` (the caller can
 only delegate to a principal it is allowed to act for). The value may be a bare
 principal id or the `principal:<id>` form; it is sent verbatim.

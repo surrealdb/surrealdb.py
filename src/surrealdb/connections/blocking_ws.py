@@ -1383,8 +1383,10 @@ class BlockingWsSurrealConnection(
         result = response["result"]
         return dict(result) if isinstance(result, dict) else {"data": result}
 
-    def signup(self, vars: dict[str, Value], session_id: UUID | None = None) -> Tokens:
-        kwargs: dict[str, Any] = {"data": vars}
+    def signup(
+        self, vars: Mapping[str, Value], session_id: UUID | None = None
+    ) -> Tokens:
+        kwargs: dict[str, Any] = {"data": dict(vars)}
         if session_id is not None:
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.SIGN_UP, **kwargs)
@@ -1397,11 +1399,13 @@ class BlockingWsSurrealConnection(
             self._note_tokens(session_id, tokens)
         return tokens
 
-    def signin(self, vars: dict[str, Value], session_id: UUID | None = None) -> Tokens:
+    def signin(
+        self, vars: Mapping[str, Value], session_id: UUID | None = None
+    ) -> Tokens:
         if not self._version_learned and asks_for_refresh(vars):
             self._ensure_open()
         self._require_signin(vars)
-        kwargs: dict[str, Any] = {"params": vars}
+        kwargs: dict[str, Any] = {"params": dict(vars)}
         if session_id is not None:
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.SIGN_IN, **kwargs)
@@ -1463,7 +1467,7 @@ class BlockingWsSurrealConnection(
     def query(
         self,
         query: str,
-        vars: dict[str, Value] | None = None,
+        vars: Mapping[str, Value] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> SyncQueryBuilder:
@@ -1491,7 +1495,7 @@ class BlockingWsSurrealConnection(
     def query_raw(
         self,
         query: str,
-        vars: dict[str, Value] | None = None,
+        vars: Mapping[str, Value] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> dict[str, Any]:
@@ -1508,7 +1512,7 @@ class BlockingWsSurrealConnection(
             )._collect()  # pyright: ignore[reportPrivateUsage]
             if streamed is not None:
                 return streamed
-        kwargs: dict[str, Any] = {"query": query, "params": vars}
+        kwargs: dict[str, Any] = {"query": query, "params": dict(vars)}
         if session_id is not None:
             kwargs["session"] = session_id
         if txn_id is not None:
@@ -2981,7 +2985,7 @@ class BlockingSurrealSession:
     def query(
         self,
         query: str,
-        vars: dict[str, Value] | None = None,
+        vars: Mapping[str, Value] | None = None,
     ) -> SyncQueryBuilder:
         return self._connection.query(query, vars, session_id=self._session_id)
 
@@ -2996,14 +3000,14 @@ class BlockingSurrealSession:
     def query_raw(
         self,
         query: str,
-        vars: dict[str, Value] | None = None,
+        vars: Mapping[str, Value] | None = None,
     ) -> dict[str, Any]:
         return self._connection.query_raw(query, vars, session_id=self._session_id)
 
-    def signin(self, vars: dict[str, Value]) -> Tokens:
+    def signin(self, vars: Mapping[str, Value]) -> Tokens:
         return self._connection.signin(vars, session_id=self._session_id)
 
-    def signup(self, vars: dict[str, Value]) -> Tokens:
+    def signup(self, vars: Mapping[str, Value]) -> Tokens:
         return self._connection.signup(vars, session_id=self._session_id)
 
     def authenticate(self, token: str) -> None:
@@ -3339,7 +3343,7 @@ class BlockingSurrealTransaction:
     def query(
         self,
         query: str,
-        vars: dict[str, Value] | None = None,
+        vars: Mapping[str, Value] | None = None,
     ) -> SyncQueryBuilder:
         return self._connection.query(
             query,
@@ -3351,7 +3355,7 @@ class BlockingSurrealTransaction:
     def query_raw(
         self,
         query: str,
-        vars: dict[str, Value] | None = None,
+        vars: Mapping[str, Value] | None = None,
     ) -> dict[str, Any]:
         return self._connection.query_raw(
             query,

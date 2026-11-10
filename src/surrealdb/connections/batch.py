@@ -42,7 +42,7 @@ class _RunsQueries(Protocol):
     def server_version(self) -> str | None: ...
 
     def query_raw(
-        self, query: str, vars: dict[str, Value] | None = None
+        self, query: str, vars: Mapping[str, Value] | None = None
     ) -> dict[str, Any]: ...
 
 
@@ -51,7 +51,7 @@ class _RunsQueriesAsync(Protocol):
     def server_version(self) -> str | None: ...
 
     def query_raw(
-        self, query: str, vars: dict[str, Value] | None = None
+        self, query: str, vars: Mapping[str, Value] | None = None
     ) -> Awaitable[dict[str, Any]]: ...
 
 

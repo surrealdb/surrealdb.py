@@ -1504,9 +1504,9 @@ class AsyncWsSurrealConnection(
         return dict(result) if isinstance(result, dict) else {"data": result}
 
     async def signup(
-        self, vars: dict[str, Value], session_id: UUID | None = None
+        self, vars: Mapping[str, Value], session_id: UUID | None = None
     ) -> Tokens:
-        kwargs: dict[str, Any] = {"data": vars}
+        kwargs: dict[str, Any] = {"data": dict(vars)}
         if session_id is not None:
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.SIGN_UP, **kwargs)
@@ -1518,12 +1518,12 @@ class AsyncWsSurrealConnection(
         return tokens
 
     async def signin(
-        self, vars: dict[str, Value], session_id: UUID | None = None
+        self, vars: Mapping[str, Value], session_id: UUID | None = None
     ) -> Tokens:
         if not self._version_learned and asks_for_refresh(vars):
             await self.connect()
         self._require_signin(vars)
-        kwargs: dict[str, Any] = {"params": vars}
+        kwargs: dict[str, Any] = {"params": dict(vars)}
         if session_id is not None:
             kwargs["session"] = session_id
         message = RequestMessage(RequestMethod.SIGN_IN, **kwargs)
@@ -1582,7 +1582,7 @@ class AsyncWsSurrealConnection(
     def query(
         self,
         query: str,
-        vars: dict[str, Value] | None = None,
+        vars: Mapping[str, Value] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> AsyncQueryBuilder:
@@ -1610,7 +1610,7 @@ class AsyncWsSurrealConnection(
     async def query_raw(
         self,
         query: str,
-        vars: dict[str, Value] | None = None,
+        vars: Mapping[str, Value] | None = None,
         session_id: UUID | None = None,
         txn_id: UUID | None = None,
     ) -> dict[str, Any]:
@@ -1627,7 +1627,7 @@ class AsyncWsSurrealConnection(
             )._collect()  # pyright: ignore[reportPrivateUsage]
             if streamed is not None:
                 return streamed
-        kwargs: dict[str, Any] = {"query": query, "params": vars}
+        kwargs: dict[str, Any] = {"query": query, "params": dict(vars)}
         if session_id is not None:
             kwargs["session"] = session_id
         if txn_id is not None:
@@ -2829,7 +2829,7 @@ class AsyncSurrealSession:
     def query(
         self,
         query: str,
-        vars: dict[str, Value] | None = None,
+        vars: Mapping[str, Value] | None = None,
     ) -> AsyncQueryBuilder:
         return self._connection.query(query, vars, session_id=self._session_id)
 
@@ -2844,16 +2844,16 @@ class AsyncSurrealSession:
     async def query_raw(
         self,
         query: str,
-        vars: dict[str, Value] | None = None,
+        vars: Mapping[str, Value] | None = None,
     ) -> dict[str, Any]:
         return await self._connection.query_raw(
             query, vars, session_id=self._session_id
         )
 
-    async def signin(self, vars: dict[str, Value]) -> Tokens:
+    async def signin(self, vars: Mapping[str, Value]) -> Tokens:
         return await self._connection.signin(vars, session_id=self._session_id)
 
-    async def signup(self, vars: dict[str, Value]) -> Tokens:
+    async def signup(self, vars: Mapping[str, Value]) -> Tokens:
         return await self._connection.signup(vars, session_id=self._session_id)
 
     async def authenticate(self, token: str) -> None:
@@ -3187,7 +3187,7 @@ class AsyncSurrealTransaction:
     def query(
         self,
         query: str,
-        vars: dict[str, Value] | None = None,
+        vars: Mapping[str, Value] | None = None,
     ) -> AsyncQueryBuilder:
         return self._connection.query(
             query,
@@ -3199,7 +3199,7 @@ class AsyncSurrealTransaction:
     async def query_raw(
         self,
         query: str,
-        vars: dict[str, Value] | None = None,
+        vars: Mapping[str, Value] | None = None,
     ) -> dict[str, Any]:
         return await self._connection.query_raw(
             query,

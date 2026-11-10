@@ -252,17 +252,17 @@ def test_on_behalf_of_sends_delegation_header(client: Memory) -> None:
     # A write merges delegation with the idempotency header.
     client.remember("x", on_behalf_of="principal:agent-7")
     write = responses.calls[0].request
-    assert write.headers["X-Memory-On-Behalf-Of"] == "principal:agent-7"
+    assert write.headers["X-Spectron-On-Behalf-Of"] == "principal:agent-7"
     assert "Idempotency-Key" in write.headers
 
     # A read sends it too, and omits it when not set.
     client.recall("q", on_behalf_of="principal:agent-7")
     assert (
-        responses.calls[1].request.headers["X-Memory-On-Behalf-Of"]
+        responses.calls[1].request.headers["X-Spectron-On-Behalf-Of"]
         == "principal:agent-7"
     )
     client.recall("q")
-    assert "X-Memory-On-Behalf-Of" not in responses.calls[2].request.headers
+    assert "X-Spectron-On-Behalf-Of" not in responses.calls[2].request.headers
 
 
 def test_context_quotes_special_chars(client: Memory) -> None:
