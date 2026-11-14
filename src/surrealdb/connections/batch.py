@@ -23,6 +23,7 @@ from collections.abc import Awaitable, Collection, Iterator, Mapping, Sequence
 from typing import Any, Protocol, TypeVar, cast
 
 from surrealdb.errors import (
+    QueryError,
     ServerError,
     UnexpectedResponseError,
     parse_query_error,
@@ -31,7 +32,10 @@ from surrealdb.errors import (
 from surrealdb.features import parse_version
 from surrealdb.types import Value
 
-_NOT_EXECUTED = "not executed due to a failed transaction"
+_NOT_EXECUTED_MESSAGES = (
+    "The query was not executed due to a failed transaction",
+    "Cannot COMMIT: the transaction was aborted due to a prior error",
+)
 _QUOTE_CLOSERS = {"⟨": "⟩", "`": "`", '"': '"', "'": "'"}
 _ENDS_TRANSACTION = re.compile(r"\s*(BEGIN|COMMIT|CANCEL)\b", re.IGNORECASE)
 _RETURNS = re.compile(r"\s*RETURN\b", re.IGNORECASE)
@@ -200,6 +204,9 @@ def _results(response: dict[str, Any], envelope: bool) -> list[Value]:
 
     SurrealDB 3 answers for ``BEGIN`` and ``COMMIT`` as well, which
     *envelope* says to drop; SurrealDB 2 does not.
+
+    ``NotExecuted`` errors describe consequences rather than the cause. Only
+    errors without kind or details fall back to exact server messages.
     """
     error = response.get("error")
     if error is not None:
@@ -210,17 +217,24 @@ def _results(response: dict[str, Any], envelope: bool) -> list[Value]:
             f"batch expected a list of statement results; got "
             f"{type(statements).__name__}"
         )
-    failures: list[ServerError] = [
-        parse_query_error(statement)
-        for statement in statements
-        if isinstance(statement, dict) and statement.get("status") == "ERR"
-    ]
-    if failures:
-        cause = next(
-            (failure for failure in failures if _NOT_EXECUTED not in str(failure)),
-            failures[0],
-        )
-        raise cause
+    first_failure: ServerError | None = None
+    for statement in statements:
+        if not isinstance(statement, dict) or statement.get("status") != "ERR":
+            continue
+        failure = parse_query_error(statement)
+        if first_failure is None:
+            first_failure = failure
+        if isinstance(failure, QueryError) and failure.is_not_executed:
+            continue
+        if (
+            statement.get("kind") is None
+            and statement.get("details") is None
+            and str(failure) in _NOT_EXECUTED_MESSAGES
+        ):
+            continue
+        raise failure
+    if first_failure is not None:
+        raise first_failure
     if envelope and len(statements) >= 2:
         statements = statements[1:-1]
     return [
