@@ -127,13 +127,20 @@ _UNQUOTED_IDENTIFIER_CHARS = frozenset(
 _UNQUOTED_IDENTIFIER_ALPHA = frozenset(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 )
+# Bare, these read as the float constants, so neither works as a table name or
+# a record-id key: `t:NaN` is ``Unexpected token `NaN`, expected a record-id
+# key`` on every supported server, and `t:Infinity` the same from 3.0 on. Only
+# this exact spelling is a constant - `nan` and `INFINITY` are plain names.
+_FLOAT_CONSTANTS = frozenset(("NaN", "Infinity"))
+_DIGITS_AND_UNDERSCORE = frozenset("0123456789_")
 
 
 def escape_identifier(identifier: str) -> str:
     """Escape a string identifier for use inside SurrealQL.
 
     A name of ASCII letters, digits and underscores containing at least one
-    letter and not starting with a digit is returned bare. Anything else is
+    letter, not starting with a digit and not ``NaN`` or ``Infinity`` is
+    returned bare. Anything else is
     wrapped in backticks, with ``\\`` escaped as ``\\\\`` and ``` ` ``` as
     ``` \\` ```, so ``users:john-doe`` renders as ``users:`john-doe```.
 
@@ -151,7 +158,8 @@ def escape_identifier(identifier: str) -> str:
     ``⟨trailing\\⟩``          internal    Unexpected end of file
     ======================  ==========  =========
 
-    Used by :meth:`RecordID.__str__` for record-id rendering and by the
+    Used by :meth:`RecordID.__str__` for the table half of a record id (the
+    key half has a looser rule, see :func:`_escape_record_id_key`) and by the
     v3 CRUD builders for ``INSERT`` target inlining (SurrealDB rejects
     parameter binding such as ``type::table($x)`` on INSERT targets, so
     the SDK escapes the target identifier instead).
@@ -170,9 +178,34 @@ def escape_identifier(identifier: str) -> str:
     # numeric IDs in SurrealQL's record-id literal syntax.
     has_no_alpha = _UNQUOTED_IDENTIFIER_ALPHA.isdisjoint(identifier)
 
-    if unsafe or starts_with_digit or has_no_alpha:
+    if unsafe or starts_with_digit or has_no_alpha or identifier in _FLOAT_CONSTANTS:
         return delimit_identifier(identifier)
     return identifier
+
+
+def _escape_record_id_key(key: str) -> str:
+    """Escape a string record-id key, the part after the ``:``.
+
+    The key half has its own rule, the server's ``EscapeRidKey``, which is
+    looser than :func:`escape_identifier`'s rule for a table name. A key may
+    start with a digit: the parser reads ``t:8pkgf59qqokxbqjtured``, ``t:1e10``
+    and ``t:8d`` as string keys on every supported server, and shows them that
+    way. Wrapping them anyway (issue #448) made about a quarter of the ids the
+    server generates print as ``t:`8pkg...``` while the rest printed bare, and
+    no longer matched what the server, Surrealist and the CLI show.
+
+    What a key does need wrapped is a name of only digits and underscores,
+    which would read as a number, and the float constants ``NaN`` and
+    ``Infinity``.
+    """
+    if (
+        not key
+        or not _UNQUOTED_IDENTIFIER_CHARS.issuperset(key)
+        or _DIGITS_AND_UNDERSCORE.issuperset(key)
+        or key in _FLOAT_CONSTANTS
+    ):
+        return delimit_identifier(key)
+    return key
 
 
 def delimit_identifier(identifier: str) -> str:
@@ -291,7 +324,7 @@ class RecordID:
         table = escape_identifier(self.table_name)
         # Only escape if the identifier is a string
         if isinstance(self.id, str):
-            return f"{table}:{escape_identifier(self.id)}"
+            return f"{table}:{_escape_record_id_key(self.id)}"
         if isinstance(self.id, bytes):
             # Rendered, not decoded. `_unchecked` means a wire value can still
             # be bytes, so this branch is live - and decoding it was wrong

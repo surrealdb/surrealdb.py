@@ -29,7 +29,7 @@ name comes back as itself, which has to hold on all of them.
 
 import pytest
 
-from surrealdb import RecordID, escape_identifier
+from surrealdb import RecordID, Table, escape_identifier
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
 
 NEEDS_NO_ESCAPE = [
@@ -82,6 +82,72 @@ def test_a_record_id_renders_and_parses_back(
     assert isinstance(parsed, RecordID)
     assert parsed.table_name == name
     assert parsed.id == name
+
+
+KEYS = [
+    pytest.param("8pkgf59qqokxbqjtured", id="generated-id-with-leading-digit"),
+    pytest.param("1abc", id="leading-digit"),
+    pytest.param("1e10", id="exponent-lookalike"),
+    pytest.param("8d", id="duration-lookalike"),
+    pytest.param("1_a", id="digit-underscore-letter"),
+    pytest.param("_1", id="underscore-digit"),
+    pytest.param("1_000", id="digits-underscore"),
+    pytest.param("NaN", id="nan"),
+    pytest.param("Infinity", id="infinity"),
+    pytest.param("select", id="keyword"),
+]
+# What 2.0.5 shows instead of what this SDK renders. It wraps in ⟨⟩, and it
+# shows NaN and Infinity bare, which it then cannot read back - the SDK's
+# backticked form is what 2.0.5 parses.
+SHOWN_BY_2_0 = {
+    "_1": "t:⟨_1⟩",
+    "1_000": "t:⟨1_000⟩",
+    "NaN": "t:NaN",
+    "Infinity": "t:Infinity",
+}
+
+
+@pytest.mark.parametrize("key", KEYS)
+def test_a_record_id_key_renders_as_the_server_displays_it(
+    blocking_ws_connection: BlockingWsSurrealConnection, key: str
+) -> None:
+    """Issue #448: the key half follows the server's key rule, not the table rule.
+
+    A key may start with a digit, which a table name may not, so a generated id
+    such as ``8pkgf59qqokxbqjtured`` is shown bare by the server and must be by
+    ``str()`` too. ``NaN`` and ``Infinity`` are the opposite case: bare, the
+    parser reads them as numbers.
+    """
+    record = RecordID("t", key)
+
+    parsed = blocking_ws_connection.query(f"RETURN {record}").first()
+    shown = blocking_ws_connection.query(
+        "RETURN <string> $record", {"record": record}
+    ).first()
+
+    assert parsed == record
+    assert shown in (str(record), SHOWN_BY_2_0.get(key))
+
+
+def test_generated_ids_render_as_the_server_displays_them(
+    blocking_ws_connection: BlockingWsSurrealConnection,
+) -> None:
+    """Issue #448: insert in a loop and print each new id.
+
+    About a quarter of generated ids start with a digit, and those came out
+    wrapped while the rest were bare.
+    """
+    for index in range(40):
+        record = blocking_ws_connection.insert(Table("issue_448"), {"index": index})
+        assert isinstance(record, list)
+        record_id = record[0]["id"]
+        assert isinstance(record_id, RecordID)
+
+        shown = blocking_ws_connection.query(
+            "RETURN <string> $record", {"record": record_id}
+        ).first()
+
+        assert str(record_id) == shown
 
 
 def test_the_empty_id_reads_back_as_itself(
