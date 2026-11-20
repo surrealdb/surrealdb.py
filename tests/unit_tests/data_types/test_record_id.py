@@ -282,6 +282,11 @@ def test_record_id_str_with_angle_bracket_escape() -> None:
         pytest.param(RecordID("t", "Infinity"), "t:`Infinity`", id="infinity"),
         pytest.param(RecordID("t", "nan"), "t:nan", id="nan-lowercase"),
         pytest.param(RecordID("1tbl", "1a"), "`1tbl`:1a", id="leading-digit-table"),
+        pytest.param(RecordID("select", 1), "`select`:1", id="keyword-table"),
+        pytest.param(RecordID("Select", 1), "`Select`:1", id="keyword-table-case"),
+        pytest.param(RecordID("NONE", "x"), "`NONE`:x", id="none-table"),
+        pytest.param(RecordID("value", 1), "`value`:1", id="value-table"),
+        pytest.param(RecordID("t", "select"), "t:select", id="keyword-key"),
     ],
 )
 def test_record_id_str_matches_what_the_server_displays(
@@ -814,6 +819,27 @@ class TestEscapeIdentifier:
         assert escape_identifier("NaN") == "`NaN`"
         assert escape_identifier("Infinity") == "`Infinity`"
         assert escape_identifier("nan") == "nan"
+
+    def test_reserved_words_wrapped(self) -> None:
+        # Bare, a reserved word in front of `:` starts a statement or a
+        # literal rather than a record id: `select:1` does not parse.
+        assert escape_identifier("select") == "`select`"
+        assert escape_identifier("SELECT") == "`SELECT`"
+        assert escape_identifier("none") == "`none`"
+        assert escape_identifier("true") == "`true`"
+        assert escape_identifier("value") == "`value`"
+
+    def test_words_the_server_list_misses_wrapped(self) -> None:
+        # Not in the server's own list, but `explain:1` does not parse on 3.x
+        # and 4.x, nor `fn:1` and `ml:1` on 2.x.
+        assert escape_identifier("explain") == "`explain`"
+        assert escape_identifier("fn") == "`fn`"
+        assert escape_identifier("ML") == "`ML`"
+
+    def test_names_containing_a_reserved_word_are_bare(self) -> None:
+        assert escape_identifier("selects") == "selects"
+        assert escape_identifier("select_x") == "select_x"
+        assert escape_identifier("person") == "person"
 
     def test_a_closing_bracket_is_literal_inside_backticks(self) -> None:
         # This used to assert ``⟨foo\⟩bar⟩``, which SurrealDB 3.x answers with

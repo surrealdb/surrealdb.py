@@ -31,6 +31,7 @@ import pytest
 
 from surrealdb import RecordID, Table, escape_identifier
 from surrealdb.connections.blocking_ws import BlockingWsSurrealConnection
+from surrealdb.data.types.record_id import _RESERVED_WORDS
 
 NEEDS_NO_ESCAPE = [
     pytest.param("a b", id="space"),
@@ -148,6 +149,20 @@ def test_generated_ids_render_as_the_server_displays_them(
         ).first()
 
         assert str(record_id) == shown
+
+
+@pytest.mark.parametrize(
+    "table", [*sorted(_RESERVED_WORDS), "SELECT", "Select", "NONE", "FN"]
+)
+def test_a_reserved_word_table_reads_back_as_itself(
+    blocking_ws_connection: BlockingWsSurrealConnection, table: str
+) -> None:
+    """Bare, ``select:1`` and the like are parse errors, so the table half is wrapped."""
+    record = RecordID(table, 1)
+
+    parsed = blocking_ws_connection.query(f"RETURN {record}").first()
+
+    assert parsed == record
 
 
 def test_the_empty_id_reads_back_as_itself(
