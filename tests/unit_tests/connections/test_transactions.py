@@ -80,8 +80,14 @@ def test_a_failed_statement_applies_none_and_is_raised(db: Blocking) -> None:
         assert isinstance(caught.value, AlreadyExistsError)
     assert _count(db, "account") == 1
 
-    with pytest.raises(ServerError, match="boom"):
-        db.batch().query("CREATE account:c").query("THROW 'boom'").execute()
+    message = "lease lost: a statement was not executed due to a failed transaction"
+    with pytest.raises(ServerError, match=message) as thrown:
+        db.batch().query("CREATE account:c").query(
+            "THROW $message", {"message": message}
+        ).execute()
+    if db.is_feature_supported(Features.IMPORT_FAILURE_REPORTING):
+        assert isinstance(thrown.value, ThrownError)
+    assert str(thrown.value) == f"An error occurred: {message}"
     assert _count(db, "account") == 1
 
 
@@ -127,12 +133,20 @@ async def test_async_batch(adb: Async) -> None:
         .execute()
     )
     assert results[1] == [1]
+    message = "lease lost: a statement was not executed due to a failed transaction"
     with pytest.raises(
         ThrownError
         if adb.is_feature_supported(Features.IMPORT_FAILURE_REPORTING)
-        else ServerError
-    ):
-        await adb.batch().query("CREATE thing:2").query("THROW 'no'").execute()
+        else ServerError,
+        match=message,
+    ) as thrown:
+        await (
+            adb.batch()
+            .query("CREATE thing:2")
+            .query("THROW $message", {"message": message})
+            .execute()
+        )
+    assert str(thrown.value) == f"An error occurred: {message}"
     assert await adb.query("RETURN count(SELECT * FROM thing);").first() == 1
 
 
