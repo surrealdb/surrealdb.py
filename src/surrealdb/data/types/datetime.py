@@ -44,6 +44,13 @@ class PreciseDatetime(datetime):
     round-trip - with the leftover nanoseconds kept in :attr:`nanosecond` so a
     value read from SurrealDB can be written back unchanged.
 
+    Two ``PreciseDatetime`` values compare and sort on the nanosecond too, so
+    instants that differ below a microsecond are not equal and ``max()`` picks
+    the later one. Against a plain ``datetime`` the comparison stays at
+    microsecond precision, as before. The hash ignores :attr:`nanosecond`, so
+    a value still hashes like the plain ``datetime`` it equals, and values
+    that differ only in nanoseconds are still kept apart in a set by ``==``.
+
     One limit is inherent: arithmetic goes through ``datetime``'s own
     constructors, which know nothing of the extra field, so a computed result
     carries ``nanosecond == 0``::
@@ -71,6 +78,40 @@ class PreciseDatetime(datetime):
         instance = super().__new__(cls, *args, **kwargs)
         object.__setattr__(instance, "nanosecond", nanosecond)
         return instance
+
+    def __eq__(self, other: object) -> bool:
+        result = datetime.__eq__(self, other)
+        if result is True and isinstance(other, PreciseDatetime):
+            return self.nanosecond == other.nanosecond
+        return result
+
+    def __ne__(self, other: object) -> bool:
+        result = self.__eq__(other)
+        if result is NotImplemented:
+            return result
+        return not result
+
+    def __lt__(self, other: datetime) -> bool:  # type: ignore[override]
+        if isinstance(other, PreciseDatetime) and datetime.__eq__(self, other) is True:
+            return self.nanosecond < other.nanosecond
+        return datetime.__lt__(self, other)
+
+    def __le__(self, other: datetime) -> bool:  # type: ignore[override]
+        if isinstance(other, PreciseDatetime) and datetime.__eq__(self, other) is True:
+            return self.nanosecond <= other.nanosecond
+        return datetime.__le__(self, other)
+
+    def __gt__(self, other: datetime) -> bool:  # type: ignore[override]
+        if isinstance(other, PreciseDatetime) and datetime.__eq__(self, other) is True:
+            return self.nanosecond > other.nanosecond
+        return datetime.__gt__(self, other)
+
+    def __ge__(self, other: datetime) -> bool:  # type: ignore[override]
+        if isinstance(other, PreciseDatetime) and datetime.__eq__(self, other) is True:
+            return self.nanosecond >= other.nanosecond
+        return datetime.__ge__(self, other)
+
+    __hash__ = datetime.__hash__
 
     def __reduce_ex__(self, protocol: SupportsIndex) -> tuple[Any, ...]:
         constructor, args = cast(

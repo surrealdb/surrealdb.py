@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Two `PreciseDatetime` values now compare, order and test equal on their
+  `nanosecond` as well, so instants that differ below a microsecond are no
+  longer equal and `max()` and `sorted()` pick the later one. Against a plain
+  `datetime` the comparison stays at microsecond precision, and the hash is
+  unchanged. (#438)
+
 ## [3.0.2] - 2026-11-10
 
 ### Changed
