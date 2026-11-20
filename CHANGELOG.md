@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the key, and `escape_identifier("NaN")` and `escape_identifier("Infinity")`
   wrap the name. Left bare, the server reads them as the float constants and
   refuses the record id with a parse error.
+- `str(RecordID(...))` wraps a table name that is a reserved word, in any
+  case: `str(RecordID("select", 1))` is now ``` `select`:1 ``` rather than
+  `select:1`, which the server refuses to parse. The same goes for
+  `escape_identifier()`, so the `INSERT` target and `RELATE` edge names the
+  query builders inline are wrapped too, which changes nothing there because
+  the server reads them either way. The words are the server's own reserved
+  list plus `explain`, `fn` and `ml`, which also fail to parse as a bare table
+  name on some supported versions. A record-id key is not affected:
+  `t:select` is the string key `"select"`.
 
 ## [3.0.2] - 2026-11-10
 

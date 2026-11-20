@@ -133,14 +133,79 @@ _UNQUOTED_IDENTIFIER_ALPHA = frozenset(
 # this exact spelling is a constant - `nan` and `INFINITY` are plain names.
 _FLOAT_CONSTANTS = frozenset(("NaN", "Infinity"))
 _DIGITS_AND_UNDERSCORE = frozenset("0123456789_")
+# Words a bare table name must not be, compared case-insensitively. In front of
+# `:` the parser reads them as the start of a statement or a literal, so
+# `select:1`, `none:1` and `true:1` are parse errors rather than record ids.
+#
+# This is the server's own list (`RESERVED_KEYWORD` in surrealdb's
+# `common/src/keywords.rs`), which it wraps when it displays a record id, plus
+# three words that list misses and that were found by probing every SurrealQL
+# keyword against 2.0.5, 2.7.0, 3.3.4 and 4.0.1: `explain:1` does not parse on
+# 3.x and 4.x, nor `fn:1` and `ml:1` on 2.x, although each server displays its
+# own such record ids bare.
+#
+# A record-id *key* may be any of these, so `_escape_record_id_key` does not
+# consult this: `t:select` is the string key "select" on every version.
+_RESERVED_WORDS = frozenset(
+    (
+        "after",
+        "all",
+        "alter",
+        "before",
+        "begin",
+        "break",
+        "by",
+        "cancel",
+        "commit",
+        "continue",
+        "create",
+        "define",
+        "delete",
+        "diff",
+        "explain",
+        "false",
+        "fn",
+        "for",
+        "function",
+        "if",
+        "info",
+        "insert",
+        "kill",
+        "let",
+        "live",
+        "ml",
+        "none",
+        "null",
+        "option",
+        "rand",
+        "rebuild",
+        "relate",
+        "remove",
+        "return",
+        "select",
+        "sequence",
+        "show",
+        "sleep",
+        "table",
+        "tb",
+        "throw",
+        "true",
+        "update",
+        "upsert",
+        "use",
+        "value",
+        "where",
+    )
+)
 
 
 def escape_identifier(identifier: str) -> str:
     """Escape a string identifier for use inside SurrealQL.
 
     A name of ASCII letters, digits and underscores containing at least one
-    letter, not starting with a digit and not ``NaN`` or ``Infinity`` is
-    returned bare. Anything else is
+    letter, not starting with a digit, not ``NaN`` or ``Infinity`` and not a
+    reserved word such as ``select`` (in any case) is returned bare. Anything
+    else is
     wrapped in backticks, with ``\\`` escaped as ``\\\\`` and ``` ` ``` as
     ``` \\` ```, so ``users:john-doe`` renders as ``users:`john-doe```.
 
@@ -178,7 +243,13 @@ def escape_identifier(identifier: str) -> str:
     # numeric IDs in SurrealQL's record-id literal syntax.
     has_no_alpha = _UNQUOTED_IDENTIFIER_ALPHA.isdisjoint(identifier)
 
-    if unsafe or starts_with_digit or has_no_alpha or identifier in _FLOAT_CONSTANTS:
+    if (
+        unsafe
+        or starts_with_digit
+        or has_no_alpha
+        or identifier in _FLOAT_CONSTANTS
+        or identifier.lower() in _RESERVED_WORDS
+    ):
         return delimit_identifier(identifier)
     return identifier
 
