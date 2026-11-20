@@ -267,6 +267,21 @@ def test_record_id_str_with_angle_bracket_escape() -> None:
         pytest.param(RecordID("héllo", "wörld"), "`héllo`:`wörld`", id="unicode"),
         pytest.param(RecordID("t", "a`b"), "t:`a\\`b`", id="backtick"),
         pytest.param(RecordID("t", "a:b"), "t:`a:b`", id="colon"),
+        pytest.param(
+            RecordID("my_table", "8pkgf59qqokxbqjtured"),
+            "my_table:8pkgf59qqokxbqjtured",
+            id="generated-id-with-leading-digit",
+        ),
+        pytest.param(RecordID("t", "1abc"), "t:1abc", id="leading-digit"),
+        pytest.param(RecordID("t", "1e10"), "t:1e10", id="exponent-lookalike"),
+        pytest.param(RecordID("t", "8d"), "t:8d", id="duration-lookalike"),
+        pytest.param(RecordID("t", "1_a"), "t:1_a", id="digit-underscore-letter"),
+        pytest.param(RecordID("t", "_1"), "t:`_1`", id="underscore-digit"),
+        pytest.param(RecordID("t", "1_000"), "t:`1_000`", id="digits-underscore"),
+        pytest.param(RecordID("t", "NaN"), "t:`NaN`", id="nan"),
+        pytest.param(RecordID("t", "Infinity"), "t:`Infinity`", id="infinity"),
+        pytest.param(RecordID("t", "nan"), "t:nan", id="nan-lowercase"),
+        pytest.param(RecordID("1tbl", "1a"), "`1tbl`:1a", id="leading-digit-table"),
     ],
 )
 def test_record_id_str_matches_what_the_server_displays(
@@ -792,6 +807,13 @@ class TestEscapeIdentifier:
     def test_digits_and_underscores_only_wrapped(self) -> None:
         assert escape_identifier("_") == "`_`"
         assert escape_identifier("123_456") == "`123_456`"
+
+    def test_float_constants_wrapped(self) -> None:
+        # Bare, the parser reads these as the float constants and refuses
+        # them as a table name or record-id key.
+        assert escape_identifier("NaN") == "`NaN`"
+        assert escape_identifier("Infinity") == "`Infinity`"
+        assert escape_identifier("nan") == "nan"
 
     def test_a_closing_bracket_is_literal_inside_backticks(self) -> None:
         # This used to assert ``⟨foo\⟩bar⟩``, which SurrealDB 3.x answers with

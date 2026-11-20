@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `str(RecordID(...))` no longer wraps a string key that starts with a digit.
+  About a quarter of the ids SurrealDB generates start with one, so printing
+  records in a loop showed some ids as ``my_table:`8pkgf59qqokxbqjtured` ``
+  and the rest bare, while the server, Surrealist and the CLI show them all
+  bare. The key half now follows the server's own rule for record-id keys,
+  which differs from the rule for table names. The table half is unchanged
+  (#448).
+- `str(RecordID(table, "NaN"))` and `str(RecordID(table, "Infinity"))` wrap
+  the key, and `escape_identifier("NaN")` and `escape_identifier("Infinity")`
+  wrap the name. Left bare, the server reads them as the float constants and
+  refuses the record id with a parse error.
+
 ## [3.0.2] - 2026-11-10
 
 ### Changed
