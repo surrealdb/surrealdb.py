@@ -303,3 +303,55 @@ def test_a_pickle_written_now_loads_in_3_0_0_beta_10(
     assert type(restored) is _Beta10PreciseDatetime
     assert restored == value
     assert restored.nanosecond == nanosecond
+
+
+def test_values_that_differ_below_a_microsecond_compare_by_nanosecond() -> None:
+    earlier = PreciseDatetime(2026, 1, 1, 0, 0, 0, 123456, nanosecond=100)
+    later = PreciseDatetime(2026, 1, 1, 0, 0, 0, 123456, nanosecond=900)
+
+    assert earlier != later
+    assert (earlier == later) is False
+    assert earlier < later
+    assert earlier <= later
+    assert later > earlier
+    assert later >= earlier
+    assert not later < earlier
+    assert max(earlier, later) is later
+    assert max(later, earlier) is later
+    assert sorted([later, earlier]) == [earlier, later]
+    assert len({earlier, later}) == 2
+
+
+def test_equal_nanoseconds_still_compare_equal() -> None:
+    value = PreciseDatetime(2026, 1, 1, 0, 0, 0, 123456, nanosecond=789)
+    same = PreciseDatetime(2026, 1, 1, 0, 0, 0, 123456, nanosecond=789)
+
+    assert value == same
+    assert value <= same
+    assert value >= same
+    assert not value < same
+    assert hash(value) == hash(same)
+    assert len({value, same}) == 1
+
+
+def test_a_plain_datetime_still_compares_at_microsecond_precision() -> None:
+    value = PreciseDatetime(
+        2026, 1, 1, 0, 0, 0, 123456, tzinfo=dt.timezone.utc, nanosecond=789
+    )
+    plain = dt.datetime(2026, 1, 1, 0, 0, 0, 123456, tzinfo=dt.timezone.utc)
+    later = dt.datetime(2026, 1, 1, 0, 0, 0, 123457, tzinfo=dt.timezone.utc)
+
+    assert value == plain
+    assert plain == value
+    assert (value != plain) is False
+    assert hash(value) == hash(plain)
+    assert value < later
+    assert later > value
+    assert value <= plain <= value
+
+
+def test_comparing_with_a_non_datetime_is_unchanged() -> None:
+    value = PreciseDatetime(2026, 1, 1, nanosecond=1)
+
+    assert value != "2026-01-01"
+    assert (value == 0) is False
